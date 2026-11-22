@@ -67,7 +67,7 @@ Faites-le quand la recherche indique `Aucun patient ne correspond. Enregistrez-l
 
 1. Sous **Nouveau patient**, saisissez **Prénom** et **Nom de famille**.
 2. Choisissez **Sexe**.
-3. Choisissez **Date de naissance**. Si personne ne la connaît, saisissez plutôt l'âge dans **Âge en années**.
+3. Choisissez **Date de naissance**. Si personne ne la connaît, saisissez plutôt l'âge dans **Âge en années**. Si vous remplissez les deux, la date de naissance est utilisée.
 4. Si le patient a un identifiant, saisissez **Système d'identifiant** et **Valeur de l'identifiant**.
 5. Ouvrez le menu à points à côté de **Trouver** et sélectionnez **Enregistrer le patient**.
 
@@ -83,11 +83,11 @@ Faites-le quand une demande affiche **Aucun patient lié**, ou le mauvais patien
 
 1. Ouvrez le menu à points du panneau de la demande et sélectionnez **Lier un patient**.
 2. Trouvez le patient, ou enregistrez-en un nouveau, comme dans les deux tâches ci-dessus.
-3. Sélectionnez **Utiliser ce patient**, ou **Enregistrer le patient** pour un nouveau.
+3. Ouvrez le menu à points à côté de **Trouver** et sélectionnez **Utiliser ce patient**, ou **Enregistrer le patient** pour un nouveau.
 
 **Résultat attendu :** un message indique que le patient est lié à la demande. Le panneau montre le nom du patient.
 
-Le lien est gardé comme une correction, avec votre nom et le motif `Patient lié à la réception`.
+Le lien est gardé comme une correction, avec votre nom et le motif `Patient lié à la réception`. Les échantillons déjà reçus pour la demande passent aussi au nouveau patient.
 
 ## Recevoir l'échantillon
 
@@ -99,9 +99,9 @@ Le lien est gardé comme une correction, avec votre nom et le motif `Patient li�
 
 **Résultat attendu :** un message indique, par exemple, `Échantillon reçu pour la demande CS-0001.` L'échantillon s'affiche sous **Échantillons**, avec son état et l'heure de réception.
 
-Une demande garde un échantillon de chaque type. Recevoir de nouveau le même type met cet échantillon à jour.
+Une demande garde un échantillon de chaque type. Recevoir de nouveau le même type met cet échantillon à jour et garde l'heure de la première réception.
 
-La liste des états vient du jeu de valeurs des états d'échantillon de votre laboratoire. Si le panneau indique `Les analyses de cette demande ne nomment aucun type d'échantillon.`, ajoutez les types d'échantillon à ces analyses dans le catalogue des examens.
+La liste des états vient du jeu de valeurs des états d'échantillon de votre laboratoire. Si le panneau indique `Les analyses de cette demande ne nomment aucun type d'échantillon. Associez ces analyses à un type d'échantillon dans le catalogue des analyses.`, ajoutez les types d'échantillon à ces analyses dans le catalogue des examens.
 
 ## Corriger une faute de frappe dans une demande
 
@@ -116,12 +116,25 @@ Une correction peut changer la priorité, le clinicien et la note. Pour changer 
 
 Chaque correction est gardée avec votre nom et le motif, et elle est enregistrée dans **Audit**.
 
-Un mauvais numéro de demande, établissement ou liste d'analyses ne peut pas être corrigé. Marquez la saisie comme saisie par erreur et enregistrez de nouveau la demande. Pour une demande du **Formulaire de demande**, une personne qui peut marquer des saisies comme erronées le fait dans l'onglet **Saisies** du formulaire. Lisez [Formulaires](/docs/forms).
+Un mauvais numéro de demande, établissement ou liste d'analyses ne peut pas être corrigé. Pour une demande **Enregistrée à la réception**, annulez l'enregistrement et enregistrez de nouveau la demande, comme dans la tâche suivante. Pour une demande du **Formulaire de demande**, une personne qui peut marquer des saisies comme erronées marque la saisie dans l'onglet **Saisies** du formulaire, puis vous enregistrez de nouveau la demande. Lisez [Formulaires](/docs/forms).
+
+## Annuler un enregistrement fait à la réception
+
+Faites-le quand une demande enregistrée à la réception a un mauvais numéro, établissement ou liste d'analyses. **Annuler l'enregistrement** n'apparaît que pour une demande marquée **Enregistrée à la réception**.
+
+1. Ouvrez le menu à points du panneau de la demande et sélectionnez **Annuler l'enregistrement**.
+2. Saisissez la raison dans **Motif**, par exemple `Mauvaise liste d'analyses`.
+3. Ouvrez le menu à points du panneau et sélectionnez **Annuler l'enregistrement**.
+
+**Résultat attendu :** un message indique, par exemple, `Demande CS-0001 annulée.` Chaque analyse de la demande affiche le statut **Saisie par erreur**.
+
+Chaque analyse annulée est gardée avec votre nom et le motif, et l'annulation est enregistrée dans **Audit**. Une demande annulée ne prend aucun échantillon.
+
+Pour enregistrer de nouveau la demande avec les bons détails, recherchez le numéro et suivez [Enregistrer une demande introuvable](#enregistrer-une-demande-introuvable). Les nouvelles analyses s'affichent dans le même panneau. Les analyses annulées restent listées comme **Saisie par erreur**.
 
 ## Limites
 
 - Le renvoi d'une demande à son site, le rejet d'un échantillon, les listes de travail et la vérification des résultats arrivent dans des versions ultérieures.
-- Une demande enregistrée à la réception ne peut pas être marquée comme saisie par erreur dans cette version. Vérifiez son numéro, son établissement et ses analyses avant de l'enregistrer.
 - Chaque analyse d'une nouvelle demande est sa propre demande d'examen. Une demande enregistrée avant cette version garde toutes ses analyses dans une seule demande d'examen, et la réception les liste toutes.
 - Un utilisateur avec une limite de données perd **Receive samples** et **Return and reject**. La réception n'est donc pas dans son menu.
 

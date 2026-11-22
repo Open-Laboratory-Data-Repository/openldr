@@ -88,7 +88,7 @@ Une règle n'est vérifiée que si l'intervalle a ses deux valeurs. Un refus nom
 
 Trois rôles intégrés couvrent le travail du laboratoire.
 
-- **Reception** peut réceptionner les échantillons, renvoyer une demande à son site, rejeter un échantillon, voir les listes de travail et ouvrir l'index des patients masqué.
+- **Reception** peut réceptionner les échantillons, voir les listes de travail et ouvrir l'index des patients masqué. Le rôle porte aussi le renvoi d'une demande à son site et le rejet d'un échantillon, qui arrivent dans une version ultérieure.
 - **Lab Technician** peut remplir et soumettre des formulaires, saisir des résultats et voir les listes de travail.
 - **Lab Manager** détient toutes les capacités du laboratoire, **Lab settings** compris.
 

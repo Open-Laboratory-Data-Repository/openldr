@@ -86,7 +86,7 @@ A rule is checked only when the band has both of its values. A refusal names the
 
 Three built-in roles cover the lab's work.
 
-- **Reception** can receive samples, return a request to its site, reject a sample, view worklists and open the masked patient index.
+- **Reception** can receive samples, view worklists and open the masked patient index. It also holds returning a request to its site and rejecting a sample, which come in a later release.
 - **Lab Technician** can fill and submit forms, enter results and view worklists.
 - **Lab Manager** holds every lab capability, **Lab settings** included.
 

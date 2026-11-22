@@ -88,7 +88,7 @@ Uma regra só é verificada quando o intervalo tem os dois valores. Uma recusa i
 
 Três funções incluídas cobrem o trabalho do laboratório.
 
-- **Reception** pode receber amostras, devolver um pedido ao seu local, rejeitar uma amostra, ver as listas de trabalho e abrir o índice de pacientes mascarado.
+- **Reception** pode receber amostras, ver as listas de trabalho e abrir o índice de pacientes mascarado. A função também tem devolver um pedido ao seu local e rejeitar uma amostra, que chegam numa versão posterior.
 - **Lab Technician** pode preencher e submeter formulários, introduzir resultados e ver as listas de trabalho.
 - **Lab Manager** tem todas as capacidades do laboratório, incluindo **Lab settings**.
 

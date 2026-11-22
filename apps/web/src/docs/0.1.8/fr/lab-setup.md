@@ -48,7 +48,7 @@ Dans une copie des sources, ajoutez `pnpm` devant, par exemple `pnpm openldr lab
 
 ## Les rôles
 
-- **Reception** peut réceptionner les échantillons, renvoyer une demande à son site, rejeter un échantillon, voir les listes de travail et ouvrir l'index des patients masqué.
+- **Reception** peut réceptionner les échantillons, voir les listes de travail et ouvrir l'index des patients masqué. Le rôle porte aussi le renvoi d'une demande à son site et le rejet d'un échantillon, qui arrivent dans une version ultérieure.
 - **Lab Technician** peut remplir et soumettre des formulaires, saisir des résultats et voir les listes de travail.
 - **Lab Manager** a les sept capacités du laboratoire.
 
@@ -56,7 +56,7 @@ Sur une installation qui utilisait une version antérieure, Reception apparaît 
 
 ## La réception
 
-La réception est le guichet du laboratoire dans le studio. Elle trouve une demande par un numéro de demande scanné ou saisi, enregistre une demande dont le laboratoire n'a aucune trace, trouve ou enregistre le patient, reçoit l'échantillon avec son état et corrige une faute de frappe dans une demande. Le guide intégré **Réception** montre chaque étape.
+La réception est le guichet du laboratoire dans le studio. Elle trouve une demande par un numéro de demande scanné ou saisi, enregistre une demande dont le laboratoire n'a aucune trace, trouve ou enregistre le patient, reçoit l'échantillon avec son état corrige une faute de frappe dans une demande, et annule une demande enregistrée à la réception pour l'enregistrer de nouveau. Le guide intégré **Réception** montre chaque étape.
 
 - La réception exige **Receive samples**. Les rôles Reception et Lab Manager l'ont.
 - Un utilisateur avec une limite de données perd **Receive samples** et **Return and reject**. Il n'a donc pas la réception.

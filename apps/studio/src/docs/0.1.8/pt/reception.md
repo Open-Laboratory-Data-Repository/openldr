@@ -67,7 +67,7 @@ Faça isto quando a pesquisa diz `Nenhum paciente corresponde. Registe-o abaixo.
 
 1. Em **Novo paciente**, escreva **Nome próprio** e **Apelido**.
 2. Escolha **Sexo**.
-3. Escolha **Data de nascimento**. Se ninguém a souber, escreva antes a idade em **Idade em anos**.
+3. Escolha **Data de nascimento**. Se ninguém a souber, escreva antes a idade em **Idade em anos**. Se preencher as duas, é usada a data de nascimento.
 4. Se o paciente tiver um identificador, escreva **Sistema do identificador** e **Valor do identificador**.
 5. Abra o menu de pontos ao lado de **Encontrar** e selecione **Registar paciente**.
 
@@ -83,11 +83,11 @@ Faça isto quando um pedido mostra **Nenhum paciente associado**, ou o paciente 
 
 1. Abra o menu de pontos do painel do pedido e selecione **Associar paciente**.
 2. Encontre o paciente, ou registe um novo, como nas duas tarefas acima.
-3. Selecione **Usar este paciente**, ou **Registar paciente** para um novo.
+3. Abra o menu de pontos ao lado de **Encontrar** e selecione **Usar este paciente**, ou **Registar paciente** para um novo.
 
 **Resultado esperado:** uma mensagem diz que o paciente foi associado ao pedido. O painel mostra o nome do paciente.
 
-A associação fica guardada como uma correção, com o seu nome e o motivo `Paciente associado na receção`.
+A associação fica guardada como uma correção, com o seu nome e o motivo `Paciente associado na receção`. As amostras já recebidas para o pedido passam também para o novo paciente.
 
 ## Receber a amostra
 
@@ -99,9 +99,9 @@ A associação fica guardada como uma correção, com o seu nome e o motivo `Pac
 
 **Resultado esperado:** uma mensagem diz, por exemplo, `Amostra recebida para o pedido CS-0001.` A amostra aparece em **Amostras**, com a sua condição e a hora em que foi recebida.
 
-Um pedido guarda uma amostra de cada tipo. Receber de novo o mesmo tipo atualiza essa amostra.
+Um pedido guarda uma amostra de cada tipo. Receber de novo o mesmo tipo atualiza essa amostra e mantém a hora da primeira receção.
 
-A lista de condições vem do conjunto de valores de condições de amostra do seu laboratório. Se o painel disser `As análises deste pedido não indicam nenhum tipo de amostra.`, acrescente os tipos de amostra a essas análises no catálogo de exames.
+A lista de condições vem do conjunto de valores de condições de amostra do seu laboratório. Se o painel disser `As análises deste pedido não indicam nenhum tipo de amostra. Associe estas análises a um tipo de amostra no catálogo de análises.`, acrescente os tipos de amostra a essas análises no catálogo de exames.
 
 ## Corrigir um erro de escrita num pedido
 
@@ -116,12 +116,25 @@ Uma correção pode alterar a prioridade, o clínico e a nota. Para mudar o paci
 
 Cada correção fica guardada com o seu nome e o motivo, e é registada em **Auditoria**.
 
-Um número de requisição, uma unidade sanitária ou uma lista de análises errados não podem ser corrigidos. Marque o registo como introduzido por erro e registe o pedido de novo. Para um pedido do **Formulário de pedido**, alguém que pode marcar registos como introduzidos por erro faz isto no separador **Registos** do formulário. Leia [Formulários](/docs/forms).
+Um número de requisição, uma unidade sanitária ou uma lista de análises errados não podem ser corrigidos. Para um pedido **Registado na receção**, cancele o registo e registe o pedido de novo, como na tarefa seguinte. Para um pedido do **Formulário de pedido**, alguém que pode marcar registos como introduzidos por erro marca o registo no separador **Registos** do formulário, e depois regista o pedido de novo. Leia [Formulários](/docs/forms).
+
+## Cancelar um registo feito na receção
+
+Faça isto quando um pedido registado na receção tem o número, a unidade sanitária ou a lista de análises errados. **Cancelar registo** só aparece para um pedido marcado **Registado na receção**.
+
+1. Abra o menu de pontos do painel do pedido e selecione **Cancelar registo**.
+2. Escreva a razão em **Motivo**, por exemplo `Lista de análises errada`.
+3. Abra o menu de pontos do painel e selecione **Cancelar registo**.
+
+**Resultado esperado:** uma mensagem diz, por exemplo, `Pedido CS-0001 cancelado.` Cada análise do pedido mostra o estado **Introduzido por erro**.
+
+Cada análise cancelada fica guardada com o seu nome e o motivo, e o cancelamento é registado em **Auditoria**. Um pedido cancelado não aceita amostras.
+
+Para registar o pedido de novo com os dados certos, pesquise o número e siga [Registar um pedido que não foi encontrado](#registar-um-pedido-que-nao-foi-encontrado). As análises novas aparecem no mesmo painel. As canceladas continuam listadas como **Introduzido por erro**.
 
 ## Limites
 
 - Devolver um pedido ao seu local, rejeitar uma amostra, as listas de trabalho e a revisão de resultados chegam em versões posteriores.
-- Um pedido registado na receção não pode ser marcado como introduzido por erro nesta versão. Confira o número, a unidade sanitária e as análises antes de o registar.
 - Cada análise de um pedido novo é o seu próprio pedido de análise. Um pedido guardado antes desta versão mantém todas as análises num só pedido de análise, e a receção lista-as todas.
 - Um utilizador com um limite de dados perde **Receive samples** e **Return and reject**, por isso a receção não aparece no seu menu.
 

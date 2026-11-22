@@ -48,7 +48,7 @@ In a source checkout, put `pnpm` in front, for example `pnpm openldr lab section
 
 ## The roles
 
-- **Reception** can receive samples, return a request to its site, reject a sample, view worklists and open the masked patient index.
+- **Reception** can receive samples, view worklists and open the masked patient index. It also holds returning a request to its site and rejecting a sample, which come in a later release.
 - **Lab Technician** can fill and submit forms, enter results and view worklists.
 - **Lab Manager** has all seven lab capabilities.
 
@@ -56,7 +56,7 @@ On an install that ran an older version, Reception appears the first time the se
 
 ## Reception
 
-Reception is the lab's front desk in the studio. It finds an order by a scanned or typed requisition number, registers an order the lab has no record of, finds or registers the patient, receives the sample with its condition and corrects a typo in an order. The in-app guide **Reception** shows each step.
+Reception is the lab's front desk in the studio. It finds an order by a scanned or typed requisition number, registers an order the lab has no record of, finds or registers the patient, receives the sample with its condition corrects a typo in an order, and cancels an order registered at the desk so it can be registered again. The in-app guide **Reception** shows each step.
 
 - Reception needs **Receive samples**. The Reception and Lab Manager roles hold it.
 - A user with a data limit loses **Receive samples** and **Return and reject**, so they have no Reception.

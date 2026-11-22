@@ -65,7 +65,7 @@ Do this when the search says `No patient matches. Register them below.`
 
 1. Under **New patient**, type **First name** and **Surname**.
 2. Choose **Sex**.
-3. Choose **Birth date**. If no one knows it, type the age in **Age in years** instead.
+3. Choose **Birth date**. If no one knows it, type the age in **Age in years** instead. If you fill in both, the birth date is used.
 4. If the patient has an identifier, type **Identifier system** and **Identifier value**.
 5. Open the dots menu beside **Find** and select **Register patient**.
 
@@ -81,11 +81,11 @@ Do this when an order shows **No patient linked**, or the wrong patient.
 
 1. Open the order panel's dots menu and select **Link patient**.
 2. Find the patient, or register a new one, as in the two tasks above.
-3. Select **Use this patient**, or **Register patient** for a new one.
+3. Open the dots menu beside **Find** and select **Use this patient**, or **Register patient** for a new one.
 
 **Expected result:** a message says the patient is linked to the order. The panel shows the patient's name.
 
-The link is kept as a correction, with your name and the reason `Patient linked at reception`.
+The link is kept as a correction, with your name and the reason `Patient linked at reception`. Samples already received for the order move to the new patient too.
 
 ## Receive the sample
 
@@ -97,9 +97,9 @@ The link is kept as a correction, with your name and the reason `Patient linked 
 
 **Expected result:** a message says, for example, `Sample received for order CS-0001.` The sample shows under **Samples**, with its condition and the time it was received.
 
-An order keeps one sample of each type. Receiving the same type again updates that sample.
+An order keeps one sample of each type. Receiving the same type again updates that sample and keeps the time it was first received.
 
-The condition list comes from your lab's sample condition value set. If the sheet says `The tests on this order name no sample type.`, add the sample types to those tests in the test catalog.
+The condition list comes from your lab's sample condition value set. If the sheet says `The tests on this order name no sample type. Map these tests to a sample type in the test catalog.`, add the sample types to those tests in the test catalog.
 
 ## Correct a typo in an order
 
@@ -114,12 +114,25 @@ A correction can change the priority, the clinician and the note. To change the 
 
 Each correction is kept with your name and the reason, and is recorded in **Audit**.
 
-A wrong requisition number, facility or test list cannot be corrected. Mark the entry as entered in error and register the order again. For an order from the **Lab order form**, someone who may mark entries in error does this on the form's **Entries** tab. Read [Forms](/docs/forms).
+A wrong requisition number, facility or test list cannot be corrected. For an order **Registered at the desk**, cancel the registration and register the order again, as in the next task. For an order from the **Lab order form**, someone who may mark entries in error marks the entry on the form's **Entries** tab, then you register the order again. Read [Forms](/docs/forms).
+
+## Cancel a desk registration
+
+Do this when an order registered at the desk has the wrong number, facility or test list. **Cancel registration** shows only for an order marked **Registered at the desk**.
+
+1. Open the order panel's dots menu and select **Cancel registration**.
+2. Type why in **Reason**, for example `Wrong test list`.
+3. Open the sheet's dots menu and select **Cancel registration**.
+
+**Expected result:** a message says, for example, `Order CS-0001 cancelled.` Each test on the order shows the status **Entered in error**.
+
+Each cancelled test is kept with your name and the reason, and the cancel is recorded in **Audit**. A cancelled order takes no sample.
+
+To register the order again with the right details, search for the number and follow [Register an order that is not found](#register-an-order-that-is-not-found). The new tests show in the same panel. The cancelled ones stay listed as **Entered in error**.
 
 ## Limits
 
 - Returning a request to its site, rejecting a sample, worklists and result review come in later releases.
-- An order registered at the desk cannot be marked as entered in error in this release. Check its number, facility and tests before you register it.
 - Each test on a new order is its own request. An order saved before this release keeps all its tests in one request, and Reception lists all of them.
 - A user with a data limit loses **Receive samples** and **Return and reject**, so Reception is not in their menu.
 
