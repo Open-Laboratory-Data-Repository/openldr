@@ -507,6 +507,17 @@ describe('form entries service: who marked an entry in error', () => {
     await w.db.destroy();
   });
 
+  it('names a local CLI marker by the OS user name, with no users read for it', async () => {
+    const w = await three();
+    await w.store.void(w.d.id, { id: 'cli:fredrick', reason: 'typo' });
+    expect((await w.service.get(w.d.id, all))?.statusByName).toBe('fredrick (CLI)');
+    expect(w.fakes.userReads).toHaveLength(0);
+    const r = await w.service.list({ formId: 'form-1', user: all, ...page });
+    expect(r.entries.find((e) => e.entryKey === 'CS-4')?.statusByName).toBe('fredrick (CLI)');
+    expect([...w.fakes.userReads[0]!].sort()).toEqual(['u-gone', 'u8', 'u9']);
+    await w.db.destroy();
+  });
+
   it('reads no users for a page with no marked entry', async () => {
     const w = await three();
     const r = await w.service.get(w.d.id, all);

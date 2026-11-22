@@ -1,4 +1,4 @@
-import { createAppContext, formOpenRule, type EntryViewer } from '@openldr/bootstrap';
+import { CLI_MARKER_PREFIX, createAppContext, formOpenRule, type EntryViewer } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import type { FormEntry, FormEntryStatus } from '@openldr/db';
 import { cliActor } from './cli-actor';
@@ -16,14 +16,23 @@ const STATUSES: readonly FormEntryStatus[] = ['active', 'incomplete', 'entered-i
 const MAX_REASON = 500;
 const NOT_FOUND = 'entry not found';
 
-/** The caller as the entries rules see them, and whether a form is open to them. Null when a served
- *  caller cannot be found, who then sees nothing. */
-async function callerOf(ctx: AppCtx): Promise<{ viewer: EntryViewer; openable(formIds: string[]): Promise<Set<string>> } | null> {
+/** The caller as the entries rules see them, whether a form is open to them, and who a void records as
+ *  the marker. Null when a served caller cannot be found, who then sees nothing. */
+async function callerOf(ctx: AppCtx): Promise<{
+  viewer: EntryViewer; marker: EntryViewer; openable(formIds: string[]): Promise<Set<string>>;
+} | null> {
   const caller = await servedCaller(ctx);
-  if (caller === 'local') return { viewer: { id: '', dataScope: { limited: false } }, openable: async (ids) => new Set(ids) };
+  if (caller === 'local') {
+    const viewer: EntryViewer = { id: '', dataScope: { limited: false } };
+    // A local run has no user id, so the void records `cli:<OS user>`, which the service names
+    // `<OS user> (CLI)` without a users lookup.
+    const marker: EntryViewer = { ...viewer, id: `${CLI_MARKER_PREFIX}${cliActor().actorName}` };
+    return { viewer, marker, openable: async (ids) => new Set(ids) };
+  }
   if (!caller) return null;
   const rule = formOpenRule(ctx.formAccess);
-  return { viewer: { id: caller.id, dataScope: caller.dataScope }, openable: (ids) => rule.openable(caller, ids) };
+  const viewer: EntryViewer = { id: caller.id, dataScope: caller.dataScope };
+  return { viewer, marker: viewer, openable: (ids) => rule.openable(caller, ids) };
 }
 
 /** A whole number in [min, max], or null. */
@@ -143,7 +152,7 @@ export async function runFormsVoidEntry(
       return 1;
     }
 
-    const result = await ctx.formEntries.voidEntry({ entryId: id, reason, user: caller.viewer, actor: cliActor() });
+    const result = await ctx.formEntries.voidEntry({ entryId: id, reason, user: caller.marker, actor: cliActor() });
     if (result === 'not-found') {
       process.stderr.write(`${NOT_FOUND}\n`);
       return 1;

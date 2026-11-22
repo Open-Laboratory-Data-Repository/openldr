@@ -1,3 +1,4 @@
+import os from 'node:os';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // `openldr forms entries` and `openldr forms void-entry` (design 2026-11-22-form-entries). The form
@@ -23,6 +24,7 @@ vi.mock('@openldr/bootstrap', async () => {
     { id: 'form-b', name: 'Twin' },
   ];
   return {
+    CLI_MARKER_PREFIX: 'cli:',
     formUserOf: real.formUserOf,
     formOpenRule: real.formOpenRule,
     createAppContext: async () => ({
@@ -175,11 +177,11 @@ describe('forms void-entry', () => {
     expect(out()).not.toContain('u9');
   });
 
-  it('with --force marks it, audits through the CLI actor, and says what it resaved', async () => {
+  it('with --force marks it as the OS user, audits through the CLI actor, and says what it resaved', async () => {
     expect(await runFormsVoidEntry('e1', voidOpts({ force: true, reason: '  wrong patient  ' }))).toBe(0);
     expect(mocks.voidEntry).toHaveBeenCalledWith({
-      entryId: 'e1', reason: 'wrong patient', user: { id: '', dataScope: { limited: false } },
-      actor: expect.objectContaining({ actorType: 'cli' }),
+      entryId: 'e1', reason: 'wrong patient', user: { id: `cli:${os.userInfo().username}`, dataScope: { limited: false } },
+      actor: expect.objectContaining({ actorType: 'cli', actorName: os.userInfo().username }),
     });
     expect(out()).toContain('marked e1 as entered in error');
     expect(out()).toContain('resaved 3, skipped 1');

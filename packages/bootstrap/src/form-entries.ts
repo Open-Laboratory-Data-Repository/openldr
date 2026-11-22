@@ -29,7 +29,8 @@ export interface EntryFacility { id: string; system: string; code: string; name:
 export interface EntryContext { facility: EntryFacility | null; locked: boolean; choices: EntryFacility[] | null }
 
 /** An entry as the list and the read give it. `statusByName` is the display name, else the username, of
- *  the user in `statusBy`. Null when there is no `statusBy`, or it names no user any more. */
+ *  the user in `statusBy`, or `<OS user> (CLI)` for a local CLI run. Null when there is no `statusBy`,
+ *  or it names no user any more. */
 export type NamedFormEntry = FormEntry & { statusByName: string | null };
 
 /** Who is asking. A limited user sees entries inside the limit and entries they made. */
@@ -92,6 +93,9 @@ const NOT_UPDATED = 'The entry is marked in error, but its saved records were no
 const NOT_KNOWN = 'The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.';
 const SOME_UNKNOWN = 'Some records this entry made may exist but are not known, so they were not marked.';
 
+/** The start of the id a local CLI run marks an entry with: `cli:<OS user>`. */
+export const CLI_MARKER_PREFIX = 'cli:';
+
 /** The same system actor the server's audit helper uses when no one is signed in. */
 const SYSTEM_ACTOR: AuditActor = { actorType: 'system', actorId: null, actorName: 'System' };
 
@@ -115,12 +119,15 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
     return entry.facilityId !== null && ids !== null && ids.includes(entry.facilityId) ? entry : null;
   };
 
-  /** Adds `statusByName` to each entry, with one read of the users for the whole page. */
+  /** Adds `statusByName` to each entry, with one read of the users for the whole page. A local CLI
+   *  run marks with the id `cli:<OS user>`, which names no user, so it is named without a read. */
   const withNames = async (entries: FormEntry[]): Promise<NamedFormEntry[]> => {
     const ids = [...new Set(entries.map((e) => e.statusBy).filter((id): id is string => id !== null))];
     const names = new Map<string, string>();
-    if (ids.length > 0) {
-      for (const u of await deps.users.getMany(ids)) names.set(u.id, u.displayName?.trim() || u.username);
+    for (const id of ids) if (id.startsWith(CLI_MARKER_PREFIX)) names.set(id, `${id.slice(CLI_MARKER_PREFIX.length)} (CLI)`);
+    const userIds = ids.filter((id) => !id.startsWith(CLI_MARKER_PREFIX));
+    if (userIds.length > 0) {
+      for (const u of await deps.users.getMany(userIds)) names.set(u.id, u.displayName?.trim() || u.username);
     }
     return entries.map((e) => ({ ...e, statusByName: e.statusBy ? names.get(e.statusBy) ?? null : null }));
   };
