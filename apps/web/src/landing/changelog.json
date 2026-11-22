@@ -6,6 +6,12 @@
       "version": "v0.1.12",
       "entries": [
         {
+          "hash": "a31f35ab5",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "A pack form that could never be saved is refused at install"
+        },
+        {
           "hash": "50272aac6",
           "type": "fix",
           "scope": "studio",
