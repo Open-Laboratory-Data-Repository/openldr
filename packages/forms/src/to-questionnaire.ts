@@ -24,6 +24,7 @@ import {
   EXT_QUESTIONNAIRE_MIN_OCCURS,
   EXT_QUESTIONNAIRE_UNIT,
   EXT_SDC_OBSERVATION_EXTRACT,
+  EXT_OPENLDR_ENTRIES_LIST,
 } from './extensions'
 
 const stringExt = (url: string, value: string): Extension => ({ url, valueString: value })
@@ -34,7 +35,7 @@ const boolExt = (url: string, value: boolean): Extension => ({ url, valueBoolean
 const NATIVELY_MAPPED_FIELD_KEYS = new Set<string>([
   'id', 'fhirPath', 'displayLabel', 'description', 'fieldType', 'required', 'order', 'cardinality',
   'valueSetUrl', 'bindingStrength', 'valueSetOptions', 'code', 'section', 'unit', 'allowCustomValue', 'repeatable',
-  'minItems', 'maxItems', 'groupId', 'visibility', 'observationExtract', 'translations',
+  'minItems', 'maxItems', 'groupId', 'visibility', 'observationExtract', 'entriesList', 'translations',
 ])
 
 /** Corlix-only field props (apiProperty, fhirDiscriminator, enabled, reference config, …) with no native home. */
@@ -93,6 +94,7 @@ function commonFieldExtensions(field: FormField): Extension[] {
   if (field.minItems !== undefined) ext.push(intExt(EXT_QUESTIONNAIRE_MIN_OCCURS, field.minItems))
   if (field.maxItems !== undefined) ext.push(intExt(EXT_QUESTIONNAIRE_MAX_OCCURS, field.maxItems))
   if (field.observationExtract) ext.push(boolExt(EXT_SDC_OBSERVATION_EXTRACT, true))
+  if (field.entriesList) ext.push(boolExt(EXT_OPENLDR_ENTRIES_LIST, true))
   const extras = fieldExtras(field)
   if (Object.keys(extras).length) ext.push(stringExt(EXT_CORLIX_FIELD_EXTRAS, JSON.stringify(extras)))
   return ext

@@ -19,6 +19,7 @@ import { discriminatorEquals, extrasDiscriminator } from '../discriminator'
 import { parseTestDetails } from '../test-details'
 import { ORDER_REJECTION_EXTENSION, isOrderRejectionBinding } from '../order-rejection-path'
 import { orderRejectionOf } from './order-rejection'
+import { isRequesterFacilityBinding, isRequisitionNumberBinding, pickedFacilityOf } from './order-fields'
 import { readTestDetails } from './test-results'
 import { EXT_CORLIX_FHIR_PATH, EXT_CORLIX_FIELD_EXTRAS, EXT_QUESTIONNAIRE_UNIT, EXT_SDC_OBSERVATION_EXTRACT } from '../extensions'
 
@@ -191,8 +192,8 @@ function nameOf(value: unknown): string | undefined {
  * the field could search (free text) keeps the name with no identifier, so it names no facility code.
  */
 function facilityOf(value: unknown): Reference | undefined {
-  if (value && typeof value === 'object' && typeof (value as Coding).code === 'string' && (value as Coding).code) {
-    const c = value as Coding
+  const c = pickedFacilityOf(value)
+  if (c) {
     return { identifier: { ...(c.system ? { system: c.system } : {}), value: c.code }, ...(c.display ? { display: c.display } : {}) }
   }
   const name = nameOf(value)
@@ -262,20 +263,18 @@ export const ServiceRequestExtractor: ResourceExtractor = {
 
       const value = item.answer?.[0] ? fromAnswer(item.answer[0]) : undefined
       if (value === undefined) return
-      // The shipped Lab order binds its requisition number to ServiceRequest.identifier.value since
-      // migration 103. A form an operator edited before then keeps the whole-list path, so both
-      // count. The identifier carries the system the field's discriminator names, when it names one.
-      // Every CE reader of an order identifier reads its value only, so the system adds, not moves.
-      if (path === 'ServiceRequest.identifier' || path === 'ServiceRequest.identifier.value') {
+      // The requisition number (see isRequisitionNumberBinding for which paths count). The
+      // identifier carries the system the field's discriminator names, when it names one. Every CE
+      // reader of an order identifier reads its value only, so the system adds, not moves.
+      if (isRequisitionNumberBinding(path)) {
         const system = discriminatorEquals(meta?.discriminator, 'system')
         request.identifier = [{ ...(system ? { system } : {}), value: String(value) }]
       }
       if (path === 'ServiceRequest.priority') request.priority = String(value) as ServiceRequest['priority']
-      // The clinician and the referring facility both fill the requester (migration 115), told
-      // apart by Reference.type. A requester field naming no type is the clinician, as it was
-      // before 115.
+      // The clinician and the referring facility both fill the requester (migration 115). See
+      // isRequesterFacilityBinding for how they are told apart.
       if (path === 'ServiceRequest.requester') {
-        if (discriminatorEquals(meta?.discriminator, 'type') === 'Organization') facility = facilityOf(value)
+        if (isRequesterFacilityBinding(path, meta?.discriminator)) facility = facilityOf(value)
         else clinician = nameOf(value)
       }
     })

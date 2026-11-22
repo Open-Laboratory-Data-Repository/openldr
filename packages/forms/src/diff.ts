@@ -21,7 +21,7 @@ const SECTION_KEYS = ['label', 'order', 'fhirResourceType', 'visibility'] as con
 const FIELD_KEYS = [
   'displayLabel', 'fieldType', 'required', 'enabled', 'order', 'section', 'groupId',
   'cardinality', 'valueSetOptions', 'valueSetUrl', 'bindingStrength',
-  'visibility', 'fhirPath', 'observationExtract', 'code', 'unit',
+  'visibility', 'fhirPath', 'observationExtract', 'entriesList', 'code', 'unit',
   'placeholder', 'adminNote', 'apiProperty', 'translations',
   'repeatable', 'minItems', 'maxItems', 'description',
 ] as const;
