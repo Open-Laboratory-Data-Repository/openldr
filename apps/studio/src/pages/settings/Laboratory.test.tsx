@@ -18,6 +18,7 @@ vi.mock('@/api', async (orig) => {
     saveLabIdentity: vi.fn(),
     listFacilityImportSources: vi.fn(),
     setAllowSelfAuthorise: vi.fn(),
+    fetchAllowSelfAuthorise: vi.fn(),
     listLabSections: vi.fn(),
     addLabSection: vi.fn(),
     removeLabSection: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/api', async (orig) => {
 });
 import * as api from '@/api';
 import { Laboratory } from './Laboratory';
+import { SUB_NAV } from './settingsNav';
 
 const LOGO = 'data:image/png;base64,iVBORw0KGgo=';
 
@@ -50,6 +52,7 @@ beforeEach(() => {
   vi.mocked(api.saveLabIdentity).mockClear();
   vi.mocked(api.listLabSections).mockReset().mockResolvedValue([]);
   vi.mocked(api.setAllowSelfAuthorise).mockReset();
+  vi.mocked(api.fetchAllowSelfAuthorise).mockReset().mockResolvedValue({ value: false });
   vi.mocked(api.addLabSection).mockReset();
   vi.mocked(api.removeLabSection).mockReset();
   auth.lacking.clear();
@@ -193,7 +196,7 @@ const SELF = /^allow a person to authorise results they entered$/i;
 
 describe('Settings → Laboratory: lab-wide settings', () => {
   it('shows the stored self-authorisation switch and saves a change at once, with a toast', async () => {
-    vi.mocked(api.fetchLabIdentity).mockResolvedValue({ ...META, allowSelfAuthorise: true } as never);
+    vi.mocked(api.fetchAllowSelfAuthorise).mockResolvedValue({ value: true });
     vi.mocked(api.setAllowSelfAuthorise).mockResolvedValue({ value: false });
     render(<MemoryRouter><Laboratory /></MemoryRouter>);
     const sw = await screen.findByRole('switch', { name: SELF });
@@ -216,8 +219,13 @@ describe('Settings → Laboratory: lab-wide settings', () => {
 
   it('without lab.settings: the switch is read-only, and no section list or Add section is offered', async () => {
     auth.lacking.add('lab.settings');
+    vi.mocked(api.fetchLabIdentity).mockResolvedValue({ ...META, allowSelfAuthorise: true } as never);
     render(<MemoryRouter><Laboratory /></MemoryRouter>);
-    expect(await screen.findByRole('switch', { name: SELF })).toBeDisabled();
+    const sw = await screen.findByRole('switch', { name: SELF });
+    expect(sw).toBeDisabled();
+    // Read from the letterhead GET, since this account cannot call the lab.settings route.
+    expect(sw).toHaveAttribute('aria-checked', 'true');
+    expect(api.fetchAllowSelfAuthorise).not.toHaveBeenCalled();
     expect(screen.queryByTestId('lab-sections')).not.toBeInTheDocument();
     expect(api.listLabSections).not.toHaveBeenCalled();
     fireEvent.pointerDown(screen.getByRole('button', { name: /^actions$/i }), { button: 0, ctrlKey: false });
@@ -298,5 +306,43 @@ describe('Settings → Laboratory: lab-wide settings', () => {
     fireEvent.click(within(confirm).getByRole('button', { name: /^remove$/i }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('section haem is used by 3 tests')));
     expect(screen.getByTestId('section-row-haem')).toBeInTheDocument();
+  });
+});
+
+// Controller ruling, 2026-11-22: the Lab Manager holds lab.settings and no settings.view or the
+// letterhead read, and must still reach the switch and the sections here.
+describe('Settings → Laboratory: an account with lab.settings only', () => {
+  it('is listed in the settings nav for lab.settings as well as settings.view', () => {
+    const item = SUB_NAV.find((i) => i.to === '/settings/laboratory');
+    expect(item?.caps).toEqual(['settings.view', 'lab.settings']);
+  });
+
+  it('shows the switch and the Sections table, and leaves the letterhead out when its read is refused', async () => {
+    for (const c of ['settings.view', 'settings.edit_general', 'reports.view']) auth.lacking.add(c);
+    vi.mocked(api.fetchLabIdentity).mockRejectedValue(new Error('load lab identity failed: insufficient capability'));
+    vi.mocked(api.fetchAllowSelfAuthorise).mockResolvedValue({ value: true });
+    vi.mocked(api.listLabSections).mockResolvedValue([{ code: 'haem', name: 'Haematology' }]);
+    render(<MemoryRouter><Laboratory /></MemoryRouter>);
+
+    const sw = await screen.findByRole('switch', { name: SELF });
+    expect(sw).toBeEnabled();
+    expect(sw).toHaveAttribute('aria-checked', 'true');
+    expect(await screen.findByTestId('section-row-haem')).toBeInTheDocument();
+    expect(screen.getByText('Laboratory settings')).toBeInTheDocument();
+    // No letterhead fields, no logo, no load error, and no Save for fields it cannot read.
+    expect(screen.queryByLabelText('Laboratory name')).not.toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.queryByText('Could not load the laboratory identity.')).not.toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^actions$/i }), { button: 0, ctrlKey: false });
+    expect(await screen.findByRole('menuitem', { name: /^add section$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /^save$/i })).not.toBeInTheDocument();
+  });
+
+  it('still shows the load error to an account with neither the letterhead read nor lab.settings', async () => {
+    auth.lacking.add('lab.settings');
+    vi.mocked(api.fetchLabIdentity).mockRejectedValue(new Error('nope'));
+    render(<MemoryRouter><Laboratory /></MemoryRouter>);
+    expect(await screen.findByText('Could not load the laboratory identity.')).toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 });

@@ -96,6 +96,12 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     allowSelfAuthorise: await ctx.labIdentity.allowSelfAuthorise(),
   }));
 
+  // The switch on its own, for a holder of lab.settings who cannot read the letterhead above
+  // (reports.view). The Laboratory page reads it from here when the account holds lab.settings.
+  app.get('/api/settings/lab/allow-self-authorise', LAB_SETTINGS, async () => ({
+    value: await ctx.labIdentity.allowSelfAuthorise(),
+  }));
+
   // `openldr lab settings set allow-self-authorise` calls the same service and records the same action.
   app.put('/api/settings/lab/allow-self-authorise', LAB_SETTINGS, async (req, reply) => {
     const p = AllowSelfAuthoriseSchema.safeParse(req.body);

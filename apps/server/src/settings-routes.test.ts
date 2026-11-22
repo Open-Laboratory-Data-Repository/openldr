@@ -533,6 +533,19 @@ describe('lab-wide settings: self-authorisation and sections', () => {
     expect(res.json().allowSelfAuthorise).toBe(false);
   });
 
+  it('GET /api/settings/lab/allow-self-authorise reads the switch with lab.settings alone, and is 403 without it', async () => {
+    const { ctx, deps } = fakeCtx();
+    (ctx as any).__settings.set('lab.allowSelfAuthorise', 'true');
+    const lab = appWithUser([], (a) => registerSettingsRoutes(a, ctx, deps), LAB);
+    const res = await lab.inject({ method: 'GET', url: '/api/settings/lab/allow-self-authorise' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ value: true });
+    const other = appWithUser([], (a) => registerSettingsRoutes(a, ctx, deps), ['reports.view', 'settings.view']);
+    expect((await other.inject({ method: 'GET', url: '/api/settings/lab/allow-self-authorise' })).statusCode).toBe(403);
+    // The letterhead read keeps its own gate: lab.settings alone does not open it.
+    expect((await lab.inject({ method: 'GET', url: '/api/settings/lab' })).statusCode).toBe(403);
+  });
+
   it('PUT /api/settings/lab/allow-self-authorise stores the switch with lab.settings alone, and audits', async () => {
     const { ctx, deps } = fakeCtx();
     const app = appWithUser([], (a) => registerSettingsRoutes(a, ctx, deps), LAB);

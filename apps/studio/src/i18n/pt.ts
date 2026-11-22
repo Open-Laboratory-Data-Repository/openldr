@@ -703,6 +703,8 @@ export const pt: EnShape = {
       logoReadError: 'Não foi possível ler esse ficheiro.',
       allowSelfAuthorise: 'Permitir que uma pessoa autorize os resultados que introduziu',
       allowSelfAuthoriseError: 'Não foi possível guardar a definição: {{error}}',
+      labSettingsTitle: 'Definições do laboratório',
+      allowSelfAuthoriseLoadError: 'Não foi possível carregar a definição de autorização própria: {{error}}',
       addSection: 'Adicionar secção',
       sections: {
         title: 'Secções',

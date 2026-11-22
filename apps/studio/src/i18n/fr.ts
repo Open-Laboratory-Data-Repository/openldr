@@ -703,6 +703,8 @@ export const fr: EnShape = {
       logoReadError: 'Impossible de lire ce fichier.',
       allowSelfAuthorise: 'Autoriser une personne à valider les résultats qu’elle a saisis',
       allowSelfAuthoriseError: 'Impossible d’enregistrer le paramètre : {{error}}',
+      labSettingsTitle: 'Paramètres du laboratoire',
+      allowSelfAuthoriseLoadError: 'Impossible de charger le paramètre de validation par l’auteur : {{error}}',
       addSection: 'Ajouter une section',
       sections: {
         title: 'Sections',

@@ -9,7 +9,9 @@ export interface SubNavItem {
 export const SUB_NAV: SubNavItem[] = [
   { labelKey: 'settings.subNav.general', to: '/settings/general', caps: ['settings.view'] },
   { labelKey: 'settings.subNav.setup', to: '/settings/setup', caps: ['settings.view'] },
-  { labelKey: 'settings.subNav.laboratory', to: '/settings/laboratory', caps: ['settings.view'] },
+  // lab.settings opens it too: the Lab Manager owns the section list and the self-authorisation
+  // switch on this page, and holds no settings.view.
+  { labelKey: 'settings.subNav.laboratory', to: '/settings/laboratory', caps: ['settings.view', 'lab.settings'] },
   { labelKey: 'settings.subNav.notifications', to: '/settings/notifications', caps: ['notifications.view'] },
   { labelKey: 'settings.subNav.sites', to: '/settings/sites', caps: ['sync.manage'] },
   { labelKey: 'settings.subNav.sync', to: '/settings/sync', caps: ['sync.view'] },

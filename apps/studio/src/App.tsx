@@ -83,7 +83,7 @@ export function App() {
         <Route path="roles" element={<RequireCapability cap="roles.view"><Roles /></RequireCapability>} />
         <Route path="setup" element={<RequireCapability cap="settings.view"><SetupChecks /></RequireCapability>} />
         <Route path="layouts" element={<RequireCapability cap="settings.edit_general"><Layouts /></RequireCapability>} />
-        <Route path="laboratory" element={<RequireCapability cap="settings.view"><Laboratory /></RequireCapability>} />
+        <Route path="laboratory" element={<RequireCapability caps={['settings.view', 'lab.settings']}><Laboratory /></RequireCapability>} />
         <Route path="data-exposure" element={<RequireCapability cap="data_exposure.manage"><DataExposure /></RequireCapability>} />
       </Route>
       <Route path="/audit" element={<RequireCapability cap="audit.view"><Audit /></RequireCapability>} />

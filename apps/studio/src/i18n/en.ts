@@ -707,6 +707,8 @@ export const en = {
       logoReadError: 'Could not read that file.',
       allowSelfAuthorise: 'Allow a person to authorise results they entered',
       allowSelfAuthoriseError: 'Could not save the setting: {{error}}',
+      labSettingsTitle: 'Laboratory settings',
+      allowSelfAuthoriseLoadError: 'Could not load the self-authorisation setting: {{error}}',
       addSection: 'Add section',
       sections: {
         title: 'Sections',

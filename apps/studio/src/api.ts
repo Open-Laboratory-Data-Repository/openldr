@@ -518,6 +518,10 @@ export const fetchLabIdentity = (): Promise<LabIdentityResponse> =>
 export const saveLabIdentity = (patch: LabIdentity): Promise<LabIdentity> =>
   authFetch('/api/settings/lab', jbody(patch, 'PUT')).then((r) => okJson<LabIdentity>(r, 'save lab identity'));
 
+/** The switch alone, for an account that holds lab.settings but cannot read the letterhead. */
+export const fetchAllowSelfAuthorise = (): Promise<{ value: boolean }> =>
+  authFetch('/api/settings/lab/allow-self-authorise').then((r) => okJson<{ value: boolean }>(r, 'load self-authorisation'));
+
 /** Returns the stored value. Needs lab.settings. */
 export const setAllowSelfAuthorise = (value: boolean): Promise<{ value: boolean }> =>
   authFetch('/api/settings/lab/allow-self-authorise', jbody({ value }, 'PUT'))
