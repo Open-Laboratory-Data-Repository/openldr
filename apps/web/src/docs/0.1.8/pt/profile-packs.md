@@ -94,7 +94,7 @@ O identificador já tem de estar na forma final: letras minúsculas, algarismos 
 }
 ```
 
-O formulário recebe o nome do `title` do Questionnaire. A etiqueta de versão é a versão do pacote. `open` e `submit` recebem identificadores de função, e o CE converte-os nos identificadores internos da instalação onde corre. Uma lista vazia significa todas as funções com a permissão, como no painel **Acesso** do construtor de formulários. Para submeter, a pessoa também tem de poder abrir o formulário.
+O formulário recebe o nome do `title` do Questionnaire. A etiqueta de versão é a versão do pacote. `open` e `submit` recebem identificadores de função, e o CE converte-os nos identificadores internos da instalação onde corre. Uma lista vazia significa todas as funções com a permissão, como no painel **Acesso** do construtor de formulários. Para submeter, a pessoa também tem de poder abrir o formulário. Um formulário tem de estar ligado a um pedido de análise (`ServiceRequest`) ou ter um campo marcado como resultado, senão a instalação recusa-o, porque o CE nunca conseguiria guardar uma resposta.
 
 Os códigos e os conjuntos de valores de um Questionnaire pertencem ao pacote. Guarde-os no repositório do pacote, nunca no CE.
 

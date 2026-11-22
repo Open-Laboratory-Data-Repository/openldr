@@ -94,7 +94,7 @@ The slug must already be in its final form: lowercase letters, digits and single
 }
 ```
 
-The form takes its name from the Questionnaire's `title`. Its version label is the pack's version. `open` and `submit` take role slugs, and CE turns them into the role ids of the install it runs on. An empty list means every role with the permission, as in the form builder's **Access** sheet. To submit, a person must also be able to open the form.
+The form takes its name from the Questionnaire's `title`. Its version label is the pack's version. `open` and `submit` take role slugs, and CE turns them into the role ids of the install it runs on. An empty list means every role with the permission, as in the form builder's **Access** sheet. To submit, a person must also be able to open the form. A form must be bound to an order (`ServiceRequest`) or have a field marked as a result, or the install refuses it, because CE could never save a response to it.
 
 Codes and value sets inside a Questionnaire belong to the pack. Keep them in the pack's repository, never in CE.
 

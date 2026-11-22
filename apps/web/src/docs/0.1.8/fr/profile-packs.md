@@ -94,7 +94,7 @@ L'identifiant doit déjà être sous sa forme finale : lettres minuscules, chiff
 }
 ```
 
-Le formulaire prend son nom dans le `title` du Questionnaire. Son libellé de version est la version du pack. `open` et `submit` prennent des identifiants de rôle, que le CE convertit en identifiants internes de l'installation où il s'exécute. Une liste vide veut dire tous les rôles qui ont la permission, comme dans le panneau **Accès** du constructeur de formulaires. Pour soumettre, une personne doit aussi pouvoir ouvrir le formulaire.
+Le formulaire prend son nom dans le `title` du Questionnaire. Son libellé de version est la version du pack. `open` et `submit` prennent des identifiants de rôle, que le CE convertit en identifiants internes de l'installation où il s'exécute. Une liste vide veut dire tous les rôles qui ont la permission, comme dans le panneau **Accès** du constructeur de formulaires. Pour soumettre, une personne doit aussi pouvoir ouvrir le formulaire. Un formulaire doit être lié à une demande d'analyse (`ServiceRequest`) ou avoir un champ marqué comme résultat, sinon l'installation le refuse, car le CE ne pourrait jamais en enregistrer une réponse.
 
 Les codes et les jeux de valeurs d'un Questionnaire appartiennent au pack. Gardez-les dans le dépôt du pack, jamais dans le CE.
 
