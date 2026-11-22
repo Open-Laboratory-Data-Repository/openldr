@@ -29,6 +29,12 @@ const MAX_AGE_YEARS = 130;
 /** The most patients one search shows. A strong match finds one or two. */
 const SEARCH_LIMIT = 25;
 const FULL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** The most words a name search takes. Each split of the words is a key, so this bounds the lookup. */
+const NAME_SEARCH_MAX_WORDS = 6;
+/** A request the desk has voided: it no longer holds the order's number for a new registration. */
+const VOIDED = 'entered-in-error';
+/** The statuses of a request no sample may be received for and no correction touches. */
+const NOT_LIVE: ReadonlySet<string> = new Set([VOIDED, 'revoked']);
 /** The sexes a Patient may have, from the Patient schema itself (ruling 11). */
 const GENDERS: readonly string[] = Patient.shape.gender.unwrap().options;
 
@@ -64,7 +70,8 @@ export interface RegisterOrderInput {
 }
 
 /** What a typo correction may change (ruling 12). The facility, the number and the tests are part
- *  of the ids, so a wrong one is fixed by voiding the order and registering it again. */
+ *  of the ids, so a wrong one is fixed by cancelling a desk order (cancelOrder) and registering it
+ *  again, or by voiding a form order from its form entry. */
 export interface OrderChanges {
   priority?: string | null;
   clinician?: string | null;
@@ -76,6 +83,12 @@ export interface CorrectOrderInput {
   requisition: string;
   facilityCode: string | null;
   changes: OrderChanges;
+  reason: string;
+}
+
+export interface CancelOrderInput {
+  requisition: string;
+  facilityCode: string | null;
   reason: string;
 }
 
@@ -101,6 +114,7 @@ export interface RegisterPatientInput {
   given: string;
   family: string;
   gender: 'male' | 'female' | 'other' | 'unknown';
+  /** When both are given, the birth date wins and the age is ignored. */
   birthDate?: string;
   ageYears?: number;
   identifier?: { system: string; value: string };
@@ -111,8 +125,9 @@ export interface ReceiveSampleInput {
   facilityCode: string | null;
   type: { system: string; code: string; display?: string };
   condition?: { system: string; code: string; display?: string };
-  /** The requests this sample serves. Left out, it serves every request of the order. */
+  /** The requests this sample serves. Left out, it serves every live request of the order. */
   serviceRequestIds?: string[];
+  /** Left out, a first receipt takes the time now and a second keeps the time stored. */
   receivedTime?: string;
 }
 
@@ -123,8 +138,11 @@ export interface LabReception {
   findOrders(requisition: string): Promise<ReceptionOrder[]>;
   registerOrder(input: RegisterOrderInput, who: string): Promise<ReceptionOrder>;
   correctOrder(input: CorrectOrderInput, who: string): Promise<ReceptionOrder>;
-  /** Patients on a strong match only (ruling 9): an exact identifier, or a full name with the full
-   *  birth date. Anything else finds no one, so the desk never browses patients. */
+  /** Voids every live request of a desk order (status entered-in-error), so its number can be
+   *  registered again. A form order is voided from its form entry instead. */
+  cancelOrder(input: CancelOrderInput, who: string): Promise<ReceptionOrder>;
+  /** Patients on a strong match only (ruling 9): an exact identifier, or a full name of 2 to 6 words
+   *  with the full birth date. Anything else finds no one, so the desk never browses patients. */
   searchPatients(q: PatientSearch): Promise<FoundPatient[]>;
   registerPatient(input: RegisterPatientInput, who: string): Promise<{ id: string; display: string }>;
   /** Writes, or updates, the one Specimen of this sample type for the order (ruling 13). */
@@ -141,6 +159,11 @@ export interface LabReceptionDeps {
   ops: Pick<Operations, 'expand' | 'lookup'>;
   patientIndex: Pick<PatientIndex, 'list' | 'idForRef' | 'rowsByIds'>;
   logger: Logger;
+  /** The lab's own time zone (the lab.timezone setting). Unset, or a zone the runtime cannot read,
+   *  and the lab's date is the UTC date. */
+  labTimeZone?: () => Promise<string | null | undefined>;
+  /** The clock. Tests set it. */
+  now?: () => Date;
 }
 
 type Json = Record<string, unknown>;
@@ -159,6 +182,37 @@ function text(v: unknown): string | null {
 
 function invalid(message: string): ReceptionError {
   return new ReceptionError('invalid', message);
+}
+
+/** A YYYY-MM-DD that names a real day: 1990-02-31 is refused. */
+export function isCalendarDate(v: string): boolean {
+  if (!FULL_DATE.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+/** The date at this moment in the given IANA zone, as YYYY-MM-DD. No zone, or one the runtime does
+ *  not know, gives the UTC date. */
+export function dateInZone(at: Date, zone: string | null | undefined): string {
+  const z = zone?.trim();
+  if (z) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: z, year: 'numeric', month: '2-digit', day: '2-digit' })
+        .formatToParts(at);
+      const part = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+      const out = `${part('year')}-${part('month')}-${part('day')}`;
+      if (FULL_DATE.test(out)) return out;
+    } catch { /* an unknown zone falls back to UTC */ }
+  }
+  return at.toISOString().slice(0, 10);
+}
+
+function statusOf(sr: Json): string {
+  return typeof sr['status'] === 'string' ? sr['status'] : 'unknown';
+}
+
+function isLive(sr: Json): boolean {
+  return !NOT_LIVE.has(statusOf(sr));
 }
 
 /** The Provenance of a desk write: what it wrote, how, and who did it. Every desk save carries one,
@@ -266,6 +320,14 @@ export async function orderSpecimenTypes(
 
 export function createLabReception(deps: LabReceptionDeps): LabReception {
   const { db, fhirStore, catalog } = deps;
+  const now = deps.now ?? (() => new Date());
+
+  /** Today at the lab, from the lab.timezone setting; the UTC date when it is unset or unreadable. */
+  async function labToday(): Promise<string> {
+    let zone: string | null | undefined;
+    try { zone = await deps.labTimeZone?.(); } catch { zone = null; }
+    return dateInZone(now(), zone);
+  }
 
   async function patientOf(id: string): Promise<Json | null> {
     return (await fhirStore.get('Patient', id)) as Json | null;
@@ -290,7 +352,8 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     }
     if (loaded.length === 0) return null;
     const requests = loaded.map((l) => l.sr);
-    const first = requests[0]!;
+    // The order's details come from a live request: a cancelled one may hold what was replaced.
+    const first = requests.find(isLive) ?? requests[0]!;
     const named = requesterFacility(first);
     const origin: ReceptionOrder['origin'] = requests.some(isDeskOrder)
       ? 'lab-desk'
@@ -378,10 +441,18 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
       named.push({ system: TEST_CATALOG_SYSTEM, code: test.code, display: test.lab.localDisplay ?? test.display ?? test.code });
     }
     const ids = named.map((t) => labOrderId(facilityCode, requisition, t));
-    // The index lags a save by one projection cycle, so the fixed ids are checked as well.
-    const known = (await findByRequisition(db, requisition)).some((r) => r.facility === facilityCode);
-    let stored = known;
-    for (const id of ids) if (!stored && await fhirStore.exists('ServiceRequest', id)) stored = true;
+    // The index lags a save by one projection cycle, so the fixed ids are checked as well. A voided
+    // request (a cancelled desk order, a voided form entry) no longer holds the number, and the
+    // save below writes over its fixed id as a new version.
+    const held = async (id: string): Promise<boolean> => {
+      const sr = (await fhirStore.get('ServiceRequest', id)) as Json | null;
+      return sr !== null && statusOf(sr) !== VOIDED;
+    };
+    let stored = false;
+    for (const r of await findByRequisition(db, requisition)) {
+      if (!stored && r.facility === facilityCode && await held(r.serviceRequestId)) stored = true;
+    }
+    for (const id of ids) if (!stored && await held(id)) stored = true;
     if (stored) throw new ReceptionError('conflict', `Requisition ${requisition} from ${facilityCode} is already registered.`);
 
     const loinc = await catalog.loincCodingsFor(named);
@@ -391,7 +462,7 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     }));
     const priority = text(input.priority);
     const note = text(input.note);
-    const authoredOn = new Date().toISOString();
+    const authoredOn = now().toISOString();
     const number = { system: ORDER_REQUISITION_SYSTEM, value: requisition };
     // The form's shape (ruling 2): one request per test, LOINC in front when linked, and the
     // requester the extractor writes.
@@ -473,7 +544,8 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     const extra = Object.keys(changes).filter((k) => !CHANGE_KEYS.has(k));
     if (extra.length > 0) {
       throw invalid(`A correction may change the priority, clinician, note and patient only, not ${extra.join(', ')}. `
-        + 'A wrong requisition number, facility or test list is fixed by voiding the order and registering it again.');
+        + 'A wrong requisition number, facility or test list is fixed by cancelling a desk order and registering it again, '
+        + 'or by voiding a form order from its form entry.');
     }
     if (Object.keys(changes).length === 0) throw invalid('Say what to correct.');
     const reason = text(input.reason);
@@ -487,21 +559,49 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     const group = (await groups(requisition)).find((g) => g.facility === facility);
     if (!group) throw new ReceptionError('not-found', `No order ${requisition}${facility ? ` from ${facility}` : ''} was found.`);
     const subject = changes.patientId !== undefined ? await subjectFor(String(changes.patientId)) : null;
-    const nexts: Json[] = [];
+    const requests: Json[] = [];
+    let any = false;
     for (const id of group.ids) {
       const sr = (await fhirStore.get('ServiceRequest', id)) as Json | null;
       if (!sr) continue;
+      any = true;
+      // A voided or revoked request stays as it is.
+      if (isLive(sr)) requests.push(sr);
+    }
+    if (!any) throw new ReceptionError('not-found', `No order ${requisition} was found.`);
+    if (requests.length === 0) throw invalid(`Order ${requisition} was cancelled. There is nothing left to correct.`);
+    const nexts: Array<{ resourceType: 'ServiceRequest' | 'Specimen'; next: Json }> = [];
+    for (const sr of requests) {
       const next = corrected(sr, changes, subject);
       const checked = validateResource(next);
       if (!checked.ok) throw invalid(checked.outcome.issue.map((i) => i.diagnostics ?? i.code).join('; '));
-      nexts.push(next);
+      nexts.push({ resourceType: 'ServiceRequest', next });
     }
-    if (nexts.length === 0) throw new ReceptionError('not-found', `No order ${requisition} was found.`);
-    // One correction per request, each with its own Provenance and the same reason. Every body was
-    // checked above, so a refusal part way through is a store failure, not a bad edit.
-    for (const next of nexts) {
+    // A linked patient is the subject of the order's received samples too (ruling 24).
+    if (subject) {
+      for (const sp of await specimensOf(facility, requisition, requests)) {
+        const stored = (await fhirStore.get('Specimen', sp.id)) as Json | null;
+        if (!stored) continue;
+        const next = { ...structuredClone(stored), subject: { ...subject } };
+        const checked = validateResource(next);
+        if (!checked.ok) throw invalid(checked.outcome.issue.map((i) => i.diagnostics ?? i.code).join('; '));
+        nexts.push({ resourceType: 'Specimen', next });
+      }
+    }
+    await correctAll(nexts, actor, reason);
+    const order = await findOne(requisition, facility);
+    if (!order) throw new Error(`corrected requisition ${requisition} could not be read back`);
+    return order;
+  }
+
+  /** One correction per record, each with its own Provenance and the same reason. Every body was
+   *  checked before, so a refusal part way through is a store failure, not a bad edit. */
+  async function correctAll(
+    nexts: Array<{ resourceType: 'ServiceRequest' | 'Specimen'; next: Json }>, actor: string, reason: string,
+  ): Promise<void> {
+    for (const { resourceType, next } of nexts) {
       try {
-        await fhirStore.correct({ resourceType: 'ServiceRequest', id: String(next['id']), next, who: actor, reason });
+        await fhirStore.correct({ resourceType, id: String(next['id']), next, who: actor, reason });
       } catch (err) {
         if (err instanceof CorrectionError) {
           throw new ReceptionError(err.reason === 'not-found' ? 'not-found' : 'invalid', err.message);
@@ -509,8 +609,35 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
         throw err;
       }
     }
+  }
+
+  async function cancelOrder(input: CancelOrderInput, who: string): Promise<ReceptionOrder> {
+    const reason = text(input?.reason);
+    if (!reason) throw invalid('A cancellation needs a reason.');
+    const actor = text(who);
+    if (!actor) throw invalid('A cancellation needs the name of who made it.');
+    const requisition = text(input?.requisition);
+    if (!requisition) throw invalid('A requisition number is required.');
+    const facility = text(input?.facilityCode);
+
+    const group = (await groups(requisition)).find((g) => g.facility === facility);
+    const requests: Json[] = [];
+    for (const id of group?.ids ?? []) {
+      const sr = (await fhirStore.get('ServiceRequest', id)) as Json | null;
+      if (sr) requests.push(sr);
+    }
+    if (requests.length === 0) {
+      throw new ReceptionError('not-found', `No order ${requisition}${facility ? ` from ${facility}` : ''} was found.`);
+    }
+    if (!requests.some(isDeskOrder)) {
+      throw invalid(`Order ${requisition} was not registered at the desk. A form order is voided from its form entry.`);
+    }
+    const live = requests.filter(isLive);
+    if (live.length === 0) throw invalid(`Order ${requisition} is already cancelled.`);
+    const nexts = live.map((sr) => ({ resourceType: 'ServiceRequest' as const, next: { ...structuredClone(sr), status: VOIDED } }));
+    await correctAll(nexts, actor, reason);
     const order = await findOne(requisition, facility);
-    if (!order) throw new Error(`corrected requisition ${requisition} could not be read back`);
+    if (!order) throw new Error(`cancelled requisition ${requisition} could not be read back`);
     return order;
   }
 
@@ -534,16 +661,21 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
   }
 
   /** The duplicate keys a full name could have with this birth date: each split of its words into a
-   *  first name and a surname, in either order. One word gives none, so a partial name finds no one. */
+   *  first name and a surname, in either order. The warehouse keeps the first given name only, so a
+   *  first name of several words is also tried as its first word. The surname is always whole.
+   *  One word gives none, so a partial name finds no one; more than six words give none too. */
   function matchKeys(name: string, birthDate: string): string[] {
     const words = name.split(/\s+/).filter(Boolean);
+    if (words.length > NAME_SEARCH_MAX_WORDS) return [];
     const keys = new Set<string>();
     for (let i = 1; i < words.length; i++) {
-      const front = words.slice(0, i).join(' ');
-      const back = words.slice(i).join(' ');
+      const front = words.slice(0, i);
+      const back = words.slice(i);
       for (const [first, surname] of [[front, back], [back, front]] as const) {
-        const key = patientMatchKey(surname, first, birthDate);
-        if (key) keys.add(key);
+        for (const given of new Set([first.join(' '), first[0]!])) {
+          const key = patientMatchKey(surname.join(' '), given, birthDate);
+          if (key) keys.add(key);
+        }
       }
     }
     return [...keys];
@@ -560,7 +692,7 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     }
     const name = text(q?.name);
     const birthDate = text(q?.birthDate);
-    if (!name || !birthDate || !FULL_DATE.test(birthDate)) return [];
+    if (!name || !birthDate || !isCalendarDate(birthDate)) return [];
     const keys = matchKeys(name, birthDate);
     if (keys.length === 0) return [];
     // match_key is the duplicate-detection key (surname, first name, birth date; external migration
@@ -578,16 +710,18 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     const family = text(input?.family);
     if (!given || !family) throw invalid('A patient needs a first name and a surname.');
     if (!GENDERS.includes(input.gender)) throw invalid(`Sex must be one of ${GENDERS.join(', ')}.`);
-    const today = new Date().toISOString().slice(0, 10);
+    // The lab's own date, so a baby born today is not refused just after the lab's midnight.
+    const today = await labToday();
     let birthDate = text(input.birthDate);
     let estimated = false;
+    // A birth date wins over an age when both are given.
     if (birthDate) {
-      if (!FULL_DATE.test(birthDate) || Number.isNaN(Date.parse(birthDate))) throw invalid('A birth date must be a full date, YYYY-MM-DD.');
+      if (!isCalendarDate(birthDate)) throw invalid('A birth date must be a real date, YYYY-MM-DD.');
       if (birthDate > today) throw invalid('A birth date cannot be in the future.');
     } else if (input.ageYears !== undefined && input.ageYears !== null) {
       const age = input.ageYears;
       if (!Number.isInteger(age) || age < 0 || age > MAX_AGE_YEARS) throw invalid(`An age must be a whole number of years from 0 to ${MAX_AGE_YEARS}.`);
-      birthDate = `${new Date().getUTCFullYear() - age}-01-01`;
+      birthDate = `${Number(today.slice(0, 4)) - age}-01-01`;
       estimated = true;
     } else {
       throw invalid('A patient needs a birth date or an age.');
@@ -601,7 +735,7 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     }
 
     const id = randomUUID();
-    const recorded = new Date().toISOString();
+    const recorded = now().toISOString();
     const patient: Json = {
       resourceType: 'Patient',
       id,
@@ -628,13 +762,18 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
   }
 
   async function sampleChoices(requisition: string, facilityCode: string | null): Promise<SampleChoices> {
-    return choicesOf(await orderFor(requisition, facilityCode));
+    return choicesOf(liveTests(await orderFor(requisition, facilityCode)));
   }
 
-  /** The sample types an order's tests take, each with the terminology's display. */
-  async function choicesOf(order: ReceptionOrder): Promise<SampleChoices> {
+  /** The tests of an order a sample may still be received for: not voided, not revoked. */
+  function liveTests(order: ReceptionOrder): ReceptionOrder['tests'] {
+    return order.tests.filter((t) => !NOT_LIVE.has(t.status));
+  }
+
+  /** The sample types these tests take, each with the terminology's display. */
+  async function choicesOf(tests: ReceptionOrder['tests']): Promise<SampleChoices> {
     const types: SampleChoices['types'] = [];
-    for (const t of await orderSpecimenTypes(catalog, order.tests)) {
+    for (const t of await orderSpecimenTypes(catalog, tests)) {
       const found = await deps.ops.lookup(t.system, t.code);
       types.push({ system: t.system, code: t.code, display: found.found ? text(found.display) : null });
     }
@@ -659,35 +798,41 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     const order = await orderFor(input?.requisition ?? '', input?.facilityCode ?? null);
     const facility = order.facility?.code ?? null;
 
-    // Every check that reads, before any write.
+    // Every check that reads, before any write. A voided or revoked request takes no sample.
+    const tests = liveTests(order);
+    if (tests.length === 0) throw invalid(`Order ${order.requisition} was cancelled. No sample can be received for it.`);
     const typeSystem = text(input.type?.system);
     const typeCode = text(input.type?.code);
-    const choices = await choicesOf(order);
+    const choices = await choicesOf(tests);
     const choice = choices.types.find((t) => t.system === typeSystem && t.code === typeCode);
     if (!choice) throw invalid(`Sample type ${typeCode ?? ''} is not one this order's tests take.`);
     const condition = input.condition !== undefined ? await conditionCoding(input.condition) : null;
-    const orderRequests = [...new Set(order.tests.map((t) => t.serviceRequestId))];
-    let requests = orderRequests;
+    const allRequests = new Set(order.tests.map((t) => t.serviceRequestId));
+    const liveRequests = [...new Set(tests.map((t) => t.serviceRequestId))];
+    let requests = liveRequests;
     if (input.serviceRequestIds !== undefined) {
       const chosen = [...new Set((input.serviceRequestIds ?? []).map((i) => String(i).trim()))];
-      const stranger = chosen.find((i) => !orderRequests.includes(i));
+      const stranger = chosen.find((i) => !allRequests.has(i));
+      const dead = chosen.find((i) => allRequests.has(i) && !liveRequests.includes(i));
       if (chosen.length === 0 || stranger !== undefined) {
         throw invalid(stranger !== undefined ? `Request ${stranger} is not on this order.` : 'A sample serves at least one test.');
       }
+      if (dead !== undefined) throw invalid(`Request ${dead} was cancelled. No sample can be received for it.`);
       requests = chosen;
     }
 
     const id = labSpecimenId(facility, order.requisition, choice);
     const existing = (await fhirStore.get('Specimen', id)) as Json | null;
     const display = text(input.type.display) ?? choice.display;
-    const recorded = new Date().toISOString();
+    const recorded = now().toISOString();
     const specimen: Json = {
       ...(existing ? structuredClone(existing) : {}),
       resourceType: 'Specimen',
       id,
       status: 'available',
       type: { coding: [{ system: choice.system, code: choice.code, ...(display ? { display } : {}) }] },
-      receivedTime: text(input.receivedTime) ?? recorded,
+      // A second receipt keeps the time stored unless it gives one (ruling 16).
+      receivedTime: text(input.receivedTime) ?? (existing ? text(existing['receivedTime']) : null) ?? recorded,
       request: requests.map((r) => ({ reference: `ServiceRequest/${r}` })),
     };
     if (condition) specimen['condition'] = [{ coding: [condition] }];
@@ -711,5 +856,5 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     return after;
   }
 
-  return { findOrders, registerOrder, correctOrder, searchPatients, registerPatient, receiveSample, sampleChoices };
+  return { findOrders, registerOrder, correctOrder, cancelOrder, searchPatients, registerPatient, receiveSample, sampleChoices };
 }

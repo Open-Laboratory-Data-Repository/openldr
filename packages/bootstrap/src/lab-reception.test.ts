@@ -29,7 +29,7 @@ async function seedTest(db: Kysely<InternalSchema>, code: string, display: strin
   await db.insertInto('test_catalog_lab_settings').values({ code, enabled } as never).execute();
 }
 
-async function world(): Promise<World> {
+async function world(opts: { now?: () => Date; labTimeZone?: () => Promise<string | undefined> } = {}): Promise<World> {
   delete process.env.OPENLDR_SITE_ID;
   // The patient index fixture: a migrated internal db and warehouse, with md5 for the masked list.
   const f = await buildPatientIndexFixture();
@@ -58,7 +58,7 @@ async function world(): Promise<World> {
   const patientIndex = createPatientIndex({ externalDb, systems: f.systems, engine: 'postgres', refKey: randomBytes(32) });
   return {
     db, externalDb, fhirStore, catalog,
-    reception: createLabReception({ db, externalDb, fhirStore, catalog, ops, patientIndex, logger: silent }),
+    reception: createLabReception({ db, externalDb, fhirStore, catalog, ops, patientIndex, logger: silent, ...opts }),
   };
 }
 
@@ -453,7 +453,8 @@ describe('lab reception, samples', () => {
     expect((sp2['meta'] as { versionId: string }).versionId).toBe('2');
     expect(sp2['request']).toEqual([{ reference: `ServiceRequest/${order.tests[0]!.serviceRequestId}` }]);
     expect(sp2['condition']).toEqual([{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0493', code: 'CLOT', display: 'Clotted' }] }]);
-    expect(typeof sp2['receivedTime']).toBe('string');
+    // The second receive gave no time, so the stored one stays (ruling 16).
+    expect(sp2['receivedTime']).toBe('2026-11-23T08:00:00Z');
 
     const provs = await specimenProvenances(id);
     expect(provs.map((p) => [(p['target'] as Array<{ reference: string }>)[0]!.reference, (p['activity'] as { coding: Array<{ code: string }> }).coding[0]!.code, (p['agent'] as Array<{ who: { display: string } }>)[0]!.who.display]))
@@ -495,5 +496,167 @@ describe('lab reception, samples', () => {
     const sp = await w.fhirStore.get('Specimen', id) as Record<string, unknown>;
     expect(sp['request']).toEqual([{ reference: 'ServiceRequest/old-s' }]);
     expect(sp['subject']).toEqual({ reference: 'Patient/p2', display: 'Juma Said' });
+  });
+});
+
+describe('lab reception, cancelling a desk order', () => {
+  let w: World;
+  beforeEach(async () => { w = await world(); });
+  const HB = { system: TEST_CATALOG_SYSTEM, code: 'HB' };
+  const GLU = { system: TEST_CATALOG_SYSTEM, code: 'GLU' };
+
+  it('voids every request of a desk order with the reason, and keeps listing them with their status', async () => {
+    const desk = await w.reception.registerOrder({ requisition: 'R-C1', facilityCode: 'FAC-1', patientId: 'p1', tests: [HB, GLU] }, 'Neema');
+    const o = await w.reception.cancelOrder({ requisition: ' R-C1 ', facilityCode: 'FAC-1', reason: 'wrong test list' }, 'Neema');
+    expect(o.tests.map((t) => t.status)).toEqual(['entered-in-error', 'entered-in-error']);
+    for (const t of desk.tests) {
+      const sr = await w.fhirStore.get('ServiceRequest', t.serviceRequestId) as Record<string, unknown>;
+      expect(sr['status']).toBe('entered-in-error');
+      const reasons = (await provenancesFor(w, t.serviceRequestId)).flatMap((p) => (p['reason'] as Array<{ text: string }> | undefined) ?? []);
+      expect(reasons).toEqual([{ text: 'wrong test list' }]);
+    }
+    expect((await w.reception.findOrders('R-C1'))[0]!.tests.map((t) => t.status)).toEqual(['entered-in-error', 'entered-in-error']);
+    await expect(w.reception.cancelOrder({ requisition: 'R-C1', facilityCode: 'FAC-1', reason: 'again' }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'invalid' });
+  });
+
+  it('refuses a form order, an unknown order, and a cancellation with no reason', async () => {
+    await save(w, formOrder('FAC-1', 'R-C2', [{ code: 'HB', display: 'Haemoglobin' }]), 'form-capture');
+    const err = await w.reception.cancelOrder({ requisition: 'R-C2', facilityCode: 'FAC-1', reason: 'x' }, 'Neema').catch((e: unknown) => e);
+    expect(err).toMatchObject({ reason: 'invalid' });
+    expect((err as Error).message).toMatch(/form entry/);
+    await expect(w.reception.cancelOrder({ requisition: 'R-NONE', facilityCode: 'FAC-1', reason: 'x' }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'not-found' });
+    await w.reception.registerOrder({ requisition: 'R-C3', facilityCode: 'FAC-1', patientId: 'p1', tests: [HB] }, 'Neema');
+    await expect(w.reception.cancelOrder({ requisition: 'R-C3', facilityCode: 'FAC-1', reason: '  ' }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'invalid' });
+    expect((await w.reception.findOrders('R-C3'))[0]!.tests[0]!.status).toBe('active');
+  });
+
+  it('registers the number again after a cancel: one live order with the new tests, the old request stays voided', async () => {
+    const first = await w.reception.registerOrder({ requisition: 'R-C4', facilityCode: 'FAC-1', patientId: 'p1', tests: [HB], priority: 'routine' }, 'Neema');
+    await w.reception.cancelOrder({ requisition: 'R-C4', facilityCode: 'FAC-1', reason: 'wrong test' }, 'Neema');
+    const again = await w.reception.registerOrder({ requisition: 'R-C4', facilityCode: 'FAC-1', patientId: 'p2', tests: [GLU], priority: 'stat' }, 'Neema');
+    const live = again.tests.filter((t) => t.status === 'active');
+    expect(live.map((t) => t.code)).toEqual(['GLU']);
+    expect(again.tests.find((t) => t.code === 'HB')).toMatchObject({ serviceRequestId: first.tests[0]!.serviceRequestId, status: 'entered-in-error' });
+    // The order's details come from the live request.
+    expect(again).toMatchObject({ priority: 'stat', patient: { id: 'p2' } });
+    // A third registration is refused: the new order holds the number.
+    await expect(w.reception.registerOrder({ requisition: 'R-C4', facilityCode: 'FAC-1', patientId: 'p1', tests: [HB] }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'conflict' });
+  });
+
+  it('registers the same test again after a cancel, as a new version of its fixed id', async () => {
+    const first = await w.reception.registerOrder({ requisition: 'R-C5', facilityCode: 'FAC-1', patientId: 'p1', tests: [HB] }, 'Neema');
+    await w.reception.cancelOrder({ requisition: 'R-C5', facilityCode: 'FAC-1', reason: 'wrong patient' }, 'Neema');
+    const again = await w.reception.registerOrder({ requisition: 'R-C5', facilityCode: 'FAC-1', patientId: 'p2', tests: [HB] }, 'Neema');
+    expect(again.tests).toEqual([expect.objectContaining({ serviceRequestId: first.tests[0]!.serviceRequestId, status: 'active' })]);
+    const sr = await w.fhirStore.get('ServiceRequest', first.tests[0]!.serviceRequestId) as Record<string, unknown>;
+    expect((sr['meta'] as { versionId: string }).versionId).toBe('3');
+    expect(sr['subject']).toEqual({ reference: 'Patient/p2', display: 'Juma Said' });
+  });
+
+  it('a correction skips voided requests, and refuses when none is left', async () => {
+    await w.reception.registerOrder({ requisition: 'R-C6', facilityCode: 'FAC-1', patientId: 'p1', tests: [HB] }, 'Neema');
+    await w.reception.cancelOrder({ requisition: 'R-C6', facilityCode: 'FAC-1', reason: 'wrong test' }, 'Neema');
+    await expect(w.reception.correctOrder({ requisition: 'R-C6', facilityCode: 'FAC-1', changes: { priority: 'stat' }, reason: 'x' }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'invalid' });
+    const again = await w.reception.registerOrder({ requisition: 'R-C6', facilityCode: 'FAC-1', patientId: 'p1', tests: [GLU] }, 'Neema');
+    await w.reception.correctOrder({ requisition: 'R-C6', facilityCode: 'FAC-1', changes: { priority: 'stat' }, reason: 'urgent now' }, 'Neema');
+    const voided = again.tests.find((t) => t.code === 'HB')!;
+    const live = again.tests.find((t) => t.code === 'GLU')!;
+    expect((await w.fhirStore.get('ServiceRequest', voided.serviceRequestId) as Record<string, unknown>)['priority']).toBeUndefined();
+    expect((await w.fhirStore.get('ServiceRequest', live.serviceRequestId) as Record<string, unknown>)['priority']).toBe('stat');
+  });
+
+  it('refuses a sample for a cancelled order, a voided request, or a revoked one', async () => {
+    await w.reception.registerOrder({ requisition: 'R-C7', facilityCode: 'FAC-1', patientId: 'p1', tests: [HB] }, 'Neema');
+    await w.reception.cancelOrder({ requisition: 'R-C7', facilityCode: 'FAC-1', reason: 'wrong test' }, 'Neema');
+    await expect(w.reception.receiveSample({ requisition: 'R-C7', facilityCode: 'FAC-1', type: BLD }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'invalid' });
+    const again = await w.reception.registerOrder({ requisition: 'R-C7', facilityCode: 'FAC-1', patientId: 'p1', tests: [GLU] }, 'Neema');
+    const voided = again.tests.find((t) => t.code === 'HB')!;
+    await expect(w.reception.receiveSample({ requisition: 'R-C7', facilityCode: 'FAC-1', type: BLD, serviceRequestIds: [voided.serviceRequestId] }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'invalid' });
+    // With no ids, the sample serves the live request only.
+    await w.reception.receiveSample({ requisition: 'R-C7', facilityCode: 'FAC-1', type: BLD }, 'Neema');
+    const sp = await w.fhirStore.get('Specimen', labSpecimenId('FAC-1', 'R-C7', BLD)) as Record<string, unknown>;
+    expect(sp['request']).toEqual([{ reference: `ServiceRequest/${again.tests.find((t) => t.code === 'GLU')!.serviceRequestId}` }]);
+
+    const revoked = { ...formOrder('FAC-1', 'R-C8', [{ code: 'HB', display: 'Haemoglobin' }])[0]!, status: 'revoked' };
+    await save(w, [revoked], 'form-capture');
+    await expect(w.reception.receiveSample({ requisition: 'R-C8', facilityCode: 'FAC-1', type: BLD }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'invalid' });
+    expect((await w.reception.findOrders('R-C8'))[0]!.tests[0]!.status).toBe('revoked');
+  });
+
+  it('linking a patient also moves the received samples to that patient, with the same reason', async () => {
+    await w.reception.registerOrder({ requisition: 'R-C9', facilityCode: 'FAC-1', patientId: 'p1', tests: [HB] }, 'Neema');
+    await w.reception.receiveSample({ requisition: 'R-C9', facilityCode: 'FAC-1', type: BLD }, 'Neema');
+    const id = labSpecimenId('FAC-1', 'R-C9', BLD);
+    await w.reception.correctOrder({ requisition: 'R-C9', facilityCode: 'FAC-1', changes: { patientId: 'p2' }, reason: 'wrong patient' }, 'Baraka');
+    const sp = await w.fhirStore.get('Specimen', id) as Record<string, unknown>;
+    expect(sp['subject']).toEqual({ reference: 'Patient/p2', display: 'Juma Said' });
+    const rows = await w.db.selectFrom('fhir.fhir_resources').select('resource').where('resource_type', '=', 'Provenance').execute();
+    const reasons = rows.map((r) => (typeof r.resource === 'string' ? JSON.parse(r.resource) : r.resource) as Record<string, unknown>)
+      .filter((p) => (p['target'] as Array<{ reference: string }>).some((t) => t.reference.startsWith(`Specimen/${id}/`)))
+      .flatMap((p) => (p['reason'] as Array<{ text: string }> | undefined) ?? []);
+    expect(reasons).toEqual([{ text: 'wrong patient' }]);
+  });
+});
+
+describe('lab reception, dates and names', () => {
+  it('refuses a date that is not a real day', async () => {
+    const w = await world();
+    await expect(w.reception.registerPatient({ given: 'Juma', family: 'Said', gender: 'male', birthDate: '1990-02-31' }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'invalid' });
+    expect(await w.reception.searchPatients({ name: 'Asha Mrema', birthDate: '1990-02-31' })).toEqual([]);
+  });
+
+  it('takes a baby born today at the lab, just after the lab\'s midnight, while UTC is still yesterday', async () => {
+    // 21:30 UTC on 22 November is 00:30 on 23 November in Dar es Salaam (UTC+3).
+    const now = () => new Date('2026-11-22T21:30:00Z');
+    const w = await world({ now, labTimeZone: async () => 'Africa/Dar_es_Salaam' });
+    const p = await w.reception.registerPatient({ given: 'Baby', family: 'Said', gender: 'unknown', birthDate: '2026-11-23' }, 'Neema');
+    expect((await w.fhirStore.get('Patient', p.id) as Record<string, unknown>)['birthDate']).toBe('2026-11-23');
+    await expect(w.reception.registerPatient({ given: 'Baby', family: 'Said', gender: 'unknown', birthDate: '2026-11-24' }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'invalid' });
+    // With no zone set the lab's date is the UTC date, so the same birth date is in the future.
+    const utc = await world({ now });
+    await expect(utc.reception.registerPatient({ given: 'Baby', family: 'Said', gender: 'unknown', birthDate: '2026-11-23' }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'invalid' });
+  });
+
+  it('estimates an age from the lab\'s year', async () => {
+    // 22:00 UTC on 31 December 2026 is 1 January 2027 in Dar es Salaam.
+    const w = await world({ now: () => new Date('2026-12-31T22:00:00Z'), labTimeZone: async () => 'Africa/Dar_es_Salaam' });
+    const p = await w.reception.registerPatient({ given: 'Juma', family: 'Said', gender: 'male', ageYears: 30 }, 'Neema');
+    expect((await w.fhirStore.get('Patient', p.id) as Record<string, unknown>)['birthDate']).toBe('1997-01-01');
+  });
+
+  it('takes the birth date when both a birth date and an age are given', async () => {
+    const w = await world();
+    const p = await w.reception.registerPatient({ given: 'Juma', family: 'Said', gender: 'male', birthDate: '2001-07-15', ageYears: 3 }, 'Neema');
+    const saved = await w.fhirStore.get('Patient', p.id) as Record<string, unknown>;
+    expect(saved['birthDate']).toBe('2001-07-15');
+    expect(saved['extension']).toBeUndefined();
+  });
+
+  it('finds a patient stored with the first given name only, from a name with a middle name', async () => {
+    const w = await world();
+    await seedPatient(w.externalDb, { id: 'wa', surname: 'Juma', firstname: 'Amina', dob: '1985-03-09', sex: 'F' });
+    for (const name of ['Amina Rose Juma', 'Juma Amina Rose']) {
+      expect((await w.reception.searchPatients({ name, birthDate: '1985-03-09' })).map((p) => p.id), name).toEqual(['wa']);
+    }
+    // The surname stays whole: a middle name is not tried as one.
+    expect(await w.reception.searchPatients({ name: 'Amina Rose', birthDate: '1985-03-09' })).toEqual([]);
+  });
+
+  it('finds no one for a name of more than six words', async () => {
+    const w = await world();
+    await seedPatient(w.externalDb, { id: 'wa', surname: 'Juma', firstname: 'Amina', dob: '1985-03-09', sex: 'F' });
+    expect(await w.reception.searchPatients({ name: 'Amina a b c d e Juma', birthDate: '1985-03-09' })).toEqual([]);
+    expect((await w.reception.searchPatients({ name: 'Amina a b c d Juma', birthDate: '1985-03-09' })).map((p) => p.id)).toEqual(['wa']);
   });
 });

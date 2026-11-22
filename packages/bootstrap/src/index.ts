@@ -1254,6 +1254,8 @@ const reporting: ReportingApi = {
   const patientIndex = createPatientIndex({ externalDb, systems: patientIdentifierSystems, engine });
   const labReception = createLabReception({
     db: termDb, externalDb, fhirStore: canonicalFhirStore, catalog: testCatalog, ops: terminology.ops, patientIndex, logger,
+    // LAZY: labIdentity is built further down this function. The arrow runs only on a registration.
+    labTimeZone: async () => (await labIdentity.all())['lab.timezone'],
   });
   const patientDuplicates = createPatientDuplicates({ internalDb: termDb, externalDb, index: patientIndex, systems: patientIdentifierSystems });
 
