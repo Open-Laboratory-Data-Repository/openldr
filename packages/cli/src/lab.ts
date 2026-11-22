@@ -145,10 +145,11 @@ export async function runLabSettingsSet(key: string, value: string, opts: Opts):
   }
 }
 
-/** `openldr lab requisitions rebuild --force`: empties `lab_requisitions` and indexes every current
- *  ServiceRequest by its requisition number again, the same fill migration 139 runs. The projection
- *  keeps the table current, so this is for repair: after a hook failure, or to drop the rows of
- *  requests deleted from the store. It rewrites the whole table, so it refuses without --force. */
+/** `openldr lab requisitions rebuild --force`: indexes every current ServiceRequest by its
+ *  requisition number again, writing over the rows already there (the same fill migration 139 runs),
+ *  then removes the rows that fill did not touch and the rows of requests no longer in the store.
+ *  The projection keeps the table current, so this is for repair: after a hook failure, or to drop
+ *  the rows of deleted requests. It rewrites the whole table, so it refuses without --force. */
 export async function runLabRequisitionsRebuild(opts: Opts & { force: boolean }): Promise<number> {
   if (!opts.force) {
     process.stderr.write('Refusing to rebuild the requisition index without --force.\n');

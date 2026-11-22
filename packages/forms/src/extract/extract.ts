@@ -139,11 +139,6 @@ export function requesterFacilityAnswers(
   return out
 }
 
-/**
- * Every answered requisition-number item of a response, in the order the order extractor reads
- * them, as the extractor writes them (`String(value)`). The extractor keeps the last one as the
- * order's identifier. Same index and walk as `ServiceRequestExtractor`.
- */
 /** One test an order names: the system an answer carries (LOINC when it names none) and its name. */
 export interface OrderedTestAnswer { system: string; code: string; display?: string }
 
@@ -174,6 +169,11 @@ export function orderedTests(response: QuestionnaireResponse, questionnaire: Que
   return out
 }
 
+/**
+ * Every answered requisition-number item of a response, in the order the order extractor reads
+ * them, as the extractor writes them (`String(value)`). The extractor keeps the last one as the
+ * order's identifier. Same index and walk as `ServiceRequestExtractor`.
+ */
 export function requisitionNumberAnswers(response: QuestionnaireResponse, questionnaire: Questionnaire): string[] {
   const index = indexItems(questionnaire)
   const out: string[] = []
