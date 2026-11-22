@@ -56,15 +56,24 @@ function fakeTrust() {
   };
 }
 
-/** An empty install: no pack items, roles or layouts. Every write throws. */
-function fakeProfile() {
-  const write = () => { throw new Error('a profile write is Task 4'); };
+/** An empty install unless `items` says what the pack already made. Writes return fixed ids. */
+function fakeProfile(items: Array<{ packId: string; kind: string; key: string; itemId: string }> = []) {
+  const role = (id: string, slug: string) => ({ id, slug, name: slug, description: null, isSystem: false, locked: false, capabilities: [], memberCount: 0 });
   return {
-    packItems: { list: vi.fn(async () => []), owners: vi.fn(async () => new Map()), put: vi.fn(write), remove: vi.fn(write) },
-    roles: { get: vi.fn(async () => null), getBySlug: vi.fn(async () => null), create: vi.fn(write), update: vi.fn(write), remove: vi.fn(write) },
+    packItems: { list: vi.fn(async (packId: string) => items.filter((i) => i.packId === packId)), owners: vi.fn(async () => new Map()), put: vi.fn(async () => undefined), remove: vi.fn(async () => undefined) },
+    roles: {
+      get: vi.fn(async (id: string) => { const i = items.find((x) => x.kind === 'role' && x.itemId === id); return i ? role(id, i.key) : null; }),
+      getBySlug: vi.fn(async () => null),
+      create: vi.fn(async (input: { slug: string }) => role('r-new', input.slug)),
+      update: vi.fn(async () => undefined), remove: vi.fn(async () => undefined),
+    },
     roleMembers: vi.fn(async () => []),
-    layouts: { list: vi.fn(async () => ({ layouts: [], roleOrder: [] })), save: vi.fn(write), remove: vi.fn(write) },
-    forms: { install: vi.fn(write), check: vi.fn(), setAccess: vi.fn(write) },
+    layouts: {
+      list: vi.fn(async () => ({ layouts: items.filter((i) => i.kind === 'layout').map((i) => ({ id: i.itemId, name: i.key, startPage: null, pages: ['/forms'], roles: [] })), roleOrder: [] })),
+      save: vi.fn(async (id: string | null, input: { name: string }) => ({ id: id ?? 'l-new', name: input.name, startPage: null, pages: ['/forms'], roles: [] })),
+      remove: vi.fn(async (id: string) => ({ id, name: id, startPage: null, pages: ['/forms'], roles: [] })),
+    },
+    forms: { install: vi.fn(async () => 'f-new'), check: vi.fn(), setAccess: vi.fn(async () => undefined) },
     installedVersion: vi.fn(async () => null),
     capabilityKeys: ['forms.view', 'roles.manage'],
   };
@@ -509,6 +518,71 @@ describe('content pack installer: the check phase covers the profile steps', () 
     await expect(s.installer.check(bundle)).resolves.toMatchObject({ steps: [{ kind: 'role' }] });
     await expect(s.installer.install(bundle, { actor })).resolves.toMatchObject({ status: 'installed' });
     expect(s.deps.profile.roles.getBySlug).toHaveBeenCalledWith('sample-clerk');
+    await cleanup();
+  });
+});
+
+describe('content pack installer: the write phase of the profile steps', () => {
+  const pack = {
+    formatVersion: 1,
+    steps: [
+      { kind: 'role', slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] },
+      { kind: 'form', key: 'lab-request', questionnaire: { resourceType: 'Questionnaire' }, open: ['sample-clerk'], submit: [] },
+    ],
+  };
+  const owned = [
+    { packId: 'test-pack', kind: 'role', key: 'old-clerk', itemId: 'r-old' },
+    { packId: 'test-pack', kind: 'layout', key: 'old-layout', itemId: 'l-old' },
+    { packId: 'test-pack', kind: 'form', key: 'old-form', itemId: 'f-old' },
+  ];
+
+  it('audits each profile step with the pack source', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+    await expect(s.installer.install(bundle, { actor })).resolves.toMatchObject({ status: 'installed' });
+    const rows = events(s.audit).filter((e) => e.action !== 'marketplace.install');
+    expect(rows).toEqual([
+      expect.objectContaining({ action: 'role.create', entityType: 'role', entityId: 'r-new', actorId: 'admin', metadata: { source: 'content-pack', pack: 'test-pack@1.0.0', step: 1 } }),
+      expect.objectContaining({ action: 'form.install', entityType: 'form', entityId: 'f-new', metadata: { source: 'content-pack', pack: 'test-pack@1.0.0', step: 2 } }),
+    ]);
+    expect(s.deps.profile.forms.install).toHaveBeenCalledWith(null, { resourceType: 'Questionnaire' }, '1.0.0', 'admin');
+    await cleanup();
+  });
+
+  it('after every step wrote, removes the role and layout the pack no longer carries and audits it', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup({ profile: fakeProfile(owned) });
+    await expect(s.installer.install(bundle, { actor })).resolves.toMatchObject({ status: 'installed' });
+    expect(s.deps.profile.roles.remove).toHaveBeenCalledWith('r-old');
+    expect(s.deps.profile.layouts.remove).toHaveBeenCalledWith('l-old');
+    expect(s.deps.profile.packItems.remove).toHaveBeenCalledWith('test-pack', 'form', 'old-form');
+    const rows = events(s.audit).filter((e) => e.action.endsWith('.delete'));
+    expect(rows).toEqual([
+      expect.objectContaining({ action: 'role.delete', entityType: 'role', entityId: 'old-clerk', metadata: { source: 'content-pack', pack: 'test-pack@1.0.0' } }),
+      expect.objectContaining({ action: 'layout.delete', entityType: 'layout', entityId: 'old-layout', metadata: { source: 'content-pack', pack: 'test-pack@1.0.0' } }),
+    ]);
+    await cleanup();
+  });
+
+  it('a failed step removes nothing the pack owns', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const profile = fakeProfile(owned);
+    profile.forms.install.mockRejectedValueOnce(new Error('the form store is down'));
+    const s = setup({ profile });
+    await expect(s.installer.install(bundle, { actor })).resolves.toMatchObject({ status: 'failed', failedStep: 2, error: 'the form store is down' });
+    expect(profile.roles.remove).not.toHaveBeenCalled();
+    expect(profile.layouts.remove).not.toHaveBeenCalled();
+    expect(profile.packItems.remove).not.toHaveBeenCalled();
+    await cleanup();
+  });
+
+  it('a removal that throws marks the install failed', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const profile = fakeProfile(owned);
+    profile.roles.remove.mockRejectedValueOnce(new Error('cannot delete the last role granting roles.manage'));
+    const s = setup({ profile });
+    await expect(s.installer.install(bundle, { actor })).resolves.toMatchObject({ status: 'failed', error: 'cannot delete the last role granting roles.manage' });
+    expect(s.installs.store.upsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed', failedStep: null }));
     await cleanup();
   });
 });

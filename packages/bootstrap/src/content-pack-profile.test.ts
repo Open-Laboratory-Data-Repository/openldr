@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ContentPackStep } from '@openldr/marketplace';
 import type { PackItem } from '@openldr/db';
-import { checkProfileSteps, PackRemovalError, type ProfileDeps } from './content-pack-profile';
+import { checkProfileSteps, dropLeftOut, PackRemovalError, runProfileStep, type ProfileDeps } from './content-pack-profile';
 
 const PACK = 'collection-site';
 
@@ -191,5 +191,200 @@ describe('checkProfileSteps', () => {
       items: [{ packId: PACK, kind: 'role', key: 'old-clerk', itemId: 'r2' }],
     });
     await expect(checkProfileSteps(deps, PACK, STEPS, 'all')).resolves.toBeUndefined();
+  });
+});
+
+/** An install held in memory. Every write changes it, so a second run sees the first. */
+function memDeps(opts: { failFormInstallTimes?: number } = {}) {
+  let n = 0;
+  const id = (p: string) => `${p}${++n}`;
+  const items: PackItem[] = [];
+  const roles = new Map<string, { id: string; slug: string; name: string; description: string | null; capabilities: string[] }>();
+  const layouts = new Map<string, { id: string; name: string; startPage: string | null; pages: string[]; roles: string[] }>();
+  const forms = new Map<string, { id: string; questionnaire: unknown; version: string }>();
+  const access = new Map<string, { open: string[]; submit: string[] }>();
+  let formFails = opts.failFormInstallTimes ?? 0;
+  const roleRecord = (r: { id: string; slug: string; name: string; description: string | null; capabilities: string[] }) =>
+    ({ ...r, isSystem: false, locked: false, memberCount: 0 });
+  const deps: ProfileDeps = {
+    packItems: {
+      list: vi.fn(async (packId: string) => items.filter((i) => i.packId === packId)),
+      owners: vi.fn(async () => new Map()),
+      put: vi.fn(async (item: PackItem) => {
+        const at = items.findIndex((i) => i.packId === item.packId && i.kind === item.kind && i.key === item.key);
+        if (at >= 0) items[at] = item; else items.push(item);
+      }),
+      remove: vi.fn(async (packId: string, kind: PackItem['kind'], key: string) => {
+        const at = items.findIndex((i) => i.packId === packId && i.kind === kind && i.key === key);
+        if (at >= 0) items.splice(at, 1);
+      }),
+    },
+    roles: {
+      get: vi.fn(async (rid: string) => { const r = roles.get(rid); return r ? roleRecord(r) : null; }),
+      getBySlug: vi.fn(async (slug: string) => { const r = [...roles.values()].find((x) => x.slug === slug); return r ? roleRecord(r) : null; }),
+      create: vi.fn(async (input) => {
+        const r = { id: id('r'), slug: input.slug!, name: input.name, description: input.description ?? null, capabilities: input.capabilities };
+        roles.set(r.id, r);
+        return roleRecord(r);
+      }),
+      update: vi.fn(async (rid: string, patch) => {
+        const r = roles.get(rid)!;
+        Object.assign(r, patch);
+        return roleRecord(r);
+      }),
+      remove: vi.fn(async (rid: string) => { roles.delete(rid); }),
+    },
+    roleMembers: vi.fn(async () => []),
+    layouts: {
+      list: vi.fn(async () => ({ layouts: [...layouts.values()], roleOrder: [] })),
+      save: vi.fn(async (lid: string | null, input) => {
+        const l = { id: lid ?? id('l'), ...input };
+        layouts.set(l.id, l);
+        return l;
+      }),
+      remove: vi.fn(async (lid: string) => { const l = layouts.get(lid)!; layouts.delete(lid); return l; }),
+    },
+    forms: {
+      install: vi.fn(async (fid: string | null, questionnaire: unknown, version: string) => {
+        if (formFails > 0) { formFails--; throw new Error('the form store is down'); }
+        const f = { id: fid ?? id('f'), questionnaire, version };
+        forms.set(f.id, f);
+        return f.id;
+      }),
+      check: vi.fn(),
+      setAccess: vi.fn(async (fid: string, a: { open: string[]; submit: string[] }) => { access.set(fid, a); }),
+    },
+    installedVersion: vi.fn(async () => '0.1.0'),
+    capabilityKeys: ALL_CAPS,
+  };
+  return { deps, items, roles, layouts, forms, access };
+}
+
+const runAll = async (deps: ProfileDeps, steps: ContentPackStep[], version = '1.0.0') => {
+  const out = [];
+  for (const s of steps) out.push(await runProfileStep(deps, PACK, version, s, 'admin'));
+  return out;
+};
+
+describe('runProfileStep', () => {
+  it('a needs step writes nothing and returns nothing to audit', async () => {
+    const m = memDeps();
+    await expect(runProfileStep(m.deps, PACK, '1.0.0', STEPS[0], 'admin')).resolves.toBeNull();
+    expect(m.deps.packItems.put).not.toHaveBeenCalled();
+  });
+
+  it('a role step creates the role and records that this pack made it', async () => {
+    const m = memDeps();
+    const step: ContentPackStep = { ...STEPS[1], description: 'Takes samples' } as ContentPackStep;
+    const out = await runProfileStep(m.deps, PACK, '1.0.0', step, 'admin');
+    const [role] = [...m.roles.values()];
+    expect(m.deps.roles.create).toHaveBeenCalledWith({ slug: 'sample-clerk', name: 'Sample Clerk', description: 'Takes samples', capabilities: ['forms.view', 'forms.submit', 'patients.view'] });
+    expect(m.items).toEqual([{ packId: PACK, kind: 'role', key: 'sample-clerk', itemId: role.id }]);
+    expect(out).toEqual({ action: 'role.create', entityType: 'role', entityId: role.id });
+  });
+
+  it('a role step with no description passes null', async () => {
+    const m = memDeps();
+    await runProfileStep(m.deps, PACK, '1.0.0', STEPS[1], 'admin');
+    expect(m.deps.roles.create).toHaveBeenCalledWith(expect.objectContaining({ description: null }));
+  });
+
+  it('the same role step run twice leaves one role, updated from the step', async () => {
+    const m = memDeps();
+    await runProfileStep(m.deps, PACK, '1.0.0', STEPS[1], 'admin');
+    const changed: ContentPackStep = { kind: 'role', slug: 'sample-clerk', name: 'Clerk', description: 'New', capabilities: ['forms.view'] };
+    const out = await runProfileStep(m.deps, PACK, '1.0.1', changed, 'admin');
+    expect(m.roles.size).toBe(1);
+    const [role] = [...m.roles.values()];
+    expect(m.deps.roles.update).toHaveBeenCalledWith(role.id, { name: 'Clerk', description: 'New', capabilities: ['forms.view'] });
+    expect(role).toMatchObject({ name: 'Clerk', description: 'New', capabilities: ['forms.view'] });
+    expect(m.items).toHaveLength(1);
+    expect(out).toEqual({ action: 'role.update', entityType: 'role', entityId: role.id });
+  });
+
+  it('creates the role again when the role the pack made is gone', async () => {
+    const m = memDeps();
+    m.items.push({ packId: PACK, kind: 'role', key: 'sample-clerk', itemId: 'r-gone' });
+    const out = await runProfileStep(m.deps, PACK, '1.0.0', STEPS[1], 'admin');
+    const [role] = [...m.roles.values()];
+    expect(out?.action).toBe('role.create');
+    expect(m.items).toEqual([{ packId: PACK, kind: 'role', key: 'sample-clerk', itemId: role.id }]);
+  });
+
+  it('a form step that fails after the role step wrote, then a second full run, leaves one role', async () => {
+    const m = memDeps({ failFormInstallTimes: 1 });
+    await expect(runAll(m.deps, STEPS)).rejects.toThrow('the form store is down');
+    expect(m.roles.size).toBe(1);
+    const outs = await runAll(m.deps, STEPS);
+    expect(m.roles.size).toBe(1);
+    expect(m.layouts.size).toBe(1);
+    expect(m.forms.size).toBe(1);
+    expect(outs.map((o) => o?.action)).toEqual([undefined, 'role.update', 'layout.update', 'form.install']);
+    expect(m.items.map((i) => `${i.kind}:${i.key}`).sort()).toEqual(['form:lab-request', 'layout:collection-site', 'role:sample-clerk']);
+  });
+
+  it('a layout step saves with roles set to the pack slugs, and a second run updates the same layout', async () => {
+    const m = memDeps();
+    const first = await runAll(m.deps, STEPS.slice(1, 3));
+    expect(m.deps.layouts.save).toHaveBeenCalledWith(null, { name: 'Collection site', startPage: '/forms', pages: ['/forms', '/patients', '/docs'], roles: ['sample-clerk'] }, 'admin');
+    const [layout] = [...m.layouts.values()];
+    expect(first[1]).toEqual({ action: 'layout.create', entityType: 'layout', entityId: layout.id });
+    const again = await runProfileStep(m.deps, PACK, '1.0.0', STEPS[2], 'admin');
+    expect(m.deps.layouts.save).toHaveBeenLastCalledWith(layout.id, expect.objectContaining({ roles: ['sample-clerk'] }), 'admin');
+    expect(m.layouts.size).toBe(1);
+    expect(again).toEqual({ action: 'layout.update', entityType: 'layout', entityId: layout.id });
+  });
+
+  it('creates the layout again when the layout the pack made is gone', async () => {
+    const m = memDeps();
+    m.items.push({ packId: PACK, kind: 'layout', key: 'collection-site', itemId: 'l-gone' });
+    const out = await runProfileStep(m.deps, PACK, '1.0.0', STEPS[2], 'admin');
+    expect(m.deps.layouts.save).toHaveBeenCalledWith(null, expect.anything(), 'admin');
+    expect(out?.action).toBe('layout.create');
+  });
+
+  it('a form step installs the form at the bundle version and sets access to the given slugs', async () => {
+    const m = memDeps();
+    const step: ContentPackStep = { kind: 'form', key: 'lab-request', questionnaire: { resourceType: 'Questionnaire' }, open: ['sample-clerk', 'nurse'], submit: ['sample-clerk'] };
+    const out = await runProfileStep(m.deps, PACK, '2.3.4', step, 'admin');
+    const [form] = [...m.forms.values()];
+    expect(m.deps.forms.install).toHaveBeenCalledWith(null, { resourceType: 'Questionnaire' }, '2.3.4', 'admin');
+    expect(m.access.get(form.id)).toEqual({ open: ['sample-clerk', 'nurse'], submit: ['sample-clerk'] });
+    expect(m.items).toEqual([{ packId: PACK, kind: 'form', key: 'lab-request', itemId: form.id }]);
+    expect(out).toEqual({ action: 'form.install', entityType: 'form', entityId: form.id });
+    await runProfileStep(m.deps, PACK, '2.3.5', step, 'admin');
+    expect(m.deps.forms.install).toHaveBeenLastCalledWith(form.id, { resourceType: 'Questionnaire' }, '2.3.5', 'admin');
+    expect(m.forms.size).toBe(1);
+  });
+});
+
+describe('dropLeftOut', () => {
+  it('deletes an owned role and layout the new steps leave out, and keeps a left-out form', async () => {
+    const m = memDeps();
+    await runAll(m.deps, STEPS);
+    const [formId] = [...m.forms.keys()];
+    const removed = await dropLeftOut(m.deps, PACK, [STEPS[0]]);
+    expect(removed).toEqual({ roles: ['sample-clerk'], layouts: ['collection-site'], formsKept: ['lab-request'] });
+    expect(m.roles.size).toBe(0);
+    expect(m.layouts.size).toBe(0);
+    expect(m.forms.has(formId)).toBe(true);
+    expect(m.items).toEqual([]);
+  });
+
+  it('keeps what the new steps still carry', async () => {
+    const m = memDeps();
+    await runAll(m.deps, STEPS);
+    await expect(dropLeftOut(m.deps, PACK, STEPS)).resolves.toEqual({ roles: [], layouts: [], formsKept: [] });
+    expect(m.items).toHaveLength(3);
+    expect(m.deps.roles.remove).not.toHaveBeenCalled();
+    expect(m.deps.layouts.remove).not.toHaveBeenCalled();
+  });
+
+  it('forgets a left-out layout that is already gone without failing', async () => {
+    const m = memDeps();
+    m.items.push({ packId: PACK, kind: 'layout', key: 'old', itemId: 'l-gone' });
+    await expect(dropLeftOut(m.deps, PACK, [])).resolves.toEqual({ roles: [], layouts: ['old'], formsKept: [] });
+    expect(m.deps.layouts.remove).not.toHaveBeenCalled();
+    expect(m.items).toEqual([]);
   });
 });

@@ -8,7 +8,7 @@ import { safeRecord, type AuditEventInput, type AuditStore } from '@openldr/audi
 import { redact, type Logger } from '@openldr/core';
 import type { MapLevel, PackMappingInput, PackMappingPlan } from './test-mapping';
 import type { PackDataset } from './warehouse-datasets';
-import { checkProfileSteps, type InstallerCapabilities, type ProfileDeps } from './content-pack-profile';
+import { checkProfileSteps, dropLeftOut, runProfileStep, type InstallerCapabilities, type ProfileDeps } from './content-pack-profile';
 
 type Actor = { id: string | null; name: string };
 type StepOutcome = { ok: true } | { ok: false; error: string };
@@ -165,7 +165,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     return { pack, steps, linkPreview, testMapPreview };
   }
 
-  async function runStep(step: ContentPackStep, actor: Actor, at: { pack: string; step: number; packId: string }): Promise<void> {
+  async function runStep(step: ContentPackStep, actor: Actor, at: { pack: string; step: number; packId: string; version: string }): Promise<void> {
     const source = { source: 'content-pack', pack: at.pack, step: at.step };
     switch (step.kind) {
       case 'code-system':
@@ -240,9 +240,12 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
       case 'needs':
       case 'role':
       case 'layout':
-      case 'form':
-        // The write phase for these steps is Task 4 of the profile packs plan. Until then they write nothing.
+      case 'form': {
+        // Owned by the pack's id, without its version, so a second run updates what the first made.
+        const out = await runProfileStep(deps.profile, at.packId, at.version, step, actor.id);
+        if (out) await record({ ...who(actor), ...out, before: null, after: null, metadata: source });
         return;
+      }
     }
   }
 
@@ -269,7 +272,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     let error: string | undefined;
     for (let i = 0; i < pack.steps.length; i++) {
       try {
-        await runStep(pack.steps[i], actor, { pack: `${artifactId}@${version}`, step: i + 1, packId: artifactId });
+        await runStep(pack.steps[i], actor, { pack: `${artifactId}@${version}`, step: i + 1, packId: artifactId, version });
       } catch (err) {
         failedStep = i + 1;
         // The text reaches the install row, the audit and the UI. Mask secrets a driver error may echo.
@@ -278,7 +281,23 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
       }
     }
 
-    const status: 'installed' | 'failed' = failedStep === undefined ? 'installed' : 'failed';
+    if (failedStep === undefined) {
+      // Only after every step wrote: a failed run must not delete what the next run would update.
+      try {
+        const gone = await dropLeftOut(deps.profile, artifactId, pack.steps);
+        const source = { source: 'content-pack', pack: `${artifactId}@${version}` };
+        for (const slug of gone.roles) {
+          await record({ ...who(actor), action: 'role.delete', entityType: 'role', entityId: slug, before: null, after: null, metadata: source });
+        }
+        for (const key of gone.layouts) {
+          await record({ ...who(actor), action: 'layout.delete', entityType: 'layout', entityId: key, before: null, after: null, metadata: source });
+        }
+      } catch (err) {
+        error = redact(messageOf(err));
+      }
+    }
+
+    const status: 'installed' | 'failed' = failedStep === undefined && error === undefined ? 'installed' : 'failed';
     await installStore.upsert({
       artifactId, version, kind: 'content-pack', targetFormId: null,
       payloadSha256: payloadHash(bundle),
@@ -289,7 +308,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     await record({
       ...who(actor),
       action: 'marketplace.install', entityType: 'marketplace.artifact', entityId: `${artifactId}@${version}`,
-      metadata: { type: 'content-pack', status, steps: pack.steps.length, ...(failedStep !== undefined ? { failedStep, error } : {}) },
+      metadata: { type: 'content-pack', status, steps: pack.steps.length, ...(status === 'failed' ? { failedStep, error } : {}) },
     });
 
     return status === 'installed'

@@ -4,7 +4,9 @@ import { slugify } from '@openldr/rbac';
 import { layoutInputSchema, type LayoutInput, type LayoutList, type LayoutPreset } from './layout-presets';
 
 // The needs, role, layout and form steps of a content pack (profile packs design 5.1 to 5.3).
-// This file holds the check phase: it reads and never writes.
+// checkProfileSteps is the check phase: it reads and never writes. runProfileStep and dropLeftOut
+// are the write phase. Steps write one at a time with no transaction around them (design 5.1b), so
+// each write is safe to run again: ownership is looked up by pack id and key, never by version.
 
 export interface ProfileDeps {
   packItems: PackItemStore;
@@ -129,4 +131,85 @@ export async function checkProfileSteps(
     if (users.length > 0) holders.push({ role: role.slug, users });
   }
   if (holders.length > 0) throw new PackRemovalError(holders);
+}
+
+/** What runStep records in the audit for one profile step. */
+export interface ProfileStepAudit {
+  action: 'role.create' | 'role.update' | 'layout.create' | 'layout.update' | 'form.install';
+  entityType: 'role' | 'layout' | 'form';
+  entityId: string;
+}
+
+/** Runs one role, layout or form step. Safe to run again. Returns what to audit. A needs step writes nothing. */
+export async function runProfileStep(
+  deps: ProfileDeps, packId: string, version: string, step: ContentPackStep, actorId: string | null,
+): Promise<ProfileStepAudit | null> {
+  const owned = async (kind: PackItemKind, key: string): Promise<string | null> =>
+    (await deps.packItems.list(packId)).find((i) => i.kind === kind && i.key === key)?.itemId ?? null;
+
+  switch (step.kind) {
+    case 'role': {
+      const fields = { name: step.name, description: step.description ?? null, capabilities: step.capabilities };
+      const itemId = await owned('role', step.slug);
+      // A row whose role an admin deleted counts as not found, so the role is made again.
+      if (itemId && (await deps.roles.get(itemId))) {
+        await deps.roles.update(itemId, fields);
+        return { action: 'role.update', entityType: 'role', entityId: itemId };
+      }
+      const role = await deps.roles.create({ slug: step.slug, ...fields });
+      await deps.packItems.put({ packId, kind: 'role', key: step.slug, itemId: role.id });
+      return { action: 'role.create', entityType: 'role', entityId: role.id };
+    }
+    case 'layout': {
+      const input = { name: step.name, startPage: step.startPage, pages: step.pages, roles: step.roles };
+      const itemId = await owned('layout', step.key);
+      if (itemId && (await deps.layouts.list()).layouts.some((l) => l.id === itemId)) {
+        await deps.layouts.save(itemId, input, actorId);
+        return { action: 'layout.update', entityType: 'layout', entityId: itemId };
+      }
+      const layout = await deps.layouts.save(null, input, actorId);
+      await deps.packItems.put({ packId, kind: 'layout', key: step.key, itemId: layout.id });
+      return { action: 'layout.create', entityType: 'layout', entityId: layout.id };
+    }
+    case 'form': {
+      const formId = await deps.forms.install(await owned('form', step.key), step.questionnaire, version, actorId);
+      await deps.packItems.put({ packId, kind: 'form', key: step.key, itemId: formId });
+      await deps.forms.setAccess(formId, { open: step.open, submit: step.submit });
+      return { action: 'form.install', entityType: 'form', entityId: formId };
+    }
+    default:
+      return null;
+  }
+}
+
+/** The keys of what dropLeftOut removed or let go. */
+export interface LeftOut { roles: string[]; layouts: string[]; formsKept: string[] }
+
+/** After every step succeeded: remove roles and layouts the pack owns that the new steps leave out.
+ *  Forms it leaves out lose their owner and stay (design 5.2). The check phase already refused when
+ *  users still hold a left-out role. */
+export async function dropLeftOut(deps: ProfileDeps, packId: string, steps: ContentPackStep[]): Promise<LeftOut> {
+  const keep = new Set<string>();
+  for (const s of steps) {
+    if (s.kind === 'role') keep.add(`role:${s.slug}`);
+    else if (s.kind === 'layout' || s.kind === 'form') keep.add(`${s.kind}:${s.key}`);
+  }
+  const out: LeftOut = { roles: [], layouts: [], formsKept: [] };
+  let layoutIds: Set<string> | null = null;
+  for (const item of await deps.packItems.list(packId)) {
+    if (keep.has(`${item.kind}:${item.key}`)) continue;
+    if (item.kind === 'role') {
+      // RoleStore.remove does nothing for a role that is already gone.
+      await deps.roles.remove(item.itemId);
+      out.roles.push(item.key);
+    } else if (item.kind === 'layout') {
+      layoutIds ??= new Set((await deps.layouts.list()).layouts.map((l) => l.id));
+      if (layoutIds.has(item.itemId)) await deps.layouts.remove(item.itemId);
+      out.layouts.push(item.key);
+    } else {
+      out.formsKept.push(item.key);
+    }
+    await deps.packItems.remove(packId, item.kind, item.key);
+  }
+  return out;
 }
