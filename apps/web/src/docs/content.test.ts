@@ -32,6 +32,18 @@ describe('website docs content', () => {
     }
   });
 
+  it('documents the four profile steps and their rules in every language', () => {
+    for (const locale of ['en', 'fr', 'pt'] as const) {
+      const body = docPage('profile-packs', DEFAULT_DOC_VERSION, locale)!.body;
+      for (const kind of ['needs', 'role', 'layout', 'form']) expect(body, `${locale} ${kind}`).toContain(`"kind": "${kind}"`);
+      expect(body, locale).toContain('installing this pack needs the roles.manage capability');
+      expect(body, locale).toContain('step list does not match pack.json');
+      expect(body, locale).toContain('openldr market remove <pack-id> --force');
+    }
+    expect(pageTitle('profile-packs', '0.1.8', 'fr')).toBe('Packs de profil');
+    expect(pageTitle('profile-packs', '0.1.8', 'pt')).toBe('Pacotes de perfil');
+  });
+
   it('takes each page title from the file in the reader\'s language', () => {
     expect(pageTitle('upgrading', '0.1.8', 'en')).toBe('Planned upgrades');
     expect(pageTitle('upgrading', '0.1.8', 'fr')).toBe('Mises à niveau planifiées');
@@ -52,7 +64,7 @@ describe('website docs content', () => {
     expect(SLUGS).toEqual(expect.arrayContaining([
       'getting-started', 'desktop-app', 'requirements', 'install', 'windows-server', 'upgrading',
       'environment', 'auth-providers', 'load-data', 'map-to-fhir', 'connector-diagnose',
-      'cli', 'cli-access', 'standalone', 'development',
+      'cli', 'cli-access', 'standalone', 'development', 'profile-packs',
     ]));
   });
 });

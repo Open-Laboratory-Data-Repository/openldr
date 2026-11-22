@@ -250,11 +250,11 @@ Lisez les détails au-dessus de la description, puis descendez vers les sections
 
 ## Packs de contenu et autres types de paquet
 
-Un pack applique ses étapes de données de référence dans l'ordre déclaré. Examinez leur liste et leurs nombres avant l'installation. Un pack peut modifier des systèmes de codes, jeux de valeurs, établissements, associations et requêtes nommées. Une nouvelle tentative peut écraser une requête modifiée localement.
+Un pack applique ses étapes dans l'ordre déclaré. Examinez leur liste et leurs nombres avant l'installation. Un pack peut modifier des systèmes de codes, jeux de valeurs, établissements, associations et requêtes nommées. Une nouvelle tentative peut écraser une requête modifiée localement. Un pack peut aussi créer un rôle, une disposition de la barre latérale et des formulaires. Le guide [Packs de profil](/docs/profile-packs) explique ces étapes.
 
 Si l'application d'un pack échoue, les étapes précédentes peuvent rester enregistrées. Lisez Failed at step N et l'erreur, corrigez la cause, puis choisissez de nouveau Install. Un pack refuse les signatures invalides et les contrôles préalables en échec avant toute écriture.
 
-**Detach** oublie la fiche d'un pack ou modèle de formulaire installé en conservant les données créées. Ce n'est pas une désinstallation. Les plugins proposent Remove. Une ancienne version de plugin installée peut proposer Rollback. Ces options dépendent du type choisi et des versions installées.
+**Détacher** oublie la fiche d'un modèle de formulaire installé en conservant les données créées. Ce n'est pas une désinstallation. Un pack de contenu installé propose plutôt **Supprimer**. Cela supprime les rôles et les dispositions créés par le pack, et conserve ses formulaires et ses données de référence. Les plugins proposent Remove. Une ancienne version de plugin installée peut proposer Rollback. Ces options dépendent du type choisi et des versions installées.
 
 Un paquet dont les détails ne chargent pas garde l'installation désactivée. Vérifiez la disponibilité du registre avant de réessayer. Le test documenté a suivi le parcours plugin. Il n'a appliqué aucun pack et n'a restauré aucune ancienne version de plugin.
 
