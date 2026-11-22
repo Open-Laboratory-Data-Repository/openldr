@@ -134,6 +134,7 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 | `ingest` | Carrega um ficheiro através do pipeline (opcionalmente com um plugin). |
 | `facilities` | Importa um registo nacional de unidades: `suggest-map`, `suggest-values`, `import` (mapeamento de colunas e valores; consulte **Unidades** na Documentação do estúdio). |
 | `test-catalog` | O catálogo nacional de exames: `list` dos testes, `import` de uma lista a partir de CSV ou Excel, `export` em CSV, `enable` ou `disable` de um teste neste laboratório, e `retire` ou `restore` de um teste quando esta instalação é dona do catálogo. |
+| `lab` | A configuração própria deste laboratório: `sections list`, `add` ou `remove` (`--force`) das secções do laboratório, `tests set` da secção de um exame e do interruptor **Requer revisão**, e `settings set allow-self-authorise`. Exige **Lab settings**. |
 | `query` | Consultas personalizadas: `export` para um ficheiro JSON, `import` a partir de um (`--force` substitui os nomes existentes e exige **Gerir consultas guardadas**; sem essa permissão, uma importação acrescenta as novas consultas sem grupo). |
 | `pipeline` | Inspeciona lotes de ingestão: `status`, `retry`, `logs`. |
 | `queue` | Inspeciona a fila de eventos. |

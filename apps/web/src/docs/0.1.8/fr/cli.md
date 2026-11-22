@@ -134,6 +134,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `ingest` | Ingère un fichier par le pipeline (en option via un plugin). |
 | `facilities` | Importe un registre national d'établissements : `suggest-map`, `suggest-values`, `import` (correspondance des colonnes et des valeurs, voir **Établissements** dans la documentation du studio). |
 | `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue. |
+| `lab` | La configuration propre à ce laboratoire : `sections list`, `add` ou `remove` (`--force`) les sections du laboratoire, `tests set` fixe la section d'un examen et son interrupteur **Vérification requise**, et `settings set allow-self-authorise`. Exige **Lab settings**. |
 | `query` | Requêtes personnalisées : `export` les exporte dans un fichier JSON, `import` les importe depuis un fichier (`--force` remplace les noms existants et exige **Gérer les requêtes enregistrées** ; sans cette permission, un import ajoute les nouvelles requêtes sans groupe). |
 | `pipeline` | Examine les lots d'ingestion : `status`, `retry`, `logs`. |
 | `queue` | Examine la file d'événements. |
