@@ -8,6 +8,7 @@ import { safeRecord, type AuditEventInput, type AuditStore } from '@openldr/audi
 import { redact, type Logger } from '@openldr/core';
 import type { MapLevel, PackMappingInput, PackMappingPlan } from './test-mapping';
 import type { PackDataset } from './warehouse-datasets';
+import { checkProfileSteps, type InstallerCapabilities, type ProfileDeps } from './content-pack-profile';
 
 type Actor = { id: string | null; name: string };
 type StepOutcome = { ok: true } | { ok: false; error: string };
@@ -54,10 +55,13 @@ export interface ContentPackDeps {
   planTestMappings(mappings: PackMappingInput[], level: MapLevel): Promise<PackMappingPlan>;
   /** Write the resolvable ones and rebuild test_map once. Existing mappings are kept. */
   applyTestMappings(mappings: PackMappingInput[], level: MapLevel): Promise<PackMappingPlan>;
+  /** What the needs, role, layout and form steps read and write. */
+  profile: ProfileDeps;
 }
 
 export interface ContentPackInstallOptions {
-  actor: { id?: string | null; name: string };
+  /** `capabilities` absent means 'all': nothing limits what the installer may grant. */
+  actor: { id?: string | null; name: string; capabilities?: InstallerCapabilities };
   sourceRef?: string;
 }
 
@@ -82,7 +86,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
    * Pass 1. Everything that can be checked without writing. Throws on the first problem.
    * Returns the parsed pack, its step summary and what link-matching would link.
    */
-  async function verify(bundle: Bundle, actor: Actor) {
+  async function verify(bundle: Bundle, actor: Actor, caps: InstallerCapabilities) {
     if (bundle.manifest.type !== 'content-pack' || bundle.manifest.payload.kind !== 'content-pack') {
       throw new Error(`not a content-pack: ${bundle.manifest.type}`);
     }
@@ -149,8 +153,15 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
           testMapPreview.push({ level, ...(await deps.planTestMappings(step.mappings, level)) });
           break;
         }
+        case 'needs':
+        case 'role':
+        case 'layout':
+        case 'form':
+          // Checked together below: they read each other (a layout names a role an earlier step makes).
+          break;
       }
     }
+    await checkProfileSteps(deps.profile, bundle.manifest.id, pack.steps, caps);
     return { pack, steps, linkPreview, testMapPreview };
   }
 
@@ -226,17 +237,23 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
         });
         return;
       }
+      case 'needs':
+      case 'role':
+      case 'layout':
+      case 'form':
+        // The write phase for these steps is Task 4 of the profile packs plan. Until then they write nothing.
+        return;
     }
   }
 
   async function check(bundle: Bundle): Promise<{ steps: { kind: string; label: string; count: number }[]; linkPreview: LinkPreview[]; testMapPreview: Array<PackMappingPlan & { level: MapLevel }> }> {
-    const { steps, linkPreview, testMapPreview } = await verify(bundle, { id: null, name: 'check' });
+    const { steps, linkPreview, testMapPreview } = await verify(bundle, { id: null, name: 'check' }, 'all');
     return { steps, linkPreview, testMapPreview };
   }
 
   async function install(bundle: Bundle, opts: ContentPackInstallOptions): Promise<ContentPackInstallResult> {
     const actor: Actor = { id: opts.actor.id ?? null, name: opts.actor.name };
-    const { pack } = await verify(bundle, actor);
+    const { pack } = await verify(bundle, actor, opts.actor.capabilities ?? 'all');
 
     const artifactId = bundle.manifest.id;
     const version = bundle.manifest.version;

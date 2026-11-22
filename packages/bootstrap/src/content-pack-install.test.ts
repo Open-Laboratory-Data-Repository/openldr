@@ -56,6 +56,20 @@ function fakeTrust() {
   };
 }
 
+/** An empty install: no pack items, roles or layouts. Every write throws. */
+function fakeProfile() {
+  const write = () => { throw new Error('a profile write is Task 4'); };
+  return {
+    packItems: { list: vi.fn(async () => []), owners: vi.fn(async () => new Map()), put: vi.fn(write), remove: vi.fn(write) },
+    roles: { get: vi.fn(async () => null), getBySlug: vi.fn(async () => null), create: vi.fn(write), update: vi.fn(write), remove: vi.fn(write) },
+    roleMembers: vi.fn(async () => []),
+    layouts: { list: vi.fn(async () => ({ layouts: [], roleOrder: [] })), save: vi.fn(write), remove: vi.fn(write) },
+    forms: { install: vi.fn(write), check: vi.fn(), setAccess: vi.fn(write) },
+    installedVersion: vi.fn(async () => null),
+    capabilityKeys: ['forms.view', 'roles.manage'],
+  };
+}
+
 function setup(over: Record<string, unknown> = {}) {
   const calls: string[] = [];
   const installs = fakeInstallStore();
@@ -78,6 +92,7 @@ function setup(over: Record<string, unknown> = {}) {
     applyTestMappings: vi.fn(async (m: any[]) => { calls.push('applyTestMappings'); return { mapped: m.slice(0, 1).map((x) => ({ ...x, catalogCode: 'VL' })), kept: [], skipped: m.slice(1).map((x) => ({ system: x.system, code: x.code, reason: 'no catalog test is linked to LOINC 9999-9' })) }; }),
     checkDatasets: vi.fn(async () => { calls.push('checkDatasets'); }),
     installDatasets: vi.fn(async () => { calls.push('installDatasets'); }),
+    profile: fakeProfile(),
     ...over,
   };
   const installer = createContentPackInstaller(deps as never);
@@ -474,3 +489,26 @@ describe('content pack installer: a pack\'s queries sit in a group named for the
   });
 });
 
+
+describe('content pack installer: the check phase covers the profile steps', () => {
+  const pack = { formatVersion: 1, steps: [{ kind: 'role', slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] }] };
+
+  it('refuses_a_role_step_from_an_installer_without_roles_manage_before_any_write', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+    await expect(s.installer.install(bundle, { actor: { ...actor, capabilities: ['marketplace.manage', 'forms.view'] } }))
+      .rejects.toThrow('installing this pack needs the roles.manage capability');
+    expect(s.installs.store.upsert).not.toHaveBeenCalled();
+    expect(s.trust.store.pin).not.toHaveBeenCalled();
+    await cleanup();
+  });
+
+  it('check_and_an_install_with_no_capabilities_given_treat_the_installer_as_holding_all', async () => {
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+    await expect(s.installer.check(bundle)).resolves.toMatchObject({ steps: [{ kind: 'role' }] });
+    await expect(s.installer.install(bundle, { actor })).resolves.toMatchObject({ status: 'installed' });
+    expect(s.deps.profile.roles.getBySlug).toHaveBeenCalledWith('sample-clerk');
+    await cleanup();
+  });
+});

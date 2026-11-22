@@ -10,7 +10,7 @@ import { createBlobFromConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
-import { createInternalDb, createFhirStore, createRelationalWriter, createWarehouseDatasetStore, createExplorerGroupStore, type ExplorerGroupStore, persistResources, persistRequests, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, createWarehouseDatasetStore, createExplorerGroupStore, type ExplorerGroupStore, persistResources, persistRequests, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createPackItemStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -45,6 +45,8 @@ import { createPluginScheduleApi, createPluginScheduleRunner, type PluginSchedul
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { createTrustStore } from '@openldr/marketplace';
 import { createContentPackInstaller, type ContentPackInstaller, type PackQueryChange } from './content-pack-install';
+import { listLayouts, saveLayout, deleteLayout } from './layout-presets';
+import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { withRegisteredResourceId } from './content-pack-terminology';
 import { checkCustomQueryFile, importCustomQueries } from './custom-query-transfer';
 import { importFacilityRegisterCsv } from './facility-register-file';
@@ -1371,6 +1373,25 @@ const reporting: ReportingApi = {
     },
     planTestMappings: (mappings, level) => testMapping.planPack(mappings, level),
     applyTestMappings: (mappings, level) => testMapping.applyPack(mappings, level),
+    profile: {
+      packItems: createPackItemStore(internal.db),
+      roles,
+      layouts: {
+        list: () => listLayouts(internal.db),
+        save: (id, input, actor) => saveLayout(internal.db, id, input, actor),
+        remove: (id) => deleteLayout(internal.db, id),
+      },
+      capabilityKeys: CAPABILITY_KEYS,
+      // Stubs until Task 6 of the profile packs plan wires them. Only a pack with a form or needs
+      // step, or one that already owns a role, reaches them.
+      roleMembers: async () => { throw new Error('roleMembers is not wired yet (Task 6)'); },
+      forms: {
+        install: async () => { throw new Error('forms.install is not wired yet (Task 6)'); },
+        check: () => { throw new Error('forms.check is not wired yet (Task 6)'); },
+        setAccess: async () => { throw new Error('forms.setAccess is not wired yet (Task 6)'); },
+      },
+      installedVersion: async () => { throw new Error('installedVersion is not wired yet (Task 6)'); },
+    },
   });
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
@@ -2499,3 +2520,4 @@ export * from './custom-query-transfer';
 export * from './facility-register-file';
 export * from './facility-register-source-input';
 export * from './content-pack-install';
+export * from './content-pack-profile';

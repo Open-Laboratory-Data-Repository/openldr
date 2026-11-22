@@ -31,6 +31,7 @@
     "@openldr/marketplace": "workspace:*",
     "@openldr/plugins": "workspace:*",
     "@openldr/ports": "workspace:*",
+    "@openldr/rbac": "workspace:*",
     "@openldr/report-designer": "workspace:*",
     "@openldr/report-pdf": "workspace:*",
     "@openldr/reporting": "workspace:*",
