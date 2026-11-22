@@ -27,7 +27,7 @@ import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runStorageCopy } from './storage';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge, runTerminologyJobStatus, runTerminologyJobContinue } from './terminology';
-import { runMarketVerify, runMarketInstall, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
+import { runMarketVerify, runMarketInstall, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove, runMarketRemoveCommand } from './market';
 import { runMarketSites } from './market-sites';
 import { runLayoutsList, runLayoutsSet, runLayoutsDelete } from './layouts';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
@@ -1695,13 +1695,13 @@ export function buildProgram(): Command {
     });
   market
     .command('remove <id> [version]')
-    .description('Remove a plugin: one version, or the whole plugin, which stops its reads and checks first')
+    .description('Remove a plugin (one version, or the whole plugin, which stops its reads and checks first) or a content pack (its roles and layouts; its forms stay)')
     .option('--keep <what>', 'whole plugin only: all, settings or nothing (default all)')
-    .option('--force', 'stop running work and delete as --keep says', false)
+    .option('--force', 'stop running work and delete as --keep says, or remove the content pack', false)
     .option('--json', 'emit JSON', false)
     .action(async (id: string, version: string | undefined, opts: { keep?: string; force: boolean; json: boolean }) => {
       try {
-        process.exitCode = version ? await runPluginVersionRemove(id, version, opts) : await runWholePluginRemove(id, opts);
+        process.exitCode = await runMarketRemoveCommand(id, version, opts);
       } catch (err) { process.stderr.write(`market remove failed: ${String(err)}\n`); process.exitCode = 1; }
     });
 

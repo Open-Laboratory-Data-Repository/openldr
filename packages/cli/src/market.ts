@@ -1,10 +1,12 @@
-import { createAppContext, createIngestContext, type AppContext } from '@openldr/bootstrap';
+import { createAppContext, createIngestContext, PackRemovalError, type AppContext, type InstallerCapabilities } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { createInternalDb, createMarketplaceInstallStore } from '@openldr/db';
 import { readBundle, verifyBundle, type Bundle } from '@openldr/marketplace';
 import { isNewerVersion } from '@openldr/core';
 import { redactError } from './redact-error';
-import { callerName, servedCaller } from './cli-actor';
+import { callerName, cliActor, servedCaller } from './cli-actor';
+import { servedCaller as servedCallerOf } from './served-caller';
+import { runPluginVersionRemove, runWholePluginRemove } from './plugin-removal';
 
 interface JsonOpt {
   json: boolean;
@@ -183,7 +185,9 @@ async function installPack(
         return 1;
       }
     }
-    const result = await ctx.marketplacePacks.install(bundle, { actor: servedCaller() ?? { id: null, name: 'cli' } });
+    const result = await ctx.marketplacePacks.install(bundle, {
+      actor: { ...(servedCaller() ?? { id: null, name: 'cli' }), capabilities: await installerCapabilities(ctx) },
+    });
     if (result.status === 'failed') {
       if (opts.json) emit(true, result, '');
       else process.stderr.write(`failed at step ${result.failedStep}: ${redactError(result.error)}\n`);
@@ -197,6 +201,14 @@ async function installPack(
   } finally {
     await ctx.close();
   }
+}
+
+/** What the person installing may grant. A local run is the operator on the box: everything. A
+ *  served run is the signed-in caller: their capabilities, or none when they cannot be found. */
+async function installerCapabilities(ctx: AppContext): Promise<InstallerCapabilities> {
+  const caller = await servedCallerOf(ctx);
+  if (caller === 'local') return 'all';
+  return caller?.capabilities ?? [];
 }
 
 // ---------------------------------------------------------------------------
@@ -336,4 +348,69 @@ export async function runMarketRemove(
   } finally {
     await ctx.close();
   }
+}
+
+// ---------------------------------------------------------------------------
+// `market remove <id> [version]`: a content pack when the id is an installed pack, else a plugin.
+// ---------------------------------------------------------------------------
+
+type RemoveOpts = JsonOpt & { keep?: string; force: boolean };
+
+export async function runMarketRemoveCommand(id: string, version: string | undefined, opts: RemoveOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    if ((await ctx.marketplacePacks.list()).some((r) => r.artifactId === id)) return await removePack(ctx, id, version, opts);
+  } catch (err) {
+    process.stderr.write(`market remove failed: ${redactError(err)}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+  return version ? runPluginVersionRemove(id, version, opts) : runWholePluginRemove(id, opts);
+}
+
+const holderLines = (holders: { role: string; users: string[] }[]): string[] =>
+  holders.map((h) => `  ${h.role}: ${h.users.join(', ')}`);
+
+/** Detaches a content pack: removes the roles and layouts it made and keeps its forms. Destructive,
+ *  so without --force it prints what would go and changes nothing. Refuses while a user holds one
+ *  of the pack's roles. */
+async function removePack(ctx: AppContext, id: string, version: string | undefined, opts: RemoveOpts): Promise<number> {
+  if (version) {
+    process.stderr.write('market remove failed: a content pack is removed whole, without a version\n');
+    return 1;
+  }
+  const plan = await ctx.marketplacePacks.removal(id);
+  const list = (items: string[]): string => (items.length > 0 ? items.join(', ') : '(none)');
+  const held = plan.holders.length > 0
+    ? ['users still hold a role this pack made; take the role away from them first:', ...holderLines(plan.holders)]
+    : [];
+  if (!opts.force) {
+    process.stderr.write([
+      `removing ${id} removes:`,
+      `  roles: ${list(plan.roles)}`,
+      `  layouts: ${list(plan.layouts)}`,
+      `forms kept: ${list(plan.formsKept)}`,
+      ...held,
+      'use --force to remove it',
+    ].join('\n') + '\n');
+    return 1;
+  }
+  if (held.length > 0) {
+    process.stderr.write(`market remove failed: ${held.join('\n')}\n`);
+    return 1;
+  }
+  const a = cliActor();
+  try {
+    await ctx.marketplacePacks.detach(id, { actor: { id: a.actorId ?? null, name: a.actorName } });
+  } catch (err) {
+    // A user was given one of the roles after the check above.
+    if (err instanceof PackRemovalError) {
+      process.stderr.write(`market remove failed: users still hold a role this pack made:\n${holderLines(err.holders).join('\n')}\n`);
+      return 1;
+    }
+    throw err;
+  }
+  emit(opts.json, { removed: id, roles: plan.roles, layouts: plan.layouts, formsKept: plan.formsKept }, `removed ${id}`);
+  return 0;
 }

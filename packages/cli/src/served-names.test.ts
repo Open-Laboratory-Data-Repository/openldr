@@ -124,9 +124,15 @@ describe('names recorded in served mode', () => {
     await runPluginRemove('demo', { json: false });
     expect(mocks.plugins.remove).toHaveBeenCalledWith('demo', undefined, { actor: ALICE_REF });
 
+    // A content pack also takes the caller's capabilities, which the server sends.
+    resetServedHandoffForTests();
+    setServedHandoff({
+      path: 'x', argv: [], runDir: '/srv/run1', keptDirs: [],
+      caller: { id: 'u-1', username: 'alice', displayName: 'Alice', keyName: 'ci', roleIds: ['r-1'], capabilities: ['marketplace.manage'], dataScope: { limited: false } },
+    });
     mocks.readBundle.mockResolvedValueOnce({ ...PLUGIN_BUNDLE, manifest: { ...PLUGIN_BUNDLE.manifest, id: 'pack', type: 'content-pack' } });
     await runMarketInstall('/srv/run1/pack', { json: false });
-    expect(mocks.marketplacePacks.install.mock.calls[0]![1]).toEqual({ actor: ALICE_REF });
+    expect(mocks.marketplacePacks.install.mock.calls[0]![1]).toEqual({ actor: { ...ALICE_REF, capabilities: ['marketplace.manage'] } });
 
     await runSyncEnroll('s1', { centralUrl: 'https://central.example', json: true });
     expect(mocks.enrollSite).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actor: 'u-1' }));
@@ -152,7 +158,7 @@ describe('names recorded in served mode', () => {
     expect(mocks.plugins.remove.mock.calls[0]).toEqual(['demo', undefined]);
     mocks.readBundle.mockResolvedValueOnce({ ...PLUGIN_BUNDLE, manifest: { ...PLUGIN_BUNDLE.manifest, id: 'pack', type: 'content-pack' } });
     await runMarketInstall('/x/pack', { json: false });
-    expect(mocks.marketplacePacks.install.mock.calls[0]![1]).toEqual({ actor: { id: null, name: 'cli' } });
+    expect(mocks.marketplacePacks.install.mock.calls[0]![1]).toEqual({ actor: { id: null, name: 'cli', capabilities: 'all' } });
     await runSyncEnroll('s1', { centralUrl: 'https://central.example', json: true });
     expect(mocks.enrollSite).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actor: null }));
   });
