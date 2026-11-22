@@ -277,12 +277,24 @@ describe('FieldEditorSheet', () => {
       expect(onSave).not.toHaveBeenCalled();
     });
 
-    it('offers every FieldType enum member as an option — no drift', () => {
+    // Every FieldType enum member but testDetails, so the list cannot drift. Lab slice 1b stopped
+    // offering testDetails: no new form may enter final results round authorisation.
+    it('offers every FieldType enum member except testDetails as an option', () => {
       renderSheet();
       const trigger = screen.getByRole('combobox', { name: /field type/i });
       fireEvent.click(trigger);
       const optionValues = screen.getAllByRole('option').map((el) => el.textContent);
-      expect(optionValues).toEqual(expect.arrayContaining([...FieldType.options]));
+      const offered = FieldType.options.filter((ft) => ft !== 'testDetails');
+      expect(optionValues).toEqual(expect.arrayContaining(offered));
+      expect(optionValues).toHaveLength(offered.length);
+    });
+
+    it('still shows testDetails for a field that already has it', () => {
+      const results: FormField = { ...BASE_FIELD, id: 'results', fieldType: 'testDetails', fhirPath: null };
+      renderSheet({ field: results, allFields: [results] });
+      const trigger = screen.getByRole('combobox', { name: /field type/i });
+      fireEvent.click(trigger);
+      const optionValues = screen.getAllByRole('option').map((el) => el.textContent);
       expect(optionValues).toHaveLength(FieldType.options.length);
     });
   });

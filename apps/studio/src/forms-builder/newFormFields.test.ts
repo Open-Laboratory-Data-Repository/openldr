@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { lintFormSchema, seededStarterPacks, type FormField, type FormSchema, type StarterPackEntry } from '@openldr/forms/pure';
+import { FieldType, lintFormSchema, seededStarterPacks, type FormField, type FormSchema, type StarterPackEntry } from '@openldr/forms/pure';
 import type { RepeatNode } from './fieldTree';
 import { lookupFhirPath } from '@openldr/fhir/paths';
 import {
-  buildFieldFromElement, buildFieldFromPackEntry, linkTestDetails, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf,
+  buildFieldFromElement, buildFieldFromPackEntry, linkTestDetails, offeredFieldTypes, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf,
 } from './newFormFields';
 
 const f = (o: Partial<FormField> & Pick<FormField, 'id' | 'order'>): FormField => ({
@@ -159,6 +159,28 @@ describe('linkTestDetails', () => {
 
   it('changes nothing when the form has no Tests field yet', () => {
     expect(linkTestDetails([results], 'ServiceRequest')).toEqual([results]);
+  });
+});
+
+// Lab slice 1b: no new form may enter final results round authorisation, so the builder stops
+// offering the test details type. A field that already has it keeps it, so that form still opens.
+describe('offeredFieldTypes', () => {
+  it('offers every field type except test details', () => {
+    const offered = offeredFieldTypes('text');
+    expect(offered).not.toContain('testDetails');
+    expect(offered).toEqual(FieldType.options.filter((t) => t !== 'testDetails'));
+  });
+
+  it('keeps test details on the list for a field that already has it', () => {
+    expect(offeredFieldTypes('testDetails')).toEqual([...FieldType.options]);
+  });
+});
+
+describe('the seeded starter packs', () => {
+  it('offer no test details field', () => {
+    for (const pack of seededStarterPacks()) {
+      expect(pack.entries.filter((e) => e.fieldType === 'testDetails'), pack.id).toEqual([]);
+    }
   });
 });
 
