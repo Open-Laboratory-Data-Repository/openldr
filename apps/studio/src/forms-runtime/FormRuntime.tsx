@@ -35,12 +35,16 @@ import { BROWSE_TESTS_EN, BrowseTestsSheet, type BrowseTestsCopy } from './Brows
  * What the page sets on single fields from outside the schema (design 2026-11-22-form-entries).
  * `notices`: a line drawn under a field, such as a refused requisition number. `readOnly`: reference
  * fields that show their answer and cannot be changed. `offerOnly`: reference fields that offer only
- * these codings. A context, not a prop on every row, since rows nest inside groups.
+ * these codings. `disabled`: reference fields with nothing to pick. A context, not a prop on every row, since rows nest inside groups.
  */
 export interface FieldControls {
   notices?: Record<string, ReactNode>;
   readOnly?: string[];
+  /** What a read-only field shows when it holds no answer. */
+  shown?: Record<string, string>;
   offerOnly?: Record<string, CodingAnswer[]>;
+  /** Reference fields drawn empty and disabled: there is nothing the user may pick. */
+  disabled?: string[];
 }
 const FieldControlsContext = createContext<FieldControls>({});
 
@@ -727,7 +731,9 @@ function FieldControl({
             dependsOnValue={dependsOnValue}
             trailing={trailing}
             readOnly={controls.readOnly?.includes(field.id) ?? false}
+            readOnlyText={controls.shown?.[field.id]}
             offerOnly={controls.offerOnly?.[field.id] ?? null}
+            disabled={controls.disabled?.includes(field.id) ?? false}
           />
         );
       }

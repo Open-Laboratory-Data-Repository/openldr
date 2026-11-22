@@ -586,6 +586,7 @@ export const pt: EnShape = {
       count_other: "{{count}} registos",
       sheetTitle: "Registo",
       sheetHint: "Só de leitura. As respostas tal como foram guardadas.",
+      noFacility: "A sua conta não está ligada a nenhuma unidade. Peça a um administrador.",
       removedUser: "um utilizador removido",
       voidedBy: "Marcado por",
       voidedAt: "Marcado em",

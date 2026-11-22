@@ -60,8 +60,10 @@ export function VoidEntryDialog({ entry, onClose, onDone }: {
           <DialogTitle className="[overflow-wrap:anywhere]">{t(`${P}.voidTitle`, { key: label })}</DialogTitle>
           <DialogDescription>{t(`${P}.voidIntro`)}</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="void-entry-reason">{t(`${P}.reason`)}</Label>
+        {/* Label left, textarea right (AGENTS.md section 5). At 375 wide the dialog still leaves the
+            textarea about 230px beside a one-word label, so it does not stack. */}
+        <div className="grid grid-cols-[auto_1fr] items-start gap-x-4 gap-y-2">
+          <Label htmlFor="void-entry-reason" className="pt-2">{t(`${P}.reason`)}</Label>
           <Textarea
             id="void-entry-reason"
             value={reason}
@@ -69,8 +71,8 @@ export function VoidEntryDialog({ entry, onClose, onDone }: {
             onChange={(e) => setReason(e.target.value)}
             placeholder={t(`${P}.reasonHint`)}
           />
-          <p className="m-0 text-xs text-muted-foreground">{t(`${P}.cannotUndo`)}</p>
-          {error ? <p role="alert" className="m-0 text-sm text-destructive [overflow-wrap:anywhere]">{error}</p> : null}
+          <p className="col-start-2 m-0 text-xs text-muted-foreground">{t(`${P}.cannotUndo`)}</p>
+          {error ? <p role="alert" className="col-start-2 m-0 text-sm text-destructive [overflow-wrap:anywhere]">{error}</p> : null}
         </div>
         <DialogFooter className="mt-0">
           <Button variant="outline" disabled={busy} onClick={onClose}>{t('common.cancel')}</Button>

@@ -24,9 +24,7 @@ import { RejectSheet } from '@/forms-runtime/RejectSheet';
 import type { FormSchema } from '@/forms-runtime/types';
 import { EntriesTab } from '@/forms-entries/EntriesTab';
 import { EntrySheet } from '@/forms-entries/EntrySheet';
-import { siteControls, type SiteControls } from '@/forms-entries/siteControls';
-
-const NO_SITE_CONTROLS: SiteControls = { initialAnswers: {}, readOnly: [], offerOnly: {} };
+import { NO_SITE_CONTROLS, siteControls, type SiteControls } from '@/forms-entries/siteControls';
 
 function asFormSchema(value: unknown): FormSchema | null {
   if (!value || typeof value !== 'object') return null;
@@ -226,8 +224,13 @@ export function FormCapture() {
               initialAnswers={site.initialAnswers}
               fieldControls={{
                 readOnly: site.readOnly,
+                shown: site.shown,
                 offerOnly: site.offerOnly,
-                notices: repeatNotice && keyFieldId ? { [keyFieldId]: repeatNotice } : undefined,
+                disabled: site.noFacility,
+                notices: {
+                  ...Object.fromEntries(site.noFacility.map((f) => [f, t('forms.entries.noFacility')])),
+                  ...(repeatNotice && keyFieldId ? { [keyFieldId]: repeatNotice } : {}),
+                },
               }}
               onAnswersChange={(answers) => {
                 // A changed number is a new try, so the refusal of the old one goes.

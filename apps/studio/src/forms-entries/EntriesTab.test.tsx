@@ -68,6 +68,19 @@ describe('EntriesTab', () => {
     await waitFor(() => expect(api.listFormEntries).toHaveBeenLastCalledWith('form-1', expect.objectContaining({ search: 'CS-00', offset: 0 })));
   });
 
+  it('waits for typing to pause before it asks the server, then asks once', async () => {
+    render(<EntriesTab formId="form-1" refreshKey={0} />);
+    await screen.findByText('CS-0003');
+    const box = screen.getByRole('searchbox', { name: 'Search requisition' });
+    for (const text of ['C', 'CS', 'CS-', 'CS-0']) fireEvent.change(box, { target: { value: text } });
+    // Straight after the keys, nothing new has been asked.
+    expect(api.listFormEntries).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(api.listFormEntries).toHaveBeenCalledTimes(2));
+    expect(api.listFormEntries).toHaveBeenLastCalledWith('form-1', expect.objectContaining({ search: 'CS-0' }));
+    await new Promise((r) => setTimeout(r, 400));
+    expect(api.listFormEntries).toHaveBeenCalledTimes(2);
+  });
+
   it('offers Mark as entered in error only with the capability, and never on a voided row', async () => {
     render(<EntriesTab formId="form-1" refreshKey={0} />);
     await screen.findByText('CS-0003');

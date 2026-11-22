@@ -586,6 +586,7 @@ export const fr: EnShape = {
       count_other: "{{count}} saisies",
       sheetTitle: "Saisie",
       sheetHint: "Lecture seule. Les réponses telles qu’elles ont été enregistrées.",
+      noFacility: "Votre compte n’est lié à aucun établissement. Demandez à un administrateur.",
       removedUser: "un utilisateur supprimé",
       voidedBy: "Marquée par",
       voidedAt: "Marquée le",

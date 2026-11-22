@@ -23,6 +23,8 @@ import { formatEnteredAt } from './format';
 
 const P = 'forms.entries';
 const ALL = 'all';
+/** How long the search box waits after the last key before it asks the server. */
+export const SEARCH_DEBOUNCE_MS = 300;
 
 export function EntriesTab({ formId, refreshKey }: {
   formId: string;
@@ -37,6 +39,8 @@ export function EntriesTab({ formId, refreshKey }: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  // What the list asks for: the box's text once typing has paused.
+  const [query, setQuery] = useState('');
   const [status, setStatus] = useState<string>(ALL);
   const [person, setPerson] = useState<string>(ALL);
   // The person filter offers everyone seen in the entries read so far this visit. The route has no
@@ -56,7 +60,7 @@ export function EntriesTab({ formId, refreshKey }: {
       const out = await listFormEntries(formId, {
         limit: pageSize,
         offset: page * pageSize,
-        search: search.trim() || undefined,
+        search: query.trim() || undefined,
         status: status === ALL ? undefined : (status as FormEntryStatus),
         enteredBy: person === ALL ? undefined : person,
       });
@@ -78,9 +82,15 @@ export function EntriesTab({ formId, refreshKey }: {
     } finally {
       if (id === request.current) setLoading(false);
     }
-  }, [formId, page, pageSize, search, status, person]);
+  }, [formId, page, pageSize, query, status, person]);
 
   useEffect(() => { void load(); return () => { request.current++; }; }, [load, refreshKey]);
+
+  useEffect(() => {
+    if (search === query) return;
+    const timer = setTimeout(() => { setQuery(search); setPage(0); }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search, query]);
 
   const statusWord = (s: FormEntryStatus): string | null =>
     s === 'entered-in-error' ? t(`${P}.statusVoided`) : s === 'incomplete' ? t(`${P}.statusIncomplete`) : null;
@@ -92,7 +102,7 @@ export function EntriesTab({ formId, refreshKey }: {
           <Input
             type="search"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder={t(`${P}.search`)}
             aria-label={t(`${P}.search`)}
             className="h-8 min-w-0 sm:w-64"
@@ -196,7 +206,7 @@ export function EntriesTab({ formId, refreshKey }: {
         {loading && <LoadingState className="min-h-[16rem] flex-1" label={t('common.loading')} />}
         {!loading && rows.length === 0 && (
           <StripedEmpty className="min-h-[16rem] flex-1">
-            {search.trim() || status !== ALL || person !== ALL ? t(`${P}.noMatch`) : t(`${P}.empty`)}
+            {query.trim() || status !== ALL || person !== ALL ? t(`${P}.noMatch`) : t(`${P}.empty`)}
           </StripedEmpty>
         )}
       </div>

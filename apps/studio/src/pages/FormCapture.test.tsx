@@ -428,6 +428,64 @@ describe('FormCapture entries (design 2026-11-22-form-entries)', () => {
     })));
   });
 
+  it('still locks a value-set facility field whose system cannot be learned, and sends no other facility', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue({
+      ...orderForm,
+      schema: {
+        ...(orderForm.schema as { fields: Record<string, unknown>[] }),
+        fields: (orderForm.schema as { fields: Record<string, unknown>[] }).fields.map((f) =>
+          f.id === 'fac' ? { ...f, referenceTarget: undefined, valueSetUrl: 'urn:test:vs:facilities' } : f),
+      },
+    } as api.FormDefinition);
+    vi.spyOn(api, 'getFormEntryContext').mockResolvedValue({ facility: hill, locked: true, choices: [hill] });
+    const search = vi.spyOn(api, 'referenceSearch').mockResolvedValue({ kind: 'coding', rows: [], total: 0 });
+    renderAt();
+    const facility = await screen.findByLabelText('Referring facility');
+    expect(facility).toHaveValue('Hill Clinic');
+    expect(facility).toHaveAttribute('readonly');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    // Searched by code, then by name.
+    expect(search).toHaveBeenCalledWith('form-1', 'fac', { q: 'FAC-1' });
+    expect(search).toHaveBeenCalledWith('form-1', 'fac', { q: 'Hill Clinic' });
+
+    fireEvent.change(screen.getByLabelText('Requisition number'), { target: { value: 'CS-0008' } });
+    clickActionsMenuItem('Submit');
+    await waitFor(() => expect(api.submitFormResponse).toHaveBeenCalled());
+    expect(vi.mocked(api.submitFormResponse).mock.calls[0]![1]).not.toHaveProperty('fac');
+  });
+
+  it('learns a value-set field\'s system from a search by name when the code finds nothing', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue({
+      ...orderForm,
+      schema: {
+        ...(orderForm.schema as { fields: Record<string, unknown>[] }),
+        fields: (orderForm.schema as { fields: Record<string, unknown>[] }).fields.map((f) =>
+          f.id === 'fac' ? { ...f, referenceTarget: undefined, valueSetUrl: 'urn:test:vs:facilities' } : f),
+      },
+    } as api.FormDefinition);
+    vi.spyOn(api, 'getFormEntryContext').mockResolvedValue({ facility: hill, locked: true, choices: [hill] });
+    vi.spyOn(api, 'referenceSearch').mockImplementation(async (_f, _id, p) => ({
+      kind: 'coding', total: 1,
+      rows: p.q === 'Hill Clinic' ? [{ system: 'urn:test:cs:sites', code: 'FAC-1', display: 'Hill Clinic' }] : [],
+    }));
+    renderAt();
+    fireEvent.change(await screen.findByLabelText('Requisition number'), { target: { value: 'CS-0009' } });
+    clickActionsMenuItem('Submit');
+    await waitFor(() => expect(api.submitFormResponse).toHaveBeenCalledWith('form-1', expect.objectContaining({
+      fac: { system: 'urn:test:cs:sites', code: 'FAC-1', display: 'Hill Clinic' },
+    })));
+  });
+
+  it('gives a user limited to no facility an empty, disabled facility field and says why', async () => {
+    vi.spyOn(api, 'getFormEntryContext').mockResolvedValue({ facility: null, locked: false, choices: [] });
+    renderAt();
+    const facility = await screen.findByLabelText('Referring facility');
+    expect(facility).toBeDisabled();
+    expect(facility).toHaveValue('');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByText('Your account is not linked to a facility. Ask an administrator.')).toBeInTheDocument();
+  });
+
   it('offers only the facilities of the limit', async () => {
     vi.spyOn(api, 'getFormEntryContext').mockResolvedValue({ facility: null, locked: false, choices: [hill, lake] });
     const search = vi.spyOn(api, 'referenceSearch');
