@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluatePreconditions, type ReleaseFacts } from './preconditions';
+import { evaluatePreconditions, newestReleaseTag, type ReleaseFacts } from './preconditions';
 
 const clean: ReleaseFacts = {
   version: '0.2.0',
@@ -102,5 +102,22 @@ describe('evaluatePreconditions', () => {
     const r = evaluatePreconditions({ ...clean, version: 'latest', lastTag: 'v0.1.0' });
     expect(r).toHaveLength(1);
     expect(r[0]).toMatch(/not a X\.Y\.Z version/);
+  });
+});
+
+describe('newestReleaseTag', () => {
+  // Measured 2026-11-22: the 0.1.12 dry run refused "0.1.12 is not newer than the last tag
+  // v0.1.12-rc.4". Hand-made rc and demo tags are not releases, so they must not be the last one.
+  it('skips rc and demo tags and returns the newest release tag', () => {
+    expect(newestReleaseTag(['v0.1.12-rc.4', 'v0.1.12-rc.3', 'v0.1.12-demo.4', 'v0.1.11', 'v0.1.8'])).toBe('v0.1.11');
+  });
+
+  it('orders by version, not by text', () => {
+    expect(newestReleaseTag(['v0.1.9', 'v0.1.11', 'v0.1.10'])).toBe('v0.1.11');
+  });
+
+  it('returns null when no tag is a release', () => {
+    expect(newestReleaseTag([])).toBeNull();
+    expect(newestReleaseTag(['v0.1.12-rc.1', 'backup/main'])).toBeNull();
   });
 });
