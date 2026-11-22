@@ -118,4 +118,27 @@ describe('137 lab groundwork', () => {
     expect(await db.selectFrom('coding_systems').select('id').where('url', '=', SAMPLE_CONDITION_SYSTEM).execute())
       .toEqual([{ id: 'cs-V2-0493-pub-hl7-fhir' }]);
   });
+
+  it("down leaves the concepts of a coding system it skipped, since up() did not create that system", async () => {
+    const db = await makeMigratedDb();
+    await down(db);
+    await db.insertInto('coding_systems').values({
+      id: 'cs-V2-0493-pub-hl7-fhir', system_code: 'V2-0493', system_name: 'Already here', url: SAMPLE_CONDITION_SYSTEM,
+      active: true, publisher_id: 'pub-hl7-fhir', seeded: true,
+    }).execute();
+    await db.insertInto('terminology_concepts').values([
+      { system: SAMPLE_CONDITION_SYSTEM, code: 'HEM', display: 'Haemolysed (ours)', status: 'ACTIVE', properties: null },
+      { system: SAMPLE_CONDITION_SYSTEM, code: 'OWN', display: 'A condition of our own', status: 'ACTIVE', properties: null },
+    ]).execute();
+    await up(db);
+    await down(db);
+    const left = await concepts(db, SAMPLE_CONDITION_SYSTEM);
+    expect(left).toContainEqual({ code: 'HEM', display: 'Haemolysed (ours)' });
+    expect(left).toContainEqual({ code: 'OWN', display: 'A condition of our own' });
+    // The nine codes up() added to that system stay too: once up() did not create the system, down()
+    // leaves every concept in it, as the ruling asks.
+    expect(left).toHaveLength(11);
+    // The systems up() did create still lose their seeded concepts.
+    expect(await concepts(db, ORDER_RETURN_SYSTEM)).toEqual([]);
+  });
 });

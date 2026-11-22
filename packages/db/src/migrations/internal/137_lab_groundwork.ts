@@ -126,9 +126,11 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   await seedLists(seedDb);
 }
 
-// Removes the rows up() writes, by the exact ids and codes it writes. A row that was already there
-// under the same id or code (so up() skipped it) cannot be told apart from one up() made, and goes
-// too. Concepts a lab added later to these systems are not touched.
+// Removes the rows up() writes, by the exact ids and codes it writes. A system's seeded concepts go
+// only when coding_systems holds that system's url under 137's id, so up() created the system. A
+// system already there under another id was skipped by up(), and its concepts stay. A row already
+// there under the same id, or a concept under the same code in a system 137 created, cannot be told
+// apart from one up() made, and goes too. Concepts a lab added later are not touched.
 export async function down(db: Kysely<unknown>): Promise<void> {
   const seedDb = db as Kysely<any>;
   for (const vs of VALUE_SETS) {
@@ -137,7 +139,11 @@ export async function down(db: Kysely<unknown>): Promise<void> {
     await seedDb.deleteFrom('fhir.resource_history').where('resource_type', '=', 'ValueSet').where('id', '=', vs.id).execute();
     await seedDb.deleteFrom('value_sets').where('id', '=', vs.id).execute();
   }
+  const held = await seedDb.selectFrom('coding_systems').select(['id', 'url'])
+    .where('id', 'in', SYSTEMS.map((s) => s.id)).execute() as Array<{ id: string; url: string | null }>;
+  const created = new Set(held.filter((r) => SYSTEMS.some((s) => s.id === r.id && s.url === r.url)).map((r) => r.url));
   for (const c of CONCEPTS) {
+    if (!created.has(c.system)) continue;
     await seedDb.deleteFrom('terminology_concepts').where('system', '=', c.system).where('code', '=', c.code).execute();
   }
   for (const s of SYSTEMS) {
