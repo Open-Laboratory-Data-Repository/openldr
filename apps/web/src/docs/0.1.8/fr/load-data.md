@@ -128,8 +128,6 @@ Valider n’importe pas. Corrigez les erreurs. Un fichier introuvable est souven
 
 Cela écrit dans l’installation configurée. Une réussite indique lot et nombre de ressources. Zéro ressource ne prouve pas un import utile. Vérifiez convertisseur et format.
 
-Des exemples à importer se trouvent dans [examples](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples).
-
 ```sh
 {{operator:data-ingest}}
 ```
@@ -249,6 +247,8 @@ openldr import check stop <plugin-id> <run-id>
 Un plugin qui a sa propre page, comme un importeur de source du Marketplace, y montre la même vérification. Son propre guide explique cette page.
 
 ## Exemples de contenu facultatifs
+
+Un exemple complet se trouve dans [examples/workflows](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/workflows). Il contient un workflow à importer, un `payload.json` de lignes fictives et `send.sh`, qui envoie ces lignes au webhook du workflow.
 
 ### Exemples de contenus
 

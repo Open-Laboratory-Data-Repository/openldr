@@ -128,8 +128,6 @@ Validar não importa. Corrija erros. Um ficheiro não encontrado pode estar fora
 
 Grava na instalação configurada. Sucesso indica lote e número de recursos. Zero recursos não prova importação útil. Verifique conversor e formato.
 
-Há exemplos para importar em [examples](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples).
-
 ```sh
 {{operator:data-ingest}}
 ```
@@ -249,6 +247,8 @@ openldr import check stop <plugin-id> <run-id>
 Um plugin com página própria, como um importador de origem do Marketplace, mostra aí a mesma verificação. O guia do próprio plugin explica essa página.
 
 ## Exemplos opcionais de dados
+
+Há um exemplo completo em [examples/workflows](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/workflows). Tem um workflow para importar, um `payload.json` com linhas fictícias e `send.sh`, que envia essas linhas para o webhook do workflow.
 
 ### Exemplos de conteúdo
 

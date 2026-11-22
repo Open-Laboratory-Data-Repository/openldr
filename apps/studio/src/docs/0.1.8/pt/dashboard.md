@@ -518,11 +518,11 @@ O menu de três pontos tem **Exportar** e **Importar**, no modo de visualizaçã
 - **Exportar** transfere o painel como ficheiro JSON com o nome dele, por exemplo `Novo_painel.json`.
 - **Importar** lê um ficheiro assim e junta-o como painel novo. Nunca substitui um painel. Se o nome já existir, junta um número.
 
-Há exemplos para importar em [examples/dashboards](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/dashboards).
-
 Use-os para:
 
 - **Copiar um painel** para outra instalação, ou guardar uma cópia de segurança.
+
+Há exemplos para importar em [examples/dashboards](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/dashboards).
 
 Importar um painel com widgets SQL falha enquanto **SQL bruto no painel** estiver desativada, com a mensagem `raw SQL widgets are disabled`. Isto inclui uma cópia do painel de exemplo. Ative primeiro a definição.
 

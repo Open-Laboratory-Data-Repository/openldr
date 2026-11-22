@@ -518,11 +518,11 @@ Le menu à trois points propose **Exporter** et **Importer**, en consultation co
 - **Exporter** télécharge le tableau de bord en fichier JSON nommé d'après lui, par exemple `Nouveau_tableau_de_bord.json`.
 - **Importer** lit un tel fichier et l'ajoute comme nouveau tableau de bord. Il n'en remplace jamais un. Si le nom est déjà pris, il ajoute un numéro.
 
-Des exemples à importer se trouvent dans [examples/dashboards](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/dashboards).
-
 Servez-vous-en pour :
 
 - **Copier un tableau de bord** vers une autre installation, ou en garder une sauvegarde.
+
+Des exemples à importer se trouvent dans [examples/dashboards](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/dashboards).
 
 Importer un tableau de bord qui contient des widgets SQL échoue tant que **SQL brut pour les tableaux de bord** est désactivé, avec le message `raw SQL widgets are disabled`. Cela vaut aussi pour une copie du tableau de bord d'exemple. Activez d'abord le paramètre.
 

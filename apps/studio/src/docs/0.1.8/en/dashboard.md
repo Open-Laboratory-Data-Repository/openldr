@@ -518,11 +518,11 @@ The **Dashboard menu** has **Export** and **Import** in view mode and in edit mo
 - **Export** downloads the dashboard as a JSON file named after it, for example `New_dashboard.json`.
 - **Import** reads such a file and adds it as a new dashboard. It never replaces one. If the name is taken, it adds a number.
 
-Examples you can import are in [examples/dashboards](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/dashboards).
-
 Use them to:
 
 - **Copy a dashboard** to another install, or keep a backup.
+
+Examples you can import are in [examples/dashboards](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/dashboards).
 
 Importing a dashboard that holds SQL widgets fails while **Dashboard raw SQL** is off, with the message `raw SQL widgets are disabled`. That includes a copy of the sample dashboard. Turn the setting on first.
 

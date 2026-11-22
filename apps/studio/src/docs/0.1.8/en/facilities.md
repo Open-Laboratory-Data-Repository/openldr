@@ -232,11 +232,11 @@ Use the registered source that owns the codes in this file. Manual form requirem
 
 On Registry, open the page dots menu and select **Import facilities**.
 
-Examples you can import are in [examples/facilities](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/facilities).
-
 ![Import starts from the Registry page dots menu.](facilities-guide-import-actions.png)
 
 ![Choose Import facilities to open the three-step wizard.](facilities-guide-import-menu.png)
+
+Examples you can import are in [examples/facilities](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/facilities).
 
 ### 2. Choose your file
 

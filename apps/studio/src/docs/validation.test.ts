@@ -294,9 +294,10 @@ describe('authored guide structure', () => {
             wrong.push(`${page.name}: ${href}`);
           }
         }
-        const folder = page.slug === 'load-data' ? '' : guideFolders[page.slug];
+        // The web load-data guide points at the workflow example: its payload and send.sh.
+        const folder = page.slug === 'load-data' ? 'workflows' : guideFolders[page.slug];
         if (folder === undefined) continue;
-        const expected = `${repo}/tree/v{{version}}/examples${folder ? `/${folder}` : ''})`;
+        const expected = `${repo}/tree/v{{version}}/examples/${folder})`;
         if (!page.content.includes(expected)) missing.push(page.name);
       }
       for (const slug of Object.keys(guideFolders)) {

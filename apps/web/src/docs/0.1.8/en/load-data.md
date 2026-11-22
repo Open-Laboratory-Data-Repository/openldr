@@ -128,8 +128,6 @@ Validation is not ingestion. Correct reported errors first. A missing file often
 
 This writes into the configured installation. A successful run reports a batch and resource count. Zero resources is not useful proof of an import. Check the converter and source format.
 
-Examples you can import are in [examples](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples).
-
 ```sh
 {{operator:data-ingest}}
 ```
@@ -249,6 +247,8 @@ openldr import check stop <plugin-id> <run-id>
 A plugin with its own page, such as a source importer from the marketplace, shows the same check there. Its own guide explains that page.
 
 ## Optional payload examples
+
+A complete example is in [examples/workflows](https://github.com/Open-Laboratory-Data-Repository/openldr/tree/v{{version}}/examples/workflows). It has a workflow to import, a `payload.json` of made-up rows, and `send.sh`, which posts those rows to the workflow's webhook.
 
 ### Example payloads
 
