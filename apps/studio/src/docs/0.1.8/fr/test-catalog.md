@@ -6,7 +6,7 @@ Maintenez une liste partagée de tests, choisissez ceux proposés par ce laborat
 
 Utilisez vos codes de tests, noms, prélèvements et fichiers. Les captures utilisent des exemples fictifs. Aucun jeu de données de documentation n'est nécessaire. Les [fichiers d'exercice facultatifs](#exercice-facultatif-avec-des-donnees-fictives) se trouvent à la fin.
 
-La lecture exige **Browse terminology**. Les modifications exigent **Manage terminology**. Si le catalogue vient du central, ce laboratoire peut changer la disponibilité, les prélèvements et les noms locaux. Il ne peut pas modifier les définitions partagées.
+La lecture exige **Browse terminology**. Les modifications exigent **Manage terminology**. La section d'un examen et son interrupteur **Vérification requise** exigent plutôt **Lab settings**. Si le catalogue vient du central, ce laboratoire peut changer la disponibilité, les prélèvements et les noms locaux. Il ne peut pas modifier les définitions partagées.
 
 Les captures utilisent une installation propriétaire de son catalogue. Les exemples de champs utilisent aussi un petit dictionnaire fictif de résultats. Les nombres des intervalles de référence servent uniquement à la documentation. Utilisez les intervalles et significations de codes approuvés pour vos vrais tests.
 
@@ -143,6 +143,28 @@ Ouvrez les points du panneau et sélectionnez **Save**.
 ![Save conserve les réglages locaux avec le test existant.](test-catalog-guide-local-save.png)
 
 **Résultat attendu :** les réglages du laboratoire sont enregistrés sans changer le code du test.
+
+## Définir la section et la vérification de l'examen
+
+Chaque examen a une section et un réglage de vérification dans ce laboratoire. Les deux sont enregistrés dès maintenant pour les listes de travail et la vérification des résultats, qui arrivent dans des versions ultérieures. Ils ne changent encore rien. Il faut **Lab settings**. Sans cette capacité, vous pouvez lire les deux champs mais pas les modifier.
+
+### 1. Ouvrir l'examen
+
+Ouvrez les points de la ligne et sélectionnez **Modifier**.
+
+### 2. Choisir la section
+
+Sous **Ce laboratoire**, choisissez la section dans **Section**, ou choisissez **Aucune section**. Le champ est masqué tant que le laboratoire n'a aucune section. Ajoutez-les dans Paramètres, Laboratoire.
+
+### 3. Régler Vérification requise
+
+Activez **Vérification requise** quand une personne doit valider les résultats de cet examen avant leur diffusion. Désactivez-le pour diffuser sans vérification un résultat sans valeur critique. Un nouvel examen commence avec ce réglage activé.
+
+### 4. Enregistrer l'examen
+
+Ouvrez les points du panneau et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** la section et l'interrupteur gardent votre choix quand vous rouvrez l'examen.
 
 ## Trouver et exporter des tests
 
@@ -312,7 +334,11 @@ Définissez les limites de sexe ou d'âge applicables. Un intervalle sans restri
 
 ![Les limites de sexe et d'âge restreignent l'application de cet intervalle. Laissez-les ouvertes seulement pour un intervalle sans restriction.](test-catalog-guide-range-context.png)
 
-### 5. Enregistrer le test
+### 5. Saisir les seuils critiques si votre laboratoire en utilise
+
+Saisissez les seuils approuvés dans **Seuil critique bas** et **Seuil critique haut**, sous **Âge à**. Laissez-les vides si l'examen n'en a pas. **Seuil critique bas** doit être inférieur ou égal à **Borne basse**, **Seuil critique haut** doit être supérieur ou égal à **Borne haute**, et **Seuil critique bas** doit être inférieur à **Seuil critique haut**. Chaque règle n'est vérifiée que si ses deux valeurs sont remplies.
+
+### 6. Enregistrer le test
 
 Ouvrez les points du panneau de test et sélectionnez **Save**.
 
@@ -522,8 +548,12 @@ Retirer un test le masque de la liste active par défaut. Il peut être restaur�
 
 **Un code reste sans association.** Vérifiez si vous avez choisi Tests ou Results. Associer un niveau n'associe pas l'autre.
 
+**L'enregistrement refuse un seuil critique.** Le message, en anglais, nomme le champ et l'intervalle, par exemple `HGB range 1: the critical low limit must be at or below the low limit.` Corrigez le seuil et enregistrez de nouveau.
+
+**Section manque.** Le laboratoire n'a encore aucune section. Ajoutez-en une dans Paramètres, Laboratoire.
+
 **La page signale une copie d'entrepôt périmée.** Ouvrez les actions de Observed et choisissez Rebuild warehouse copy. La page signale un échec si la reconstruction est impossible.
 
 ## Guides associés
 
-[Terminologie](/docs/terminology) décrit les listes de codes configurées. [Établissements](/docs/facilities) décrit les codes d'établissement. [Commencer ici](/docs/start-here) décrit la CLI installée et de développement.
+[Terminologie](/docs/terminology) décrit les listes de codes configurées. [Établissements](/docs/facilities) décrit les codes d'établissement. [Commencer ici](/docs/start-here) décrit la CLI installée et de développement. [Configuration du laboratoire](/docs/lab-setup) décrit les sections, la vérification et les seuils critiques du module laboratoire.

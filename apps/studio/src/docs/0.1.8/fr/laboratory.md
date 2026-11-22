@@ -2,7 +2,7 @@
 
 Laboratory conserve le nom, l'adresse, les coordonnées et le logo du laboratoire émetteur pour les modèles de rapport. Cette page définit aussi le registre d'établissements par défaut et le fuseau horaire local.
 
-Utilisez les coordonnées réelles et le logo approuvé de votre laboratoire. Les images montrent un laboratoire fictif sur une installation de test. Aucun jeu de données n'est nécessaire. View settings permet d'ouvrir la page. Edit general settings permet d'enregistrer.
+Utilisez les coordonnées réelles et le logo approuvé de votre laboratoire. Les images montrent un laboratoire fictif sur une installation de test. Aucun jeu de données n'est nécessaire. View settings permet d'ouvrir la page. Edit general settings permet d'enregistrer. L'interrupteur d'auto-validation et le tableau Sections exigent Lab settings. Un compte qui n'a que Lab settings peut ouvrir la page. Il ne voit alors que l'interrupteur et les sections, sous le titre **Paramètres du laboratoire**.
 
 Le laboratoire émetteur produit les rapports. Les établissements envoient les demandes. Choisir un registre par défaut ici ne crée ni n'importe d'établissements.
 
@@ -122,6 +122,52 @@ Descendez jusqu'à l'aperçu du logo et à Choose file. Enregistrez par le menu 
 
 ![Descendez jusqu'à Logo. L'aperçu et les commandes restent disponibles.](laboratory-guide-phone-logo.png)
 
+## Autoriser une personne à valider ses propres résultats
+
+Par défaut, la personne qui a saisi un résultat ne peut pas le valider. Activez ce réglage seulement si votre laboratoire permet à une personne de faire les deux. Il faut Lab settings. La vérification des résultats ne fait pas partie de cette version, donc l'interrupteur n'a encore aucun effet. Il est enregistré pour l'arrivée de la vérification.
+
+### 1. Trouver l'interrupteur
+
+Ouvrez **Paramètres**, puis **Laboratoire**. Trouvez **Autoriser une personne à valider les résultats qu'elle a saisis**.
+
+### 2. L'activer ou le désactiver
+
+Sélectionnez l'interrupteur. Il s'enregistre dès que vous le changez. Il n'y a pas d'étape d'enregistrement à part.
+
+**Résultat attendu :** un message indique **Enregistré.** L'interrupteur garde sa position quand vous rouvrez Laboratoire.
+
+## Ajouter une section
+
+Une section est une partie du laboratoire, comme l'hématologie. Un examen peut être classé dans une section. Il faut Lab settings.
+
+### 1. Choisir Ajouter une section
+
+Ouvrez les points de la page en haut à droite et sélectionnez **Ajouter une section**.
+
+### 2. Saisir le code et le nom
+
+Saisissez le code dans **Code**, par exemple `haem`. Utilisez des lettres minuscules, des chiffres et des tirets, en commençant par une lettre. Le code ne peut plus changer ensuite. Saisissez le nom dans **Nom**, par exemple `Hématologie`.
+
+### 3. Enregistrer la section
+
+Ouvrez les points du panneau et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** un message indique **Section haem ajoutée.** La section figure sous **Sections** et apparaît tout de suite dans le catalogue des examens.
+
+## Supprimer une section
+
+### 1. Choisir Supprimer
+
+Ouvrez les points de la ligne de la section et sélectionnez **Supprimer**.
+
+### 2. Confirmer
+
+Lisez la demande de confirmation et sélectionnez **Supprimer**.
+
+**Résultat attendu :** un message indique que la section est supprimée. Cette action est définitive. OpenLDR refuse de supprimer une section encore utilisée par un examen, et le message indique combien d'examens l'utilisent.
+
+[Configuration du laboratoire](/docs/lab-setup) montre la place des sections et de l'interrupteur dans la configuration du laboratoire, avec les commandes `openldr lab` correspondantes.
+
 ## Utiliser les coordonnées dans les modèles de rapport
 
 Les modèles peuvent utiliser `{{lab.name}}`, `{{lab.address}}`, `{{lab.contact}}` et `{{lab.logo}}`. La page affiche ces noms sous sa description. Placez-les dans un modèle avec Report Designer. Enregistrer Laboratory ne modifie aucun modèle.
@@ -144,6 +190,10 @@ Le logo accepte les formats PNG et JPEG, jusqu'à 256 Ko. SVG, WebP et les adres
 
 **Un rapport n'affiche pas les coordonnées enregistrées.** Vérifiez que son modèle utilise les variables du laboratoire.
 
+**Ajouter une section manque.** Votre compte n'a pas Lab settings.
+
+**Une section n'est pas supprimée.** Un examen l'utilise encore. Déplacez d'abord ces examens vers une autre section dans le catalogue des examens.
+
 ## Guides associés
 
-Lisez [Établissements](/docs/facilities) pour enregistrer une source. Lisez [Vérifications de configuration](/docs/setup-checks) pour contrôler la préparation. Lisez [Commencer ici](/docs/start-here) pour la configuration en ligne de commande.
+Lisez [Établissements](/docs/facilities) pour enregistrer une source. Lisez [Vérifications de configuration](/docs/setup-checks) pour contrôler la préparation. Lisez [Commencer ici](/docs/start-here) pour la configuration en ligne de commande. Lisez [Configuration du laboratoire](/docs/lab-setup) pour préparer le module laboratoire.

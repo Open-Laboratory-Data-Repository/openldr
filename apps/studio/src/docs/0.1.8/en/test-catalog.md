@@ -6,7 +6,7 @@ Keep a shared list of tests, decide which ones this lab offers, and link the cod
 
 Use your own test codes, names, specimens and files. The screenshots use fictional examples. No documentation sample data is required. [Optional practice files](#optional-practice-with-fictional-data) are at the end.
 
-Reading needs **Browse terminology**. Changes need **Manage terminology**. When the catalog comes from central, this lab can change local availability, specimens and names. It cannot change the shared test definitions.
+Reading needs **Browse terminology**. Changes need **Manage terminology**. A test's section and its **Needs review** switch need **Lab settings** instead. When the catalog comes from central, this lab can change local availability, specimens and names. It cannot change the shared test definitions.
 
 The screenshots use an installation that owns its catalog. Result-field examples also use a small fictional result dictionary. Reference-band numbers are for documentation only. Use the ranges and code meanings approved for your actual tests.
 
@@ -143,6 +143,28 @@ Open the sheet dots menu and select **Save**.
 ![Save stores the local settings alongside the existing test.](test-catalog-guide-local-save.png)
 
 **Expected result:** The lab settings are saved without changing the test code.
+
+## Set the test's section and review
+
+Each test has a section and a review setting at this lab. Both are stored now for worklists and result review, which come in later releases. They change nothing yet. You need **Lab settings**. Without it you can read both fields but not change them.
+
+### 1. Open the test
+
+Open the row dots menu and select **Edit**.
+
+### 2. Choose the section
+
+Under **This lab**, choose the section in **Section**, or choose **No section**. The field is hidden while the lab has no sections. Add them on Settings, Laboratory.
+
+### 3. Set Needs review
+
+Turn **Needs review** on when a person must authorise this test's results before release. Turn it off to release a result with no critical value without review. A new test starts with it on.
+
+### 4. Save the test
+
+Open the sheet dots menu and select **Save**.
+
+**Expected result:** the section and the switch keep your choice when you open the test again.
 
 ## Find and export tests
 
@@ -312,7 +334,11 @@ Set any sex or age limits that apply. An unrestricted band should have no such r
 
 ![Sex and age limits restrict who this band applies to. Leave them open only for an unrestricted band.](test-catalog-guide-range-context.png)
 
-### 5. Save the test
+### 5. Enter critical limits if your lab uses them
+
+Type the approved limits in **Critical low** and **Critical high**, below **Age to**. Leave them empty when the test has none. **Critical low** must be at or below **Low**, **Critical high** must be at or above **High**, and **Critical low** must be below **Critical high**. Each rule is checked only when both of its values are filled.
+
+### 6. Save the test
 
 Open the test sheet dots menu and select **Save**.
 
@@ -522,8 +548,12 @@ Retiring a test hides it from the default active list. It can be restored. Catal
 
 **A code is still unmapped.** Check whether you selected Tests or Results. Mapping one level does not map the other.
 
+**Save refuses a critical limit.** The message names the field and band, for example `HGB range 1: the critical low limit must be at or below the low limit.` Correct the limit and save again.
+
+**Section is missing.** The lab has no sections yet. Add one on Settings, Laboratory.
+
 **The page reports a stale warehouse copy.** Open Observed actions and choose Rebuild warehouse copy. The page reports a failure if it cannot rebuild.
 
 ## Related guides
 
-[Terminology](/docs/terminology) explains configured code lists. [Facilities](/docs/facilities) explains facility codes. [Start here](/docs/start-here) explains installed and development CLI use.
+[Terminology](/docs/terminology) explains configured code lists. [Facilities](/docs/facilities) explains facility codes. [Start here](/docs/start-here) explains installed and development CLI use. [Lab setup](/docs/lab-setup) explains sections, review and critical limits for the lab module.
