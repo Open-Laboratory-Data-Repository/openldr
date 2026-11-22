@@ -20,8 +20,9 @@ The command refuses to publish a broken release. It checks all of these before a
 pushed, and reports every problem at once:
 
 1. Clean tree, on `main`, in sync with `origin`.
-2. `package.json` version parses as `X.Y.Z` and is newer than the last `v*` tag (the first
-   release has no tag to compare against, so this check is skipped).
+2. `package.json` version parses as `X.Y.Z` and is newer than the last release tag, `vX.Y.Z`.
+   rc and demo tags such as `v0.1.12-rc.4` are test builds, so the check skips them. The first
+   release has no tag to compare against, so this check is skipped.
 3. No `vX.Y.Z` tag exists yet.
 4. `:X.Y.Z` is not already published for **any** of the five images. All five are read, and the
    refusal names the ones that already carry the tag — a run that pushed some images and died

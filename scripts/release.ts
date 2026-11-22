@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveGitBash } from '../packages/release/src/git-bash';
 import { cleanupPlan, teardownCommand, type CleanupPlan } from '../packages/release/src/cleanup';
 import { buildReleaseManifest, parseReleaseManifest } from '../packages/release/src/manifest';
-import { evaluatePreconditions, type ReleaseFacts } from '../packages/release/src/preconditions';
+import { evaluatePreconditions, newestReleaseTag, type ReleaseFacts } from '../packages/release/src/preconditions';
 import {
   imagesWithTag,
   findPrivatePackages,
@@ -143,10 +143,11 @@ const ghJson: FetchJson = async (path) => {
   return parseGhPages(sh('gh', ['api', '--paginate', url]));
 };
 
-/** The newest v* tag by semver, or null for the first release. */
+/** The newest release tag (vX.Y.Z), or null for the first release. rc and demo tags are skipped;
+ *  `newestReleaseTag` decides, and is unit-tested. */
 function newestTag(): string | null {
-  const out = sh('git', ['tag', '--list', 'v*', '--sort=-v:refname']);
-  return out ? out.split('\n')[0]!.trim() : null;
+  const out = sh('git', ['tag', '--list', 'v*']);
+  return newestReleaseTag(out ? out.split('\n') : []);
 }
 
 /** Green, or green on a lone re-run of exactly the tasks turbo said failed.

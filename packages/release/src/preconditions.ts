@@ -1,4 +1,4 @@
-import { isNewerVersion, parseSemver } from '@openldr/core/pure';
+import { compareSemver, isNewerVersion, parseSemver } from '@openldr/core/pure';
 
 export interface ReleaseFacts {
   /** The version in package.json — the single source of truth for what is being released. */
@@ -71,4 +71,15 @@ export function evaluatePreconditions(f: ReleaseFacts): string[] {
   }
 
   return refusals;
+}
+
+/** The newest release tag (`vX.Y.Z`) among `tags`, or null when there is none.
+ *
+ *  rc and demo tags (`v0.1.12-rc.4`) are skipped: they are made by hand for test builds, not by
+ *  `pnpm release`, so they are never the last release. Before this, git's version sort put
+ *  `v0.1.12-rc.4` first, `parseSemver` could not read it, and the 0.1.12 release refused. */
+export function newestReleaseTag(tags: readonly string[]): string | null {
+  const releases = tags.map((t) => t.trim()).filter((t) => t.startsWith('v') && parseSemver(t));
+  if (releases.length === 0) return null;
+  return releases.reduce((best, t) => (compareSemver(t, best) > 0 ? t : best));
 }
