@@ -10,7 +10,7 @@ Le workflow fourni **Ingest** traite aussi les soumissions Forms. Sur une nouvel
 
 ## Envoyer une ligne d'essai au workflow Ingest fourni
 
-Vous pouvez utiliser **Ingest** sans créer de workflow ni connaître FHIR. FHIR est le format standard des enregistrements utilisé par OpenLDR. Sur une nouvelle installation, les étapes sont **Ingest received**, **Map to FHIR**, **Persist store** et **Log persisted**. Map to FHIR transforme vos champs en patient, prélèvement, demande et résultat liés. Persist store enregistre ces données.
+Vous pouvez utiliser **Ingest** sans créer de workflow ni connaître FHIR. FHIR est le format standard des enregistrements utilisé par OpenLDR. Sur une nouvelle installation, les étapes sont **Ingest received**, **Map to FHIR**, **Persist store**, **Log persisted** et **Log held**. Map to FHIR transforme vos champs en patient, prélèvement, demande et résultat liés. Persist store enregistre ces données. Log held consigne chaque ligne non mappée, avec sa raison.
 
 Utilisez la ligne fictive ci-dessous sur une installation de test. Gardez le workflow existant activé. Une ancienne installation peut avoir un autre graphe. Ne réinitialisez pas un workflow opérationnel pour essayer cet exemple.
 
@@ -38,7 +38,7 @@ curl -i -X POST 'https://your-host/api/workflows/hooks/ingest' \
   }'
 ```
 
-**Résultat attendu :** le message apparaît dans History. Sans mappage enregistré correspondant, cette première exécution échoue et ne stocke rien. Elle fournit l'échantillon pour la tâche suivante. Envoyez seulement la ligne ci-dessus. Le webhook la place sous `body`.
+**Résultat attendu :** le message apparaît dans History. Sans mappage enregistré correspondant, Map to FHIR retient la ligne et rien n'est stocké. L'exécution affiche quand même **Completed**, avec une ligne retenue. Le webhook répond HTTP 200 avec `held: 1`, la raison `no mapping for this shape` et un `message`. Cette exécution fournit l'échantillon pour la tâche suivante. Envoyez seulement la ligne ci-dessus. Le webhook la place sous `body`.
 
 Vous envoyez déjà du FHIR ? Ingest accepte les enregistrements FHIR pris en charge sans mappage des champs source. Pour vos propres noms de champs, continuez ci-dessous.
 
@@ -94,7 +94,7 @@ Choisissez vos champs source à côté des libellés de laboratoire. Vous n'avez
 
 La ligne d'essai a une date de prélèvement mais aucune date de demande. Effacez le filtre Period du tableau de bord pour la chercher. Un tableau peut montrer seulement ses examens les plus fréquents. Une nouvelle demande peut donc être absente de **Orders by Test**. Vérifiez d'abord le stockage dans History et la fiche du patient.
 
-Si Map to FHIR retient une ligne, consultez cette étape dans History pour en connaître la raison. Une structure source inconnue demande un mappage enregistré. Un identifiant patient manquant demande des données corrigées. Dans Ingest fourni, **retenus** reste volontairement sans connexion. Une ligne retenue fait échouer tout le message, sans rien stocker. Corrigez les données ou le mappage, puis renvoyez. [Map to FHIR](/docs/map-to-fhir) explique les raisons et les workflows qui gardent les bonnes lignes séparément.
+Si Map to FHIR retient une ligne, consultez cette étape dans History pour en connaître la raison. Une structure source inconnue demande un mappage enregistré. Un identifiant patient manquant demande des données corrigées. Dans Ingest fourni, **retenus** mène à **Log held**. Les bonnes lignes d'un message sont stockées, et chaque ligne retenue est consignée avec sa raison. Les lignes retenues ne sont pas stockées. Corrigez les données ou le mappage, puis renvoyez ces lignes. [Map to FHIR](/docs/map-to-fhir) explique les raisons, et comment refuser tout le message dès qu'une ligne est retenue.
 
 ## Trouver un workflow
 

@@ -10,7 +10,7 @@ The shipped **Ingest** workflow also handles Forms submissions. On a new install
 
 ## Send a practice row to the shipped Ingest workflow
 
-You can use **Ingest** without building another workflow or knowing FHIR. FHIR is the standard record format OpenLDR uses. On a new install, the steps are **Ingest received**, **Map to FHIR**, **Persist store** and **Log persisted**. Map to FHIR turns your fields into linked patient, specimen, order and result records. Persist store saves those records.
+You can use **Ingest** without building another workflow or knowing FHIR. FHIR is the standard record format OpenLDR uses. On a new install, the steps are **Ingest received**, **Map to FHIR**, **Persist store**, **Log persisted** and **Log held**. Map to FHIR turns your fields into linked patient, specimen, order and result records. Persist store saves those records. Log held records each row that could not be mapped, with its reason.
 
 Use the fictional row below in a test installation. Keep the existing workflow enabled. An older installation can have a different graph. Do not reset an operational workflow to try this example.
 
@@ -38,7 +38,7 @@ curl -i -X POST 'https://your-host/api/workflows/hooks/ingest' \
   }'
 ```
 
-**Expected result:** the message appears in History. Without a matching saved mapping, this first run fails and stores nothing. That run supplies the sample for the next task. Send only the row above. The webhook puts it under `body`.
+**Expected result:** the message appears in History. Without a matching saved mapping, Map to FHIR holds the row and nothing is stored. The run still shows **Completed**, with one held row. The webhook answers HTTP 200 with `held: 1`, the reason `no mapping for this shape` and a `message`. That run supplies the sample for the next task. Send only the row above. The webhook puts it under `body`.
 
 Already sending FHIR? Ingest accepts supported FHIR records without a source-field mapping. For your own field names, continue below.
 
@@ -94,7 +94,7 @@ Choose your source fields beside the lab labels. You do not need to type FHIR pa
 
 The practice row has a collected date but no order date. Clear the dashboard's Period filter when looking for it. A dashboard may show only its most frequent tests, so one new order may not appear in **Orders by Test**. History and the patient detail are the first checks for storage.
 
-If Map to FHIR holds a row, inspect that step in History for its reason. For example, an unknown source structure needs a saved mapping; a missing patient identifier needs corrected data. In the shipped Ingest workflow, **held** is deliberately unconnected. One held row fails the whole message and stores nothing. Correct the data or mapping, then send again. See [Map to FHIR](/docs/map-to-fhir) for held reasons and workflows that keep good rows separately.
+If Map to FHIR holds a row, inspect that step in History for its reason. For example, an unknown source structure needs a saved mapping; a missing patient identifier needs corrected data. In the shipped Ingest workflow, **held** goes to **Log held**. The good rows of a message are stored, and each held row is logged with its reason. Held rows are not stored. Correct the data or mapping, then send those rows again. See [Map to FHIR](/docs/map-to-fhir) for held reasons, and for refusing a whole message when any row is held.
 
 ## Find a workflow
 

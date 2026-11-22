@@ -10,7 +10,7 @@ O workflow fornecido **Ingest** também trata submissões Forms. Numa instalaç�
 
 ## Enviar uma linha de ensaio ao workflow Ingest fornecido
 
-Pode usar **Ingest** sem criar outro workflow nem conhecer FHIR. FHIR é o formato padrão dos registos usado pelo OpenLDR. Numa instalação nova, os passos são **Ingest received**, **Map to FHIR**, **Persist store** e **Log persisted**. Map to FHIR transforma os seus campos em paciente, amostra, pedido e resultado ligados. Persist store guarda esses registos.
+Pode usar **Ingest** sem criar outro workflow nem conhecer FHIR. FHIR é o formato padrão dos registos usado pelo OpenLDR. Numa instalação nova, os passos são **Ingest received**, **Map to FHIR**, **Persist store**, **Log persisted** e **Log held**. Map to FHIR transforma os seus campos em paciente, amostra, pedido e resultado ligados. Persist store guarda esses registos. Log held regista cada linha que não foi mapeada, com o motivo.
 
 Use a linha fictícia abaixo numa instalação de teste. Mantenha o workflow existente ativado. Uma instalação antiga pode ter outro grafo. Não reponha um workflow operacional para experimentar este exemplo.
 
@@ -38,7 +38,7 @@ curl -i -X POST 'https://your-host/api/workflows/hooks/ingest' \
   }'
 ```
 
-**Resultado esperado:** a mensagem aparece em History. Sem um mapeamento guardado correspondente, a primeira execução falha e não guarda nada. Essa execução fornece a amostra para a tarefa seguinte. Envie só a linha acima. O webhook coloca-a em `body`.
+**Resultado esperado:** a mensagem aparece em History. Sem um mapeamento guardado correspondente, Map to FHIR retém a linha e nada é guardado. A execução mostra mesmo assim **Completed**, com uma linha retida. O webhook responde HTTP 200 com `held: 1`, o motivo `no mapping for this shape` e uma `message`. Essa execução fornece a amostra para a tarefa seguinte. Envie só a linha acima. O webhook coloca-a em `body`.
 
 Já envia FHIR? Ingest aceita os registos FHIR suportados sem mapeamento dos campos de origem. Para os seus nomes de campos, continue abaixo.
 
@@ -94,7 +94,7 @@ Escolha os campos de origem ao lado dos nomes de laboratório. Não precisa de e
 
 A linha de ensaio tem data de colheita mas não tem data do pedido. Limpe o filtro Period do dashboard para a procurar. Um dashboard pode mostrar apenas as análises mais frequentes. Por isso, um pedido novo pode não aparecer em **Orders by Test**. Verifique primeiro a gravação em History e na ficha do paciente.
 
-Se Map to FHIR retiver uma linha, consulte esse passo em History para ler o motivo. Uma estrutura de origem desconhecida precisa de um mapeamento guardado. Um identificador de paciente em falta precisa de dados corrigidos. No Ingest fornecido, **retidos** fica sem ligação de propósito. Uma linha retida faz falhar a mensagem inteira e não guarda nada. Corrija os dados ou o mapeamento e envie novamente. [Map to FHIR](/docs/map-to-fhir) explica os motivos e os workflows que guardam as linhas válidas separadamente.
+Se Map to FHIR retiver uma linha, consulte esse passo em History para ler o motivo. Uma estrutura de origem desconhecida precisa de um mapeamento guardado. Um identificador de paciente em falta precisa de dados corrigidos. No Ingest fornecido, **retidos** liga a **Log held**. As linhas válidas de uma mensagem são guardadas, e cada linha retida fica registada com o motivo. As linhas retidas não são guardadas. Corrija os dados ou o mapeamento e envie essas linhas novamente. [Map to FHIR](/docs/map-to-fhir) explica os motivos, e como recusar a mensagem inteira quando uma linha é retida.
 
 ## Encontrar um workflow
 
