@@ -3903,3 +3903,82 @@ export const restorePatientDuplicates = (refs: string[]): Promise<{ changed: num
   authFetch('/api/patients/duplicates/restore', jbody({ refs }, 'POST')).then((r) => okJson<{ changed: number }>(r, 'show duplicates again'));
 export const downloadPatientDuplicatesCsv = (): Promise<void> =>
   downloadCsv('/api/patients/duplicates/export', 'patient-duplicates.csv', 'export duplicate patients');
+
+// Lab reception (lab module slices 1b and 2). Every route gates on lab.receive alone, since the
+// Reception role holds none of the capabilities the other lookups need (apps/server/src/lab-routes.ts).
+export interface ReceptionCoding { system: string; code: string; display: string | null }
+export interface ReceptionOrder {
+  requisition: string;
+  facility: { code: string; display: string | null } | null;
+  origin: 'lab-desk' | 'form' | 'other';
+  patient: { id: string; display: string } | null;
+  priority: string | null;
+  clinician: string | null;
+  note: string | null;
+  tests: Array<{ serviceRequestId: string; system: string; code: string; display: string | null; status: string }>;
+  specimens: Array<{ id: string; type: ReceptionCoding | null; condition: string | null; receivedTime: string | null }>;
+}
+export interface ReceptionPatient {
+  id: string;
+  name: string;
+  birthDate: string | null;
+  gender: string | null;
+  identifiers: Array<{ system: string; value: string }>;
+}
+export interface RegisterReceptionOrderInput {
+  requisition: string;
+  facilityCode: string;
+  patientId: string;
+  tests: Array<{ system: string; code: string }>;
+  priority?: string;
+  clinician?: string;
+  note?: string;
+}
+export interface CorrectReceptionOrderInput {
+  requisition: string;
+  facilityCode: string | null;
+  changes: { priority?: string | null; clinician?: string | null; note?: string | null; patientId?: string };
+  reason: string;
+}
+export interface RegisterReceptionPatientInput {
+  given: string;
+  family: string;
+  gender: string;
+  birthDate?: string;
+  ageYears?: number;
+  identifier?: { system: string; value: string };
+}
+export interface ReceiveReceptionSampleInput {
+  requisition: string;
+  facilityCode: string | null;
+  type: { system: string; code: string; display?: string };
+  condition?: { system: string; code: string; display?: string };
+  serviceRequestIds?: string[];
+}
+
+export const findReceptionOrders = (requisition: string): Promise<ReceptionOrder[]> =>
+  apiGet<{ rows: ReceptionOrder[] }>(`/api/lab/orders?requisition=${encodeURIComponent(requisition)}`, 'find order').then((r) => r.rows);
+export const registerReceptionOrder = (input: RegisterReceptionOrderInput): Promise<ReceptionOrder> =>
+  authFetch('/api/lab/orders', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'register order'));
+export const correctReceptionOrder = (input: CorrectReceptionOrderInput): Promise<ReceptionOrder> =>
+  authFetch('/api/lab/orders/correct', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'correct order'));
+export function searchReceptionPatients(q: { identifier?: string; name?: string; birthDate?: string }): Promise<ReceptionPatient[]> {
+  const s = new URLSearchParams();
+  if (q.identifier) s.set('identifier', q.identifier);
+  if (q.name) s.set('name', q.name);
+  if (q.birthDate) s.set('birthDate', q.birthDate);
+  return apiGet<{ rows: ReceptionPatient[] }>(`/api/lab/patients?${s}`, 'find patient').then((r) => r.rows);
+}
+export const registerReceptionPatient = (input: RegisterReceptionPatientInput): Promise<{ id: string; display: string }> =>
+  authFetch('/api/lab/patients', jbody(input, 'POST')).then((r) => okJson<{ id: string; display: string }>(r, 'register patient'));
+export const receiveReceptionSample = (input: ReceiveReceptionSampleInput): Promise<ReceptionOrder> =>
+  authFetch('/api/lab/samples', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'receive sample'));
+export function receptionSampleChoices(requisition: string, facilityCode: string | null): Promise<ReceptionCoding[]> {
+  const s = new URLSearchParams({ requisition });
+  if (facilityCode) s.set('facility', facilityCode);
+  return apiGet<{ types: ReceptionCoding[] }>(`/api/lab/samples/choices?${s}`, 'read sample types').then((r) => r.types);
+}
+export const searchReceptionFacilities = (q: string): Promise<Array<{ code: string; display: string | null }>> =>
+  apiGet<{ rows: Array<{ code: string; display: string | null }> }>(`/api/lab/facilities?q=${encodeURIComponent(q)}`, 'find facility').then((r) => r.rows);
+export const searchReceptionTests = (q: string): Promise<ReceptionCoding[]> =>
+  apiGet<{ rows: ReceptionCoding[] }>(`/api/lab/tests?q=${encodeURIComponent(q)}`, 'find test').then((r) => r.rows);
