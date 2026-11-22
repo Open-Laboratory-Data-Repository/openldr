@@ -359,12 +359,18 @@ describe('runProfileStep', () => {
 });
 
 describe('dropLeftOut', () => {
-  it('deletes an owned role and layout the new steps leave out, and keeps a left-out form', async () => {
+  it('deletes an owned role and layout the new steps leave out, reports them by id, and keeps a left-out form', async () => {
     const m = memDeps();
     await runAll(m.deps, STEPS);
+    const [roleId] = [...m.roles.keys()];
+    const [layoutId] = [...m.layouts.keys()];
     const [formId] = [...m.forms.keys()];
-    const removed = await dropLeftOut(m.deps, PACK, [STEPS[0]]);
-    expect(removed).toEqual({ roles: ['sample-clerk'], layouts: ['collection-site'], formsKept: ['lab-request'] });
+    const seen: string[] = [];
+    const removed = await dropLeftOut(m.deps, PACK, [STEPS[0]], async (r) => { seen.push(`${r.kind}:${r.itemId}`); });
+    expect(removed.roles).toEqual([expect.objectContaining({ kind: 'role', key: 'sample-clerk', itemId: roleId, name: 'Sample Clerk', before: expect.objectContaining({ id: roleId, slug: 'sample-clerk' }) })]);
+    expect(removed.layouts).toEqual([expect.objectContaining({ kind: 'layout', key: 'collection-site', itemId: layoutId, name: 'Collection site', before: expect.objectContaining({ id: layoutId }) })]);
+    expect(removed.formsKept).toEqual(['lab-request']);
+    expect(seen.sort()).toEqual([`layout:${layoutId}`, `role:${roleId}`].sort());
     expect(m.roles.size).toBe(0);
     expect(m.layouts.size).toBe(0);
     expect(m.forms.has(formId)).toBe(true);
@@ -380,11 +386,38 @@ describe('dropLeftOut', () => {
     expect(m.deps.layouts.remove).not.toHaveBeenCalled();
   });
 
-  it('forgets a left-out layout that is already gone without failing', async () => {
+  it('forgets a left-out role and layout that are already gone, without reporting them as removed', async () => {
     const m = memDeps();
-    m.items.push({ packId: PACK, kind: 'layout', key: 'old', itemId: 'l-gone' });
-    await expect(dropLeftOut(m.deps, PACK, [])).resolves.toEqual({ roles: [], layouts: ['old'], formsKept: [] });
+    m.items.push({ packId: PACK, kind: 'layout', key: 'old', itemId: 'l-gone' }, { packId: PACK, kind: 'role', key: 'old-clerk', itemId: 'r-gone' });
+    const onRemoved = vi.fn(async () => undefined);
+    await expect(dropLeftOut(m.deps, PACK, [], onRemoved)).resolves.toEqual({ roles: [], layouts: [], formsKept: [] });
+    expect(onRemoved).not.toHaveBeenCalled();
     expect(m.deps.layouts.remove).not.toHaveBeenCalled();
+    expect(m.deps.roles.remove).not.toHaveBeenCalled();
     expect(m.items).toEqual([]);
+  });
+
+  it('reports each removal before a later removal throws', async () => {
+    const m = memDeps();
+    m.roles.set('ra', { id: 'ra', slug: 'a-clerk', name: 'A', description: null, capabilities: [] });
+    m.roles.set('rb', { id: 'rb', slug: 'b-clerk', name: 'B', description: null, capabilities: [] });
+    m.items.push({ packId: PACK, kind: 'role', key: 'a-clerk', itemId: 'ra' }, { packId: PACK, kind: 'role', key: 'b-clerk', itemId: 'rb' });
+    vi.mocked(m.deps.roles.remove).mockImplementation(async (id: string) => {
+      if (id === 'rb') throw new Error('cannot delete the last role granting roles.manage');
+      m.roles.delete(id);
+    });
+    const seen: string[] = [];
+    await expect(dropLeftOut(m.deps, PACK, [], async (r) => { seen.push(r.itemId); }))
+      .rejects.toThrow('cannot delete the last role granting roles.manage');
+    expect(seen).toEqual(['ra']);
+  });
+});
+
+describe('runProfileStep: layout name', () => {
+  it('saves the trimmed name the check phase compared', async () => {
+    const m = memDeps();
+    await runProfileStep(m.deps, PACK, '1.0.0', STEPS[1], 'admin');
+    await runProfileStep(m.deps, PACK, '1.0.0', { ...STEPS[2], name: '  Collection site  ' } as ContentPackStep, 'admin');
+    expect(m.deps.layouts.save).toHaveBeenCalledWith(null, expect.objectContaining({ name: 'Collection site' }), 'admin');
   });
 });

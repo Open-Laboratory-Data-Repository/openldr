@@ -284,14 +284,12 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     if (failedStep === undefined) {
       // Only after every step wrote: a failed run must not delete what the next run would update.
       try {
-        const gone = await dropLeftOut(deps.profile, artifactId, pack.steps);
         const source = { source: 'content-pack', pack: `${artifactId}@${version}` };
-        for (const slug of gone.roles) {
-          await record({ ...who(actor), action: 'role.delete', entityType: 'role', entityId: slug, before: null, after: null, metadata: source });
-        }
-        for (const key of gone.layouts) {
-          await record({ ...who(actor), action: 'layout.delete', entityType: 'layout', entityId: key, before: null, after: null, metadata: source });
-        }
+        // Audited one by one inside dropLeftOut, the way the roles and layouts routes audit a delete.
+        await dropLeftOut(deps.profile, artifactId, pack.steps, (r) => record({
+          ...who(actor), action: `${r.kind}.delete`, entityType: r.kind, entityId: r.itemId,
+          before: r.before, after: null, metadata: { ...source, key: r.key, name: r.name },
+        }));
       } catch (err) {
         error = redact(messageOf(err));
       }

@@ -65,7 +65,7 @@ function fakeProfile(items: Array<{ packId: string; kind: string; key: string; i
       get: vi.fn(async (id: string) => { const i = items.find((x) => x.kind === 'role' && x.itemId === id); return i ? role(id, i.key) : null; }),
       getBySlug: vi.fn(async () => null),
       create: vi.fn(async (input: { slug: string }) => role('r-new', input.slug)),
-      update: vi.fn(async () => undefined), remove: vi.fn(async () => undefined),
+      update: vi.fn(async () => undefined), remove: vi.fn(async (_id: string): Promise<void> => undefined),
     },
     roleMembers: vi.fn(async () => []),
     layouts: {
@@ -558,8 +558,8 @@ describe('content pack installer: the write phase of the profile steps', () => {
     expect(s.deps.profile.packItems.remove).toHaveBeenCalledWith('test-pack', 'form', 'old-form');
     const rows = events(s.audit).filter((e) => e.action.endsWith('.delete'));
     expect(rows).toEqual([
-      expect.objectContaining({ action: 'role.delete', entityType: 'role', entityId: 'old-clerk', metadata: { source: 'content-pack', pack: 'test-pack@1.0.0' } }),
-      expect.objectContaining({ action: 'layout.delete', entityType: 'layout', entityId: 'old-layout', metadata: { source: 'content-pack', pack: 'test-pack@1.0.0' } }),
+      expect.objectContaining({ action: 'role.delete', entityType: 'role', entityId: 'r-old', before: expect.objectContaining({ id: 'r-old' }), after: null, metadata: { source: 'content-pack', pack: 'test-pack@1.0.0', key: 'old-clerk', name: 'old-clerk' } }),
+      expect.objectContaining({ action: 'layout.delete', entityType: 'layout', entityId: 'l-old', before: expect.objectContaining({ id: 'l-old' }), after: null, metadata: { source: 'content-pack', pack: 'test-pack@1.0.0', key: 'old-layout', name: 'l-old' } }),
     ]);
     await cleanup();
   });
@@ -576,13 +576,16 @@ describe('content pack installer: the write phase of the profile steps', () => {
     await cleanup();
   });
 
-  it('a removal that throws marks the install failed', async () => {
+  it('a removal that throws marks the install failed, and the removals before it keep their audit rows', async () => {
     const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
-    const profile = fakeProfile(owned);
-    profile.roles.remove.mockRejectedValueOnce(new Error('cannot delete the last role granting roles.manage'));
+    const profile = fakeProfile([{ packId: 'test-pack', kind: 'role', key: 'a-clerk', itemId: 'r-a' }, ...owned]);
+    profile.roles.remove.mockImplementation(async (id: string) => {
+      if (id === 'r-old') throw new Error('cannot delete the last role granting roles.manage');
+    });
     const s = setup({ profile });
     await expect(s.installer.install(bundle, { actor })).resolves.toMatchObject({ status: 'failed', error: 'cannot delete the last role granting roles.manage' });
     expect(s.installs.store.upsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed', failedStep: null }));
+    expect(events(s.audit).filter((e) => e.action.endsWith('.delete')).map((e) => e.entityId)).toEqual(['r-a']);
     await cleanup();
   });
 });

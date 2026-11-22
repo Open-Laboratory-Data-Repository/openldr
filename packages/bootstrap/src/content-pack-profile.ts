@@ -161,7 +161,8 @@ export async function runProfileStep(
       return { action: 'role.create', entityType: 'role', entityId: role.id };
     }
     case 'layout': {
-      const input = { name: step.name, startPage: step.startPage, pages: step.pages, roles: step.roles };
+      // The trimmed name, the one the check phase compared.
+      const input = { name: step.name.trim(), startPage: step.startPage, pages: step.pages, roles: step.roles };
       const itemId = await owned('layout', step.key);
       if (itemId && (await deps.layouts.list()).layouts.some((l) => l.id === itemId)) {
         await deps.layouts.save(itemId, input, actorId);
@@ -182,30 +183,45 @@ export async function runProfileStep(
   }
 }
 
-/** The keys of what dropLeftOut removed or let go. */
-export interface LeftOut { roles: string[]; layouts: string[]; formsKept: string[] }
+/** One role or layout dropLeftOut deleted. `before` is the row as it was, for the audit. */
+export interface Removed { kind: 'role' | 'layout'; key: string; itemId: string; name: string; before: unknown }
+
+/** What dropLeftOut deleted, and the keys of the forms it let go. Items already gone are not listed. */
+export interface LeftOut { roles: Removed[]; layouts: Removed[]; formsKept: string[] }
 
 /** After every step succeeded: remove roles and layouts the pack owns that the new steps leave out.
  *  Forms it leaves out lose their owner and stay (design 5.2). The check phase already refused when
- *  users still hold a left-out role. */
-export async function dropLeftOut(deps: ProfileDeps, packId: string, steps: ContentPackStep[]): Promise<LeftOut> {
+ *  users still hold a left-out role. `onRemoved` runs right after each delete, so a later delete that
+ *  throws cannot leave an earlier one unaudited. An item an admin already deleted is forgotten, and
+ *  neither listed nor passed to `onRemoved`. */
+export async function dropLeftOut(
+  deps: ProfileDeps, packId: string, steps: ContentPackStep[], onRemoved: (r: Removed) => Promise<void> = async () => undefined,
+): Promise<LeftOut> {
   const keep = new Set<string>();
   for (const s of steps) {
     if (s.kind === 'role') keep.add(`role:${s.slug}`);
     else if (s.kind === 'layout' || s.kind === 'form') keep.add(`${s.kind}:${s.key}`);
   }
   const out: LeftOut = { roles: [], layouts: [], formsKept: [] };
-  let layoutIds: Set<string> | null = null;
+  let layouts: LayoutList | null = null;
   for (const item of await deps.packItems.list(packId)) {
     if (keep.has(`${item.kind}:${item.key}`)) continue;
     if (item.kind === 'role') {
-      // RoleStore.remove does nothing for a role that is already gone.
-      await deps.roles.remove(item.itemId);
-      out.roles.push(item.key);
+      const role = await deps.roles.get(item.itemId);
+      if (role) {
+        await deps.roles.remove(item.itemId);
+        const r: Removed = { kind: 'role', key: item.key, itemId: item.itemId, name: role.name, before: role };
+        out.roles.push(r);
+        await onRemoved(r);
+      }
     } else if (item.kind === 'layout') {
-      layoutIds ??= new Set((await deps.layouts.list()).layouts.map((l) => l.id));
-      if (layoutIds.has(item.itemId)) await deps.layouts.remove(item.itemId);
-      out.layouts.push(item.key);
+      layouts ??= await deps.layouts.list();
+      if (layouts.layouts.some((l) => l.id === item.itemId)) {
+        const gone = await deps.layouts.remove(item.itemId);
+        const r: Removed = { kind: 'layout', key: item.key, itemId: item.itemId, name: gone.name, before: gone };
+        out.layouts.push(r);
+        await onRemoved(r);
+      }
     } else {
       out.formsKept.push(item.key);
     }
