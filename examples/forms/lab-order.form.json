@@ -1,0 +1,72 @@
+{
+  "name": "Example: lab order",
+  "versionLabel": "v1",
+  "fhirVersion": "R4",
+  "fhirResourceType": "ServiceRequest",
+  "targetPages": ["forms"],
+  "sections": [
+    { "id": "patient", "label": "Patient", "order": 0 },
+    { "id": "order", "label": "Order details", "order": 1 }
+  ],
+  "fields": [
+    {
+      "id": "patient",
+      "fhirPath": "ServiceRequest.subject",
+      "displayLabel": "Patient",
+      "description": null,
+      "fieldType": "reference",
+      "required": true,
+      "enabled": true,
+      "order": 0,
+      "cardinality": { "min": 0, "max": "1" },
+      "section": "patient",
+      "referenceTarget": "Patient",
+      "placeholder": "Search by name or ID"
+    },
+    {
+      "id": "tests",
+      "fhirPath": "ServiceRequest.code",
+      "displayLabel": "Tests",
+      "description": null,
+      "fieldType": "reference",
+      "required": true,
+      "enabled": true,
+      "order": 1,
+      "cardinality": { "min": 1, "max": "*" },
+      "referenceMultiple": true,
+      "section": "order",
+      "valueSetUrl": "urn:openldr:valueset:lab-tests",
+      "placeholder": "Search tests"
+    },
+    {
+      "id": "priority",
+      "fhirPath": "ServiceRequest.priority",
+      "displayLabel": "Priority",
+      "description": null,
+      "fieldType": "select",
+      "required": true,
+      "enabled": true,
+      "order": 2,
+      "cardinality": { "min": 0, "max": "1" },
+      "section": "order",
+      "valueSetOptions": [
+        { "code": "routine", "display": "Routine" },
+        { "code": "urgent", "display": "Urgent" },
+        { "code": "asap", "display": "ASAP" },
+        { "code": "stat", "display": "STAT" }
+      ]
+    },
+    {
+      "id": "notes",
+      "fhirPath": "ServiceRequest.note.0.text",
+      "displayLabel": "Clinical notes",
+      "description": null,
+      "fieldType": "text",
+      "required": false,
+      "enabled": true,
+      "order": 3,
+      "cardinality": { "min": 0, "max": "1" },
+      "section": "order"
+    }
+  ]
+}

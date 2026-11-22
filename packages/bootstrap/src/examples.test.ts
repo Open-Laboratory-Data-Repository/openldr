@@ -19,8 +19,8 @@ import { createMapToFhirService } from './map-to-fhir-service';
 
 const EXAMPLES = fileURLToPath(new URL('../../../examples/', import.meta.url));
 
-// The subfolders of `examples/`. Task 3 of the examples plan adds dashboards and forms.
-const EXAMPLE_FOLDERS = ['facilities', 'queries', 'terminology', 'test-catalog', 'workflows'];
+// The subfolders of `examples/`.
+const EXAMPLE_FOLDERS = ['dashboards', 'facilities', 'forms', 'queries', 'terminology', 'test-catalog', 'workflows'];
 
 // The folders whose files this test checks, and the files it checks in each.
 const CHECKED: Record<string, string[]> = {
