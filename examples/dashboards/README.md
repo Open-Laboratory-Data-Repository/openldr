@@ -1,8 +1,10 @@
 # Dashboard examples
 
-- `lab-overview.dashboard.json` is a full dashboard with 13 widgets: counts, charts and a table of
-  recent orders. It has three filters: Period, Test and Priority. It is the same dashboard a seeded
-  install ships as Lab Overview (Sample), under the name `Example: lab overview`.
+- `lab-overview.dashboard.json` is a full dashboard named `Example: lab overview`. It has 13
+  widgets: counts of orders, patients and results, charts of orders by test, status and priority,
+  trends over time, and a table of orders and patients by test. It has three filters: Period, Test
+  and Priority. Test is free text, so type a test name as your install spells it. Every widget is
+  built with the widget builder, so the file imports on any install.
 - `one-widget.dashboard.json` is the smallest dashboard that imports. It has one widget that counts
   orders. Start from it when you write your own dashboard file.
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { DashboardSchema } from '@openldr/dashboards';
+import { DashboardSchema, sqlAuthoringRefusal } from '@openldr/dashboards';
 import { WorkflowSchema } from '@openldr/workflows/types';
 import { FormCreateInputSchema } from '@openldr/forms/pure';
 import { importDashboard } from './dashboard/io';
@@ -54,6 +54,13 @@ describe('dashboards', () => {
       const parsed = DashboardSchema.parse(dashboard);
       expect(parsed.widgets.length, file).toBeGreaterThanOrEqual(1);
       expect(parsed.layout.map((l) => l.i).sort(), file).toEqual(parsed.widgets.map((w) => w.id).sort());
+    }
+  });
+
+  it('each dashboard saves on a default install, where raw SQL is off', () => {
+    for (const file of CHECKED.dashboards) {
+      const parsed = DashboardSchema.parse(importDashboard(readJson(`dashboards/${file}`), []));
+      expect(sqlAuthoringRefusal(parsed, false, new Set()), file).toBeNull();
     }
   });
 });

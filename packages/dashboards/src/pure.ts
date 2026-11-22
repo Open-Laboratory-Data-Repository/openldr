@@ -9,3 +9,4 @@ export { recognizeSql, type RecognizeResult, type RecognizeCode } from './recogn
 export * from './models/registry';
 export * from './types';
 export { bindQuery, bindFilterTree } from './bind';
+export { sqlAuthoringRefusal } from './sql-authoring';

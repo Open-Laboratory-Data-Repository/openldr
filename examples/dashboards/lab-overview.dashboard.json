@@ -11,8 +11,7 @@
     {
       "id": "test",
       "label": "Test",
-      "type": "text",
-      "optionsSql": "SELECT DISTINCT panel_desc FROM lab_requests WHERE panel_desc IS NOT NULL ORDER BY panel_desc"
+      "type": "text"
     },
     {
       "id": "priority",
@@ -389,16 +388,35 @@
     },
     {
       "id": "s9",
-      "type": "funnel",
-      "title": "Order → Report Pipeline",
+      "type": "bar-chart",
+      "title": "Results by Status",
       "refreshIntervalSec": 300,
       "visual": {
         "xAxisKey": "label",
-        "yAxisKey": "value"
+        "yAxisKey": "value",
+        "color": "#6366f1"
       },
       "query": {
-        "mode": "sql",
-        "sql": "SELECT 'Ordered' AS label, COUNT(*) AS value FROM lab_requests\nUNION ALL SELECT 'Specimen Received', COUNT(*) FROM specimens WHERE received_time IS NOT NULL\nUNION ALL SELECT 'Result Recorded', COUNT(*) FROM lab_results WHERE (status IS NULL OR status <> 'cancelled')\nUNION ALL SELECT 'Report Issued', COUNT(*) FROM diagnostic_reports WHERE issued IS NOT NULL"
+        "mode": "builder",
+        "model": "observations",
+        "metric": {
+          "key": "count",
+          "label": "Results",
+          "agg": "count"
+        },
+        "dimension": {
+          "key": "status"
+        },
+        "filters": [
+          {
+            "dimension": "status",
+            "op": "set",
+            "value": null
+          }
+        ],
+        "variableBindings": {
+          "effective_date_time": "period"
+        }
       }
     },
     {
@@ -540,60 +558,55 @@
     {
       "id": "s13",
       "type": "table",
-      "title": "Recent Orders",
+      "title": "Orders by Test",
       "refreshIntervalSec": 0,
       "visual": {
         "columns": [
           {
-            "key": "order_id",
-            "label": "Order"
-          },
-          {
-            "key": "test",
+            "key": "label",
             "label": "Test"
           },
           {
-            "key": "status",
-            "label": "Status"
+            "key": "count",
+            "label": "Orders"
           },
           {
-            "key": "priority",
-            "label": "Priority"
-          },
-          {
-            "key": "authored",
-            "label": "Authored"
+            "key": "distinct_subjects",
+            "label": "Patients"
           }
         ],
         "pageSize": 10
       },
       "query": {
-        "mode": "sql",
-        "sql": "SELECT request_id AS order_id, panel_desc AS test, status, priority, substring(authored_at,1,10) AS authored\nFROM lab_requests\nWHERE 1=1\n[[AND substring(authored_at,1,10) >= {{period_from}}]]\n[[AND substring(authored_at,1,10) <= {{period_to}}]]\n[[AND panel_desc = {{test}}]]\n[[AND priority = {{priority}}]]\nORDER BY authored_at DESC\nOFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY",
-        "variableBindings": {
-          "period": "period",
-          "test": "test",
-          "priority": "priority"
-        },
-        "variables": {
-          "period": {
-            "type": "date-range",
-            "label": "Period"
+        "mode": "builder",
+        "model": "service_requests",
+        "metrics": [
+          {
+            "key": "count",
+            "label": "Orders",
+            "agg": "count"
           },
-          "test": {
-            "type": "text",
-            "label": "Test"
-          },
-          "priority": {
-            "type": "text",
-            "label": "Priority",
-            "options": [
-              "routine",
-              "urgent",
-              "asap",
-              "stat"
-            ]
+          {
+            "key": "distinct_subjects",
+            "label": "Patients",
+            "agg": "count_distinct",
+            "column": "patient_id"
           }
+        ],
+        "dimension": {
+          "key": "code_text"
+        },
+        "filters": [
+          {
+            "dimension": "code_text",
+            "op": "set",
+            "value": null
+          }
+        ],
+        "limit": 50,
+        "variableBindings": {
+          "authored_on": "period",
+          "priority": "priority"
         }
       }
     }
