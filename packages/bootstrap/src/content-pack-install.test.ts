@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createContentPackInstaller } from './content-pack-install';
+import { PackRemovalError } from './content-pack-profile';
 
 const PACK = {
   formatVersion: 1,
@@ -293,7 +294,11 @@ describe('createContentPackInstaller', () => {
     await s.installs.store.upsert({ artifactId: 'p1', kind: 'content-pack', version: '1', payloadSha256: 'y' });
     await s.installer.detach('p1', { actor });
     expect(s.installs.rows.has('p1')).toBe(false);
-    expect(events(s.audit)[0]).toMatchObject({ action: 'marketplace.detach' });
+    expect(events(s.audit)).toEqual([
+      expect.objectContaining({ action: 'marketplace.detach', metadata: { type: 'content-pack', roles: [], layouts: [], formsKept: [] } }),
+    ]);
+    expect(s.deps.profile.roles.remove).not.toHaveBeenCalled();
+    expect(s.deps.profile.layouts.remove).not.toHaveBeenCalled();
   });
 
   it('refuses an unsigned pack before any write', async () => {
@@ -587,5 +592,73 @@ describe('content pack installer: the write phase of the profile steps', () => {
     expect(s.installs.store.upsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed', failedStep: null }));
     expect(events(s.audit).filter((e) => e.action.endsWith('.delete')).map((e) => e.entityId)).toEqual(['r-a']);
     await cleanup();
+  });
+});
+
+describe('content pack installer: detach takes out what the pack made', () => {
+  const owned = [
+    { packId: 'p1', kind: 'role', key: 'sample-clerk', itemId: 'r1' },
+    { packId: 'p1', kind: 'layout', key: 'collection-site', itemId: 'l1' },
+    { packId: 'p1', kind: 'form', key: 'lab-request', itemId: 'f1' },
+  ];
+  const installed = async (s: ReturnType<typeof setup>) => {
+    await s.installs.store.upsert({ artifactId: 'p1', kind: 'content-pack', version: '1.2.0', payloadSha256: 'y' });
+  };
+
+  it('refuses while a user holds a role of the pack, and deletes nothing', async () => {
+    const profile = fakeProfile(owned);
+    profile.roleMembers.mockImplementation(async () => ['Ann'] as never);
+    const s = setup({ profile });
+    await installed(s);
+    const err = await s.installer.detach('p1', { actor }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PackRemovalError);
+    expect((err as PackRemovalError).holders).toEqual([{ role: 'sample-clerk', users: ['Ann'] }]);
+    expect(s.installs.rows.has('p1')).toBe(true);
+    expect(profile.roles.remove).not.toHaveBeenCalled();
+    expect(profile.layouts.remove).not.toHaveBeenCalled();
+    expect(profile.packItems.remove).not.toHaveBeenCalled();
+    expect(events(s.audit)).toEqual([]);
+  });
+
+  it('with no holder, deletes the layout and role, keeps the form, and audits each delete', async () => {
+    const profile = fakeProfile(owned);
+    const s = setup({ profile });
+    await installed(s);
+    await s.installer.detach('p1', { actor });
+    expect(profile.layouts.remove).toHaveBeenCalledWith('l1');
+    expect(profile.roles.remove).toHaveBeenCalledWith('r1');
+    expect(profile.packItems.remove).toHaveBeenCalledWith('p1', 'form', 'lab-request');
+    expect(profile.forms.install).not.toHaveBeenCalled();
+    expect(s.installs.rows.has('p1')).toBe(false);
+    const source = { source: 'content-pack', pack: 'p1@1.2.0' };
+    expect(events(s.audit)).toEqual([
+      expect.objectContaining({ action: 'layout.delete', entityType: 'layout', entityId: 'l1', before: expect.objectContaining({ id: 'l1' }), after: null, actorId: 'admin', metadata: { ...source, key: 'collection-site', name: 'l1' } }),
+      expect.objectContaining({ action: 'role.delete', entityType: 'role', entityId: 'r1', before: expect.objectContaining({ id: 'r1' }), after: null, actorId: 'admin', metadata: { ...source, key: 'sample-clerk', name: 'sample-clerk' } }),
+      expect.objectContaining({ action: 'marketplace.detach', entityId: 'p1', metadata: { type: 'content-pack', roles: ['sample-clerk'], layouts: ['l1'], formsKept: ['lab-request'] } }),
+    ]);
+  });
+
+  it('removal previews the same lists and the holders, and writes nothing', async () => {
+    const profile = fakeProfile(owned);
+    profile.roleMembers.mockImplementation(async () => ['Ann'] as never);
+    const s = setup({ profile });
+    await installed(s);
+    await expect(s.installer.removal('p1')).resolves.toEqual({
+      roles: ['sample-clerk'], layouts: ['collection-site'], formsKept: ['lab-request'],
+      holders: [{ role: 'sample-clerk', users: ['Ann'] }],
+    });
+    expect(profile.roles.remove).not.toHaveBeenCalled();
+    expect(profile.layouts.remove).not.toHaveBeenCalled();
+    expect(profile.packItems.remove).not.toHaveBeenCalled();
+    expect(s.installs.rows.has('p1')).toBe(true);
+    expect(events(s.audit)).toEqual([]);
+  });
+
+  it('removal and detach refuse an id that is not an installed content pack', async () => {
+    const s = setup();
+    await s.installs.store.upsert({ artifactId: 'f1', kind: 'form-template', version: '1', payloadSha256: 'x' });
+    await expect(s.installer.removal('nope')).rejects.toThrow('not installed');
+    await expect(s.installer.removal('f1')).rejects.toThrow('not installed');
+    await expect(s.installer.detach('f1', { actor })).rejects.toThrow('not installed');
   });
 });

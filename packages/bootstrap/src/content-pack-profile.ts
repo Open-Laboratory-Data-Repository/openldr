@@ -1,5 +1,5 @@
 import { isCompatible, type ContentPackStep } from '@openldr/marketplace';
-import type { PackItemKind, PackItemStore, RoleStore } from '@openldr/db';
+import type { PackItem, PackItemKind, PackItemStore, RoleStore } from '@openldr/db';
 import { slugify } from '@openldr/rbac';
 import { layoutInputSchema, type LayoutInput, type LayoutList, type LayoutPreset } from './layout-presets';
 
@@ -122,15 +122,21 @@ export async function checkProfileSteps(
 
   // A role this pack made that the new steps leave out is removed on install (design 5.2). Refuse
   // while users still hold it, and list them all, so the admin can move them in one pass.
+  const holders = await findHolders(deps, items.filter((i) => !created.has(i.key)));
+  if (holders.length > 0) throw new PackRemovalError(holders);
+}
+
+/** The users holding each role among `items` that still exists. Other kinds are skipped. */
+async function findHolders(deps: ProfileDeps, items: PackItem[]): Promise<{ role: string; users: string[] }[]> {
   const holders: { role: string; users: string[] }[] = [];
   for (const item of items) {
-    if (item.kind !== 'role' || created.has(item.key)) continue;
+    if (item.kind !== 'role') continue;
     const role = await deps.roles.get(item.itemId);
     if (!role) continue;
     const users = await deps.roleMembers(role.id);
     if (users.length > 0) holders.push({ role: role.slug, users });
   }
-  if (holders.length > 0) throw new PackRemovalError(holders);
+  return holders;
 }
 
 /** What runStep records in the audit for one profile step. */
@@ -183,7 +189,7 @@ export async function runProfileStep(
   }
 }
 
-/** One role or layout dropLeftOut deleted. `before` is the row as it was, for the audit. */
+/** One role or layout dropLeftOut or removeProfileItems deleted. `before` is the row as it was, for the audit. */
 export interface Removed { kind: 'role' | 'layout'; key: string; itemId: string; name: string; before: unknown }
 
 /** What dropLeftOut deleted, and the keys of the forms it let go. Items already gone are not listed. */
@@ -202,10 +208,59 @@ export async function dropLeftOut(
     if (s.kind === 'role') keep.add(`role:${s.slug}`);
     else if (s.kind === 'layout' || s.kind === 'form') keep.add(`${s.kind}:${s.key}`);
   }
+  const items = (await deps.packItems.list(packId)).filter((i) => !keep.has(`${i.kind}:${i.key}`));
+  return removeItems(deps, packId, items, onRemoved);
+}
+
+/** What removing a whole pack takes out: names of the roles and layouts, keys of the forms kept. */
+export interface Removal { roles: string[]; layouts: string[]; formsKept: string[] }
+
+// Layouts name roles, so they go first. Forms go last, and only lose their owner.
+const REMOVAL_ORDER: Record<PackItemKind, number> = { layout: 0, role: 1, form: 2 };
+const inRemovalOrder = (items: PackItem[]): PackItem[] =>
+  [...items].sort((a, b) => REMOVAL_ORDER[a.kind] - REMOVAL_ORDER[b.kind]);
+
+/** Throws PackRemovalError when a user holds one of the pack's roles, listing every holder, and
+ *  deletes nothing. Otherwise deletes its layouts, then its roles, and forgets its forms, which stay
+ *  published (design 5.3). `onRemoved` runs right after each delete, as in dropLeftOut. */
+export async function removeProfileItems(
+  deps: ProfileDeps, packId: string, onRemoved: (r: Removed) => Promise<void> = async () => undefined,
+): Promise<Removal> {
+  const items = inRemovalOrder(await deps.packItems.list(packId));
+  const holders = await findHolders(deps, items);
+  if (holders.length > 0) throw new PackRemovalError(holders);
+  const out = await removeItems(deps, packId, items, onRemoved);
+  return { roles: out.roles.map((r) => r.name), layouts: out.layouts.map((r) => r.name), formsKept: out.formsKept };
+}
+
+/** What removeProfileItems would do, for the confirm prompt. Writes nothing. Items an admin already
+ *  deleted are left off, as removal does not report them. */
+export async function previewRemoval(deps: ProfileDeps, packId: string): Promise<Removal & { holders: { role: string; users: string[] }[] }> {
+  const items = inRemovalOrder(await deps.packItems.list(packId));
+  const out: Removal = { roles: [], layouts: [], formsKept: [] };
+  let layouts: LayoutList | null = null;
+  for (const item of items) {
+    if (item.kind === 'role') {
+      const role = await deps.roles.get(item.itemId);
+      if (role) out.roles.push(role.name);
+    } else if (item.kind === 'layout') {
+      layouts ??= await deps.layouts.list();
+      const layout = layouts.layouts.find((l) => l.id === item.itemId);
+      if (layout) out.layouts.push(layout.name);
+    } else {
+      out.formsKept.push(item.key);
+    }
+  }
+  return { ...out, holders: await findHolders(deps, items) };
+}
+
+/** Deletes the roles and layouts among `items`, in the order given, and forgets every item. */
+async function removeItems(
+  deps: ProfileDeps, packId: string, items: PackItem[], onRemoved: (r: Removed) => Promise<void>,
+): Promise<LeftOut> {
   const out: LeftOut = { roles: [], layouts: [], formsKept: [] };
   let layouts: LayoutList | null = null;
-  for (const item of await deps.packItems.list(packId)) {
-    if (keep.has(`${item.kind}:${item.key}`)) continue;
+  for (const item of items) {
     if (item.kind === 'role') {
       const role = await deps.roles.get(item.itemId);
       if (role) {

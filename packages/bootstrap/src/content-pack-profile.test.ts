@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ContentPackStep } from '@openldr/marketplace';
 import type { PackItem } from '@openldr/db';
-import { checkProfileSteps, dropLeftOut, PackRemovalError, runProfileStep, type ProfileDeps } from './content-pack-profile';
+import { checkProfileSteps, dropLeftOut, PackRemovalError, previewRemoval, removeProfileItems, runProfileStep, type ProfileDeps } from './content-pack-profile';
 
 const PACK = 'collection-site';
 
@@ -410,6 +410,79 @@ describe('dropLeftOut', () => {
     await expect(dropLeftOut(m.deps, PACK, [], async (r) => { seen.push(r.itemId); }))
       .rejects.toThrow('cannot delete the last role granting roles.manage');
     expect(seen).toEqual(['ra']);
+  });
+});
+
+describe('removeProfileItems', () => {
+  it('refuses while users hold a role the pack made, lists every holder, and deletes nothing', async () => {
+    const m = memDeps();
+    await runAll(m.deps, STEPS);
+    m.roles.set('r-old', { id: 'r-old', slug: 'old-clerk', name: 'Old Clerk', description: null, capabilities: [] });
+    m.items.push({ packId: PACK, kind: 'role', key: 'old-clerk', itemId: 'r-old' });
+    const [roleId] = [...m.roles.keys()];
+    vi.mocked(m.deps.roleMembers).mockImplementation(async (rid: string) => (rid === roleId ? ['Ann'] : ['Bob', 'Cy']));
+    const onRemoved = vi.fn(async () => undefined);
+    const err = await removeProfileItems(m.deps, PACK, onRemoved).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PackRemovalError);
+    expect((err as PackRemovalError).holders).toEqual([{ role: 'sample-clerk', users: ['Ann'] }, { role: 'old-clerk', users: ['Bob', 'Cy'] }]);
+    expect(m.deps.roles.remove).not.toHaveBeenCalled();
+    expect(m.deps.layouts.remove).not.toHaveBeenCalled();
+    expect(m.deps.packItems.remove).not.toHaveBeenCalled();
+    expect(onRemoved).not.toHaveBeenCalled();
+    expect(m.items).toHaveLength(4);
+  });
+
+  it('deletes the layouts, then the roles, forgets the forms and leaves them published', async () => {
+    const m = memDeps();
+    await runAll(m.deps, STEPS);
+    const [roleId] = [...m.roles.keys()];
+    const [layoutId] = [...m.layouts.keys()];
+    const [formId] = [...m.forms.keys()];
+    const seen: string[] = [];
+    const out = await removeProfileItems(m.deps, PACK, async (r) => { seen.push(`${r.kind}:${r.itemId}`); });
+    expect(out).toEqual({ roles: ['Sample Clerk'], layouts: ['Collection site'], formsKept: ['lab-request'] });
+    expect(seen).toEqual([`layout:${layoutId}`, `role:${roleId}`]);
+    expect(m.roles.size).toBe(0);
+    expect(m.layouts.size).toBe(0);
+    expect(m.forms.get(formId)).toBeDefined();
+    expect(m.access.get(formId)).toEqual({ open: ['sample-clerk'], submit: ['sample-clerk'] });
+    expect(m.items).toEqual([]);
+  });
+
+  it('forgets a role and layout an admin already deleted, without reporting them', async () => {
+    const m = memDeps();
+    m.items.push({ packId: PACK, kind: 'role', key: 'old-clerk', itemId: 'r-gone' }, { packId: PACK, kind: 'layout', key: 'old', itemId: 'l-gone' });
+    const onRemoved = vi.fn(async () => undefined);
+    await expect(removeProfileItems(m.deps, PACK, onRemoved)).resolves.toEqual({ roles: [], layouts: [], formsKept: [] });
+    expect(onRemoved).not.toHaveBeenCalled();
+    expect(m.deps.roles.remove).not.toHaveBeenCalled();
+    expect(m.deps.layouts.remove).not.toHaveBeenCalled();
+    expect(m.items).toEqual([]);
+  });
+
+  it('a pack that made nothing removes nothing', async () => {
+    const m = memDeps();
+    await expect(removeProfileItems(m.deps, PACK)).resolves.toEqual({ roles: [], layouts: [], formsKept: [] });
+    expect(m.deps.packItems.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('previewRemoval', () => {
+  it('lists what removal would take out and who holds each role, and writes nothing', async () => {
+    const m = memDeps();
+    await runAll(m.deps, STEPS);
+    m.items.push({ packId: PACK, kind: 'role', key: 'old-clerk', itemId: 'r-gone' });
+    vi.mocked(m.deps.roleMembers).mockImplementation(async () => ['Ann']);
+    vi.mocked(m.deps.packItems.put).mockClear();
+    await expect(previewRemoval(m.deps, PACK)).resolves.toEqual({
+      roles: ['Sample Clerk'], layouts: ['Collection site'], formsKept: ['lab-request'],
+      holders: [{ role: 'sample-clerk', users: ['Ann'] }],
+    });
+    expect(m.deps.roles.remove).not.toHaveBeenCalled();
+    expect(m.deps.layouts.remove).not.toHaveBeenCalled();
+    expect(m.deps.packItems.remove).not.toHaveBeenCalled();
+    expect(m.deps.packItems.put).not.toHaveBeenCalled();
+    expect(m.items).toHaveLength(4);
   });
 });
 

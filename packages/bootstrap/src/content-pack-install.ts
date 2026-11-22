@@ -8,7 +8,10 @@ import { safeRecord, type AuditEventInput, type AuditStore } from '@openldr/audi
 import { redact, type Logger } from '@openldr/core';
 import type { MapLevel, PackMappingInput, PackMappingPlan } from './test-mapping';
 import type { PackDataset } from './warehouse-datasets';
-import { checkProfileSteps, dropLeftOut, runProfileStep, type InstallerCapabilities, type ProfileDeps } from './content-pack-profile';
+import {
+  checkProfileSteps, dropLeftOut, previewRemoval, removeProfileItems, runProfileStep,
+  type InstallerCapabilities, type ProfileDeps, type Removed,
+} from './content-pack-profile';
 
 type Actor = { id: string | null; name: string };
 type StepOutcome = { ok: true } | { ok: false; error: string };
@@ -81,6 +84,11 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
   /** Best effort. A failed audit write is logged and never fails a step that already wrote. */
   const record = (e: AuditEventInput): Promise<void> => safeRecord(deps.audit as AuditStore, deps.logger, e);
   const who = (actor: Actor) => ({ actorType: 'user' as const, actorId: actor.id, actorName: actor.name });
+  /** Audits one role or layout a pack update or removal deleted, the way the roles and layouts routes audit a delete. */
+  const recordRemoved = (actor: Actor, pack: string) => (r: Removed): Promise<void> => record({
+    ...who(actor), action: `${r.kind}.delete`, entityType: r.kind, entityId: r.itemId,
+    before: r.before, after: null, metadata: { source: 'content-pack', pack, key: r.key, name: r.name },
+  });
 
   /**
    * Pass 1. Everything that can be checked without writing. Throws on the first problem.
@@ -284,12 +292,8 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     if (failedStep === undefined) {
       // Only after every step wrote: a failed run must not delete what the next run would update.
       try {
-        const source = { source: 'content-pack', pack: `${artifactId}@${version}` };
-        // Audited one by one inside dropLeftOut, the way the roles and layouts routes audit a delete.
-        await dropLeftOut(deps.profile, artifactId, pack.steps, (r) => record({
-          ...who(actor), action: `${r.kind}.delete`, entityType: r.kind, entityId: r.itemId,
-          before: r.before, after: null, metadata: { ...source, key: r.key, name: r.name },
-        }));
+        // Audited one by one inside dropLeftOut.
+        await dropLeftOut(deps.profile, artifactId, pack.steps, recordRemoved(actor, `${artifactId}@${version}`));
       } catch (err) {
         error = redact(messageOf(err));
       }
@@ -314,22 +318,37 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
       : { id: artifactId, version, status, failedStep, error };
   }
 
-  async function detach(artifactId: string, opts: { actor: { id?: string | null; name: string } }): Promise<void> {
+  async function installedPack(artifactId: string): Promise<MarketplaceInstallRow> {
     const row = await installStore.get(artifactId);
     if (!row || row.kind !== 'content-pack') throw new Error('not installed');
+    return row;
+  }
+
+  /** Removes the roles and layouts the pack made, then its install record. Refuses with
+   *  PackRemovalError while a user holds one of its roles. Its forms stay published (design 5.3). */
+  async function detach(artifactId: string, opts: { actor: { id?: string | null; name: string } }): Promise<void> {
+    const row = await installedPack(artifactId);
+    const actor: Actor = { id: opts.actor.id ?? null, name: opts.actor.name };
+    const removed = await removeProfileItems(deps.profile, artifactId, recordRemoved(actor, `${artifactId}@${row.version}`));
     await installStore.remove(artifactId);
     await record({
-      ...who({ id: opts.actor.id ?? null, name: opts.actor.name }),
+      ...who(actor),
       action: 'marketplace.detach', entityType: 'marketplace.artifact', entityId: artifactId,
-      metadata: { type: 'content-pack' },
+      metadata: { type: 'content-pack', ...removed },
     });
+  }
+
+  /** What detach would remove, and who still holds the pack's roles. Writes nothing. */
+  async function removal(artifactId: string) {
+    await installedPack(artifactId);
+    return previewRemoval(deps.profile, artifactId);
   }
 
   async function list(): Promise<MarketplaceInstallRow[]> {
     return (await installStore.list()).filter((r) => r.kind === 'content-pack');
   }
 
-  return { check, install, detach, list };
+  return { check, install, detach, removal, list };
 }
 
 /** The signed hash of pack.json. Pass 1 already proved it equals the bytes. */
