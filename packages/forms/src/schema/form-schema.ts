@@ -88,6 +88,8 @@ export const FormField = z.object({
   valueSetOptions: z.array(FormFieldOption).optional(),
   code: z.array(FormFieldCoding).optional(),
   observationExtract: z.boolean().optional(),
+  /** Show this answer in the form's entries list. */
+  entriesList: z.boolean().optional(),
   constraints: FormFieldConstraints.optional(),
   adminNote: z.string().optional(),
   placeholder: z.string().optional(),

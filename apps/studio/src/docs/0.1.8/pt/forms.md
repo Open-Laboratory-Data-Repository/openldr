@@ -98,6 +98,86 @@ Selecione **Submit** uma vez. Aguarde o resultado. Não envie novamente apenas p
 
 ![Response captured confirma a resposta enviada. Envie novamente apenas para outro pedido pretendido.](forms-guide-order-result.png)
 
+## Preencher um formulário no seu próprio local
+
+Faça isto quando a sua conta estiver limitada a um local ou a alguns locais. Um administrador define esse limite em [Utilizadores](/docs/users).
+
+1. Selecione **Formulários** no menu principal.
+2. Abra os pontos da linha do formulário e selecione **View/Run**.
+3. Verifique o campo da unidade. Se o seu limite abrange uma só unidade, ela já está preenchida e não a pode alterar.
+4. Se o seu limite abrange várias unidades, abra o campo da unidade e escolha uma delas.
+5. Preencha os outros campos.
+6. Abra o menu de pontos no canto superior direito e selecione **Submit**.
+
+**Resultado esperado:** aparece **Response captured.** e o registo fica listado em **Registos**.
+
+O servidor volta a verificar a unidade quando submete. Um formulário nunca é guardado para uma unidade fora do seu limite.
+
+## Ver os registos de um formulário
+
+Cada submissão de um formulário cria um registo. O separador **Registos** lista-os, do mais recente para o mais antigo. Precisa de **Usar formulários** e de poder abrir o formulário.
+
+1. Selecione **Formulários** no menu principal.
+2. Abra os pontos da linha do formulário e selecione **View/Run**.
+3. Selecione o separador **Registos**, ao lado de **Novo registo**.
+4. Escreva o início de um número de requisição em **Pesquisar requisição**.
+5. Abra a lista que mostra **Qualquer estado** e escolha **Ativo**, **Não totalmente guardado** ou **Introduzido por erro**.
+6. Abra a lista que mostra **Qualquer pessoa** e escolha quem fez o registo.
+7. Selecione a linha do registo.
+
+**Resultado esperado:** abre-se um painel com todas as respostas do registo, só de leitura, e com quem o fez e quando.
+
+As colunas são **Requisição**, **Resumo**, **Introduzido em** e **Por**. Num telemóvel, **Por** fica oculta. **Qualquer pessoa** oferece só as pessoas cujos registos já viu nesta visita.
+
+Se a sua conta não tem limite de dados, vê todos os registos do formulário. Se está limitado a um local, vê os registos das unidades do seu limite e os registos que fez. Um registo num formulário sem campo de unidade é visto por quem o fez e pelos utilizadores sem limite.
+
+## Corrigir um número de requisição repetido
+
+Um número de requisição só pode ser usado uma vez por formulário e por unidade. Se submeter um número que já está em uso, nada é guardado. Aparece uma mensagem como esta por baixo do campo do número de requisição:
+
+`CS-0001 já foi introduzido em 22 de nov. de 2026 às 13:50 por aisha.`
+
+1. Selecione **Ver esse registo** no fim da mensagem.
+2. Compare esse registo com o pedido que tem à sua frente.
+3. Se for o mesmo pedido, feche o painel e pare. Já está guardado.
+4. Se escreveu mal o número, corrija-o no campo do número de requisição.
+5. Abra o menu de pontos no canto superior direito e selecione **Submit**.
+
+**Resultado esperado:** aparece **Response captured.** A mensagem desaparece logo que altera o número.
+
+As suas respostas ficam no ecrã depois da recusa, por isso não precisa de as escrever de novo. Se o registo antigo é que está errado, peça a quem pode marcar registos por erro que o marque. O número dele fica livre e pode submeter o seu. A mensagem está na sua língua. A data e a hora são a hora local do seu navegador. A CLI `openldr` dá a mesma mensagem em inglês, com a hora no fuso horário do laboratório quando está definido, senão UTC.
+
+Dois formulários podem usar o mesmo número, e duas unidades também. Um formulário sem campo de número de requisição não verifica repetições.
+
+## Marcar um registo como introduzido por erro
+
+Faça isto quando um registo não devia ter sido guardado, por exemplo um paciente errado ou um pedido introduzido duas vezes. Precisa de **Marcar registos como introduzidos por erro**. As funções Administrator e Lab Manager têm esta permissão.
+
+1. Abra o separador **Registos** do formulário.
+2. Encontre o registo com **Pesquisar requisição**.
+3. Abra os pontos da linha do registo e selecione **Marcar como introduzido por erro**.
+4. Escreva em **Motivo** porque é que o registo está errado.
+5. Selecione **Marcar como introduzido por erro**.
+
+**Resultado esperado:** uma mensagem diz `<número> está marcado como introduzido por erro.` A linha fica na lista, riscada, com **Introduzido por erro** por baixo do resumo.
+
+Esta ação não pode ser anulada. O registo fica guardado, e o painel mostra **Marcado por**, **Marcado em** e **Motivo**. O pedido, as amostras e os resultados que o registo guardou também são marcados. O número de requisição pode voltar a ser usado. O motivo é obrigatório e tem no máximo 500 caracteres. Cada marcação fica gravada em **Auditoria**.
+
+Hoje, um pedido marcado ainda conta nos relatórios e nos painéis. Nenhum relatório o exclui por enquanto.
+
+## Escolher as respostas que a lista de registos mostra
+
+A coluna **Resumo** mostra até três respostas de cada registo. Se nenhum campo for escolhido, mostra os três primeiros campos de primeiro nível respondidos, sem o número de requisição. Um campo dentro de um grupo nunca aparece aí.
+
+1. Abra o formulário no construtor.
+2. Selecione o controlo de edição do campo.
+3. Ative **Mostrar na lista de registos**.
+4. Abra os pontos do editor de campo e selecione **Guardar**.
+5. Repita para cada campo que quiser. Pode escolher quantos quiser, mas a lista mostra os três primeiros que têm resposta.
+6. Abra os pontos do construtor e selecione **Guardar rascunho** e depois **Publicar**.
+
+**Resultado esperado:** os novos registos mostram as respostas escolhidas em **Resumo**. Os registos guardados antes mantêm o resumo que tinham.
+
 ## Começar o desenho de um formulário de pedido
 
 Use esta tarefa quando um formulário existente não recolhe a informação necessária ao workflow. O construtor escolhe uma versão do formato de dados de saúde FHIR e um tipo de recurso.
@@ -600,6 +680,10 @@ Save do editor de campo aplica uma edição local do construtor. Save draft do c
 
 Guardar ou restaurar conteúdo diferente pode devolver um formulário Published a Draft. Conteúdo idêntico não força essa alteração. View/Run continua disponível, mas o envio exige Published.
 
+O painel de um registo mostra cada resposta com o rótulo atual do campo. Se mudar o nome de um campo, os registos mais antigos também mostram o novo rótulo.
+
+Os formulários **Users** e **Facility** preenchem as páginas Utilizadores e Unidades. A lista de formulários só os mostra a quem tem **Editar formulários**. Numa instalação nova, o formulário **Lab order** só abre para as funções Lab Technician e Lab Manager. Quem gere funções ou edita formulários abre-o sempre. Uma instalação que já tinha o formulário mantém a sua lista de acesso.
+
 ## Resolução de problemas
 
 **Não há paciente correspondente.** Confira a pesquisa e se o fluxo habitual forneceu esse paciente. Use Patients para consultar o registo recebido.
@@ -612,9 +696,23 @@ Guardar ou restaurar conteúdo diferente pode devolver um formulário Published 
 
 **Restore deixa Draft.** Reveja o conteúdo restaurado e use Publish quando o envio voltar a ser necessário.
 
+**Um registo mostra Não totalmente guardado.** A gravação parou depois de guardar parte do registo. Pode existir um pedido, por isso o registo mantém o número de requisição. Abra o registo para ver o que contém. Depois peça a quem tem **Marcar registos como introduzidos por erro** que o marque, e introduza o pedido de novo.
+
+**Submit mostra `this entry names a facility outside your limit`.** A unidade escolhida está fora do seu limite, ou ficou vazia. Escolha uma das suas unidades.
+
+**Submit mostra `this form's facility field is free text, so it cannot be used by a user limited to a site`.** Um utilizador limitado só pode usar um campo de unidade que escolhe do registo de unidades. Peça a um editor de formulários que altere o campo.
+
+**Submit mostra `your data limit names no facility, so you cannot enter this form`.** O seu limite não indica nenhuma unidade. O campo da unidade mostra então **A sua conta não está ligada a nenhuma unidade. Peça a um administrador.** Peça a um administrador que adicione a sua unidade em Utilizadores.
+
+**Depois de marcar, uma mensagem diz `The entry is marked in error, but its saved records were not updated.`** O registo está marcado e o número está livre, mas o pedido, as amostras e os resultados não foram marcados. Peça a um administrador que verifique a execução indicada na mensagem, ou o fluxo de ingestão.
+
+**Depois de marcar, uma mensagem diz `The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.`** O servidor ainda não sabe que dados o registo criou. Se a gravação ainda estiver a decorrer, esses dados são marcados quando ela terminar.
+
+**Depois de marcar, uma mensagem diz `Some records this entry made may exist but are not known, so they were not marked.`** A gravação do registo falhou a meio. Pode ter guardado um pedido, amostras ou resultados, mas o servidor não conseguiu saber quais. O registo está marcado e o número está livre. Peça a um administrador que encontre esses dados e os corrija.
+
 ## Guias relacionados
 
-Leia [Pacientes](/docs/patients) para registos recebidos e [Catálogo de testes](/docs/test-catalog) para testes ativos. Leia [Workflows](/docs/workflows) para o workflow de recolha e [Começar aqui](/docs/start-here) para instalação e CLI.
+Leia [Pacientes](/docs/patients) para registos recebidos e [Catálogo de testes](/docs/test-catalog) para testes ativos. Leia [Workflows](/docs/workflows) para o workflow de recolha e [Começar aqui](/docs/start-here) para instalação e CLI. Leia [Utilizadores](/docs/users) para limitar uma pessoa a um local, e [Funções](/docs/roles) para dar a uma função **Marcar registos como introduzidos por erro**.
 
 ## Prática opcional
 

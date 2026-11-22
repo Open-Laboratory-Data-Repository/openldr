@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { FormAccess, FormAccessStore } from '@openldr/db';
-import { formAccess, FormAccessError, formUserOf, setFormAccess } from './form-access';
+import { drivesAppPage, formAccess, FormAccessError, formOpenRule, formUserOf, setFormAccess } from './form-access';
 
 // Design 2026-11-18-roles-scope, part 1: the one check the form routes, the CLI and the list use.
 function memStore(lists: Record<string, FormAccess>): FormAccessStore {
@@ -53,6 +53,30 @@ describe('formAccess', () => {
   it('says which of many forms a person may open', async () => {
     expect([...(await access.visible(viewer, ['open', 'tracking', 'locked']))]).toEqual(['open']);
     expect([...(await access.visible(clerk, ['open', 'tracking', 'locked']))].sort()).toEqual(['locked', 'open', 'tracking']);
+  });
+});
+
+// The form routes, the entries routes and the CLI open forms by one rule (design 2026-11-22-form-entries).
+describe('formOpenRule', () => {
+  const rule = formOpenRule(formAccess({ access: memStore({ tracking: { open: ['r-clerk'], submit: [] } }) }));
+  const editor = { roleIds: [], capabilities: ['forms.view', 'forms.edit'] };
+
+  it('an editor opens every form, anyone else only the forms their roles may open', async () => {
+    expect(await rule.mayOpen(editor, 'tracking')).toBe(true);
+    expect(await rule.mayOpen(viewer, 'tracking')).toBe(false);
+    expect(await rule.mayOpen(clerk, 'tracking')).toBe(true);
+    expect([...(await rule.openable(editor, ['open', 'tracking']))]).toEqual(['open', 'tracking']);
+    expect([...(await rule.openable(viewer, ['open', 'tracking']))]).toEqual(['open']);
+  });
+});
+
+describe('drivesAppPage', () => {
+  it('is true only for a form with target pages that leave out the Forms page', () => {
+    expect(drivesAppPage(null)).toBe(false);
+    expect(drivesAppPage([])).toBe(false);
+    expect(drivesAppPage(['forms'])).toBe(false);
+    expect(drivesAppPage(['users', 'forms'])).toBe(false);
+    expect(drivesAppPage(['users'])).toBe(true);
   });
 });
 

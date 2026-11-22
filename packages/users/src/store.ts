@@ -42,6 +42,8 @@ export interface UserStore {
   withSubjectLock<T>(subject: string, work: (users: UserStore) => Promise<T>): Promise<T>;
   create(input: CreateUserInput): Promise<User>;
   get(id: string): Promise<User | undefined>;
+  /** The users with these ids, in one read. An id with no user is left out. */
+  getMany(ids: string[]): Promise<User[]>;
   getBySubject(subject: string): Promise<User | undefined>;
   getByUsername(username: string): Promise<User | undefined>;
   list(opts?: { offset: number; limit: number; search?: string; enabled?: boolean }): Promise<User[]>;
@@ -135,6 +137,12 @@ export function createUserStore(db: Kysely<InternalSchema>, deps: {
     },
     create,
     get,
+    async getMany(ids) {
+      const unique = [...new Set(ids)];
+      if (unique.length === 0) return [];
+      const rows = await db.selectFrom('users').select(COLS).where('id', 'in', unique).execute();
+      return rows.map((r) => toUser(r as unknown as Row));
+    },
     getBySubject,
     getByUsername,
     async list(opts) {

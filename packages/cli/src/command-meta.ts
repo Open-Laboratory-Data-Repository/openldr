@@ -251,10 +251,13 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'dashboards share': { kind: 'app', capability: 'dashboards.view' },
   // forms-routes.ts GET and PUT /api/forms/:id/access, both forms.edit.
   'forms access': { kind: 'app', capability: 'forms.edit' },
+  // form-entry-routes.ts GET /api/forms/:id/entries (forms.view) and POST /api/forms/entries/:entryId/void (forms.void_entries).
+  'forms entries': { kind: 'app', capability: 'forms.view' },
   'forms lint': { kind: 'app', capability: 'forms.view' },
   'forms list': { kind: 'app', capability: 'forms.view' }, // :185
   'forms restore': { kind: 'app', capability: 'forms.edit', destructive: true }, // :331
   'forms versions': { kind: 'app', capability: 'forms.view' }, // :301
+  'forms void-entry': { kind: 'app', capability: 'forms.void_entries', destructive: true },
 
   // Import from a database connector. allow, revoke and allowed are connectors-routes.ts:228 and
   // :235 (connectors.manage). The rest have no route: Studio runs them through the plugin broker,

@@ -51,7 +51,7 @@ L'installation ne touche pas aux paquets dont elle dépend, la suppression non p
 }
 ```
 
-Chaque capacité doit être une clé que le CE en cours connaît. Les clés sont listées dans `packages/rbac/src/catalog.ts` dans les sources du CE, et la page Rôles montre la même liste par nom. Une clé inconnue fait échouer l'installation avec `unknown capability: <key>`.
+Chaque capacité doit être une clé que le CE en cours connaît. Les clés sont listées dans `packages/rbac/src/catalog.ts` dans les sources du CE, et la page Rôles montre la même liste par nom. Une clé inconnue fait échouer l'installation avec `unknown capability: <key>`. Un rôle peut avoir `forms.void_entries`, pour que ses utilisateurs puissent marquer une saisie de formulaire comme saisie par erreur.
 
 L'identifiant doit déjà être sous sa forme finale : lettres minuscules, chiffres et traits d'union simples. Le CE refuse un identifiant qu'il modifierait en l'enregistrant.
 

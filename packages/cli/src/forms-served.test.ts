@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // checks are the real bootstrap functions, against in-memory stores.
 const mocks = vi.hoisted(() => ({
   user: { capabilities: ['forms.view'], roleIds: ['r-viewer'] },
+  withPageForm: false,
 }));
 
 vi.mock('@openldr/bootstrap', async () => {
@@ -13,13 +14,15 @@ vi.mock('@openldr/bootstrap', async () => {
     async get(id: string) { return lists[id] ?? { open: [], submit: [] }; },
     async forForms(ids: string[]) { return new Map(ids.filter((id) => lists[id]).map((id) => [id, lists[id]!])); },
   };
-  const form = (id: string) => ({ id, name: id, status: 'published', active: true, fhirResourceType: null, fieldCount: 0, versionLabel: null, schema: { fields: [], sections: [], targetPages: [] } });
+  const form = (id: string, targetPages: string[] | null = null) => ({ id, name: id, status: 'published', active: true, fhirResourceType: null, fieldCount: 0, versionLabel: null, targetPages, schema: { fields: [], sections: [], targetPages: [] } });
   return {
     formUserOf: real.formUserOf,
+    formOpenRule: real.formOpenRule,
+    drivesAppPage: real.drivesAppPage,
     recordAuditEvent: vi.fn(),
     createAppContext: async () => ({
       forms: {
-        async list() { return [form('open'), form('tracking')]; },
+        async list() { return mocks.withPageForm ? [form('open'), form('tracking'), form('user-profile', ['users'])] : [form('open'), form('tracking')]; },
         async get(id: string) { return id === 'open' || id === 'tracking' ? form(id) : null; },
         async listVersions() { return [{ version: 1, versionLabel: 'v1', publishedAt: '2026-01-01T00:00:00.000Z' }]; },
       },
@@ -48,6 +51,7 @@ function serve() {
 describe('served form reads', () => {
   beforeEach(() => {
     mocks.user = { capabilities: ['forms.view'], roleIds: ['r-viewer'] };
+    mocks.withPageForm = false;
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
@@ -88,5 +92,22 @@ describe('served form reads', () => {
     mocks.user = { capabilities: [], roleIds: [] };
     await runFormsList({ json: true });
     expect(JSON.parse(out()).map((f: { id: string }) => f.id)).toEqual(['open', 'tracking']);
+  });
+
+  // Design 2026-11-22-form-entries 5.6, as GET /api/forms does: a form that drives an app page is left
+  // out for a caller who cannot edit forms. An editor and a local run still see it.
+  it('leaves page forms out for a served caller without forms.edit', async () => {
+    mocks.withPageForm = true;
+    serve();
+    await runFormsList({ json: true });
+    expect(JSON.parse(out()).map((f: { id: string }) => f.id)).toEqual(['open']);
+    vi.mocked(process.stdout.write).mockClear();
+    mocks.user = { capabilities: ['forms.view', 'forms.edit'], roleIds: [] };
+    await runFormsList({ json: true });
+    expect(JSON.parse(out()).map((f: { id: string }) => f.id)).toEqual(['open', 'tracking', 'user-profile']);
+    resetServedHandoffForTests();
+    vi.mocked(process.stdout.write).mockClear();
+    await runFormsList({ json: true });
+    expect(JSON.parse(out()).map((f: { id: string }) => f.id)).toEqual(['open', 'tracking', 'user-profile']);
   });
 });

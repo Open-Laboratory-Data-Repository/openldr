@@ -1,0 +1,336 @@
+import type { FormEntry, FormEntrySaved, FormEntryStatus, FormEntryStore } from '@openldr/db';
+import { entryFacilitiesOf, entryKeyOf, entryValuesOf, type FacilityAnswer, type FormSchema } from '@openldr/forms';
+import type { DataScope } from '@openldr/rbac';
+import type { WorkflowTriggerRunner } from '@openldr/workflows';
+import type { Logger } from '@openldr/core';
+import type { UserStore } from '@openldr/users';
+import type { AuditActor, AuditDetails } from './record-audit';
+import { inDataScope, type ScopeRegistryRow } from './data-scope';
+import { registryConceptById, registryRowIdByConceptCode } from './facility-reconcile';
+
+// Form entries (design 2026-11-22-form-entries). The submit route writes an entry row before the
+// save runs, so a repeated requisition number is refused before anything is stored, then settles the
+// row once the save is done.
+
+/** A submission refused by the site rules: the user's data limit does not allow the facility. */
+export class EntrySiteError extends Error {
+  constructor(message: string, readonly reason: 'outside-limit' | 'free-text-facility' | 'empty-limit') {
+    super(message);
+    this.name = 'EntrySiteError';
+  }
+}
+
+/** A facility as the form's picker names it: the register row id, the system and code the picker
+ *  saves, and the name. */
+export interface EntryFacility { id: string; system: string; code: string; name: string }
+
+/** The site rules the form screen applies before a submission. `locked`: the limit covers exactly one
+ *  facility, and `facility` is it. `choices`: the facilities the limit covers, null for no limit. */
+export interface EntryContext { facility: EntryFacility | null; locked: boolean; choices: EntryFacility[] | null }
+
+/** An entry as the list and the read give it. `statusByName` is the display name, else the username, of
+ *  the user in `statusBy`, or `<OS user> (CLI)` for a local CLI run. Null when there is no `statusBy`,
+ *  or it names no user any more. */
+export type NamedFormEntry = FormEntry & { statusByName: string | null };
+
+/** Who is asking. A limited user sees entries inside the limit and entries they made. */
+export interface EntryViewer { id: string; dataScope: DataScope }
+
+export interface FormEntriesService {
+  /** One page of a form's entries the user may see, newest first. `total` counts every match. */
+  list(input: {
+    formId: string; user: EntryViewer; status?: FormEntryStatus; enteredBy?: string; search?: string;
+    limit: number; offset: number;
+  }): Promise<{ entries: NamedFormEntry[]; total: number }>;
+  /** Null when there is no such entry, or when the user may not see it. */
+  get(id: string, user: EntryViewer): Promise<NamedFormEntry | null>;
+  /** What the form screen pre-fills. Only the user's limit decides it, so it is the same on every form. */
+  context(user: EntryViewer): Promise<EntryContext>;
+
+  /** The facility register row ids a limit covers. Null means no limit. Reads the register itself. */
+  facilityIdsOf(scope: DataScope): Promise<string[] | null>;
+  /** Checks the site rules, then writes the row. Throws EntrySiteError or FormEntryRepeat. */
+  begin(input: {
+    form: { id: string; schema: FormSchema };
+    answers: Record<string, unknown>;
+    user: { id: string; name: string; dataScope: DataScope };
+  }): Promise<FormEntry>;
+  /** After the save: `stored` is what the save left behind. ok true means it completed.
+   *  `somethingStored` says the save stored records even when `stored` names none, because their
+   *  ids could not be found. Left out, it is worked out from `stored`. */
+  finish(entryId: string, outcome: { ok: boolean; stored: FormEntrySaved; somethingStored?: boolean }): Promise<FormEntry | null>;
+
+  /** Marks an entry entered in error, which frees its number, then saves every record it made again
+   *  with that FHIR status. The row is marked first and stays marked if the re-save fails; `warning`
+   *  then says the records were not updated. `skipped` counts records that could not be read or whose
+   *  type has no such status. Throws when the reason is empty or longer than 500 characters. */
+  voidEntry(input: {
+    entryId: string; reason: string; user: EntryViewer; actor: AuditActor;
+  }): Promise<VoidedEntry | 'not-found' | 'already-void'>;
+}
+
+export interface VoidedEntry { entry: NamedFormEntry; resaved: number; skipped: number; warning?: string }
+
+export interface FormEntriesDeps {
+  store: FormEntryStore;
+  /** Every facility register row. A limit and a picked code are both resolved against all of them. */
+  registryRows(): Promise<ScopeRegistryRow[]>;
+  /** Reads the records an entry made, to mark them in error. */
+  fhir: { get(resourceType: string, id: string): Promise<Record<string, unknown> | null> };
+  /** Runs the ingest workflow that saves them again, the same one the submit route uses. */
+  runner: Pick<WorkflowTriggerRunner, 'runAndRecord'>;
+  audit(actor: AuditActor, details: AuditDetails): Promise<void>;
+  logger: Pick<Logger, 'warn' | 'error'>;
+  /** Names who marked an entry in error. The row keeps only the user id. */
+  users: Pick<UserStore, 'getMany'>;
+}
+
+/** The record types whose FHIR status allows `entered-in-error`. Each is checked against its schema
+ *  in packages/fhir/src/resources. A record of any other type is left as it is. */
+const VOIDABLE_TYPES = new Set(['QuestionnaireResponse', 'ServiceRequest', 'Specimen', 'Observation', 'DiagnosticReport']);
+const MAX_REASON = 500;
+const NOT_UPDATED = 'The entry is marked in error, but its saved records were not updated.';
+const NOT_KNOWN = 'The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.';
+const SOME_UNKNOWN = 'Some records this entry made may exist but are not known, so they were not marked.';
+
+/** The start of the id a local CLI run marks an entry with: `cli:<OS user>`. */
+export const CLI_MARKER_PREFIX = 'cli:';
+
+/** The same system actor the server's audit helper uses when no one is signed in. */
+const SYSTEM_ACTOR: AuditActor = { actorType: 'system', actorId: null, actorName: 'System' };
+
+interface ResaveResult { resaved: number; skipped: number; warning?: string }
+
+const EMPTY_LIMIT = 'your data limit names no facility, so you cannot enter this form';
+const FREE_TEXT = "this form's facility field is free text, so it cannot be used by a user limited to a site";
+const OUTSIDE = 'this entry names a facility outside your limit';
+
+export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesService {
+  const idsIn = (rows: ScopeRegistryRow[], scope: Extract<DataScope, { limited: true }>): string[] =>
+    rows.filter((r) => inDataScope(r, scope)).map((r) => r.id);
+  const facilityIdsOf = async (scope: DataScope): Promise<string[] | null> =>
+    scope.limited ? idsIn(await deps.registryRows(), scope) : null;
+
+  const get = async (id: string, user: EntryViewer): Promise<FormEntry | null> => {
+    const entry = await deps.store.get(id);
+    if (!entry) return null;
+    if (!user.dataScope.limited || entry.enteredBy === user.id) return entry;
+    const ids = await facilityIdsOf(user.dataScope);
+    return entry.facilityId !== null && ids !== null && ids.includes(entry.facilityId) ? entry : null;
+  };
+
+  /** Adds `statusByName` to each entry, with one read of the users for the whole page. A local CLI
+   *  run marks with the id `cli:<OS user>`, which names no user, so it is named without a read. */
+  const withNames = async (entries: FormEntry[]): Promise<NamedFormEntry[]> => {
+    const ids = [...new Set(entries.map((e) => e.statusBy).filter((id): id is string => id !== null))];
+    const names = new Map<string, string>();
+    for (const id of ids) if (id.startsWith(CLI_MARKER_PREFIX)) names.set(id, `${id.slice(CLI_MARKER_PREFIX.length)} (CLI)`);
+    const userIds = ids.filter((id) => !id.startsWith(CLI_MARKER_PREFIX));
+    if (userIds.length > 0) {
+      for (const u of await deps.users.getMany(userIds)) names.set(u.id, u.displayName?.trim() || u.username);
+    }
+    return entries.map((e) => ({ ...e, statusByName: e.statusBy ? names.get(e.statusBy) ?? null : null }));
+  };
+
+  /** Saves every record of an entry again with the status entered-in-error, through the ingest
+   *  workflow. Used by the void, and by a save that settles after its entry was voided. */
+  const markInError = async (entryId: string, saved: FormEntrySaved | null): Promise<ResaveResult> => {
+    const refs = [
+      ...(saved?.responseId ? [{ resourceType: 'QuestionnaireResponse', id: saved.responseId }] : []),
+      ...(saved?.resources ?? []),
+    ];
+    let skipped = 0;
+    const changed: Record<string, unknown>[] = [];
+    for (const ref of refs) {
+      if (!VOIDABLE_TYPES.has(ref.resourceType)) { skipped += 1; continue; }
+      let record: Record<string, unknown> | null = null;
+      try {
+        record = await deps.fhir.get(ref.resourceType, ref.id);
+      } catch (err) {
+        deps.logger.warn({ err, entryId, record: ref }, 'form entry void: a saved record could not be read');
+      }
+      if (!record) { skipped += 1; continue; }
+      changed.push({ ...record, status: 'entered-in-error' });
+    }
+    if (changed.length === 0) return { resaved: 0, skipped };
+
+    const bundle = {
+      resourceType: 'Bundle', type: 'transaction',
+      entry: changed.map((resource) => ({
+        resource, request: { method: 'PUT', url: `${String(resource.resourceType)}/${String(resource.id)}` },
+      })),
+    };
+    try {
+      const outcome = await deps.runner.runAndRecord('wf-ingest', 'form', {
+        method: 'POST', body: bundle, headers: {}, query: {}, __provenance: { sourceSystem: 'form-capture' },
+      });
+      if (outcome && outcome.status === 'completed' && !outcome.held) return { resaved: changed.length, skipped };
+      const warning = outcome ? `${NOT_UPDATED} Check run ${outcome.runId}.` : `${NOT_UPDATED} The ingest workflow is missing or disabled.`;
+      return { resaved: 0, skipped, warning };
+    } catch (err) {
+      deps.logger.error({ err, entryId }, 'form entry void: the records could not be saved again');
+      return { resaved: 0, skipped, warning: NOT_UPDATED };
+    }
+  };
+
+  /** A row the store left entered-in-error was voided while its save ran: mark what the save stored. */
+  const afterSave = async (row: FormEntry): Promise<FormEntry> => {
+    if (row.status !== 'entered-in-error') return row;
+    const r = await markInError(row.id, row.saved);
+    if (r.warning) deps.logger.warn({ entryId: row.id, ...r }, 'form entry void: a save that settled after the void left records unmarked');
+    // The trail shows whether the records were marked. No person asked for this, so the actor is the system.
+    await deps.audit(SYSTEM_ACTOR, {
+      action: 'form.entry.void', entityType: 'form-entry', entityId: row.id, before: row, after: row,
+      metadata: { late: true, resaved: r.resaved, skipped: r.skipped, ...(r.warning ? { warning: r.warning } : {}) },
+    });
+    return row;
+  };
+
+  return {
+    facilityIdsOf,
+
+    async list({ formId, user, status, enteredBy, search, limit, offset }) {
+      const ids = await facilityIdsOf(user.dataScope);
+      const page = await deps.store.list({
+        formId, status, enteredBy, search, limit, offset,
+        // A limited user: entries at a facility inside the limit, or entries they made.
+        ...(ids === null ? {} : { facilityIds: ids, orEnteredBy: user.id }),
+      });
+      return { entries: await withNames(page.entries), total: page.total };
+    },
+
+    async get(id, user) {
+      const entry = await get(id, user);
+      return entry ? (await withNames([entry]))[0]! : null;
+    },
+
+    async context(user) {
+      const scope = user.dataScope;
+      if (!scope.limited) return { facility: null, locked: false, choices: null };
+      const rows = await deps.registryRows();
+      // The code a register field saves depends on the whole register, so map every row first.
+      const conceptById = registryConceptById(rows);
+      const choices = rows.filter((r) => inDataScope(r, scope))
+        .map((r) => ({ id: r.id, ...conceptById.get(r.id)!, name: r.name }))
+        .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+      const only = choices.length === 1 ? choices[0]! : null;
+      return { facility: only, locked: only !== null, choices };
+    },
+
+    async begin({ form, answers, user }) {
+      const values = entryValuesOf(form.schema, answers);
+      // Every facility field counts: a form may carry two, and the order keeps the last answered one.
+      const facilities = entryFacilitiesOf(form.schema, answers);
+      const picked = facilities.order?.facility ?? null;
+      const scope = user.dataScope;
+      // Read the register once, only when the limit or a picked facility needs it.
+      const rows = scope.limited || facilities.answered.some((a) => a.facility) ? await deps.registryRows() : [];
+      // The code a register field saves is the register concept code, which maps back to one row.
+      const idByCode = registryRowIdByConceptCode(rows);
+      const rowIdOf = (a: FacilityAnswer): string | null => (a.facility ? idByCode.get(a.facility.code) ?? null : null);
+
+      if (scope.limited) {
+        const allowed = idsIn(rows, scope);
+        if (allowed.length === 0) throw new EntrySiteError(EMPTY_LIMIT, 'empty-limit');
+        if (facilities.fields.some((f) => !f.fromRegister)) throw new EntrySiteError(FREE_TEXT, 'free-text-facility');
+        const outside = facilities.answered.some((a) => {
+          const id = rowIdOf(a);
+          return id === null || !allowed.includes(id);
+        });
+        if (outside || (facilities.fields.length > 0 && facilities.answered.length === 0)) {
+          throw new EntrySiteError(OUTSIDE, 'outside-limit');
+        }
+      }
+
+      // The entry names the facility the order will carry, so the list and the order agree.
+      const facilityId = facilities.order ? rowIdOf(facilities.order) : null;
+      const facilityName = facilities.order?.name ?? rows.find((r) => r.id === facilityId)?.name ?? null;
+
+      // Never inside a transaction: on Postgres the unique violation aborts it, and the store's
+      // follow-up read of the holding entry would then fail.
+      return deps.store.create({
+        formId: form.id,
+        facilityId,
+        facilityCode: picked?.code ?? null,
+        facilityName,
+        // The number the order carries, so the repeat check and the order agree.
+        entryKey: entryKeyOf(form.schema, answers),
+        summary: values.summary,
+        enteredBy: user.id,
+        enteredByName: user.name,
+      });
+    },
+
+    async finish(entryId, outcome) {
+      if (outcome.ok) return afterSave(await deps.store.setSaved(entryId, outcome.stored, 'active'));
+      const stored = outcome.somethingStored
+        ?? (outcome.stored.responseId !== null || outcome.stored.resources.length > 0);
+      if (!stored) {
+        // A voided row stays as the record of the void; it already holds no number.
+        const current = await deps.store.get(entryId);
+        if (current?.status === 'entered-in-error') return current;
+        await deps.store.remove(entryId);
+        return null;
+      }
+      // An order may exist, so the row keeps the number until someone marks it in error.
+      return afterSave(await deps.store.setSaved(entryId, outcome.stored, 'incomplete'));
+    },
+
+    async voidEntry({ entryId, reason: raw, user, actor }) {
+      const reason = raw.trim();
+      if (reason.length === 0 || reason.length > MAX_REASON) {
+        throw new Error(`a reason of 1 to ${MAX_REASON} characters is required`);
+      }
+      const before = await get(entryId, user);
+      if (!before) return 'not-found';
+      // The row is the source of truth: once marked, a failed re-save does not undo it.
+      const entry = await deps.store.void(entryId, { id: user.id, reason });
+      if (!entry) return 'already-void';
+
+      // The row after the void: a save that settled meanwhile has recorded what it stored. A save that
+      // settles later sees the void in `finish` and marks its records there.
+      const namesNone = entry.saved === null || (entry.saved.responseId === null && entry.saved.resources.length === 0);
+      let result: ResaveResult;
+      if (entry.saved === null && before.status !== 'incomplete') {
+        result = { resaved: 0, skipped: 0, warning: NOT_KNOWN };
+      } else if (before.status === 'incomplete' && namesNone) {
+        // An incomplete save stored something, but no id was found, so nothing can be marked.
+        result = { resaved: 0, skipped: 0, warning: SOME_UNKNOWN };
+      } else {
+        result = await markInError(entry.id, entry.saved);
+      }
+      const { resaved, skipped, warning } = result;
+
+      await deps.audit(actor, {
+        action: 'form.entry.void', entityType: 'form-entry', entityId: entry.id, before, after: entry,
+        metadata: { reason, resaved, skipped, ...(warning ? { warning } : {}) },
+      });
+      return { entry: (await withNames([entry]))[0]!, resaved, skipped, ...(warning ? { warning } : {}) };
+    },
+  };
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** `CS-0001 was already entered on 22 Nov 2026 at 13:50 by aisha.` The time is in the lab's time
+ *  zone when one is set, else UTC. */
+export function repeatMessage(
+  entry: Pick<FormEntry, 'entryKey' | 'enteredAt' | 'enteredByName'>,
+  timeZone?: string,
+): string {
+  const at = new Date(entry.enteredAt);
+  const partsIn = (zone: string) => new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(at);
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = partsIn(timeZone?.trim() || 'UTC');
+  } catch {
+    parts = partsIn('UTC');
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? '';
+  const date = `${Number(part('day'))} ${MONTHS[Number(part('month')) - 1]} ${part('year')}`;
+  // A name that already ends the sentence, such as "Aisha M.", takes no second full stop.
+  const stop = entry.enteredByName.endsWith('.') ? '' : '.';
+  return `${entry.entryKey ?? ''} was already entered on ${date} at ${part('hour')}:${part('minute')} by ${entry.enteredByName}${stop}`;
+}

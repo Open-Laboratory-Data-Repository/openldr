@@ -90,6 +90,15 @@ describe('createUserStore', () => {
     });
   });
 
+  it('getMany reads several users at once and leaves out an unknown id', async () => {
+    const store = createUserStore(await makeMigratedDb());
+    const a = await store.create({ username: 'aisha', displayName: 'Aisha M.' });
+    const b = await store.create({ username: 'juma' });
+    const got = await store.getMany([a.id, b.id, a.id, 'no-such-id']);
+    expect(got.map((u) => u.username).sort()).toEqual(['aisha', 'juma']);
+    expect(await store.getMany([])).toEqual([]);
+  });
+
   it('create returns a parseable ISO createdAt', async () => {
     const db = await makeMigratedDb();
     const store = createUserStore(db);

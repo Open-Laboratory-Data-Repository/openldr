@@ -16,6 +16,7 @@ import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { formAccess, type FormAccessCheck } from './form-access';
+import { createFormEntriesService, type FormEntriesService } from './form-entries';
 import { dashboardAccess, type DashboardAccessCheck } from './dashboard-access';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
@@ -53,7 +54,7 @@ import { checkCustomQueryFile, importCustomQueries } from './custom-query-transf
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { canRunOffThread, createPluginStore, type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope, FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope, FACILITY_REGISTRY_SYSTEM, createFormEntryStore, type FormEntryStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -516,6 +517,10 @@ export interface AppContext {
   formAccessStore: FormAccessStore;
   /** The one check of who may open and submit a form. */
   formAccess: FormAccessCheck;
+  /** One row per saved form submission (design 2026-11-22-form-entries). */
+  formEntryStore: FormEntryStore;
+  /** Records an entry when a form saves, with the site rules and the repeat refusal. */
+  formEntries: FormEntriesService;
   /** Which roles may see each dashboard (design 2026-11-18-roles-scope, part 2). */
   dashboardAccessStore: DashboardAccessStore;
   /** Each user's data limit, by role subject (roles part 3). */
@@ -833,6 +838,17 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const forms = createFormStore(internal.db, referenceCapture);
   const formAccessStore = createFormAccessStore(internal.db as unknown as Kysely<InternalSchema>);
   const formAccessCheck = formAccess({ access: formAccessStore });
+  const formEntryStore = createFormEntryStore(internal.db as unknown as Kysely<InternalSchema>);
+  const formEntries = createFormEntriesService({
+    store: formEntryStore,
+    registryRows: () => readScopeRegistryRows(internal.db as unknown as Kysely<InternalSchema>),
+    // The FHIR store and the workflow runner are made further down. These run only on a request.
+    fhir: { get: (type, id) => canonicalFhirStore.get(type, id) as Promise<Record<string, unknown> | null> },
+    runner: { runAndRecord: (...args) => workflowRunner.runAndRecord(...args) },
+    audit: (actor, details) => recordAuditEvent({ audit, logger }, actor, details),
+    logger,
+    users,
+  });
   const dashboardAccessStore = createDashboardAccessStore(internal.db as unknown as Kysely<InternalSchema>);
   const dashboardAccessCheck = dashboardAccess({ access: dashboardAccessStore });
   const dataScopes = createUserDataScopeStore(internal.db as unknown as Kysely<InternalSchema>);
@@ -2164,6 +2180,8 @@ const reporting: ReportingApi = {
     forms,
     formAccessStore,
     formAccess: formAccessCheck,
+    formEntryStore,
+    formEntries,
     dashboardAccessStore,
     dataScopes,
     dashboardAccess: dashboardAccessCheck,
@@ -2293,6 +2311,7 @@ export * from './test-mapping';
 export * from './result-fields';
 export * from './job-continue';
 export * from './form-access';
+export * from './form-entries';
 export * from './dashboard-access';
 export * from './data-scope';
 export { MAX_SELF_RESUMES } from './job-interruptions';
@@ -2465,12 +2484,6 @@ export async function dangerClearAudit(ctx: AppContext): Promise<void> {
 export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   const wiped = await wipeInternalDatabase(ctx.internalDb);
   ctx.logger.warn({ tables: wiped.length }, 'factory reset: internal DB wiped, reseeding');
-  const dbCtx = await createDbContext(ctx.cfg);
-  try {
-    await seedDatabase(dbCtx, ctx);
-  } finally {
-    await dbCtx.close();
-  }
   // Admin-lockout guard: wipeInternalDatabase() TRUNCATEs roles/role_capabilities/user_roles
   // along with everything else, and seedDatabase() deliberately does NOT reseed roles (that
   // seed is routed through createAppContext's unconditional boot-time call — see the comment
@@ -2478,7 +2491,15 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   // would be left with zero roles — and once RBAC enforcement lands, nobody holding
   // `roles.manage` — until the process restarts. seedSystemRoles() is idempotent, so calling it
   // here is safe even though createAppContext already seeded it once at boot.
+  // It runs before seedDatabase(), as at boot, because the seed limits the new Lab order to
+  // seeded roles (design 2026-11-22-form-entries 5.6).
   await ctx.roles.seedSystemRoles();
+  const dbCtx = await createDbContext(ctx.cfg);
+  try {
+    await seedDatabase(dbCtx, ctx);
+  } finally {
+    await dbCtx.close();
+  }
   // The wipe empties the starter pack tables too, and only boot writes them. Without this the
   // builder offers no pack until the process restarts. Best-effort, as at boot.
   await ctx.starterPacks.replaceSeeded(seededStarterPacks()).catch((err) => {

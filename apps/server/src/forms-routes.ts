@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import AdmZip from 'adm-zip';
-import { FormAccessError, TEST_CATALOG_SYSTEM, findCatalogBand, setFormAccess, type AppContext, type ResultBand } from '@openldr/bootstrap';
+import { EntrySiteError, FormAccessError, TEST_CATALOG_SYSTEM, drivesAppPage, findCatalogBand, formOpenRule, repeatMessage, setFormAccess, type AppContext, type ResultBand } from '@openldr/bootstrap';
+import { FormEntryRepeat, type FormEntry, type FormEntrySaved } from '@openldr/db';
+import { EVERYTHING } from '@openldr/rbac';
 import { redact } from '@openldr/core';
 import type { ExtractionContext, FormSchema } from '@openldr/forms';
 import { FormCreateInputSchema } from '@openldr/forms/pure';
@@ -174,19 +176,32 @@ const formAccessInput = z.object({
   submit: z.array(z.string().min(1).max(100)).max(200),
 });
 
-export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
-  // Per-form access (design 2026-11-18-roles-scope, part 1). An editor manages every form, so sees
-  // every form; anyone else sees and opens only the forms their roles may open.
+/** Per-form access (design 2026-11-18-roles-scope, part 1), by the rule the entries routes and the
+ *  CLI share (formOpenRule in @openldr/bootstrap): an editor sees every form, anyone else only the
+ *  forms their roles may open. */
+export function formOpenRules(ctx: Pick<AppContext, 'formAccess'>) {
+  const rule = formOpenRule(ctx.formAccess);
   const formUser = (req: FastifyRequest) => ({ roleIds: req.user?.roleIds ?? [], capabilities: req.user?.capabilities ?? [] });
-  const isEditor = (req: FastifyRequest) => (req.user?.capabilities ?? []).includes('forms.edit');
-  const mayOpen = async (req: FastifyRequest, id: string) => isEditor(req) || ctx.formAccess.mayOpen(formUser(req), id);
+  const isEditor = (req: FastifyRequest) => rule.isEditor(formUser(req));
+  const mayOpen = async (req: FastifyRequest, id: string) => rule.mayOpen(formUser(req), id);
   async function openable<T extends { id: string }>(req: FastifyRequest, forms: T[]): Promise<T[]> {
     if (isEditor(req)) return forms;
-    const seen = await ctx.formAccess.visible(formUser(req), forms.map((f) => f.id));
+    const seen = await rule.openable(formUser(req), forms.map((f) => f.id));
     return forms.filter((f) => seen.has(f.id));
   }
+  return { formUser, isEditor, mayOpen, openable };
+}
 
-  app.get('/api/forms', VIEW, async (req) => openable(req, await ctx.forms.list()));
+export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
+  const { formUser, isEditor, mayOpen, openable } = formOpenRules(ctx);
+
+  // A form that drives an app page (Users, Facility) is left out of the Forms list for anyone who
+  // cannot edit forms; its page loads it through /published?targetPage= (design 2026-11-22-form-entries
+  // 5.6). Same rule as the studio's isStandalone: no target page, or the generic 'forms' page.
+  app.get('/api/forms', VIEW, async (req) => {
+    const forms = await openable(req, await ctx.forms.list());
+    return isEditor(req) ? forms : forms.filter((f) => !drivesAppPage(f.targetPages));
+  });
 
   app.get('/api/forms/published', VIEW, async (req) => {
     const query = req.query as Record<string, string | undefined>;
@@ -457,6 +472,15 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return reply.send(buf);
   });
 
+  /** The lab's time zone for the repeat message, or undefined when none is set or it cannot be read. */
+  const labTimeZone = async (): Promise<string | undefined> => {
+    try {
+      return (await ctx.labIdentity?.tokens())?.['lab.timezone'] || undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
   app.post('/api/forms/:id/responses', SUBMIT, async (req, reply) => {
     const formId = (req.params as { id: string }).id;
     // No editor bypass here: seeing every form in the builder does not mean submitting to it (Codex FR1).
@@ -544,15 +568,94 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       };
     }
 
-    const bundle = toTransactionBundle(response as never, resources);
-    const outcome = await ctx.workflows.runner.runAndRecord(
-      'wf-ingest',
-      'form',
-      { method: 'POST', body: bundle, headers: {}, query: {}, __provenance: { sourceSystem: 'form-capture' } },
-    );
+    // Every record gets its id here, so the entry can name what this save stored. Unwrap Bundle
+    // keeps an id that is set and mints one only where there is none, so the ids are the same ones
+    // it would have stored.
+    if (typeof response.id !== 'string' || !response.id) response.id = randomUUID();
+    const withIds = resources.map((r) => (typeof r.id === 'string' && r.id ? r : { ...r, id: randomUUID() }));
+    const responseId = response.id as string;
+    const records = withIds.map((r) => ({ resourceType: r.resourceType, id: r.id as string }));
+
+    // The entry row is written before the save, outside any transaction, so a repeated requisition
+    // number is refused before anything is stored (design 2026-11-22-form-entries, 5.1).
+    let entry: FormEntry;
+    try {
+      entry = await ctx.formEntries.begin({
+        form: { id: f.id, schema: f.schema },
+        answers: p.data.answers,
+        user: {
+          id: req.user?.id ?? actor,
+          name: req.user?.displayName || actor,
+          // The dev-bypass and admin users carry EVERYTHING; a missing limit is no limit, as on dashboards.
+          dataScope: req.user?.dataScope ?? EVERYTHING,
+        },
+      });
+    } catch (err) {
+      if (err instanceof EntrySiteError) {
+        reply.code(403);
+        return { error: err.message };
+      }
+      if (err instanceof FormEntryRepeat) {
+        const held = err.existing;
+        reply.code(409);
+        return {
+          error: 'entry-repeat',
+          message: repeatMessage(held, await labTimeZone()),
+          entry: { id: held.id, entryKey: held.entryKey, enteredAt: held.enteredAt, enteredByName: held.enteredByName },
+        };
+      }
+      throw err;
+    }
+
+    // Settle the entry once the save is done. A completed save stored every record. A failed one
+    // stored only those the FHIR store now holds; `persisted` is the run's own count, which says
+    // something was stored even if none of these ids is found. A failure here never changes the
+    // answer: the row stays active with no saved records, and the log says so.
+    const savedOf = (found: { resourceType: string; id: string }[], qr: boolean): FormEntrySaved =>
+      ({ responseId: qr ? responseId : null, resources: found });
+    const settle = async (ok: boolean, persisted: number): Promise<void> => {
+      try {
+        if (ok) {
+          await ctx.formEntries.finish(entry.id, { ok: true, stored: savedOf(records, true) });
+          return;
+        }
+        let qr = false;
+        const found: { resourceType: string; id: string }[] = [];
+        try {
+          qr = await ctx.fhirStore.exists('QuestionnaireResponse', responseId);
+          for (const r of records) if (await ctx.fhirStore.exists(r.resourceType, r.id)) found.push(r);
+        } catch (err) {
+          // The store is often down for the same reason the save failed. Not knowing what landed,
+          // keep the number held: the row becomes incomplete with no records named.
+          req.log.error({ err, entryId: entry.id }, 'could not look up what a failed save stored');
+          await ctx.formEntries.finish(entry.id, { ok: false, stored: savedOf([], false), somethingStored: true });
+          return;
+        }
+        await ctx.formEntries.finish(entry.id, {
+          ok: false, stored: savedOf(found, qr), somethingStored: persisted > 0 || qr || found.length > 0,
+        });
+      } catch (err) {
+        req.log.error({ err, entryId: entry.id }, 'form entry could not be settled after the save');
+      }
+    };
+
+    const bundle = toTransactionBundle(response as never, withIds);
+    let outcome: Awaited<ReturnType<typeof ctx.workflows.runner.runAndRecord>>;
+    try {
+      outcome = await ctx.workflows.runner.runAndRecord(
+        'wf-ingest',
+        'form',
+        { method: 'POST', body: bundle, headers: {}, query: {}, __provenance: { sourceSystem: 'form-capture' } },
+      );
+    } catch (err) {
+      // A run-store insert failure throws after the run, so records may exist. Look before freeing the number.
+      await settle(false, 0);
+      throw err;
+    }
 
     if (!outcome) {
       // runAndRecord returns null when the workflow is missing or disabled: nothing ran.
+      await settle(false, 0);
       reply.code(409);
       return { ok: false, error: "capture pipeline unavailable: the 'wf-ingest' workflow is missing or disabled" };
     }
@@ -567,9 +670,10 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       //
       // NOT covered here: a run-store insert failure. `deps.runs.record(run)` throws INSIDE
       // runAndRecord, before it builds and returns the outcome object, so `runAndRecord` itself
-      // throws, this route has no try/catch around that call, and the request falls through to
+      // throws, the catch around that call only settles the form entry and rethrows, and the request falls through to
       // the generic error handler — a plain 500 with the raw error, no clerk-facing advice.
       const persisted = persistedCount(outcome.nodeMeta);
+      await settle(false, persisted);
       // The clerk-facing sentence. The "already stored" case has real evidence and tells the
       // clerk not to resubmit. The zero case is absence of evidence, not evidence of absence —
       // persist-1 may never have been reached, may have been renamed/removed from the graph, or
@@ -601,6 +705,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       // The run completed, but Map to FHIR held the submission back (the default Ingest sends held
       // items to a Log since 2026-11-20). Not submitted: say so, with the reasons.
       const persisted = persistedCount(outcome.nodeMeta);
+      await settle(false, persisted);
       const stored = persisted > 0
         ? ` ${persisted} resource(s) were stored. Do NOT resubmit the whole form; quote run ${outcome.runId}.`
         : ` Fix it and submit again.`;
@@ -612,6 +717,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       };
     }
 
+    await settle(true, 0);
     await recordAudit(ctx, req, {
       action: 'form.response.submit', entityType: 'form', entityId: f.id,
       before: null, after: response, metadata: { formId: f.id, runId: outcome.runId },
@@ -622,6 +728,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       runId: outcome.runId,
       correlationId: outcome.correlationId,
       resourceTypes: resources.map((r) => (r as { resourceType: string }).resourceType),
+      entryId: entry.id,
     };
   });
 }

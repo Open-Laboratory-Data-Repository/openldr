@@ -134,6 +134,7 @@ import * as m132 from './132_warehouse_dataset_group';
 import * as m133 from './133_explorer_groups';
 import * as m134 from './134_import_copy_rows_key_estimate';
 import * as m135 from './135_content_pack_items';
+import * as m136 from './136_form_entries';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -272,4 +273,5 @@ export const internalMigrations: Record<string, Migration> = {
   '133_explorer_groups': { up: m133.up, down: m133.down },
   '134_import_copy_rows_key_estimate': { up: m134.up, down: m134.down },
   '135_content_pack_items': { up: m135.up, down: m135.down },
+  '136_form_entries': { up: m136.up, down: m136.down },
 };

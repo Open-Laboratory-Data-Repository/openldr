@@ -503,10 +503,32 @@ export function assertResolvedFacilityInvariant(
 export function registryConceptCodeById(
   registry: readonly { id: string; name: string; facility_code: string | null }[],
 ): Map<string, string> {
+  return new Map([...registryConceptById(registry)].map(([id, c]) => [id, c.code]));
+}
+
+/**
+ * The coding each registry row projects as, keyed by registry id: the system and code of its concept.
+ * This is the coding the facility picker saves, since reference search answers with the concept's own
+ * system and code (apps/server/src/reference-search-routes.ts).
+ */
+export function registryConceptById(
+  registry: readonly { id: string; name: string; facility_code: string | null }[],
+): Map<string, { system: string; code: string }> {
   const concepts = registryConceptRows(
     registry.map((r): RegistryRowForConcept => ({ id: r.id, name: r.name, facilityCode: r.facility_code })),
   );
-  return new Map(registry.map((r, i) => [r.id, concepts[i].code]));
+  return new Map(registry.map((r, i) => [r.id, { system: concepts[i].system, code: concepts[i].code }]));
+}
+
+/**
+ * The registry row id each concept code stands for: the inverse of `registryConceptCodeById`, over
+ * the same full register. A form's facility answer carries this code. Codes are unique, since a code
+ * two rows share becomes each row's own id.
+ */
+export function registryRowIdByConceptCode(
+  registry: readonly { id: string; name: string; facility_code: string | null }[],
+): Map<string, string> {
+  return new Map([...registryConceptCodeById(registry)].map(([id, code]) => [code, id]));
 }
 
 /**

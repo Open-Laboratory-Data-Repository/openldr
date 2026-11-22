@@ -30,7 +30,7 @@ The install prompt lists one line per step, in the order the pack installs them.
 
 Older steps, such as **Code system** or **Datasets**, show a plain number. Read the [Marketplace](/docs/marketplace) guide for those.
 
-Read every capability of every role before you approve. Anyone you later give the role to gets all of them.
+Read every capability of every role before you approve. Anyone you later give the role to gets all of them. A role may hold **Mark entries as entered in error** (`forms.void_entries`), so its users can withdraw a form entry saved by mistake.
 
 ## Remove a profile pack
 

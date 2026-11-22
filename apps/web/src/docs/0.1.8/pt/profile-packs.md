@@ -51,7 +51,7 @@ A instalação não mexe nos pacotes de que depende, e a remoção também não.
 }
 ```
 
-Cada capacidade tem de ser uma chave que o CE em execução conheça. As chaves estão em `packages/rbac/src/catalog.ts` no código do CE, e a página Funções mostra a mesma lista pelo nome. Uma chave desconhecida faz falhar a instalação com `unknown capability: <key>`.
+Cada capacidade tem de ser uma chave que o CE em execução conheça. As chaves estão em `packages/rbac/src/catalog.ts` no código do CE, e a página Funções mostra a mesma lista pelo nome. Uma chave desconhecida faz falhar a instalação com `unknown capability: <key>`. Uma função pode ter `forms.void_entries`, para que os seus utilizadores possam marcar um registo de formulário como introduzido por erro.
 
 O identificador já tem de estar na forma final: letras minúsculas, algarismos e hífenes simples. O CE recusa um identificador que alteraria ao guardá-lo.
 

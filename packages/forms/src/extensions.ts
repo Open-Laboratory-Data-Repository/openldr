@@ -114,6 +114,13 @@ export const EXT_CORLIX_FHIR_PROFILE_URL = 'urn:corlix:questionnaire:fhir-profil
 /** `FormSchema.languages` — author-declared content-translation locales (JSON string array valueString). */
 export const EXT_CORLIX_LANGUAGES = 'urn:corlix:questionnaire:languages'
 
+// ─── OpenLDR extensions ──────────────────────────────────────────────────────
+//
+// OpenLDR-only field flags, in the `urn:openldr:ext:*` style the order rejection extension uses.
+
+/** `FormField.entriesList` (valueBoolean true): show this answer in the form's entries list. */
+export const EXT_OPENLDR_ENTRIES_LIST = 'urn:openldr:ext:entries-list'
+
 // ─── Deliberately NOT exported ───────────────────────────────────────────────
 //
 // `sdc-questionnaire-constraint` (FHIRPath item-level validation) is referenced

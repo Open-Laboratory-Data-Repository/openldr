@@ -30,7 +30,7 @@ A janela de instalação mostra uma linha por passo, pela ordem em que o pacote 
 
 Os passos mais antigos, como **Sistema de códigos** ou **Conjuntos de dados**, mostram apenas um número. O guia [Marketplace](/docs/marketplace) explica-os.
 
-Leia todas as capacidades de cada função antes de aprovar. Quem receber a função mais tarde fica com todas elas.
+Leia todas as capacidades de cada função antes de aprovar. Quem receber a função mais tarde fica com todas elas. Uma função pode ter **Marcar registos como introduzidos por erro** (`forms.void_entries`), para que os seus utilizadores possam retirar um registo de formulário guardado por engano.
 
 ## Remover um pacote de perfil
 

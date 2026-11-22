@@ -98,6 +98,86 @@ Select **Submit** once. Wait for the result. Do not submit again merely to confi
 
 ![Response captured confirms the submitted response. Submit again only for another intended order.](forms-guide-order-result.png)
 
+## Enter a form at your own site
+
+Do this when your account is limited to one site or a few sites. An administrator sets that limit in [Users](/docs/users).
+
+1. Select **Forms** in the main menu.
+2. Open the form's row dots and select **View/Run**.
+3. Check the facility field. If your limit covers one facility, it is already filled in and you cannot change it.
+4. If your limit covers several facilities, open the facility field and choose one of them.
+5. Complete the other fields.
+6. Open the dots menu at the top right and select **Submit**.
+
+**Expected result:** **Response captured.** appears, and the entry is listed under **Entries**.
+
+The server checks the facility again when you submit. A form is never saved for a facility outside your limit.
+
+## See the entries of a form
+
+Each submission of a form makes one entry. The **Entries** tab lists them, newest first. You need **Use forms**, and you must be allowed to open the form.
+
+1. Select **Forms** in the main menu.
+2. Open the form's row dots and select **View/Run**.
+3. Select the **Entries** tab, beside **New entry**.
+4. Type the start of a requisition number in **Search requisition**.
+5. Open the list that shows **Any status** and choose **Active**, **Not fully saved** or **Entered in error**.
+6. Open the list that shows **Anyone** and choose the person who entered it.
+7. Select the entry's row.
+
+**Expected result:** a sheet opens with every answer of the entry, read only, and who entered it and when.
+
+The columns are **Requisition**, **Summary**, **Entered** and **By**. On a phone, **By** is hidden. **Anyone** offers only the people whose entries you have already seen on this visit.
+
+If your account has no data limit, you see every entry of the form. If you are limited to a site, you see the entries for the facilities in your limit, and the entries you made yourself. An entry on a form with no facility field is seen by the person who made it and by users with no limit.
+
+## Fix a repeated requisition number
+
+A requisition number can be used once per form and per facility. If you submit a number that is already in use, nothing is saved. A message like this one shows under the requisition field:
+
+`CS-0001 was already entered on Nov 22, 2026 at 1:50 PM by aisha.`
+
+1. Select **View that entry** at the end of the message.
+2. Compare that entry with the request in front of you.
+3. If it is the same request, close the sheet and stop. It is already saved.
+4. If you typed the number wrong, correct it in the requisition field.
+5. Open the dots menu at the top right and select **Submit**.
+
+**Expected result:** **Response captured.** appears. The message goes away as soon as you change the number.
+
+Your answers stay on screen after the refusal, so you do not type them again. If the older entry is the wrong one, ask someone who may mark entries in error to mark it. Its number is then free, and you can submit yours. The message is in your language. The date and time are your browser's local time. The `openldr` CLI gives the same message in English, with the time in the lab's time zone when one is set, otherwise UTC.
+
+Two forms may use the same number, and so may two facilities. A form with no requisition field has no repeat check.
+
+## Mark an entry as entered in error
+
+Do this when an entry should not have been saved, for example a wrong patient or a request entered twice. You need **Mark entries as entered in error**. The Administrator and Lab Manager roles have it.
+
+1. Open the form's **Entries** tab.
+2. Find the entry with **Search requisition**.
+3. Open the entry's row dots and select **Mark as entered in error**.
+4. Type why the entry is wrong in **Reason**.
+5. Select **Mark as entered in error**.
+
+**Expected result:** a message says `<number> is marked as entered in error.` The row stays in the list, struck through, with **Entered in error** under its summary.
+
+This cannot be undone. The entry stays on record, and its sheet shows **Marked by**, **Marked on** and **Reason**. The order, samples and results the entry saved are marked too. Its requisition number is free to use again. The reason is required and holds up to 500 characters. Each mark is recorded in **Audit**.
+
+A marked order still counts in reports and dashboards today. No report leaves it out yet.
+
+## Choose which answers the entries list shows
+
+The **Summary** column shows up to three answers of each entry. If no field is chosen, it shows the first three answered top-level fields, apart from the requisition number. A field inside a group never appears there.
+
+1. Open the form in the builder.
+2. Select the field's Edit control.
+3. Turn on **Show in entries list**.
+4. Open the field-editor dots and select **Save**.
+5. Repeat for each field you want. You may choose any number, but the list shows the first three that are answered.
+6. Open the builder dots and select **Save draft**, then **Publish**.
+
+**Expected result:** new entries show the chosen answers under **Summary**. Entries saved before keep the summary they had.
+
 ## Start a request-form design
 
 Use this when an existing form does not collect the information your workflow needs. The builder selects a FHIR healthcare data format and a record type.
@@ -600,6 +680,10 @@ Field-editor Save applies a local builder edit. Builder Save draft stores the de
 
 Saving or restoring different content can return a Published form to Draft. Identical content does not force that change. View/Run remains available, but submission requires Published status.
 
+The entry sheet shows each answer under the field's current label. If you rename a field, older entries show the new label too.
+
+The **Users** and **Facility** forms fill in the Users and Facilities pages. The Forms list shows them only to people with **Edit forms**. On a new install, the **Lab order** form opens only for the Lab Technician and Lab Manager roles. Someone who manages roles or edits forms always opens it. An install that already had the form keeps its access list.
+
 ## Troubleshooting
 
 **No patient matches.** Check the search value and whether your normal feed has supplied that patient. Use Patients to inspect the received record.
@@ -612,9 +696,23 @@ Saving or restoring different content can return a Published form to Draft. Iden
 
 **Restore leaves Draft.** Review the restored content, then Publish it when it should be available for submission again.
 
+**An entry shows Not fully saved.** The save stopped after it had stored part of the entry. An order may exist, so the entry still holds its requisition number. Open the entry to read what it holds. Then ask someone with **Mark entries as entered in error** to mark it, and enter the request again.
+
+**Submit says `this entry names a facility outside your limit`.** The facility you chose is outside your limit, or you left it empty. Choose one of your own facilities.
+
+**Submit says `this form's facility field is free text, so it cannot be used by a user limited to a site`.** A limited user can only use a facility field that picks from the facility register. Ask a form editor to change the field.
+
+**Submit says `your data limit names no facility, so you cannot enter this form`.** Your limit lists no facility. The facility field then says **Your account is not linked to a facility. Ask an administrator.** Ask an administrator to add your facility in Users.
+
+**After marking, a message says `The entry is marked in error, but its saved records were not updated.`** The entry is marked and its number is free, but its order, samples and results are not marked. Ask an administrator to check the run the message names, or the ingest workflow.
+
+**After marking, a message says `The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.`** The server does not know yet which records the entry made. If its save is still running, the records are marked when it finishes.
+
+**After marking, a message says `Some records this entry made may exist but are not known, so they were not marked.`** The entry's save failed part way. It may have stored an order, samples or results, but the server could not find which. The entry is marked and its number is free. Ask an administrator to find those records and correct them.
+
 ## Related guides
 
-Read [Patients](/docs/patients) for received patient records and [Test catalog](/docs/test-catalog) for lab-enabled tests. Read [Workflows](/docs/workflows) for the capture workflow and [Start here](/docs/start-here) for installation and command-line setup.
+Read [Patients](/docs/patients) for received patient records and [Test catalog](/docs/test-catalog) for lab-enabled tests. Read [Workflows](/docs/workflows) for the capture workflow and [Start here](/docs/start-here) for installation and command-line setup. Read [Users](/docs/users) to limit a person to a site, and [Roles](/docs/roles) to give a role **Mark entries as entered in error**.
 
 ## Optional practice
 

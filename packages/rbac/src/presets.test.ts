@@ -51,7 +51,7 @@ describe('system role presets', () => {
     expect(role('lab_manager')).toEqual([
       'dashboards.view', 'dashboards.create', 'dashboards.edit', 'dashboards.delete',
       'reports.view', 'reports.run', 'reports.export', 'reports.edit_templates',
-      'forms.view', 'forms.submit', 'forms.edit', 'forms.publish',
+      'forms.view', 'forms.submit', 'forms.edit', 'forms.publish', 'forms.void_entries',
       'workflows.view', 'workflows.edit', 'workflows.run', 'workflows.manage_secrets',
       'query.run', 'query.manage',
       'terminology.view', 'terminology.manage',
@@ -68,6 +68,13 @@ describe('system role presets', () => {
       'activity.view', 'notifications.view', 'audit.view',
     ]);
     expect(role('lab_technician')).toEqual(['forms.view', 'forms.submit']);
+  });
+
+  // Marking a form entry as entered in error withdraws a saved record, so only the roles that
+  // manage content hold it. Bench and read-only roles do not.
+  it('grants forms.void_entries to lab_admin and lab_manager only', () => {
+    const holders = SYSTEM_ROLES.filter((r) => r.capabilities.includes('forms.void_entries')).map((r) => r.slug).sort();
+    expect(holders).toEqual(['lab_admin', 'lab_manager']);
   });
 
   it('every preset capability is a real catalog key', () => {

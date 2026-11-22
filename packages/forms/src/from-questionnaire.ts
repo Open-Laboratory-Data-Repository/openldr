@@ -21,6 +21,7 @@ import {
   EXT_QUESTIONNAIRE_MIN_OCCURS,
   EXT_QUESTIONNAIRE_UNIT,
   EXT_SDC_OBSERVATION_EXTRACT,
+  EXT_OPENLDR_ENTRIES_LIST,
 } from './extensions'
 import { deriveLanguagesFromTranslations } from './derive-languages'
 
@@ -82,6 +83,7 @@ export function fromQuestionnaire(questionnaire: Questionnaire): FormSchema {
     const max = extInt(item.extension, EXT_QUESTIONNAIRE_MAX_OCCURS)
     if (max !== undefined) base.maxItems = max
     if (extBool(item.extension, EXT_SDC_OBSERVATION_EXTRACT)) base.observationExtract = true
+    if (extBool(item.extension, EXT_OPENLDR_ENTRIES_LIST)) base.entriesList = true
     if (ctx.section) base.section = ctx.section
     if (ctx.groupId) base.groupId = ctx.groupId
     const visibility = visibilityOf(item.extension)

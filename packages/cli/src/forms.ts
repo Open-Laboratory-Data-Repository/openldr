@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { createAppContext, FormAccessError, recordAuditEvent, setFormAccess } from '@openldr/bootstrap';
+import { createAppContext, drivesAppPage, FormAccessError, formOpenRule, recordAuditEvent, setFormAccess } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { ObservationExtractor, ServiceRequestExtractor, toTransactionBundle, lintFormSchema, type ExtractionContext } from '@openldr/forms';
 import type { Questionnaire, QuestionnaireResponse } from '@openldr/fhir';
@@ -31,23 +31,25 @@ type AppCtx = Awaited<ReturnType<typeof createAppContext>>;
 
 /**
  * Which of `ids` the caller may open. A served command runs for a signed-in caller, so it obeys
- * each form's open list as the form routes do; an editor manages every form (roles review FR4). A
- * local run on the server is the machine's operator and sees every form, as before.
+ * each form's open list by the rule the form routes use (formOpenRule); an editor manages every
+ * form (roles review FR4). A local run on the server is the machine's operator and sees every form.
+ * `editor` is true for a local run and for a served caller who holds forms.edit.
  */
-async function formsCallerMayOpen(ctx: AppCtx, ids: string[]): Promise<Set<string>> {
+export async function formsCallerMayOpen(ctx: AppCtx, ids: string[]): Promise<{ open: Set<string>; editor: boolean }> {
   const caller = await servedCaller(ctx);
-  if (caller === 'local') return new Set(ids);
-  if (!caller) return new Set();
-  if (caller.capabilities.includes('forms.edit')) return new Set(ids);
-  return ctx.formAccess.visible(caller, ids);
+  if (caller === 'local') return { open: new Set(ids), editor: true };
+  if (!caller) return { open: new Set(), editor: false };
+  const rule = formOpenRule(ctx.formAccess);
+  return { open: await rule.openable(caller, ids), editor: rule.isEditor(caller) };
 }
 
 export async function runFormsList(opts: { json: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
     const all = await ctx.forms.list();
-    const open = await formsCallerMayOpen(ctx, all.map((f) => f.id));
-    const forms = all.filter((f) => open.has(f.id));
+    const { open, editor } = await formsCallerMayOpen(ctx, all.map((f) => f.id));
+    // As GET /api/forms: a form that drives an app page is left out for a caller who cannot edit forms.
+    const forms = all.filter((f) => open.has(f.id) && (editor || !drivesAppPage(f.targetPages)));
     if (opts.json) {
       process.stdout.write(JSON.stringify(forms, null, 2) + '\n');
     } else {
@@ -74,7 +76,7 @@ export async function runFormsLint(id: string | undefined, opts: { json: boolean
   const ctx = await createAppContext(loadConfig());
   try {
     const ids = id ? [id] : (await ctx.forms.list()).map((s) => s.id);
-    const open = await formsCallerMayOpen(ctx, ids);
+    const { open } = await formsCallerMayOpen(ctx, ids);
     // A form the caller may not open is missing to them, as on GET /api/forms/:id.
     const targets = await Promise.all(ids.filter((f) => open.has(f)).map((f) => ctx.forms.get(f)))
       .then((forms) => forms.filter((f): f is NonNullable<typeof f> => f !== null));
@@ -111,7 +113,7 @@ export async function runFormsLint(id: string | undefined, opts: { json: boolean
 export async function runFormsVersions(id: string, opts: { json: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
-    if (!(await formsCallerMayOpen(ctx, [id])).has(id)) {
+    if (!(await formsCallerMayOpen(ctx, [id])).open.has(id)) {
       process.stderr.write(`no form with id ${id}\n`);
       return 1;
     }

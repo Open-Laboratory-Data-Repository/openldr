@@ -30,7 +30,7 @@ La fenêtre d'installation affiche une ligne par étape, dans l'ordre où le pac
 
 Les étapes plus anciennes, comme **Système de codes** ou **Jeux de données**, affichent un simple nombre. Le guide [Marketplace](/docs/marketplace) les explique.
 
-Lisez toutes les capacités de chaque rôle avant d'approuver. Toute personne à qui vous donnerez ce rôle les recevra toutes.
+Lisez toutes les capacités de chaque rôle avant d'approuver. Toute personne à qui vous donnerez ce rôle les recevra toutes. Un rôle peut avoir **Marquer des saisies comme erronées** (`forms.void_entries`), pour que ses utilisateurs puissent retirer une saisie de formulaire enregistrée par erreur.
 
 ## Supprimer un pack de profil
 

@@ -2132,8 +2132,69 @@ export async function exportFormBundle(id: string): Promise<void> {
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
-export const submitFormResponse = (id: string, answers: unknown): Promise<unknown> =>
-  authFetch(`/api/forms/${id}/responses`, jbody({ answers }, 'POST')).then((r) => okJson<unknown>(r, 'submit form response'));
+/** A refused submission: the requisition number is already held by another entry of this form.
+ *  `message` is the server's sentence. `entry` is the entry that holds the number. */
+export class FormEntryRepeatError extends Error {
+  constructor(message: string, readonly entry: { id: string; entryKey: string | null; enteredAt: string; enteredByName: string }) {
+    super(message);
+    this.name = 'FormEntryRepeatError';
+  }
+}
+
+/** Throws FormEntryRepeatError on a repeated requisition number. The route also answers 409 when the
+ *  ingest workflow is off, with another body, so only `error: 'entry-repeat'` counts as a repeat. */
+export async function submitFormResponse(id: string, answers: unknown): Promise<{ entryId?: string } & Record<string, unknown>> {
+  const r = await authFetch(`/api/forms/${id}/responses`, jbody({ answers }, 'POST'));
+  if (r.status === 409) {
+    const body = await r.clone().json().catch(() => null) as { error?: unknown; message?: unknown; entry?: unknown } | null;
+    if (body?.error === 'entry-repeat' && body.entry && typeof body.message === 'string') {
+      throw new FormEntryRepeatError(body.message, body.entry as FormEntryRepeatError['entry']);
+    }
+  }
+  return okJson(r, 'submit form response');
+}
+
+// ── Form entries (design 2026-11-22-form-entries) ──────────────────────────────
+export type FormEntryStatus = 'active' | 'incomplete' | 'entered-in-error';
+/** One saved submission of a form, as apps/server/src/form-entry-routes.ts sends it. */
+export interface FormEntry {
+  id: string; formId: string;
+  facilityId: string | null; facilityCode: string | null; facilityName: string | null;
+  entryKey: string | null; summary: { label: string; value: string }[];
+  enteredBy: string; enteredByName: string; enteredAt: string;
+  status: FormEntryStatus; statusBy: string | null; statusAt: string | null; statusReason: string | null;
+  /** Who marked it in error, by name. Null when nobody did, or the user no longer exists. */
+  statusByName: string | null;
+}
+/** An entry with every answer of its saved form copy. Null answers: the copy could not be read. */
+export interface FormEntryDetail extends FormEntry { answers: { fieldId: string; label: string; value: string }[] | null }
+/** `system` and `code` are the coding the facility picker saves for this facility. */
+export interface EntryFacility { id: string; system: string; code: string; name: string }
+/** The site rules for the form screen. `locked`: the user's limit covers one facility, `facility`.
+ *  `choices`: the facilities the limit covers, null for no limit. */
+export interface FormEntryContext { facility: EntryFacility | null; locked: boolean; choices: EntryFacility[] | null }
+export interface VoidEntryResult { entry: FormEntry; resaved: number; skipped: number; warning?: string }
+
+export const listFormEntries = (
+  formId: string,
+  p: { status?: FormEntryStatus; enteredBy?: string; search?: string; limit: number; offset: number },
+): Promise<{ entries: FormEntry[]; total: number }> => {
+  const qs = new URLSearchParams({ limit: String(p.limit), offset: String(p.offset) });
+  if (p.status) qs.set('status', p.status);
+  if (p.enteredBy) qs.set('enteredBy', p.enteredBy);
+  if (p.search) qs.set('search', p.search);
+  return apiGet(`/api/forms/${encodeURIComponent(formId)}/entries?${qs}`, 'list form entries');
+};
+export const getFormEntry = (entryId: string): Promise<FormEntryDetail> =>
+  apiGet(`/api/forms/entries/${encodeURIComponent(entryId)}`, 'get form entry');
+export const getFormEntryContext = (formId: string): Promise<FormEntryContext> =>
+  apiGet(`/api/forms/${encodeURIComponent(formId)}/entry-context`, 'get entry context');
+/** The thrown error carries `status`: 409 means the entry was already marked. */
+export async function voidFormEntry(entryId: string, reason: string): Promise<VoidEntryResult> {
+  const r = await authFetch(`/api/forms/entries/${encodeURIComponent(entryId)}/void`, jbody({ reason }, 'POST'));
+  if (!r.ok) throw await statusError(r, 'mark entry in error');
+  return r.json() as Promise<VoidEntryResult>;
+}
 
 // ── Reference search (form reference pickers) ────────────────────────────────────
 export interface CodingRow { system: string; code: string; display: string | null }

@@ -5,12 +5,13 @@ import { buildDefaultWorkflows, type Workflow, type WorkflowStore } from '@openl
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
 import { seedReportDesigns, removeRetiredDemoDesigns, type ReportDesignStore } from '@openldr/report-designer';
 import { seedDataDrivenReports, DEFAULT_REPORT_CATEGORIES, type SeedDataDrivenReportsResult } from '@openldr/reporting';
-import type { ConnectorStore, TerminologyAdminStore, AppSettingStore, ReportStore } from '@openldr/db';
+import type { ConnectorStore, TerminologyAdminStore, AppSettingStore, ReportStore, FormAccessStore, RoleStore } from '@openldr/db';
 import { BUNDLED_TERMINOLOGY, readBundledTerminology, createCustomQueryStore, referenceCapture } from '@openldr/db';
 import { FEATURE_FLAGS } from '@openldr/config';
 import type { DbContext } from './db-context';
 import { REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 import { LAB_IDENTITY_DEFAULTS } from './lab-identity-defaults';
+import { FormAccessError, setFormAccess } from './form-access';
 
 export interface SeedResult {
   resources: { id: string; flattened: string }[];
@@ -59,6 +60,9 @@ const FACILITY_FORM_NAME = 'Facility';
  *  the Users-page form, the Facilities-page form, and the Lab order form the ingestion workflow
  *  binds to. */
 const ESSENTIAL_FORM_NAMES = new Set<string>([USERS_FORM_NAME, ORDER_FORM_NAME, FACILITY_FORM_NAME]);
+/** The seeded system roles (packages/rbac/src/presets.ts) that may open and submit the Lab order on
+ *  a new install. A holder of `roles.manage` passes any list, so the Administrator is not named. */
+const ORDER_FORM_ROLES = ['lab_technician', 'lab_manager'];
 
 /** Name for the MSSQL target-warehouse connector — distinct from DEFAULT_CONNECTOR_NAME so the
  *  two warehouse connectors are identifiable by name. `seedDataDrivenReports` resolves EITHER name
@@ -77,7 +81,11 @@ const MYSQL_CONNECTOR_NAME = 'Target Warehouse (MySQL/MariaDB)';
 // to keep seed.ts from importing ./index, which re-exports this module — that would be a circular
 // dependency. AppContext satisfies it.
 export interface EssentialSeedTarget {
-  forms: Pick<FormStore, 'list' | 'create' | 'setStatus'>;
+  forms: Pick<FormStore, 'list' | 'create' | 'setStatus' | 'get'>;
+  // Who may open and submit a form, and the roles it names: the seed limits a newly created Lab
+  // order (design 2026-11-22-form-entries 5.6). System roles are seeded first, in createAppContext.
+  formAccessStore: Pick<FormAccessStore, 'set'>;
+  roles: Pick<RoleStore, 'list'>;
   // 'update' is needed for one narrowly-scoped upgrade repair: re-enabling a disabled
   // `wf-ingest` row on an existing install (see `enableIngestWorkflow`).
   workflows: { store: Pick<WorkflowStore, 'list' | 'create' | 'update'> };
@@ -155,6 +163,17 @@ export interface FormSeedTarget extends EssentialSeedTarget {
 // "Lab order", random ids make central's copy arrive as an ADDITIONAL form rather than matching
 // the lab's — the Forms page then lists "Lab order" and "Users" twice, and deleting the duplicate
 // only makes the next pull re-create it. A shared id makes the two converge.
+/** Limit a newly created Lab order to ORDER_FORM_ROLES. A role that is missing (its seed failed)
+ *  leaves the form open with a warning, so the rest of the seed still runs. */
+async function limitOrderForm(app: EssentialSeedTarget, formId: string): Promise<void> {
+  try {
+    await setFormAccess({ access: app.formAccessStore, forms: app.forms, roles: app.roles }, formId, { open: ORDER_FORM_ROLES, submit: ORDER_FORM_ROLES });
+  } catch (err) {
+    if (!(err instanceof FormAccessError)) throw err;
+    console.warn(`[seed] "${ORDER_FORM_NAME}" left open to every role: ${err.message}`);
+  }
+}
+
 async function upsertPublishedForms(
   app: EssentialSeedTarget,
   forms: (typeof sampleForms)[number][],
@@ -189,6 +208,8 @@ async function upsertPublishedForms(
       id = created.id;
       status = created.status;
       seeded++;
+      // Only when this run made the form, so a list an operator changed is never reset.
+      if (form.name === ORDER_FORM_NAME) await limitOrderForm(app, id);
     }
     if (status !== 'published') await app.forms.setStatus(id, 'published');
     if (form.name === ORDER_FORM_NAME) orderFormId = id;

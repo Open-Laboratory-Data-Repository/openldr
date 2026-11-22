@@ -29,6 +29,7 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   { key: 'forms.submit', group: 'forms', label: 'Submit forms', description: 'Capture data by hand: submitting a form WRITES clinical records to the FHIR store and the read model.' },
   { key: 'forms.edit', group: 'forms', label: 'Edit forms', description: 'Create and modify form definitions; export form bundles.' },
   { key: 'forms.publish', group: 'forms', label: 'Publish forms', description: 'Publish new form versions.' },
+  { key: 'forms.void_entries', group: 'forms', label: 'Mark entries as entered in error', description: 'Withdraw a saved form entry. The entry stays on record, marked as entered in error.' },
   // Workflows
   { key: 'workflows.view', group: 'workflows', label: 'View workflows', description: 'Open the Workflows workspace and see definitions and runs.' },
   { key: 'workflows.edit', group: 'workflows', label: 'Edit workflows', description: 'Create and modify workflow definitions.' },
