@@ -2098,6 +2098,26 @@ describe('form entries on submit', () => {
     await w.db.destroy();
   });
 
+  it('keys the entry on the number the order carries when two fields fill the identifier', async () => {
+    const w = await world();
+    const schema = entrySchema('register');
+    const two = { ...schema, fields: [...schema.fields, field({ id: 'num2', displayLabel: 'Second number', order: 2, fhirPath: 'ServiceRequest.identifier' })] };
+    const formId = (await w.appFor().inject({ method: 'POST', url: '/api/forms', payload: { name: 'Two', schema: two, targetPages: ['forms'] } })).json().id as string;
+
+    expect((await w.submit(w.appFor(), formId, { num: 'CS-1', num2: 'CS-2', fac: siteA })).statusCode).toBe(201);
+    const order = (w.runs[0].body.entry as { resource: { resourceType: string; identifier?: { value?: string }[] } }[])
+      .find((e) => e.resource.resourceType === 'ServiceRequest')!.resource;
+    const [row] = await w.rows(formId);
+    expect(row!.entryKey).toBe(order.identifier?.[0]?.value);
+    expect(row!.entryKey).toBe('CS-2');
+
+    const again = await w.submit(w.appFor(), formId, { num: 'CS-9', num2: 'CS-2', fac: siteA });
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toMatchObject({ error: 'entry-repeat', entry: { id: row!.id, entryKey: 'CS-2' } });
+    expect(w.runs).toHaveLength(1);
+    await w.db.destroy();
+  });
+
   it('still answers success when settling the row fails after a completed save', async () => {
     const w = await world();
     const real = (w.ctx as any).formEntries;

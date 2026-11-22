@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { entryFacilitiesOf, entryFieldsOf, entryValuesOf } from './entry-fields'
+import { entryFacilitiesOf, entryFieldsOf, entryKeyOf, entryValuesOf } from './entry-fields'
 import { ServiceRequestExtractor } from './extract/extract'
 import { toQuestionnaireResponse } from './response'
 import { sampleForms } from './samples/forms'
@@ -194,5 +194,38 @@ describe('entryFacilitiesOf', () => {
   it('gives nothing for a form the order extractor does not run on', () => {
     const form = makeSchema({ id: 'f', name: 'F', fhirResourceType: 'Patient', fields: [makeField(facilityField('f1', 0))] })
     expect(entryFacilitiesOf(form, { f1: siteA })).toEqual({ fields: [], answered: [], order: null })
+  })
+})
+
+describe('entryKeyOf', () => {
+  /** The requisition number the order extractor really puts on the order. */
+  function orderNumberOf(form: FormSchema, answers: Record<string, unknown>) {
+    const [order] = ServiceRequestExtractor.extract(toQuestionnaireResponse(form, answers as never), toQuestionnaire(form), {})
+    return (order as { identifier?: { value?: string }[] }).identifier?.[0]?.value ?? null
+  }
+  const twoNumbers = () => requisition([
+    { id: 'num2', displayLabel: 'Second number', fieldType: 'text', order: 1, fhirPath: 'ServiceRequest.identifier' },
+  ])
+
+  it('takes the number the order carries: the last answered identifier field', () => {
+    const form = twoNumbers()
+    const answers = { num: 'CS-0001', num2: 'CS-0002' }
+    expect(entryKeyOf(form, answers)).toBe('CS-0002')
+    expect(orderNumberOf(form, answers)).toBe('CS-0002')
+  })
+
+  it('takes the first when only it is answered, and trims it', () => {
+    const form = twoNumbers()
+    expect(entryKeyOf(form, { num: ' CS-0001 ' })).toBe('CS-0001')
+    expect(orderNumberOf(form, { num: 'CS-0001' })).toBe('CS-0001')
+  })
+
+  it('gives null with no number, and for a form the order extractor does not run on', () => {
+    expect(entryKeyOf(twoNumbers(), {})).toBeNull()
+    const form = makeSchema({
+      id: 'f', name: 'F', fhirResourceType: 'Patient',
+      fields: [makeField({ id: 'n', displayLabel: 'N', fieldType: 'text', order: 0, fhirPath: 'ServiceRequest.identifier.value' })],
+    })
+    expect(entryKeyOf(form, { n: 'R1' })).toBeNull()
   })
 })

@@ -1,5 +1,5 @@
 import type { FormField, FormSchema } from './schema/form-schema'
-import { ServiceRequestExtractor, requesterFacilityAnswers } from './extract/extract'
+import { ServiceRequestExtractor, requesterFacilityAnswers, requisitionNumberAnswers } from './extract/extract'
 import { isRequesterFacilityBinding, isRequisitionNumberBinding, pickedFacilityOf, type PickedFacility } from './extract/order-fields'
 import { extractorsForForm } from './routing'
 import { resolveReferenceSource } from './reference-source'
@@ -79,6 +79,17 @@ export function entryFacilitiesOf(schema: FormSchema, answers: Record<string, un
     return { fieldId: linkId, facility, name: typeof display === 'string' && display.trim() ? display.trim() : null }
   })
   return { fields, answered, order: answered.at(-1) ?? null }
+}
+
+/**
+ * The requisition number the saved order will carry, trimmed, or null when there is none. With two
+ * fields bound to the order identifier the extractor keeps the last answered one, so this does too.
+ * `entryValuesOf(...).entryKey` reads the first such field and is left as it is for its callers.
+ */
+export function entryKeyOf(schema: FormSchema, answers: Record<string, unknown>): string | null {
+  if (!extractorsForForm(schema).includes(ServiceRequestExtractor)) return null
+  const read = requisitionNumberAnswers(toQuestionnaireResponse(schema, answers as never), toQuestionnaire(schema))
+  return read.at(-1)?.trim() || null
 }
 
 /** One answer as a short display string, or null when it is empty or not a single answer. */

@@ -261,6 +261,26 @@ describe('form entries service: a form with two facility fields', () => {
   });
 });
 
+describe('form entries service: a form with two requisition number fields', () => {
+  function twoNumbers(): FormSchema {
+    const base = orderForm('register') as unknown as { fields: Record<string, unknown>[] };
+    return {
+      ...base,
+      fields: [...base.fields, field({ id: 'num2', displayLabel: 'Second number', order: 3, fhirPath: 'ServiceRequest.identifier' })],
+    } as unknown as FormSchema;
+  }
+
+  it('keys the entry on the number the order carries, and refuses that number again', async () => {
+    const { db, service } = await world();
+    const input = { form: { id: 'form-1', schema: twoNumbers() }, answers: { num: 'CS-1', num2: 'CS-2', fac: pick('A1') }, user: user({ limited: false }) };
+    const entry = await service.begin(input);
+    expect(entry.entryKey).toBe('CS-2');
+    // A different first number does not dodge the check: the order carries CS-2 again.
+    await expect(service.begin({ ...input, answers: { num: 'CS-9', num2: 'CS-2', fac: pick('A1') } })).rejects.toBeInstanceOf(FormEntryRepeat);
+    await db.destroy();
+  });
+});
+
 describe('form entries service: finish', () => {
   const saved = { responseId: 'qr-1', resources: [{ resourceType: 'ServiceRequest', id: 'sr-1' }] };
 

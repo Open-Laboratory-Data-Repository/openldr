@@ -1,5 +1,5 @@
 import type { FormEntry, FormEntrySaved, FormEntryStore } from '@openldr/db';
-import { entryFacilitiesOf, entryValuesOf, type FacilityAnswer, type FormSchema } from '@openldr/forms';
+import { entryFacilitiesOf, entryKeyOf, entryValuesOf, type FacilityAnswer, type FormSchema } from '@openldr/forms';
 import type { DataScope } from '@openldr/rbac';
 import { inDataScope, type ScopeRegistryRow } from './data-scope';
 import { registryRowIdByConceptCode } from './facility-reconcile';
@@ -87,7 +87,8 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
         facilityId,
         facilityCode: picked?.code ?? null,
         facilityName,
-        entryKey: values.entryKey,
+        // The number the order carries, so the repeat check and the order agree.
+        entryKey: entryKeyOf(form.schema, answers),
         summary: values.summary,
         enteredBy: user.id,
         enteredByName: user.name,

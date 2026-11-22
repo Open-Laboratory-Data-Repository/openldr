@@ -132,6 +132,23 @@ export function requesterFacilityAnswers(
   return out
 }
 
+/**
+ * Every answered requisition-number item of a response, in the order the order extractor reads
+ * them, as the extractor writes them (`String(value)`). The extractor keeps the last one as the
+ * order's identifier. Same index and walk as `ServiceRequestExtractor`.
+ */
+export function requisitionNumberAnswers(response: QuestionnaireResponse, questionnaire: Questionnaire): string[] {
+  const index = indexItems(questionnaire)
+  const out: string[] = []
+  walkResponse(response.item, (item) => {
+    const path = index.get(item.linkId)?.fhirPath
+    if (!isRequisitionNumberBinding(path)) return
+    const value = item.answer?.[0] ? fromAnswer(item.answer[0]) : undefined
+    if (value !== undefined) out.push(String(value))
+  })
+  return out
+}
+
 // ─── Observation extraction ──────────────────────────────────────────────────
 
 const UCUM = 'http://unitsofmeasure.org'
