@@ -1,22 +1,37 @@
 import { randomUUID } from 'node:crypto';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import type { Logger } from '@openldr/core';
 import {
-  CorrectionError, FACILITY_REGISTRY_SYSTEM, findByRequisition, indexRequisitions, persistResources,
-  requesterFacility, requesterPractitionerDisplay, type FhirStore, type InternalSchema,
+  CorrectionError, FACILITY_REGISTRY_SYSTEM, findByRequisition, indexRequisitions, patientMatchKey, persistResources,
+  requesterFacility, requesterPractitionerDisplay, type ExternalSchema, type FhirStore, type InternalSchema,
 } from '@openldr/db';
-import { validateResource } from '@openldr/fhir';
+import { Patient, validateResource } from '@openldr/fhir';
 import {
   ORDER_ORIGIN_SYSTEM, ORDER_REQUISITION_SYSTEM, facilityReference, labOrderId, labSpecimenId, orderRequester,
 } from '@openldr/forms';
+import type { Operations } from '@openldr/terminology';
+import type { PatientIndex } from './patient-index';
 import { TEST_CATALOG_SYSTEM, type TestCatalog } from './test-catalog';
 
 // The lab desk's orders (lab module slices 1b and 2, spec 5.2 and 5.3): find an order by its
 // requisition number whatever saved it, register one at the desk, and correct a typo on one.
-// The routes and the reception page call this. Patients and samples join it in Task 6.
+// It also finds and registers patients and receives samples. The routes and the reception page call this.
 
 /** The tag code that says an order was registered at the lab's desk (ruling 14). */
 export const LAB_DESK_ORIGIN = 'lab-desk';
+/** Says a Patient's birth date was worked out from an age, as 1 January of that year (ruling 10). */
+export const BIRTHDATE_ESTIMATED_EXTENSION = 'urn:openldr:ext:birthdate-estimated';
+/** The sample conditions a lab may record. Must equal SAMPLE_CONDITION_VALUE_SET in internal migration 137. */
+export const SAMPLE_CONDITION_VALUE_SET = 'urn:openldr:valueset:sample-condition';
+const DATA_OPERATION = 'http://terminology.hl7.org/CodeSystem/v3-DataOperation';
+/** The oldest age a registration takes. */
+const MAX_AGE_YEARS = 130;
+/** The most patients one search shows. A strong match finds one or two. */
+const SEARCH_LIMIT = 25;
+const FULL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** The sexes a Patient may have, from the Patient schema itself (ruling 11). */
+const GENDERS: readonly string[] = Patient.shape.gender.unwrap().options;
+
 /** The provenance source system the form routes stamp on what a form saves
  *  (`apps/server/src/forms-routes.ts` and `form-entries.ts`, through the wf-ingest Persist Store node). */
 const FORM_SOURCE_SYSTEM = 'form-capture';
@@ -72,17 +87,59 @@ export class ReceptionError extends Error {
   }
 }
 
+export interface PatientSearch { identifier?: string; name?: string; birthDate?: string }
+
+export interface FoundPatient {
+  id: string;
+  name: string;
+  birthDate: string | null;
+  gender: string | null;
+  identifiers: Array<{ system: string; value: string }>;
+}
+
+export interface RegisterPatientInput {
+  given: string;
+  family: string;
+  gender: 'male' | 'female' | 'other' | 'unknown';
+  birthDate?: string;
+  ageYears?: number;
+  identifier?: { system: string; value: string };
+}
+
+export interface ReceiveSampleInput {
+  requisition: string;
+  facilityCode: string | null;
+  type: { system: string; code: string; display?: string };
+  condition?: { system: string; code: string; display?: string };
+  /** The requests this sample serves. Left out, it serves every request of the order. */
+  serviceRequestIds?: string[];
+  receivedTime?: string;
+}
+
+export interface SampleChoices { types: Array<{ system: string; code: string; display: string | null }> }
+
 export interface LabReception {
   /** The orders with this number, one per facility. */
   findOrders(requisition: string): Promise<ReceptionOrder[]>;
   registerOrder(input: RegisterOrderInput, who: string): Promise<ReceptionOrder>;
   correctOrder(input: CorrectOrderInput, who: string): Promise<ReceptionOrder>;
+  /** Patients on a strong match only (ruling 9): an exact identifier, or a full name with the full
+   *  birth date. Anything else finds no one, so the desk never browses patients. */
+  searchPatients(q: PatientSearch): Promise<FoundPatient[]>;
+  registerPatient(input: RegisterPatientInput, who: string): Promise<{ id: string; display: string }>;
+  /** Writes, or updates, the one Specimen of this sample type for the order (ruling 13). */
+  receiveSample(input: ReceiveSampleInput, who: string): Promise<ReceptionOrder>;
+  sampleChoices(requisition: string, facilityCode: string | null): Promise<SampleChoices>;
 }
 
 export interface LabReceptionDeps {
   db: Kysely<InternalSchema>;
+  /** The warehouse, where patient search reads `patients`. */
+  externalDb: Kysely<ExternalSchema>;
   fhirStore: FhirStore;
   catalog: Pick<TestCatalog, 'get' | 'loincCodingsFor'>;
+  ops: Pick<Operations, 'expand' | 'lookup'>;
+  patientIndex: Pick<PatientIndex, 'list' | 'idForRef' | 'rowsByIds'>;
   logger: Logger;
 }
 
@@ -102,6 +159,19 @@ function text(v: unknown): string | null {
 
 function invalid(message: string): ReceptionError {
   return new ReceptionError('invalid', message);
+}
+
+/** The Provenance of a desk write: what it wrote, how, and who did it. Every desk save carries one,
+ *  saved in the same call, so all of them have this one shape. */
+function deskProvenance(targets: string[], activity: 'CREATE' | 'UPDATE', actor: string, recorded: string): Json {
+  return {
+    resourceType: 'Provenance',
+    id: randomUUID(),
+    target: targets.map((reference) => ({ reference })),
+    recorded,
+    activity: { coding: [{ system: DATA_OPERATION, code: activity }] },
+    agent: [{ who: { display: actor } }],
+  };
 }
 
 /** A patient's name as one line: name.text, else the given names and the family name. */
@@ -343,14 +413,7 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
         ...(requester ? { contained: [requester.contained], requester: requester.requester } : {}),
       };
     });
-    const provenance = {
-      resourceType: 'Provenance',
-      id: randomUUID(),
-      target: ids.map((id) => ({ reference: `ServiceRequest/${id}` })),
-      recorded: authoredOn,
-      activity: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-DataOperation', code: 'CREATE' }] },
-      agent: [{ who: { display: actor } }],
-    };
+    const provenance = deskProvenance(ids.map((id) => `ServiceRequest/${id}`), 'CREATE', actor, authoredOn);
     for (const r of requests) {
       const checked = validateResource(r);
       if (!checked.ok) {
@@ -379,9 +442,13 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     if (subject) next['subject'] = subject;
     if ('clinician' in changes) {
       const clinician = text(changes.clinician) ?? undefined;
-      const role = (Array.isArray(next['contained']) ? next['contained'] : [])
-        .find((c): c is Json => isObject(c) && c['resourceType'] === 'PractitionerRole' && c['id'] === 'requester');
       const requester = isObject(next['requester']) ? next['requester'] : null;
+      // The contained role the requester points at, followed the way requesterFacility does.
+      const ref = requester ? text(requester['reference']) : null;
+      const role = ref && ref.startsWith('#')
+        ? (Array.isArray(next['contained']) ? next['contained'] : [])
+          .find((c): c is Json => isObject(c) && c['resourceType'] === 'PractitionerRole' && c['id'] === ref.slice(1))
+        : undefined;
       // The facility the order already names stays: from the contained role, or a requester that
       // is itself a facility reference.
       const organization = role && isObject(role['organization'])
@@ -447,5 +514,202 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     return order;
   }
 
-  return { findOrders, registerOrder, correctOrder };
+  /** A warehouse sex letter as a Patient gender: the gender whose first letter it is, as the
+   *  warehouse projection writes it. */
+  function genderOf(sex: string | null): string | null {
+    const letter = sex?.trim().toUpperCase();
+    return (letter && GENDERS.find((g) => g[0]!.toUpperCase() === letter)) ?? null;
+  }
+
+  async function foundPatients(ids: string[]): Promise<FoundPatient[]> {
+    const rows = await deps.patientIndex.rowsByIds(ids.slice(0, SEARCH_LIMIT), { unmask: true });
+    return rows.filter((r): r is typeof r & { id: string } => r.id !== null).map((r) => ({
+      id: r.id,
+      name: r.name ?? r.id,
+      birthDate: r.birthDate,
+      gender: genderOf(r.sex),
+      identifiers: r.identifiers.filter((i): i is typeof i & { system: string } => i.system !== null)
+        .map((i) => ({ system: i.system, value: i.value })),
+    }));
+  }
+
+  /** The duplicate keys a full name could have with this birth date: each split of its words into a
+   *  first name and a surname, in either order. One word gives none, so a partial name finds no one. */
+  function matchKeys(name: string, birthDate: string): string[] {
+    const words = name.split(/\s+/).filter(Boolean);
+    const keys = new Set<string>();
+    for (let i = 1; i < words.length; i++) {
+      const front = words.slice(0, i).join(' ');
+      const back = words.slice(i).join(' ');
+      for (const [first, surname] of [[front, back], [back, front]] as const) {
+        const key = patientMatchKey(surname, first, birthDate);
+        if (key) keys.add(key);
+      }
+    }
+    return [...keys];
+  }
+
+  async function searchPatients(q: PatientSearch): Promise<FoundPatient[]> {
+    const identifier = text(q?.identifier);
+    if (identifier) {
+      // The patient index's own exact match: a searchable identifier or the patient guid, active
+      // patients only. Its masked list is the exact-match-only one.
+      const list = await deps.patientIndex.list(
+        { q: identifier, status: 'active', limit: SEARCH_LIMIT, offset: 0 }, { unmask: false });
+      return foundPatients(list.rows.map((r) => deps.patientIndex.idForRef(r.ref)).filter((id): id is string => !!id));
+    }
+    const name = text(q?.name);
+    const birthDate = text(q?.birthDate);
+    if (!name || !birthDate || !FULL_DATE.test(birthDate)) return [];
+    const keys = matchKeys(name, birthDate);
+    if (keys.length === 0) return [];
+    // match_key is the duplicate-detection key (surname, first name, birth date; external migration
+    // 026, indexed). The patient index has no name and birth date lookup to reuse.
+    const rows = await deps.externalDb.selectFrom('patients').select('id')
+      .where('match_key', 'in', keys).where('active', '=', true).where('replaced_by_id', 'is', null)
+      .orderBy('id').limit(SEARCH_LIMIT).execute();
+    return foundPatients(rows.map((r) => r.id));
+  }
+
+  async function registerPatient(input: RegisterPatientInput, who: string): Promise<{ id: string; display: string }> {
+    const actor = text(who);
+    if (!actor) throw invalid('A registration needs the name of who made it.');
+    const given = text(input?.given);
+    const family = text(input?.family);
+    if (!given || !family) throw invalid('A patient needs a first name and a surname.');
+    if (!GENDERS.includes(input.gender)) throw invalid(`Sex must be one of ${GENDERS.join(', ')}.`);
+    const today = new Date().toISOString().slice(0, 10);
+    let birthDate = text(input.birthDate);
+    let estimated = false;
+    if (birthDate) {
+      if (!FULL_DATE.test(birthDate) || Number.isNaN(Date.parse(birthDate))) throw invalid('A birth date must be a full date, YYYY-MM-DD.');
+      if (birthDate > today) throw invalid('A birth date cannot be in the future.');
+    } else if (input.ageYears !== undefined && input.ageYears !== null) {
+      const age = input.ageYears;
+      if (!Number.isInteger(age) || age < 0 || age > MAX_AGE_YEARS) throw invalid(`An age must be a whole number of years from 0 to ${MAX_AGE_YEARS}.`);
+      birthDate = `${new Date().getUTCFullYear() - age}-01-01`;
+      estimated = true;
+    } else {
+      throw invalid('A patient needs a birth date or an age.');
+    }
+    let identifier: { system: string; value: string } | null = null;
+    if (input.identifier !== undefined) {
+      const system = text(input.identifier?.system);
+      const value = text(input.identifier?.value);
+      if (!system || !value) throw invalid('An identifier needs a system and a value.');
+      identifier = { system, value };
+    }
+
+    const id = randomUUID();
+    const recorded = new Date().toISOString();
+    const patient: Json = {
+      resourceType: 'Patient',
+      id,
+      ...(estimated ? { extension: [{ url: BIRTHDATE_ESTIMATED_EXTENSION, valueBoolean: true }] } : {}),
+      ...(identifier ? { identifier: [identifier] } : {}),
+      name: [{ given: [given], family }],
+      gender: input.gender,
+      birthDate,
+    };
+    const checked = validateResource(patient);
+    if (!checked.ok) throw invalid(checked.outcome.issue.map((i) => i.diagnostics ?? i.code).join('; '));
+    const provenance = deskProvenance([`Patient/${id}`], 'CREATE', actor, recorded);
+    await persistResources({ fhirStore, logger: deps.logger }, [patient, provenance], { sourceSystem: LAB_DESK_ORIGIN });
+    return { id, display: `${given} ${family}` };
+  }
+
+  async function orderFor(requisition: string, facilityCode: string | null): Promise<ReceptionOrder> {
+    const key = text(requisition);
+    if (!key) throw invalid('A requisition number is required.');
+    const facility = text(facilityCode);
+    const order = await findOne(key, facility);
+    if (!order) throw new ReceptionError('not-found', `No order ${key}${facility ? ` from ${facility}` : ''} was found.`);
+    return order;
+  }
+
+  async function sampleChoices(requisition: string, facilityCode: string | null): Promise<SampleChoices> {
+    return choicesOf(await orderFor(requisition, facilityCode));
+  }
+
+  /** The sample types an order's tests take, each with the terminology's display. */
+  async function choicesOf(order: ReceptionOrder): Promise<SampleChoices> {
+    const types: SampleChoices['types'] = [];
+    for (const t of await orderSpecimenTypes(catalog, order.tests)) {
+      const found = await deps.ops.lookup(t.system, t.code);
+      types.push({ system: t.system, code: t.code, display: found.found ? text(found.display) : null });
+    }
+    return { types };
+  }
+
+  /** The condition as the value set holds it, or a refusal when the set does not hold it. */
+  async function conditionCoding(c: NonNullable<ReceiveSampleInput['condition']>): Promise<{ system: string; code: string; display?: string }> {
+    const system = text(c?.system);
+    const code = text(c?.code);
+    if (!system || !code) throw invalid('A sample condition needs a system and a code.');
+    const vs = await deps.ops.expand(SAMPLE_CONDITION_VALUE_SET, { filter: code, count: 1000 });
+    const hit = (vs.expansion?.contains ?? []).find((e) => e.system === system && e.code === code);
+    if (!hit) throw invalid(`Condition ${code} is not a sample condition this lab records.`);
+    const display = text(c.display) ?? text(hit.display);
+    return { system, code, ...(display ? { display } : {}) };
+  }
+
+  async function receiveSample(input: ReceiveSampleInput, who: string): Promise<ReceptionOrder> {
+    const actor = text(who);
+    if (!actor) throw invalid('A receipt needs the name of who received the sample.');
+    const order = await orderFor(input?.requisition ?? '', input?.facilityCode ?? null);
+    const facility = order.facility?.code ?? null;
+
+    // Every check that reads, before any write.
+    const typeSystem = text(input.type?.system);
+    const typeCode = text(input.type?.code);
+    const choices = await choicesOf(order);
+    const choice = choices.types.find((t) => t.system === typeSystem && t.code === typeCode);
+    if (!choice) throw invalid(`Sample type ${typeCode ?? ''} is not one this order's tests take.`);
+    const condition = input.condition !== undefined ? await conditionCoding(input.condition) : null;
+    const orderRequests = [...new Set(order.tests.map((t) => t.serviceRequestId))];
+    let requests = orderRequests;
+    if (input.serviceRequestIds !== undefined) {
+      const chosen = [...new Set((input.serviceRequestIds ?? []).map((i) => String(i).trim()))];
+      const stranger = chosen.find((i) => !orderRequests.includes(i));
+      if (chosen.length === 0 || stranger !== undefined) {
+        throw invalid(stranger !== undefined ? `Request ${stranger} is not on this order.` : 'A sample serves at least one test.');
+      }
+      requests = chosen;
+    }
+
+    const id = labSpecimenId(facility, order.requisition, choice);
+    const existing = (await fhirStore.get('Specimen', id)) as Json | null;
+    const display = text(input.type.display) ?? choice.display;
+    const recorded = new Date().toISOString();
+    const specimen: Json = {
+      ...(existing ? structuredClone(existing) : {}),
+      resourceType: 'Specimen',
+      id,
+      status: 'available',
+      type: { coding: [{ system: choice.system, code: choice.code, ...(display ? { display } : {}) }] },
+      receivedTime: text(input.receivedTime) ?? recorded,
+      request: requests.map((r) => ({ reference: `ServiceRequest/${r}` })),
+    };
+    if (condition) specimen['condition'] = [{ coding: [condition] }];
+    if (order.patient) specimen['subject'] = { reference: `Patient/${order.patient.id}`, display: order.patient.display };
+    else delete specimen['subject'];
+    const checked = validateResource(specimen);
+    if (!checked.ok) throw invalid(checked.outcome.issue.map((i) => i.diagnostics ?? i.code).join('; '));
+
+    // The store numbers versions from the history (fhir-store.ts writeMany), so the next one is
+    // its highest plus one. A receipt of the same sample at the same moment could take that number
+    // first; the Provenance would then name the version before this one.
+    const last = await db.selectFrom('fhir.resource_history')
+      .select(sql<number | string | null>`max(version)`.as('v'))
+      .where('resource_type', '=', 'Specimen').where('id', '=', id)
+      .executeTakeFirst();
+    const version = Number(last?.v ?? 0) + 1;
+    const provenance = deskProvenance([`Specimen/${id}/_history/${version}`], existing ? 'UPDATE' : 'CREATE', actor, recorded);
+    await persistResources({ fhirStore, logger: deps.logger }, [specimen, provenance], { sourceSystem: LAB_DESK_ORIGIN });
+    const after = await findOne(order.requisition, facility);
+    if (!after) throw new Error(`received a sample for requisition ${order.requisition} but could not read the order back`);
+    return after;
+  }
+
+  return { findOrders, registerOrder, correctOrder, searchPatients, registerPatient, receiveSample, sampleChoices };
 }

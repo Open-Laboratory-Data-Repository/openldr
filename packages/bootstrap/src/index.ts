@@ -1248,11 +1248,13 @@ const reporting: ReportingApi = {
     onChanged: () => { void testMapping.requestRebuild(); },
   });
   const labSections = createLabSections({ db: termDb, admin: termAdmin });
-  const labReception = createLabReception({ db: termDb, fhirStore: canonicalFhirStore, catalog: testCatalog, logger });
   // A changed LOINC link changes the loinc column of test_map's result rows.
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
   const patientIdentifierSystems = createPatientIdentifierSystems({ internalDb: termDb, externalDb, admin: termAdmin });
   const patientIndex = createPatientIndex({ externalDb, systems: patientIdentifierSystems, engine });
+  const labReception = createLabReception({
+    db: termDb, externalDb, fhirStore: canonicalFhirStore, catalog: testCatalog, ops: terminology.ops, patientIndex, logger,
+  });
   const patientDuplicates = createPatientDuplicates({ internalDb: termDb, externalDb, index: patientIndex, systems: patientIdentifierSystems });
 
   // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
