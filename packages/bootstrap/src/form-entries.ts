@@ -1,5 +1,5 @@
 import type { FormEntry, FormEntrySaved, FormEntryStore } from '@openldr/db';
-import { entryFieldsOf, entryValuesOf, type FormSchema } from '@openldr/forms';
+import { entryFacilitiesOf, entryValuesOf, type FacilityAnswer, type FormSchema } from '@openldr/forms';
 import type { DataScope } from '@openldr/rbac';
 import { inDataScope, type ScopeRegistryRow } from './data-scope';
 import { registryRowIdByConceptCode } from './facility-reconcile';
@@ -52,36 +52,40 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
     },
 
     async begin({ form, answers, user }) {
-      const fields = entryFieldsOf(form.schema);
       const values = entryValuesOf(form.schema, answers);
+      // Every facility field counts: a form may carry two, and the order keeps the last answered one.
+      const facilities = entryFacilitiesOf(form.schema, answers);
+      const picked = facilities.order?.facility ?? null;
       const scope = user.dataScope;
       // Read the register once, only when the limit or a picked facility needs it.
-      const rows = scope.limited || values.facility ? await deps.registryRows() : [];
-
-      let allowed: string[] | null = null;
-      if (scope.limited) {
-        allowed = idsIn(rows, scope);
-        if (allowed.length === 0) throw new EntrySiteError(EMPTY_LIMIT, 'empty-limit');
-        if (fields.facilityFieldId && !fields.facilityFromRegister) throw new EntrySiteError(FREE_TEXT, 'free-text-facility');
-      }
-
+      const rows = scope.limited || facilities.answered.some((a) => a.facility) ? await deps.registryRows() : [];
       // The code a register field saves is the register concept code, which maps back to one row.
-      const facilityId = values.facility ? registryRowIdByConceptCode(rows).get(values.facility.code) ?? null : null;
-      if (allowed && fields.facilityFieldId && (facilityId === null || !allowed.includes(facilityId))) {
-        throw new EntrySiteError(OUTSIDE, 'outside-limit');
+      const idByCode = registryRowIdByConceptCode(rows);
+      const rowIdOf = (a: FacilityAnswer): string | null => (a.facility ? idByCode.get(a.facility.code) ?? null : null);
+
+      if (scope.limited) {
+        const allowed = idsIn(rows, scope);
+        if (allowed.length === 0) throw new EntrySiteError(EMPTY_LIMIT, 'empty-limit');
+        if (facilities.fields.some((f) => !f.fromRegister)) throw new EntrySiteError(FREE_TEXT, 'free-text-facility');
+        const outside = facilities.answered.some((a) => {
+          const id = rowIdOf(a);
+          return id === null || !allowed.includes(id);
+        });
+        if (outside || (facilities.fields.length > 0 && facilities.answered.length === 0)) {
+          throw new EntrySiteError(OUTSIDE, 'outside-limit');
+        }
       }
 
-      const typed = fields.facilityFieldId ? answers[fields.facilityFieldId] : undefined;
-      const facilityName = values.facility
-        ? values.facility.display ?? rows.find((r) => r.id === facilityId)?.name ?? null
-        : typeof typed === 'string' && typed.trim() ? typed.trim() : null;
+      // The entry names the facility the order will carry, so the list and the order agree.
+      const facilityId = facilities.order ? rowIdOf(facilities.order) : null;
+      const facilityName = facilities.order?.name ?? rows.find((r) => r.id === facilityId)?.name ?? null;
 
       // Never inside a transaction: on Postgres the unique violation aborts it, and the store's
       // follow-up read of the holding entry would then fail.
       return deps.store.create({
         formId: form.id,
         facilityId,
-        facilityCode: values.facility?.code ?? null,
+        facilityCode: picked?.code ?? null,
         facilityName,
         entryKey: values.entryKey,
         summary: values.summary,

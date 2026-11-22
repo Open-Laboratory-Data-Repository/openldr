@@ -202,6 +202,65 @@ describe('form entries service: begin', () => {
   });
 });
 
+describe('form entries service: a form with two facility fields', () => {
+  /** The order form with a second register facility field after the first. */
+  function twoFacilities(): FormSchema {
+    const base = orderForm('register') as unknown as { fields: Record<string, unknown>[] };
+    return {
+      ...base,
+      fields: [...base.fields, field({
+        id: 'fac2', displayLabel: 'Second facility', fieldType: 'facility', order: 3,
+        fhirPath: 'ServiceRequest.requester', fhirDiscriminator: { type: 'Organization' }, referenceTarget: REGISTRY,
+      })],
+    } as unknown as FormSchema;
+  }
+
+  it('refuses a limited user when the second field names a facility outside the limit', async () => {
+    const { db, service, store } = await world();
+    const err = await siteError(service.begin({
+      form: { id: 'form-1', schema: twoFacilities() },
+      answers: { num: 'CS-1', fac: pick('A1'), fac2: pick('C1') },
+      user: user(limit({ facilities: ['reg-a'] })),
+    }));
+    expect(err.message).toBe('this entry names a facility outside your limit');
+    expect((await store.list({ formId: 'form-1', limit: 10, offset: 0 })).total).toBe(0);
+    await db.destroy();
+  });
+
+  it('refuses a limited user when the second field is typed into, even with the first inside the limit', async () => {
+    const { db, service } = await world();
+    const err = await siteError(service.begin({
+      form: { id: 'form-1', schema: twoFacilities() },
+      answers: { num: 'CS-1', fac: pick('A1'), fac2: 'Somewhere else' },
+      user: user(limit({ facilities: ['reg-a'] })),
+    }));
+    expect(err.reason).toBe('outside-limit');
+    await db.destroy();
+  });
+
+  it('lets a limited user through when both fields are inside the limit', async () => {
+    const { db, service } = await world();
+    const entry = await service.begin({
+      form: { id: 'form-1', schema: twoFacilities() },
+      answers: { num: 'CS-1', fac: pick('A1'), fac2: pick('B1') },
+      user: user(limit({ regions: ['Coast'] })),
+    });
+    expect(entry.facilityId).toBe('reg-b');
+    await db.destroy();
+  });
+
+  it('leaves an unlimited user alone, and the entry names the facility the order carries: the last answered', async () => {
+    const { db, service } = await world();
+    const entry = await service.begin({
+      form: { id: 'form-1', schema: twoFacilities() },
+      answers: { num: 'CS-1', fac: pick('A1', 'Site A'), fac2: pick('C1', 'Site C') },
+      user: user({ limited: false }),
+    });
+    expect(entry).toMatchObject({ facilityId: 'reg-c', facilityCode: 'C1', facilityName: 'Site C' });
+    await db.destroy();
+  });
+});
+
 describe('form entries service: finish', () => {
   const saved = { responseId: 'qr-1', resources: [{ resourceType: 'ServiceRequest', id: 'sr-1' }] };
 

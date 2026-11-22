@@ -110,6 +110,28 @@ function walkResponse(items: QuestionnaireResponseItem[] | undefined, visit: (it
   }
 }
 
+/**
+ * Every answered referring-facility item of a response, in the order the order extractor reads
+ * them, with the answer as it decodes it. The extractor keeps the last one as the order's facility.
+ * It reads with the same index and walk as `ServiceRequestExtractor`, so the two cannot disagree on
+ * which items count.
+ */
+export function requesterFacilityAnswers(
+  response: QuestionnaireResponse,
+  questionnaire: Questionnaire,
+): { linkId: string; value: unknown }[] {
+  const index = indexItems(questionnaire)
+  const out: { linkId: string; value: unknown }[] = []
+  walkResponse(response.item, (item) => {
+    const meta = index.get(item.linkId)
+    const path = meta?.fhirPath
+    if (path !== 'ServiceRequest.requester' || !isRequesterFacilityBinding(path, meta?.discriminator)) return
+    const value = item.answer?.[0] ? fromAnswer(item.answer[0]) : undefined
+    if (value !== undefined) out.push({ linkId: item.linkId, value })
+  })
+  return out
+}
+
 // ─── Observation extraction ──────────────────────────────────────────────────
 
 const UCUM = 'http://unitsofmeasure.org'

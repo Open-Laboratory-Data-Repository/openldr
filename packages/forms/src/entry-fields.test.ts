@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { entryFieldsOf, entryValuesOf } from './entry-fields'
+import { entryFacilitiesOf, entryFieldsOf, entryValuesOf } from './entry-fields'
+import { ServiceRequestExtractor } from './extract/extract'
+import { toQuestionnaireResponse } from './response'
 import { sampleForms } from './samples/forms'
 import { toQuestionnaire } from './to-questionnaire'
 import { fromQuestionnaire } from './from-questionnaire'
@@ -136,5 +138,61 @@ describe('the entries list flag', () => {
     const back = fromQuestionnaire(q)
     expect(back.fields.find((f) => f.id === 'a')?.entriesList).toBe(true)
     expect(back.fields.find((f) => f.id === 'num')?.entriesList).toBeUndefined()
+  })
+})
+
+describe('entryFacilitiesOf', () => {
+  const registry = 'urn:openldr:cs:facility-registry'
+  const facilityField = (id: string, order: number, register = true) => ({
+    id, displayLabel: id, fieldType: 'facility' as const, order,
+    fhirPath: 'ServiceRequest.requester', fhirDiscriminator: { type: 'Organization' as const },
+    ...(register ? { referenceTarget: registry } : {}),
+  })
+  const siteA = { system: registry, code: 'A1', display: 'Site A' }
+  const siteB = { system: registry, code: 'B1', display: 'Site B' }
+
+  /** The facility the order extractor really puts on the order. */
+  function orderFacilityOf(form: FormSchema, answers: Record<string, unknown>) {
+    const [order] = ServiceRequestExtractor.extract(toQuestionnaireResponse(form, answers as never), toQuestionnaire(form), {})
+    const role = (order as { contained?: { organization?: { identifier?: { value?: string }; display?: string } }[] }).contained?.[0]
+    return role?.organization ?? null
+  }
+
+  it('lists every facility field on the form, with whether it picks from the register', () => {
+    const form = requisition([facilityField('f1', 1), facilityField('f2', 2, false)])
+    expect(entryFacilitiesOf(form, {}).fields).toEqual([
+      { id: 'f1', fromRegister: true },
+      { id: 'f2', fromRegister: false },
+    ])
+  })
+
+  it('reads every answered facility field, and takes the last one as the order does', () => {
+    const form = requisition([facilityField('f1', 1), facilityField('f2', 2)])
+    const answers = { num: 'R1', f1: siteA, f2: siteB }
+    const v = entryFacilitiesOf(form, answers)
+    expect(v.answered.map((a) => a.fieldId)).toEqual(['f1', 'f2'])
+    expect(v.answered.map((a) => a.facility?.code)).toEqual(['A1', 'B1'])
+    expect(v.order).toMatchObject({ facility: { code: 'B1' }, name: 'Site B' })
+    expect(orderFacilityOf(form, answers)).toMatchObject({ identifier: { value: v.order!.facility!.code } })
+  })
+
+  it('with only the first answered, the order facility is the first, as the extractor gives', () => {
+    const form = requisition([facilityField('f1', 1), facilityField('f2', 2)])
+    const v = entryFacilitiesOf(form, { num: 'R1', f1: siteA })
+    expect(v.answered).toHaveLength(1)
+    expect(v.order?.facility?.code).toBe('A1')
+    expect(orderFacilityOf(form, { num: 'R1', f1: siteA })).toMatchObject({ identifier: { value: 'A1' } })
+  })
+
+  it('a typed name is answered with no picked facility, and keeps its name', () => {
+    const form = requisition([facilityField('f1', 1, false)])
+    const v = entryFacilitiesOf(form, { num: 'R1', f1: ' Some clinic ' })
+    expect(v.answered).toEqual([{ fieldId: 'f1', facility: null, name: 'Some clinic' }])
+    expect(v.order).toEqual({ fieldId: 'f1', facility: null, name: 'Some clinic' })
+  })
+
+  it('gives nothing for a form the order extractor does not run on', () => {
+    const form = makeSchema({ id: 'f', name: 'F', fhirResourceType: 'Patient', fields: [makeField(facilityField('f1', 0))] })
+    expect(entryFacilitiesOf(form, { f1: siteA })).toEqual({ fields: [], answered: [], order: null })
   })
 })

@@ -606,9 +606,18 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
           await ctx.formEntries.finish(entry.id, { ok: true, stored: savedOf(records, true) });
           return;
         }
-        const qr = await ctx.fhirStore.exists('QuestionnaireResponse', responseId);
+        let qr = false;
         const found: { resourceType: string; id: string }[] = [];
-        for (const r of records) if (await ctx.fhirStore.exists(r.resourceType, r.id)) found.push(r);
+        try {
+          qr = await ctx.fhirStore.exists('QuestionnaireResponse', responseId);
+          for (const r of records) if (await ctx.fhirStore.exists(r.resourceType, r.id)) found.push(r);
+        } catch (err) {
+          // The store is often down for the same reason the save failed. Not knowing what landed,
+          // keep the number held: the row becomes incomplete with no records named.
+          req.log.error({ err, entryId: entry.id }, 'could not look up what a failed save stored');
+          await ctx.formEntries.finish(entry.id, { ok: false, stored: savedOf([], false), somethingStored: true });
+          return;
+        }
         await ctx.formEntries.finish(entry.id, {
           ok: false, stored: savedOf(found, qr), somethingStored: persisted > 0 || qr || found.length > 0,
         });

@@ -2019,6 +2019,85 @@ describe('form entries on submit', () => {
     await w.db.destroy();
   });
 
+  it('keeps the row incomplete when the save failed and the store cannot say what landed', async () => {
+    const w = await world({
+      run: () => ({ runId: 'run-down', correlationId: null, status: 'failed', error: 'store down', nodeMeta: {} }),
+      exists: () => { throw new Error('connection refused'); },
+    });
+    const formId = await w.createForm();
+    const res = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ ok: false, runId: 'run-down', persisted: 0 });
+    expect((await w.rows(formId))[0]).toMatchObject({ status: 'incomplete', saved: { responseId: null, resources: [] } });
+    expect((await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA })).statusCode).toBe(409);
+    await w.db.destroy();
+  });
+
+  it('removes the row when a held submission stored nothing, and keeps it incomplete when it stored some', async () => {
+    let persisted = 0;
+    const w = await world({
+      run: () => ({
+        runId: 'run-h', correlationId: null, status: 'completed', error: null,
+        nodeMeta: { 'persist-1': { persisted } }, held: { count: 1, reasons: ['failed the business-rule check'] },
+      }),
+      exists: (type) => persisted > 0 && type === 'ServiceRequest',
+    });
+    const formId = await w.createForm();
+    const none = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect(none.statusCode).toBe(422);
+    expect(await w.rows(formId)).toHaveLength(0);
+
+    persisted = 1;
+    const some = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect(some.statusCode).toBe(422);
+    const order = (w.runs[1].body.entry as { resource: { resourceType: string; id: string } }[])
+      .find((e) => e.resource.resourceType === 'ServiceRequest')!.resource;
+    expect((await w.rows(formId))[0]).toMatchObject({
+      status: 'incomplete', saved: { responseId: null, resources: [{ resourceType: 'ServiceRequest', id: order.id }] },
+    });
+    await w.db.destroy();
+  });
+
+  it('settles the row and still fails the request when runAndRecord throws', async () => {
+    let stored = false;
+    const w = await world({
+      run: () => { throw new Error('run store insert failed'); },
+      exists: (type) => stored && type === 'ServiceRequest',
+    });
+    const formId = await w.createForm();
+    const nothing = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect(nothing.statusCode).toBe(500);
+    expect(await w.rows(formId)).toHaveLength(0);
+
+    stored = true;
+    const some = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    expect(some.statusCode).toBe(500);
+    expect((await w.rows(formId))[0]).toMatchObject({ status: 'incomplete' });
+    await w.db.destroy();
+  });
+
+  it('refuses a limited user when a second facility field names a site outside the limit', async () => {
+    const w = await world();
+    const schema = entrySchema('register');
+    const two = { ...schema, fields: [...schema.fields, field({
+      id: 'fac2', displayLabel: 'Second facility', fieldType: 'facility', order: 2,
+      fhirPath: 'ServiceRequest.requester', fhirDiscriminator: { type: 'Organization' }, referenceTarget: REGISTRY,
+    })] };
+    const formId = (await w.appFor().inject({ method: 'POST', url: '/api/forms', payload: { name: 'Two', schema: two, targetPages: ['forms'] } })).json().id as string;
+    const res = await w.submit(w.appFor(onlySiteA), formId, { num: 'CS-1', fac: siteA, fac2: siteB });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: 'this entry names a facility outside your limit' });
+    expect(w.runs).toHaveLength(0);
+
+    // An unlimited user saves, and the entry names the facility the order carries.
+    expect((await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA, fac2: siteB })).statusCode).toBe(201);
+    const order = (w.runs[0].body.entry as { resource: { resourceType: string; contained?: { organization?: { identifier?: { value?: string } } }[] } }[])
+      .find((e) => e.resource.resourceType === 'ServiceRequest')!.resource;
+    expect(order.contained?.[0]?.organization?.identifier?.value).toBe('B1');
+    expect((await w.rows(formId))[0]).toMatchObject({ facilityId: 'reg-b', facilityCode: 'B1' });
+    await w.db.destroy();
+  });
+
   it('still answers success when settling the row fails after a completed save', async () => {
     const w = await world();
     const real = (w.ctx as any).formEntries;

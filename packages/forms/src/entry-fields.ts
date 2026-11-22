@@ -1,8 +1,10 @@
 import type { FormField, FormSchema } from './schema/form-schema'
-import { ServiceRequestExtractor } from './extract/extract'
+import { ServiceRequestExtractor, requesterFacilityAnswers } from './extract/extract'
 import { isRequesterFacilityBinding, isRequisitionNumberBinding, pickedFacilityOf, type PickedFacility } from './extract/order-fields'
 import { extractorsForForm } from './routing'
 import { resolveReferenceSource } from './reference-source'
+import { toQuestionnaireResponse } from './response'
+import { toQuestionnaire } from './to-questionnaire'
 
 /** The fields of a form that make an entry in its entries list. */
 export interface EntryFields {
@@ -40,6 +42,43 @@ export function entryFieldsOf(schema: FormSchema): EntryFields {
     // A field with a coding source offers picked codings; one with no source is a text box.
     facilityFromRegister: source?.ok === true && source.source.kind === 'coding',
   }
+}
+
+/** One referring-facility answer: the picked register coding, or the typed name. */
+export interface FacilityAnswer {
+  fieldId: string
+  facility: PickedFacility | null
+  name: string | null
+}
+
+const isFromRegister = (field: FormField): boolean => {
+  const source = resolveReferenceSource(field)
+  return source?.ok === true && source.source.kind === 'coding'
+}
+
+/**
+ * Every referring-facility field of a form and every answer to one. A form may carry more than one
+ * such field. The order extractor keeps the last answered one, so `order` is that one, and a site
+ * check must look at all of `answered`, not only the field `entryFieldsOf` names.
+ */
+export function entryFacilitiesOf(schema: FormSchema, answers: Record<string, unknown>): {
+  fields: { id: string; fromRegister: boolean }[]
+  answered: FacilityAnswer[]
+  order: FacilityAnswer | null
+} {
+  if (!extractorsForForm(schema).includes(ServiceRequestExtractor)) return { fields: [], answered: [], order: null }
+  const fields = schema.fields.slice().sort(byOrder)
+    .filter((f) => f.enabled !== false && isRequesterFacilityBinding(f.fhirPath, f.fhirDiscriminator))
+    .map((f) => ({ id: f.id, fromRegister: isFromRegister(f) }))
+  // Read the answers through the response and questionnaire the extractor reads, in its order.
+  const read = requesterFacilityAnswers(toQuestionnaireResponse(schema, answers as never), toQuestionnaire(schema))
+  const answered = read.map(({ linkId, value }): FacilityAnswer => {
+    const facility = pickedFacilityOf(value)
+    const display = facility?.display
+      ?? (typeof value === 'string' ? value : (value as { display?: unknown } | null)?.display)
+    return { fieldId: linkId, facility, name: typeof display === 'string' && display.trim() ? display.trim() : null }
+  })
+  return { fields, answered, order: answered.at(-1) ?? null }
 }
 
 /** One answer as a short display string, or null when it is empty or not a single answer. */
