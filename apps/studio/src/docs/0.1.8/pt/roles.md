@@ -182,7 +182,7 @@ Três funções do sistema usam-nas.
 - **Lab Technician** tem **Use forms**, **Submit forms**, **Enter results** e **View worklists**.
 - **Lab Manager** tem as sete capacidades do laboratório, além do que já tinha.
 
-A receção, as listas de trabalho e a revisão de resultados não fazem parte desta versão. Hoje só **Lab settings** abre alguma coisa: o interruptor de autovalidação e as secções em Laboratório, e a secção e a revisão de um exame. As outras seis passam a ter efeito em versões posteriores.
+Hoje duas capacidades do laboratório abrem alguma coisa. **Receive samples** abre **Receção**. Leia [Receção](/docs/reception). **Lab settings** abre o interruptor de autovalidação e as secções em Laboratório, e a secção e a revisão de um exame. As outras cinco passam a ter efeito em versões posteriores, com as listas de trabalho, a revisão de resultados, a devolução de um pedido e a rejeição de uma amostra.
 
 Numa instalação que usava uma versão anterior, Reception aparece no primeiro arranque do servidor nesta versão. Lab Technician e Lab Manager recebem as novas capacidades nesse arranque, uma só vez. Se depois tirar uma delas, ela continua tirada. Reception pode ser editada, mas não eliminada.
 

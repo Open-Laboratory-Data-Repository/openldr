@@ -134,7 +134,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `ingest` | Ingère un fichier par le pipeline (en option via un plugin). |
 | `facilities` | Importe un registre national d'établissements : `suggest-map`, `suggest-values`, `import` (correspondance des colonnes et des valeurs, voir **Établissements** dans la documentation du studio). |
 | `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue. |
-| `lab` | La configuration propre à ce laboratoire : `sections list`, `add` ou `remove` (`--force`) les sections du laboratoire, `tests set` fixe la section d'un examen et son interrupteur **Vérification requise**, et `settings set allow-self-authorise`. Exige **Lab settings**. |
+| `lab` | La configuration propre à ce laboratoire : `sections list`, `add` ou `remove` (`--force`) les sections du laboratoire, `tests set` fixe la section d'un examen et son interrupteur **Vérification requise**, `settings set allow-self-authorise`, et `requisitions rebuild --force` reconstruit l'index des numéros de demande. Exige **Lab settings**. |
 | `query` | Requêtes personnalisées : `export` les exporte dans un fichier JSON, `import` les importe depuis un fichier (`--force` remplace les noms existants et exige **Gérer les requêtes enregistrées** ; sans cette permission, un import ajoute les nouvelles requêtes sans groupe). |
 | `pipeline` | Examine les lots d'ingestion : `status`, `retry`, `logs`. |
 | `queue` | Examine la file d'événements. |
@@ -547,10 +547,20 @@ openldr dashboards share default --clear
 
 Il faut `roles.manage`. Une limite liste au plus 300 lieux. Chaque lieu doit être dans le registre des établissements, sinon la commande est refusée et rien ne change. Lancée localement sur le serveur, l'acteur est enregistré comme `cli`. Chaque changement est audité comme `user.data_scope.set`.
 
-Un utilisateur limité perd les rapports, les patients, les requêtes, les exports, les workflows, les connecteurs, l'audit, l'activité, les corrections en attente, le registre des établissements et la synchronisation, et ne peut ni créer ni modifier de tableau de bord. Il n'exécute jamais de widget SQL. Il garde les formulaires, y compris la recherche de patients dans un formulaire, que la limite ne couvre pas. Un nouveau code d'établissement ne compte qu'après la reconstruction de la table des établissements.
+Un utilisateur limité perd les rapports, les patients, les requêtes, les exports, les workflows, les connecteurs, l'audit, l'activité, les corrections en attente, le registre des établissements, la synchronisation et la réception (`lab.receive` et `lab.reject`), et ne peut ni créer ni modifier de tableau de bord. Il n'exécute jamais de widget SQL. Il garde les formulaires, y compris la recherche de patients dans un formulaire, que la limite ne couvre pas. Un nouveau code d'établissement ne compte qu'après la reconstruction de la table des établissements.
 
 ```
 openldr users scope 3f2a9c1e
 openldr users scope 3f2a9c1e --region Dodoma --district Arusha/Arumeru --force
 openldr users scope 3f2a9c1e --all
 ```
+
+## Reconstruire l'index des numéros de demande
+
+La réception trouve une demande grâce à un index des numéros de demande. OpenLDR le tient à jour à l'arrivée des demandes, qu'elles viennent des formulaires, de la réception ou d'autres systèmes. Reconstruisez-le seulement quand une demande que vous savez enregistrée n'apparaît pas dans la réception, ou après la suppression de demandes du stockage.
+
+```
+openldr lab requisitions rebuild --force
+```
+
+La commande vide l'index et indexe de nouveau chaque demande actuelle. Elle affiche `Indexed <n> orders by requisition number.`, et `--json` affiche `{"indexed":<n>}`. Elle refuse sans `--force`, avec `Refusing to rebuild the requisition index without --force.`, car elle réécrit tout l'index. Connecté, le compte doit avoir **Lab settings**. Chaque reconstruction est inscrite dans l'audit sous `lab.requisitions.rebuild`.

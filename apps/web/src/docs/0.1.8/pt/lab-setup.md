@@ -1,8 +1,8 @@
 # Configurar um laboratório
 
-O módulo de laboratório vai permitir que um laboratório receba amostras, trabalhe com listas de trabalho e reveja resultados dentro do OpenLDR. Esta versão prepara-o. Define as secções do laboratório, que exames precisam de revisão, se uma pessoa pode validar os resultados que introduziu, e limites críticos nos intervalos de referência. Também dá às pessoas as novas funções do laboratório.
+O módulo de laboratório permite que um laboratório receba amostras, trabalhe com listas de trabalho e reveja resultados dentro do OpenLDR. Esta versão traz a primeira parte, a receção. Também prepara o resto. Define as secções do laboratório, que exames precisam de revisão, se uma pessoa pode validar os resultados que introduziu, e limites críticos nos intervalos de referência. Também dá às pessoas as novas funções do laboratório.
 
-**A receção, as listas de trabalho e a revisão de resultados não fazem parte desta versão.** Chegam em versões posteriores. As definições abaixo ficam guardadas já agora. Guardá-las não muda nada no trabalho atual do laboratório.
+**As listas de trabalho, a revisão de resultados, devolver um pedido ao seu local e rejeitar uma amostra não fazem parte desta versão.** Chegam em versões posteriores. As definições abaixo ficam guardadas já agora. Guardá-las não muda nada no trabalho atual do laboratório.
 
 O guia da aplicação **Configuração do laboratório** mostra cada passo no ecrã. Esta página dá a ordem e os comandos, para uma instalação gerida na linha de comandos.
 
@@ -34,6 +34,7 @@ openldr lab tests set HGB --section haem --needs-review true
 openldr lab tests set HGB --no-section
 openldr lab settings set allow-self-authorise false
 openldr lab sections remove haem --force
+openldr lab requisitions rebuild --force
 ```
 
 - `lab sections add <code> <name>` adiciona uma secção. O código usa letras minúsculas, algarismos e hífenes, a começar por uma letra. Não pode mudar depois.
@@ -41,6 +42,7 @@ openldr lab sections remove haem --force
 - `lab tests set <code>` arquiva um exame numa secção com `--section <code>`, tira-o com `--no-section`, e define a revisão com `--needs-review true` ou `false`. Um campo que não indicar mantém o valor guardado.
 - `lab settings set allow-self-authorise true|false` liga ou desliga a autovalidação.
 - `lab sections remove <code> --force` remove uma secção. Recusa sem `--force`, porque uma remoção não pode ser desfeita. Também recusa enquanto um exame usar a secção, com `section <code> is used by <n> tests`.
+- `lab requisitions rebuild --force` reconstrói o índice que a receção usa para encontrar um pedido pelo número de requisição. O OpenLDR mantém esse índice atualizado sozinho, por isso execute-o só quando um pedido que sabe estar guardado não aparecer na receção. Mostra `Indexed <n> orders by requisition number.` Recusa sem `--force`, porque reescreve o índice inteiro.
 
 Numa cópia do código-fonte, ponha `pnpm` à frente, por exemplo `pnpm openldr lab sections list`.
 
@@ -51,6 +53,15 @@ Numa cópia do código-fonte, ponha `pnpm` à frente, por exemplo `pnpm openldr 
 - **Lab Manager** tem as sete capacidades do laboratório.
 
 Numa instalação que usava uma versão anterior, Reception aparece no primeiro arranque do servidor nesta versão. Lab Technician e Lab Manager recebem as novas capacidades nesse arranque, uma só vez. Uma capacidade tirada depois continua tirada.
+
+## A receção
+
+A receção é o balcão do laboratório no studio. Encontra um pedido por um número de requisição lido ou escrito, regista um pedido de que o laboratório não tem registo, encontra ou regista o paciente, recebe a amostra com a sua condição e corrige um erro de escrita num pedido. O guia da aplicação **Receção** mostra cada passo.
+
+- A receção precisa de **Receive samples**. As funções Reception e Lab Manager têm-na.
+- Um utilizador com um limite de dados perde **Receive samples** e **Return and reject**, por isso não tem a receção.
+- O formulário Lab order agora só pede testes. Já não tem o campo **Results**. Os resultados vão ser introduzidos e validados no laboratório numa versão posterior. O campo **Order rejection** fica até lá.
+- Cada teste de um pedido novo é guardado como o seu próprio pedido de análise. Os pedidos guardados antes desta versão ficam como foram guardados, e a receção lista todos os seus testes.
 
 ## Resolução de problemas
 

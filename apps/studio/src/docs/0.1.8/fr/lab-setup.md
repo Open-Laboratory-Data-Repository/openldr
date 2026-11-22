@@ -2,7 +2,9 @@
 
 La configuration du laboratoire prépare ce laboratoire au module laboratoire. Vous ajoutez les sections du laboratoire, choisissez les examens à vérifier, décidez si une personne peut valider ses propres résultats et fixez des seuils critiques sur les intervalles de référence. Les responsables de laboratoire et les administrateurs le font une fois, avant que le laboratoire commence le travail.
 
-**La réception, les listes de travail et la vérification des résultats ne font pas partie de cette version.** Elles arrivent dans des versions ultérieures. Cette version enregistre les réglages qu'elles utiliseront. Les enregistrer ne change rien au travail actuel du laboratoire.
+**Les listes de travail et la vérification des résultats ne font pas partie de cette version.** Elles arrivent dans des versions ultérieures. Cette version enregistre les réglages qu'elles utiliseront. Les enregistrer ne change rien au travail actuel du laboratoire.
+
+La réception fait partie de cette version. Lisez [Réception](/docs/reception) pour trouver les demandes, les enregistrer et recevoir les échantillons.
 
 Il faut **Lab settings** pour modifier les sections, l'interrupteur de vérification et l'auto-validation. Les seuils critiques font partie des intervalles de référence d'un examen. Ils exigent donc **Manage terminology**, comme le reste de la définition de l'examen. Ouvrir **Catalogue des examens** exige **Browse terminology**.
 
@@ -103,7 +105,9 @@ Il faut **Manage roles** pour donner un rôle à une personne.
 
 Sur une installation qui utilisait une version antérieure, **Reception** apparaît au premier démarrage du serveur sur cette version. **Lab Technician** et **Lab Manager** reçoivent leurs nouvelles capacités au même démarrage, une seule fois. Si vous retirez ensuite une capacité à l'un d'eux, elle reste retirée.
 
-La plupart de ces capacités ouvrent des écrans qui arrivent dans des versions ultérieures. Aujourd'hui, seule **Lab settings** change ce qu'une personne peut faire.
+Aujourd'hui, **Receive samples** ouvre **Réception**, et **Lab settings** change la configuration du laboratoire. Les autres capacités du laboratoire ouvrent des écrans qui arrivent dans des versions ultérieures. Le renvoi d'une demande à son site et le rejet d'un échantillon arrivent plus tard aussi.
+
+Un utilisateur avec une limite de données perd **Receive samples** et **Return and reject**, quel que soit son rôle. Lisez [Utilisateurs](/docs/users).
 
 ## Configurer le laboratoire en ligne de commande
 
@@ -124,9 +128,17 @@ Pour une copie installée sous Linux ou macOS, utilisez `./openldr` au lieu de `
 
 `lab sections remove` refuse sans `--force`, car une suppression est définitive. Chaque commande est inscrite dans le journal d'audit sous votre compte.
 
+La réception trouve une demande grâce à un index des numéros de demande. OpenLDR le tient à jour tout seul. Si une demande que vous savez enregistrée n'apparaît pas dans la réception, reconstruisez l'index :
+
+```shell
+pnpm openldr lab requisitions rebuild --force
+```
+
+La commande indexe de nouveau chaque demande actuelle et affiche, par exemple, `Indexed 120 orders by requisition number.` Elle refuse sans `--force`, car elle réécrit tout l'index. Elle exige **Lab settings**.
+
 ## Limites
 
-- La réception, les listes de travail et la vérification des résultats ne font pas partie de cette version. Ces réglages prennent effet à leur arrivée.
+- Les listes de travail et la vérification des résultats ne font pas partie de cette version. Ces réglages prennent effet à leur arrivée.
 - Une section a un code et un nom. Le code ne peut pas changer.
 - La section et le réglage de vérification appartiennent à ce laboratoire. Un catalogue partagé par le central ne les définit pas.
 

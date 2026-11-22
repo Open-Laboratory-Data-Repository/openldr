@@ -2,7 +2,9 @@
 
 A configuração do laboratório prepara este laboratório para o módulo de laboratório. Adiciona as secções do laboratório, escolhe que exames precisam de revisão, decide se uma pessoa pode validar os resultados que introduziu e define limites críticos nos intervalos de referência. Os gestores de laboratório e os administradores fazem isto uma vez, antes de o laboratório começar a trabalhar.
 
-**A receção, as listas de trabalho e a revisão de resultados não fazem parte desta versão.** Chegam em versões posteriores. Esta versão guarda as definições que elas vão usar. Guardá-las não muda nada no trabalho atual do laboratório.
+**As listas de trabalho e a revisão de resultados não fazem parte desta versão.** Chegam em versões posteriores. Esta versão guarda as definições que elas vão usar. Guardá-las não muda nada no trabalho atual do laboratório.
+
+A receção faz parte desta versão. Leia [Receção](/docs/reception) para encontrar pedidos, registá-los e receber amostras.
 
 Precisa de **Lab settings** para alterar as secções, o interruptor de revisão e a autovalidação. Os limites críticos fazem parte dos intervalos de referência de um exame. Por isso precisam de **Manage terminology**, como o resto da definição do exame. Abrir **Catálogo de exames** precisa de **Browse terminology**.
 
@@ -103,7 +105,9 @@ Precisa de **Manage roles** para dar uma função a uma pessoa.
 
 Numa instalação que usava uma versão anterior, **Reception** aparece no primeiro arranque do servidor nesta versão. **Lab Technician** e **Lab Manager** recebem as novas capacidades no mesmo arranque, uma só vez. Se depois tirar uma capacidade a uma delas, ela continua tirada.
 
-A maior parte destas capacidades abre ecrãs que chegam em versões posteriores. Hoje só **Lab settings** muda o que uma pessoa pode fazer.
+Hoje **Receive samples** abre **Receção**, e **Lab settings** muda a configuração do laboratório. As outras capacidades do laboratório abrem ecrãs que chegam em versões posteriores. Devolver um pedido ao seu local e rejeitar uma amostra também chegam mais tarde.
+
+Um utilizador com um limite de dados perde **Receive samples** e **Return and reject**, seja qual for a sua função. Leia [Utilizadores](/docs/users).
 
 ## Configurar o laboratório na linha de comandos
 
@@ -124,9 +128,17 @@ Numa cópia instalada em Linux ou macOS, use `./openldr` em vez de `pnpm openldr
 
 `lab sections remove` recusa sem `--force`, porque uma remoção não pode ser desfeita. Cada comando fica registado no registo de auditoria com a sua conta.
 
+A receção encontra um pedido através de um índice dos números de requisição. O OpenLDR mantém-no atualizado sozinho. Se um pedido que sabe estar guardado não aparecer na receção, reconstrua o índice:
+
+```shell
+pnpm openldr lab requisitions rebuild --force
+```
+
+O comando indexa de novo cada pedido atual e mostra, por exemplo, `Indexed 120 orders by requisition number.` Recusa sem `--force`, porque reescreve o índice inteiro. Precisa de **Lab settings**.
+
 ## Limites
 
-- A receção, as listas de trabalho e a revisão de resultados não fazem parte desta versão. Estas definições passam a ter efeito quando chegarem.
+- As listas de trabalho e a revisão de resultados não fazem parte desta versão. Estas definições passam a ter efeito quando chegarem.
 - Uma secção tem um código e um nome. O código não pode mudar.
 - A secção e a definição de revisão pertencem a este laboratório. Um catálogo partilhado pelo central não as define.
 

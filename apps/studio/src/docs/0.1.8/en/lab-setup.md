@@ -2,7 +2,9 @@
 
 Lab setup prepares this laboratory for the lab module. You add the lab's sections, choose which tests need review, decide whether a person may authorise their own results, and set critical limits on reference bands. Lab managers and administrators do this once, before the lab starts work.
 
-**Reception, worklists and result review are not in this release.** They come in later releases. This release stores the settings they will use. Saving them changes nothing in how this lab works today.
+**Worklists and result review are not in this release.** They come in later releases. This release stores the settings they will use. Saving them changes nothing in how this lab works today.
+
+Reception is in this release. Read [Reception](/docs/reception) to find orders, register them and receive samples.
 
 You need **Lab settings** to change the sections, the review switch and self-authorisation. Critical limits are part of a test's reference bands, so they need **Manage terminology**, like the rest of the test definition. Opening **Test catalog** needs **Browse terminology**.
 
@@ -101,7 +103,9 @@ You need **Manage roles** to give a person a role.
 
 On an install that ran an older version, **Reception** appears the first time the server starts on this version. **Lab Technician** and **Lab Manager** gain their new capabilities at the same start, once. If you later take a capability away from one of them, it stays away.
 
-Most of these capabilities open screens that come in later releases. Today only **Lab settings** changes what a person can do.
+Today **Receive samples** opens **Reception**, and **Lab settings** changes the lab's setup. The other lab capabilities open screens that come in later releases. Returning a request to its site and rejecting a sample come later too.
+
+A user with a data limit loses **Receive samples** and **Return and reject**, whatever their role gives. Read [Users](/docs/users).
 
 ## Set up the lab from the command line
 
@@ -122,9 +126,17 @@ For an installed Linux or macOS copy, use `./openldr` instead of `pnpm openldr`.
 
 `lab sections remove` refuses without `--force`, because a removal cannot be undone. Each command is recorded in the audit log under your account.
 
+Reception finds an order through an index of requisition numbers. OpenLDR keeps it current by itself. If an order you know is stored does not appear in Reception, rebuild the index:
+
+```shell
+pnpm openldr lab requisitions rebuild --force
+```
+
+It indexes every current order again and prints, for example, `Indexed 120 orders by requisition number.` It refuses without `--force`, because it rewrites the whole index. It needs **Lab settings**.
+
 ## Limits
 
-- Reception, worklists and result review are not in this release. These settings take effect when they arrive.
+- Worklists and result review are not in this release. These settings take effect when they arrive.
 - A section has one code and one name. The code cannot change.
 - The section and review setting belong to this lab. A catalog shared from central does not set them.
 
