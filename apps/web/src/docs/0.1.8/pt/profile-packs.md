@@ -79,14 +79,26 @@ O identificador já tem de estar na forma final: letras minúsculas, algarismos 
 ```json
 {
   "kind": "form",
-  "key": "sample-dispatch",
+  "key": "lab-request",
   "questionnaire": {
     "resourceType": "Questionnaire",
-    "title": "Sample dispatch",
+    "title": "Lab request",
     "status": "active",
+    "extension": [{ "url": "urn:corlix:questionnaire:fhir-resource-type", "valueString": "ServiceRequest" }],
     "item": [
-      { "linkId": "batch", "text": "Batch number", "type": "string", "required": true },
-      { "linkId": "sent-on", "text": "Date sent", "type": "date" }
+      { "linkId": "requisition", "text": "Requisition number", "type": "string", "required": true,
+        "extension": [
+          { "url": "urn:corlix:questionnaire:fhir-path", "valueString": "ServiceRequest.identifier.value" },
+          { "url": "urn:corlix:questionnaire:field-extras", "valueString": "{\"fhirDiscriminator\":{\"system\":\"urn:openldr:order:requisition\"},\"fhirValueField\":\"value\"}" }
+        ] },
+      { "linkId": "tests", "text": "Tests requested", "type": "string", "required": true, "repeats": true,
+        "answerValueSet": "urn:openldr:valueset:lab-tests",
+        "extension": [
+          { "url": "urn:corlix:questionnaire:fhir-path", "valueString": "ServiceRequest.code" },
+          { "url": "urn:corlix:questionnaire:field-type", "valueString": "reference" },
+          { "url": "urn:corlix:questionnaire:cardinality", "valueString": "{\"min\":1,\"max\":\"*\"}" },
+          { "url": "urn:corlix:questionnaire:field-extras", "valueString": "{\"referenceMultiple\":true}" }
+        ] }
     ]
   },
   "open": ["sample-clerk"],
@@ -94,7 +106,7 @@ O identificador já tem de estar na forma final: letras minúsculas, algarismos 
 }
 ```
 
-O formulário recebe o nome do `title` do Questionnaire. A etiqueta de versão é a versão do pacote. `open` e `submit` recebem identificadores de função, e o CE converte-os nos identificadores internos da instalação onde corre. Uma lista vazia significa todas as funções com a permissão, como no painel **Acesso** do construtor de formulários. Para submeter, a pessoa também tem de poder abrir o formulário. Um formulário tem de estar ligado a um pedido de análise (`ServiceRequest`) ou ter um campo marcado como resultado, senão a instalação recusa-o, porque o CE nunca conseguiria guardar uma resposta.
+Este exemplo é um pequeno formulário de pedido. A extensão `fhir-resource-type` liga-o a um pedido de análise, o número do pedido preenche o identificador do pedido, e as análises vêm das que estão ativadas no laboratório. O formulário recebe o nome do `title` do Questionnaire. A etiqueta de versão é a versão do pacote. `open` e `submit` recebem identificadores de função, e o CE converte-os nos identificadores internos da instalação onde corre. Uma lista vazia significa todas as funções com a permissão, como no painel **Acesso** do construtor de formulários. Para submeter, a pessoa também tem de poder abrir o formulário. Um formulário tem de estar ligado a um pedido de análise (`ServiceRequest`) ou ter um campo marcado como resultado, senão a instalação recusa-o, porque o CE nunca conseguiria guardar uma resposta.
 
 Os códigos e os conjuntos de valores de um Questionnaire pertencem ao pacote. Guarde-os no repositório do pacote, nunca no CE.
 
@@ -136,7 +148,7 @@ Para o exemplo do posto de colheita acima, a lista é:
 [
   { "kind": "role", "label": "Sample Clerk", "count": 3 },
   { "kind": "layout", "label": "Collection site", "count": 3 },
-  { "kind": "form", "label": "Sample dispatch", "count": 1 }
+  { "kind": "form", "label": "Lab request", "count": 1 }
 ]
 ```
 

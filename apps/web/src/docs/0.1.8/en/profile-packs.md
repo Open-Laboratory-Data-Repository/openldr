@@ -79,14 +79,26 @@ The slug must already be in its final form: lowercase letters, digits and single
 ```json
 {
   "kind": "form",
-  "key": "sample-dispatch",
+  "key": "lab-request",
   "questionnaire": {
     "resourceType": "Questionnaire",
-    "title": "Sample dispatch",
+    "title": "Lab request",
     "status": "active",
+    "extension": [{ "url": "urn:corlix:questionnaire:fhir-resource-type", "valueString": "ServiceRequest" }],
     "item": [
-      { "linkId": "batch", "text": "Batch number", "type": "string", "required": true },
-      { "linkId": "sent-on", "text": "Date sent", "type": "date" }
+      { "linkId": "requisition", "text": "Requisition number", "type": "string", "required": true,
+        "extension": [
+          { "url": "urn:corlix:questionnaire:fhir-path", "valueString": "ServiceRequest.identifier.value" },
+          { "url": "urn:corlix:questionnaire:field-extras", "valueString": "{\"fhirDiscriminator\":{\"system\":\"urn:openldr:order:requisition\"},\"fhirValueField\":\"value\"}" }
+        ] },
+      { "linkId": "tests", "text": "Tests requested", "type": "string", "required": true, "repeats": true,
+        "answerValueSet": "urn:openldr:valueset:lab-tests",
+        "extension": [
+          { "url": "urn:corlix:questionnaire:fhir-path", "valueString": "ServiceRequest.code" },
+          { "url": "urn:corlix:questionnaire:field-type", "valueString": "reference" },
+          { "url": "urn:corlix:questionnaire:cardinality", "valueString": "{\"min\":1,\"max\":\"*\"}" },
+          { "url": "urn:corlix:questionnaire:field-extras", "valueString": "{\"referenceMultiple\":true}" }
+        ] }
     ]
   },
   "open": ["sample-clerk"],
@@ -94,7 +106,7 @@ The slug must already be in its final form: lowercase letters, digits and single
 }
 ```
 
-The form takes its name from the Questionnaire's `title`. Its version label is the pack's version. `open` and `submit` take role slugs, and CE turns them into the role ids of the install it runs on. An empty list means every role with the permission, as in the form builder's **Access** sheet. To submit, a person must also be able to open the form. A form must be bound to an order (`ServiceRequest`) or have a field marked as a result, or the install refuses it, because CE could never save a response to it.
+This example is a small order form. The `fhir-resource-type` extension binds it to an order, the requisition number fills the order's identifier, and the tests come from the tests switched on at the lab. The form takes its name from the Questionnaire's `title`. Its version label is the pack's version. `open` and `submit` take role slugs, and CE turns them into the role ids of the install it runs on. An empty list means every role with the permission, as in the form builder's **Access** sheet. To submit, a person must also be able to open the form. A form must be bound to an order (`ServiceRequest`) or have a field marked as a result, or the install refuses it, because CE could never save a response to it.
 
 Codes and value sets inside a Questionnaire belong to the pack. Keep them in the pack's repository, never in CE.
 
@@ -136,7 +148,7 @@ For the collection site example above, the list is:
 [
   { "kind": "role", "label": "Sample Clerk", "count": 3 },
   { "kind": "layout", "label": "Collection site", "count": 3 },
-  { "kind": "form", "label": "Sample dispatch", "count": 1 }
+  { "kind": "form", "label": "Lab request", "count": 1 }
 ]
 ```
 
