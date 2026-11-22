@@ -1,0 +1,22 @@
+{
+  "resourceType": "ValueSet",
+  "url": "urn:example:vs:example-tests",
+  "version": "1",
+  "name": "ExampleTests",
+  "title": "Example tests",
+  "status": "draft",
+  "experimental": true,
+  "description": "Example value set from the OpenLDR examples folder. It lists the three codes in terms.csv.",
+  "compose": {
+    "include": [
+      {
+        "system": "urn:example:cs",
+        "concept": [
+          { "code": "EXAMPLE-HGB", "display": "Haemoglobin" },
+          { "code": "EXAMPLE-GLU", "display": "Glucose" },
+          { "code": "EXAMPLE-WBC", "display": "White blood cell count" }
+        ]
+      }
+    ]
+  }
+}
