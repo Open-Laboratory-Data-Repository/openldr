@@ -277,6 +277,7 @@ export const ServiceRequestExtractor: ResourceExtractor = {
     if (ctx.authored) request.authoredOn = ctx.authored
 
     const tests: OrderedTest[] = []
+    const seen = new Set<string>()
     let clinician: string | undefined
     let facility: Reference | undefined
     walkResponse(response.item, (item) => {
@@ -297,6 +298,10 @@ export const ServiceRequestExtractor: ResourceExtractor = {
           if (!code) continue
           const system = answer.valueCoding?.system || LOINC
           const display = answer.valueCoding?.display || meta?.answerOptions?.find((o) => o.code === code)?.display
+          // A test picked twice is one order: its fixed id comes from the test, so two requests
+          // for it would share an id.
+          if (seen.has(`${system}|${code}`)) continue
+          seen.add(`${system}|${code}`)
           const before = ctx.codingBefore?.get(`${system}|${code}`)
           tests.push({
             codings: [...(before ? [before] : []), { system, code, ...(display ? { display } : {}) }],

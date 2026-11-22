@@ -8,6 +8,7 @@ import { toTransactionBundle } from './to-transaction-bundle'
 import { makeField, makeSchema, definitionOf } from './__fixtures__/forms'
 import { isOrderRejectionField, orderRejectionFieldId } from './order-rejection-path'
 import { linkToOrder } from './link-to-order'
+import { labOrderId } from './extract/order-ids'
 
 const ctx = { subject: { reference: 'Patient/p1' }, authored: '2026-06-04T00:00:00Z' }
 
@@ -186,6 +187,14 @@ describe('ServiceRequestExtractor tests codings (test catalog S4)', () => {
       expect(r.identifier).toEqual([{ system: 'urn:openldr:order:requisition', value: 'CS-1' }])
       expect(r).toMatchObject({ status: 'active', intent: 'order', priority: 'urgent', subject: ctx.subject })
     }
+  })
+
+  it('writes one request for a test picked twice, so no two requests share an id', () => {
+    const answers = { tests: [...twoTests.tests, { system: CATALOG, code: 'HIVVL', display: 'Viral load' }] }
+    const out = requests(order('reference'), answers)
+    expect(out.map((r) => r.code.coding.at(-1).code)).toEqual(['HIVVL', 'CD4'])
+    const ids = out.map((r) => labOrderId('A1', 'CS-1', r.code.coding.at(-1)))
+    expect(new Set(ids).size).toBe(2)
   })
 
   it('writes one ServiceRequest with no code when no test is chosen', () => {
