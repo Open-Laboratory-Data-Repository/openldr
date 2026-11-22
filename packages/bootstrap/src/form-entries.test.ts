@@ -45,12 +45,13 @@ interface VoidFakes {
   records: Map<string, Record<string, unknown>>;
   runs: { workflowId: string; source: string; input: any }[];
   audits: { actor: unknown; details: any }[];
+  logs: { level: string; obj: any; msg: string }[];
   /** What the next run answers. Left out, the run completes. */
   outcome?: () => unknown;
 }
 
 async function world() {
-  const fakes: VoidFakes = { records: new Map(), runs: [], audits: [] };
+  const fakes: VoidFakes = { records: new Map(), runs: [], audits: [], logs: [] };
   const db = await makeMigratedDb();
   const add = (id: string, code: string, name: string, region: string | null, district: string | null) =>
     db.insertInto('facility_registry').values({
@@ -79,6 +80,10 @@ async function world() {
       },
     },
     audit: async (actor, details) => { fakes.audits.push({ actor, details }); },
+    logger: {
+      warn: (obj: any, msg: string) => { fakes.logs.push({ level: 'warn', obj, msg }); },
+      error: (obj: any, msg: string) => { fakes.logs.push({ level: 'error', obj, msg }); },
+    } as never,
   });
   return { db, store, service, fakes };
 }
@@ -497,7 +502,7 @@ describe('form entries service: context', () => {
 
 describe('form entries service: voidEntry', () => {
   const actor = { actorType: 'user' as const, actorId: 'u9', actorName: 'manager' };
-  const everyone = { id: 'u9', name: 'Manager', dataScope: { limited: false } as DataScope };
+  const everyone = { id: 'u9', dataScope: { limited: false } as DataScope };
 
   /** An entry settled as `status`, with these saved records held by the fake FHIR store. */
   async function settled(w: Awaited<ReturnType<typeof world>>, key: string, status: 'active' | 'incomplete', resources: { resourceType: string; id: string }[], responseId: string | null) {
@@ -600,6 +605,68 @@ describe('form entries service: voidEntry', () => {
     }
   });
 
+  it('logs a record it cannot read and a run that throws, with the entry id', async () => {
+    const w = await world();
+    w.fakes.outcome = () => { throw new Error('run store down'); };
+    hold(w, 'ServiceRequest', 'sr-1', 'active');
+    const e = await settled(w, 'CS-1', 'active', [{ resourceType: 'ServiceRequest', id: 'sr-1' }, { resourceType: 'Observation', id: 'broken' }], null);
+    await w.service.voidEntry({ entryId: e.id, reason: 'typo', user: everyone, actor });
+    expect(w.fakes.logs.map((l) => [l.obj.entryId, l.obj.err?.message])).toEqual([[e.id, 'db gone'], [e.id, 'run store down']]);
+    await w.db.destroy();
+  });
+
+  it('warns when an active entry does not know its records, and still marks it', async () => {
+    const w = await world();
+    // A completed save whose settle failed, or a save still running: active, with nothing recorded.
+    const e = await w.store.create({
+      formId: 'form-1', facilityId: 'reg-a', facilityCode: 'A1', facilityName: 'Site A', entryKey: 'CS-1',
+      summary: [], enteredBy: 'u1', enteredByName: 'Clerk One',
+    });
+    const r = await w.service.voidEntry({ entryId: e.id, reason: 'typo', user: everyone, actor });
+    if (typeof r === 'string') throw new Error(r);
+    expect(r.entry.status).toBe('entered-in-error');
+    expect(r).toMatchObject({ resaved: 0, skipped: 0 });
+    expect(r.warning).toMatch(/records this entry made are not known, so they were not marked/);
+    expect(w.fakes.runs).toHaveLength(0);
+    expect(w.fakes.audits[0]!.details.metadata).toMatchObject({ warning: r.warning });
+    await w.db.destroy();
+  });
+
+  it('a save that settles after the void keeps the entry voided and marks the records it stored', async () => {
+    for (const ok of [true, false]) {
+      const w = await world();
+      const answers = { num: 'CS-1', fac: pick('A1', 'Site A') };
+      const begun = await w.service.begin({ form: { id: 'form-1', schema: orderForm('register') }, answers, user: user({ limited: false }) });
+      // Voided while the save runs: nothing is known yet.
+      const v = await w.service.voidEntry({ entryId: begun.id, reason: 'typo', user: everyone, actor });
+      expect(v).toMatchObject({ resaved: 0, warning: expect.stringMatching(/not known/) });
+
+      hold(w, 'QuestionnaireResponse', 'qr-1', 'completed');
+      hold(w, 'ServiceRequest', 'sr-1', 'active');
+      const stored = { responseId: 'qr-1', resources: [{ resourceType: 'ServiceRequest', id: 'sr-1' }] };
+      const after = await w.service.finish(begun.id, { ok, stored });
+      expect(after, String(ok)).toMatchObject({ status: 'entered-in-error', statusReason: 'typo', saved: stored });
+      expect((await w.store.get(begun.id))!.status).toBe('entered-in-error');
+      expect(w.fakes.runs, String(ok)).toHaveLength(1);
+      const sent = w.fakes.runs[0]!.input.body.entry as { resource: { status: string }; request: { url: string } }[];
+      expect(sent.map((x) => [x.request.url, x.resource.status])).toEqual([
+        ['QuestionnaireResponse/qr-1', 'entered-in-error'], ['ServiceRequest/sr-1', 'entered-in-error'],
+      ]);
+      expect(w.fakes.runs[0]!.input.__provenance).toEqual({ sourceSystem: 'form-capture' });
+      await w.db.destroy();
+    }
+  });
+
+  it('a voided entry whose late save stored nothing keeps its row', async () => {
+    const w = await world();
+    const begun = await w.service.begin({ form: { id: 'form-1', schema: orderForm('register') }, answers: { num: 'CS-1', fac: pick('A1') }, user: user({ limited: false }) });
+    await w.service.voidEntry({ entryId: begun.id, reason: 'typo', user: everyone, actor });
+    await w.service.finish(begun.id, { ok: false, stored: { responseId: null, resources: [] } });
+    expect((await w.store.get(begun.id))!.status).toBe('entered-in-error');
+    expect(w.fakes.runs).toHaveLength(0);
+    await w.db.destroy();
+  });
+
   it('answers already-void for an entry already marked, and changes nothing more', async () => {
     const w = await world();
     const e = await settled(w, 'CS-1', 'active', [], null);
@@ -623,7 +690,7 @@ describe('form entries service: voidEntry', () => {
   it('answers not-found for a missing entry or one the user may not see, and leaves it alone', async () => {
     const w = await world();
     const e = await settled(w, 'CS-1', 'active', [], null);
-    const outside = { id: 'u2', name: 'Other', dataScope: limit({ facilities: ['reg-b'] }) };
+    const outside = { id: 'u2', dataScope: limit({ facilities: ['reg-b'] }) };
     expect(await w.service.voidEntry({ entryId: e.id, reason: 'typo', user: outside, actor })).toBe('not-found');
     expect(await w.service.voidEntry({ entryId: 'no-such', reason: 'typo', user: everyone, actor })).toBe('not-found');
     expect((await w.store.get(e.id))!.status).toBe('active');

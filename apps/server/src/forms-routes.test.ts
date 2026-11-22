@@ -1840,6 +1840,7 @@ describe('form entries on submit', () => {
       fhir: { get: async (type: string, id: string) => ({ resourceType: type, id, status: 'active' }) },
       runner: { runAndRecord: (...args: [any, any, any]) => (ctx as any).workflows.runner.runAndRecord(...args) },
       audit: async () => {},
+      logger: { warn: () => {}, error: () => {} } as never,
     });
     (ctx as any).labIdentity = { tokens: async () => ({ 'lab.timezone': 'Africa/Dar_es_Salaam' }) };
     (ctx as any).workflows = {
@@ -2153,6 +2154,24 @@ describe('form entries on submit', () => {
     const again = await w.submit(w.appFor(), formId, { num: 'CS-0001', fac: siteA });
     expect(again.statusCode).toBe(201);
     expect(again.json().entryId).not.toBe(first.json().entryId);
+    await w.db.destroy();
+  });
+
+  it('voiding an entry whose settle failed marks it and warns that its records are not known', async () => {
+    const w = await world();
+    const real = (w.ctx as any).formEntries;
+    (w.ctx as any).formEntries = { ...real, finish: async () => { throw new Error('db gone'); } };
+    const formId = await w.createForm();
+    const res = await w.submit(w.appFor(), formId, { num: 'CS-1', fac: siteA });
+    (w.ctx as any).formEntries = real;
+    const runsBefore = w.runs.length;
+    const voided = await w.voidEntry(res.json().entryId);
+    expect(voided.statusCode).toBe(200);
+    expect(voided.json()).toMatchObject({
+      entry: { status: 'entered-in-error', saved: null }, resaved: 0, skipped: 0,
+      warning: expect.stringMatching(/records this entry made are not known/),
+    });
+    expect(w.runs).toHaveLength(runsBefore);
     await w.db.destroy();
   });
 

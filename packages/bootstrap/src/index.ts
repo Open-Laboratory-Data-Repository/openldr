@@ -846,6 +846,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
     fhir: { get: (type, id) => canonicalFhirStore.get(type, id) as Promise<Record<string, unknown> | null> },
     runner: { runAndRecord: (...args) => workflowRunner.runAndRecord(...args) },
     audit: (actor, details) => recordAuditEvent({ audit, logger }, actor, details),
+    logger,
   });
   const dashboardAccessStore = createDashboardAccessStore(internal.db as unknown as Kysely<InternalSchema>);
   const dashboardAccessCheck = dashboardAccess({ access: dashboardAccessStore });

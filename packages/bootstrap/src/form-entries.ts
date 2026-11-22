@@ -2,6 +2,7 @@ import type { FormEntry, FormEntrySaved, FormEntryStatus, FormEntryStore } from 
 import { entryFacilitiesOf, entryKeyOf, entryValuesOf, type FacilityAnswer, type FormSchema } from '@openldr/forms';
 import type { DataScope } from '@openldr/rbac';
 import type { WorkflowTriggerRunner } from '@openldr/workflows';
+import type { Logger } from '@openldr/core';
 import type { AuditActor, AuditDetails } from './record-audit';
 import { inDataScope, type ScopeRegistryRow } from './data-scope';
 import { registryConceptCodeById, registryRowIdByConceptCode } from './facility-reconcile';
@@ -57,7 +58,7 @@ export interface FormEntriesService {
    *  then says the records were not updated. `skipped` counts records that could not be read or whose
    *  type has no such status. Throws when the reason is empty or longer than 500 characters. */
   voidEntry(input: {
-    entryId: string; reason: string; user: { id: string; name: string; dataScope: DataScope }; actor: AuditActor;
+    entryId: string; reason: string; user: EntryViewer; actor: AuditActor;
   }): Promise<VoidedEntry | 'not-found' | 'already-void'>;
 }
 
@@ -72,6 +73,7 @@ export interface FormEntriesDeps {
   /** Runs the ingest workflow that saves them again, the same one the submit route uses. */
   runner: Pick<WorkflowTriggerRunner, 'runAndRecord'>;
   audit(actor: AuditActor, details: AuditDetails): Promise<void>;
+  logger: Pick<Logger, 'warn' | 'error'>;
 }
 
 /** The record types whose FHIR status allows `entered-in-error`. Each is checked against its schema
@@ -79,6 +81,9 @@ export interface FormEntriesDeps {
 const VOIDABLE_TYPES = new Set(['QuestionnaireResponse', 'ServiceRequest', 'Specimen', 'Observation', 'DiagnosticReport']);
 const MAX_REASON = 500;
 const NOT_UPDATED = 'The entry is marked in error, but its saved records were not updated.';
+const NOT_KNOWN = 'The entry is marked in error, but the records this entry made are not known, so they were not marked.';
+
+interface ResaveResult { resaved: number; skipped: number; warning?: string }
 
 const EMPTY_LIMIT = 'your data limit names no facility, so you cannot enter this form';
 const FREE_TEXT = "this form's facility field is free text, so it cannot be used by a user limited to a site";
@@ -96,6 +101,55 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
     if (!user.dataScope.limited || entry.enteredBy === user.id) return entry;
     const ids = await facilityIdsOf(user.dataScope);
     return entry.facilityId !== null && ids !== null && ids.includes(entry.facilityId) ? entry : null;
+  };
+
+  /** Saves every record of an entry again with the status entered-in-error, through the ingest
+   *  workflow. Used by the void, and by a save that settles after its entry was voided. */
+  const markInError = async (entryId: string, saved: FormEntrySaved | null): Promise<ResaveResult> => {
+    const refs = [
+      ...(saved?.responseId ? [{ resourceType: 'QuestionnaireResponse', id: saved.responseId }] : []),
+      ...(saved?.resources ?? []),
+    ];
+    let skipped = 0;
+    const changed: Record<string, unknown>[] = [];
+    for (const ref of refs) {
+      if (!VOIDABLE_TYPES.has(ref.resourceType)) { skipped += 1; continue; }
+      let record: Record<string, unknown> | null = null;
+      try {
+        record = await deps.fhir.get(ref.resourceType, ref.id);
+      } catch (err) {
+        deps.logger.warn({ err, entryId, record: ref }, 'form entry void: a saved record could not be read');
+      }
+      if (!record) { skipped += 1; continue; }
+      changed.push({ ...record, status: 'entered-in-error' });
+    }
+    if (changed.length === 0) return { resaved: 0, skipped };
+
+    const bundle = {
+      resourceType: 'Bundle', type: 'transaction',
+      entry: changed.map((resource) => ({
+        resource, request: { method: 'PUT', url: `${String(resource.resourceType)}/${String(resource.id)}` },
+      })),
+    };
+    try {
+      const outcome = await deps.runner.runAndRecord('wf-ingest', 'form', {
+        method: 'POST', body: bundle, headers: {}, query: {}, __provenance: { sourceSystem: 'form-capture' },
+      });
+      if (outcome && outcome.status === 'completed' && !outcome.held) return { resaved: changed.length, skipped };
+      const warning = outcome ? `${NOT_UPDATED} Check run ${outcome.runId}.` : `${NOT_UPDATED} The ingest workflow is missing or disabled.`;
+      return { resaved: 0, skipped, warning };
+    } catch (err) {
+      deps.logger.error({ err, entryId }, 'form entry void: the records could not be saved again');
+      return { resaved: 0, skipped, warning: NOT_UPDATED };
+    }
+  };
+
+  /** A row the store left entered-in-error was voided while its save ran: mark what the save stored. */
+  const afterSave = async (row: FormEntry): Promise<FormEntry> => {
+    if (row.status !== 'entered-in-error') return row;
+    const r = await markInError(row.id, row.saved);
+    if (r.warning) deps.logger.warn({ entryId: row.id, ...r }, 'form entry void: a save that settled after the void left records unmarked');
+    return row;
   };
 
   return {
@@ -170,15 +224,18 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
     },
 
     async finish(entryId, outcome) {
-      if (outcome.ok) return deps.store.setSaved(entryId, outcome.stored, 'active');
+      if (outcome.ok) return afterSave(await deps.store.setSaved(entryId, outcome.stored, 'active'));
       const stored = outcome.somethingStored
         ?? (outcome.stored.responseId !== null || outcome.stored.resources.length > 0);
       if (!stored) {
+        // A voided row stays as the record of the void; it already holds no number.
+        const current = await deps.store.get(entryId);
+        if (current?.status === 'entered-in-error') return current;
         await deps.store.remove(entryId);
         return null;
       }
       // An order may exist, so the row keeps the number until someone marks it in error.
-      return deps.store.setSaved(entryId, outcome.stored, 'incomplete');
+      return afterSave(await deps.store.setSaved(entryId, outcome.stored, 'incomplete'));
     },
 
     async voidEntry({ entryId, reason: raw, user, actor }) {
@@ -192,43 +249,15 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
       const entry = await deps.store.void(entryId, { id: user.id, reason });
       if (!entry) return 'already-void';
 
-      const refs = [
-        ...(before.saved?.responseId ? [{ resourceType: 'QuestionnaireResponse', id: before.saved.responseId }] : []),
-        ...(before.saved?.resources ?? []),
-      ];
-      let skipped = 0;
-      const changed: Record<string, unknown>[] = [];
-      for (const ref of refs) {
-        if (!VOIDABLE_TYPES.has(ref.resourceType)) { skipped += 1; continue; }
-        let record: Record<string, unknown> | null = null;
-        try {
-          record = await deps.fhir.get(ref.resourceType, ref.id);
-        } catch {
-          record = null;
-        }
-        if (!record) { skipped += 1; continue; }
-        changed.push({ ...record, status: 'entered-in-error' });
+      // The row after the void: a save that settled meanwhile has recorded what it stored. A save that
+      // settles later sees the void in `finish` and marks its records there.
+      let result: ResaveResult;
+      if (entry.saved === null && before.status !== 'incomplete') {
+        result = { resaved: 0, skipped: 0, warning: NOT_KNOWN };
+      } else {
+        result = await markInError(entry.id, entry.saved);
       }
-
-      let resaved = 0;
-      let warning: string | undefined;
-      if (changed.length > 0) {
-        const bundle = {
-          resourceType: 'Bundle', type: 'transaction',
-          entry: changed.map((resource) => ({
-            resource, request: { method: 'PUT', url: `${String(resource.resourceType)}/${String(resource.id)}` },
-          })),
-        };
-        try {
-          const outcome = await deps.runner.runAndRecord('wf-ingest', 'form', {
-            method: 'POST', body: bundle, headers: {}, query: {}, __provenance: { sourceSystem: 'form-capture' },
-          });
-          if (outcome && outcome.status === 'completed' && !outcome.held) resaved = changed.length;
-          else warning = outcome ? `${NOT_UPDATED} Check run ${outcome.runId}.` : `${NOT_UPDATED} The ingest workflow is missing or disabled.`;
-        } catch {
-          warning = NOT_UPDATED;
-        }
-      }
+      const { resaved, skipped, warning } = result;
 
       await deps.audit(actor, {
         action: 'form.entry.void', entityType: 'form-entry', entityId: entry.id, before, after: entry,

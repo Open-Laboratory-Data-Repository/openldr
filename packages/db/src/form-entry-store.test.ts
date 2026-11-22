@@ -123,6 +123,21 @@ describe('form entry store: one row per saved submission (migration 136)', () =>
     await db.destroy();
   });
 
+  it('setSaved_on_a_voided_entry_records_the_ids_and_keeps_it_voided', async () => {
+    const { db, store } = await world();
+    const first = await store.create(entry());
+    await store.void(first.id, { id: 'u9', reason: 'typo' });
+    const saved = { responseId: 'qr-1', resources: [{ resourceType: 'ServiceRequest', id: 'sr-1' }] };
+    for (const status of ['active', 'incomplete'] as const) {
+      expect(await store.setSaved(first.id, saved, status)).toMatchObject({
+        status: 'entered-in-error', statusBy: 'u9', statusReason: 'typo', saved,
+      });
+    }
+    // The number stays free.
+    await expect(store.create(entry())).resolves.toMatchObject({ status: 'active' });
+    await db.destroy();
+  });
+
   it('remove_deletes_the_row_and_frees_the_key', async () => {
     const { db, store } = await world();
     const first = await store.create(entry());

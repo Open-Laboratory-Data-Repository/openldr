@@ -91,8 +91,7 @@ export function registerFormEntryRoutes(app: FastifyInstance<any, any, any, any>
     const seen = await ctx.formEntries.get(entryId, viewer);
     if (!seen || !(await openForm(req, seen.formId))) { reply.code(404); return NOT_FOUND; }
     const result = await ctx.formEntries.voidEntry({
-      entryId, reason: b.data.reason, actor: actorFromRequest(req),
-      user: { ...viewer, name: req.user?.displayName || req.user?.username || viewer.id },
+      entryId, reason: b.data.reason, actor: actorFromRequest(req), user: viewer,
     });
     if (result === 'not-found') { reply.code(404); return NOT_FOUND; }
     if (result === 'already-void') { reply.code(409); return { error: 'already-void' }; }

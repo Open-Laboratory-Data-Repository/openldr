@@ -45,6 +45,7 @@ export interface FormEntryStore {
   get(id: string): Promise<FormEntry | null>;
   /** Newest first, with the id breaking ties. `total` counts every match, not just the page. */
   list(filter: FormEntryFilter): Promise<{ entries: FormEntry[]; total: number }>;
+  /** Records what the save stored. An entry already entered-in-error keeps that status. */
   setSaved(id: string, saved: FormEntrySaved, status: 'active' | 'incomplete'): Promise<FormEntry>;
   remove(id: string): Promise<void>;
   /** Null when the entry is already entered-in-error. */
@@ -138,7 +139,9 @@ export function createFormEntryStore(db: Kysely<InternalSchema>): FormEntryStore
     },
 
     async setSaved(id, saved, status) {
-      const row = await db.updateTable(T).set({ saved: JSON.stringify(saved), status })
+      // A row marked in error while its save ran keeps that status; it still learns what was saved.
+      const row = await db.updateTable(T)
+        .set({ saved: JSON.stringify(saved), status: sql`case when status = 'entered-in-error' then status else ${status} end` as never })
         .where('id', '=', id).returningAll().executeTakeFirst();
       if (!row) throw new Error(`form entry ${id} not found`);
       return toEntry(row);

@@ -84,6 +84,7 @@ async function world() {
         },
       },
       audit: async (actor, details) => { audits.push({ actor, details }); },
+      logger: { warn: () => {}, error: () => {} } as never,
     }),
     fhirStore: { get: fhirGet },
     logger: { warn: () => {}, error: () => {}, info: () => {} },
