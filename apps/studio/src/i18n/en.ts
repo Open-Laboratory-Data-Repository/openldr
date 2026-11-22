@@ -278,6 +278,7 @@ export const en = {
       lab_technician: 'Lab Technician',
       data_analyst: 'Data Analyst',
       system_auditor: 'System Auditor',
+      reception: 'Reception',
     },
     accessKeys: {
       menuItem: 'Access keys',
@@ -543,6 +544,19 @@ export const en = {
       },
       imports: {
         correct_held: { label: 'Correct held requests', description: 'Open the held requests of a source check, correct their fields and check them again. Sees patient details.' },
+      },
+      lab: {
+        receive: { label: 'Receive samples', description: 'Find and register requests, receive samples, correct a typo in a request, and link its patient.' },
+        reject: { label: 'Return and reject', description: 'Return a request to its site for correction, or reject a sample and ask for a redraw.' },
+        results: {
+          enter: { label: 'Enter results', description: 'Enter and change results that are not yet authorised.' },
+          authorise: { label: 'Authorise results', description: 'Authorise results entered by someone else.' },
+          amend: { label: 'Amend results', description: 'Correct a released result, with a reason.' },
+        },
+        worklist: {
+          view: { label: 'View worklists', description: "See the lab's worklists." },
+        },
+        settings: { label: 'Lab settings', description: "Set the lab's sections, which tests need review, and self-authorisation." },
       },
     },
   },

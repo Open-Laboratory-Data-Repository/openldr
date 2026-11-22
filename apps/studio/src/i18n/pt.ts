@@ -282,6 +282,7 @@ export const pt: EnShape = {
       lab_technician: 'Técnico de laboratório',
       data_analyst: 'Analista de dados',
       system_auditor: 'Auditor do sistema',
+      reception: 'Receção',
     },
     accessKeys: {
       menuItem: 'Chaves de acesso',
@@ -539,6 +540,19 @@ export const pt: EnShape = {
       },
       imports: {
         correct_held: { label: 'Corrigir pedidos retidos', description: 'Abrir os pedidos retidos de uma verificação de fonte, corrigir os seus campos e verificá-los de novo. Vê dados dos pacientes.' },
+      },
+      lab: {
+        receive: { label: 'Receber amostras', description: 'Procurar e registar pedidos, receber amostras, corrigir um erro de digitação num pedido e associar o seu paciente.' },
+        reject: { label: 'Devolver e rejeitar', description: 'Devolver um pedido ao seu local para correção, ou rejeitar uma amostra e pedir nova colheita.' },
+        results: {
+          enter: { label: 'Introduzir resultados', description: 'Introduzir e alterar resultados ainda não validados.' },
+          authorise: { label: 'Validar resultados', description: 'Validar resultados introduzidos por outra pessoa.' },
+          amend: { label: 'Retificar resultados', description: 'Corrigir um resultado já libertado, indicando um motivo.' },
+        },
+        worklist: {
+          view: { label: 'Ver listas de trabalho', description: 'Ver as listas de trabalho do laboratório.' },
+        },
+        settings: { label: 'Definições do laboratório', description: 'Definir as secções do laboratório, que testes precisam de revisão e a autovalidação.' },
       },
     },
   },

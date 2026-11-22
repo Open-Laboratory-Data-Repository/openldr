@@ -509,7 +509,7 @@ export interface AppContext {
   pluginScheduleRunner: PluginScheduleRunner;
   users: UserStore;
   /** Capability-based roles (RBAC Task 4): system + custom roles, capability grants, and
-   *  user↔role assignment. Seeded with the 5 system roles on every `createAppContext` boot —
+   *  user↔role assignment. Seeded with the system roles on every `createAppContext` boot —
    *  see the `seedSystemRoles()` call beside its construction below. */
   roles: RoleStore;
   userProfiles: UserProfileStore;
@@ -802,8 +802,8 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const reportRuns = createReportRunStore(internal.db);
   const reportSchedules = createReportScheduleStore(internal.db);
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
-  // RBAC Task 4: seed the 5 system roles (lab_admin/lab_manager/data_analyst/system_auditor/
-  // lab_technician) on every boot. Deliberately UNCONDITIONAL — NOT routed through seedDatabase()/
+  // RBAC Task 4: seed the system roles (lab_admin/lab_manager/data_analyst/system_auditor/
+  // lab_technician/reception) on every boot. Deliberately UNCONDITIONAL — NOT routed through seedDatabase()/
   // SEED_ON_START (apps/server/src/index.ts), because that flag defaults to false and only guards
   // optional demo/sample data (see seed.ts); a real production install would never seed roles if
   // this depended on it. seedSystemRoles() is idempotent (safe to call on every boot) so this

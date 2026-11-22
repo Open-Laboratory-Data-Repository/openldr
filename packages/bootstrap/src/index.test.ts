@@ -206,26 +206,26 @@ describe('createAppContext reference-capture wiring (S2 pull source)', () => {
 });
 
 /**
- * RBAC Task 4: `createAppContext` seeds the 5 system roles UNCONDITIONALLY (via
+ * RBAC Task 4: `createAppContext` seeds the system roles UNCONDITIONALLY (via
  * `roles.seedSystemRoles()` beside `const roles = createRoleStore(internal.db)` in index.ts) —
  * deliberately NOT gated behind SEED_ON_START, which defaults to false and only guards optional
  * demo/sample data (see seed.ts). `createAppContext` itself can't run against pg-mem (real pg
  * pools + a LISTEN client, per the comment above), so this mirrors the exact bootstrap
  * construction (`createRoleStore(internal.db)`) against a fully-migrated db, the same pattern the
- * reference-capture tests above use, and proves the seed call's idempotent semantics: 5 roles
- * after one call, still 5 after a second (both fresh install and an existing-DB upgrade re-run it
+ * reference-capture tests above use, and proves the seed call's idempotent semantics: 6 roles
+ * after one call, still 6 after a second (both fresh install and an existing-DB upgrade re-run it
  * on every boot).
  */
 describe('createAppContext system-role seed (RBAC Task 4)', () => {
-  it('seedSystemRoles produces the 5 system roles, idempotently', async () => {
+  it('seedSystemRoles produces the 6 system roles, idempotently', async () => {
     const db = await makeMigratedDb();
     const roles = createRoleStore(db); // bootstrap construction: createRoleStore(internal.db)
     await roles.seedSystemRoles();
     await roles.seedSystemRoles(); // second call (mirrors every-boot re-seed) — no duplicates
     const list = await roles.list();
-    expect(list).toHaveLength(5);
+    expect(list).toHaveLength(6);
     expect(list.map((r) => r.slug).sort()).toEqual(
-      ['data_analyst', 'lab_admin', 'lab_manager', 'lab_technician', 'system_auditor'].sort(),
+      ['data_analyst', 'lab_admin', 'lab_manager', 'lab_technician', 'reception', 'system_auditor'].sort(),
     );
     const admin = list.find((r) => r.slug === 'lab_admin')!;
     expect(admin.isSystem).toBe(true);
@@ -250,16 +250,16 @@ describe('createAppContext system-role seed (RBAC Task 4)', () => {
  * `wipeInternalDatabase` issues, just against an explicit table list instead of one discovered via
  * `pg_tables` — targeted at exactly the tables a factory reset empties: `roles` really does end up
  * empty, and re-calling `roles.seedSystemRoles()` after the wipe — exactly what `dangerFactoryReset`
- * now does — repopulates all 5 system roles without any process restart.
+ * now does — repopulates all 6 system roles without any process restart.
  */
 describe('dangerFactoryReset role reseed (admin-lockout fix)', () => {
-  it('truncating roles (as a factory reset would) then re-seeding repopulates the 5 system roles', async () => {
+  it('truncating roles (as a factory reset would) then re-seeding repopulates the 6 system roles', async () => {
     const db = await makeMigratedDb();
     const roles = createRoleStore(db); // bootstrap construction: createRoleStore(internal.db)
 
     // Boot-time seed (mirrors createAppContext's unconditional call).
     await roles.seedSystemRoles();
-    expect(await roles.list()).toHaveLength(5);
+    expect(await roles.list()).toHaveLength(6);
 
     // Factory reset step 1: wipe. Proves the bug's premise — roles really is emptied. Same CASCADE
     // TRUNCATE `wipeInternalDatabase` runs, just given the table names directly (pg-mem can't run
@@ -272,12 +272,12 @@ describe('dangerFactoryReset role reseed (admin-lockout fix)', () => {
 
     // Factory reset step 2 (the fix): dangerFactoryReset now calls ctx.roles.seedSystemRoles()
     // after the wipe/reseed, using the same already-constructed roles store off ctx (not a
-    // fresh one) — so the reset leaves 5 roles present with no restart required.
+    // fresh one) — so the reset leaves 6 roles present with no restart required.
     await roles.seedSystemRoles();
     const list = await roles.list();
-    expect(list).toHaveLength(5);
+    expect(list).toHaveLength(6);
     expect(list.map((r) => r.slug).sort()).toEqual(
-      ['data_analyst', 'lab_admin', 'lab_manager', 'lab_technician', 'system_auditor'].sort(),
+      ['data_analyst', 'lab_admin', 'lab_manager', 'lab_technician', 'reception', 'system_auditor'].sort(),
     );
     const admin = list.find((r) => r.slug === 'lab_admin')!;
     expect(admin.isSystem).toBe(true);

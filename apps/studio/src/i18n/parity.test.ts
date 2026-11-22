@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { en } from './en';
 import { fr } from './fr';
 import { pt } from './pt';
-import { CAPABILITIES, CAPABILITY_KEYS } from '@openldr/rbac';
+import { CAPABILITIES, CAPABILITY_KEYS, SYSTEM_ROLES } from '@openldr/rbac';
 
 /** Recursively collect dotted key paths from a nested resource object. */
 function keyPaths(obj: Record<string, unknown>, prefix = ''): string[] {
@@ -76,5 +76,20 @@ describe('capability labels', () => {
       at(res, `roles.capability.${c.key}.label`) !== c.label || at(res, `roles.capability.${c.key}.description`) !== c.description,
     ).map((c) => c.key);
     expect(bad).toEqual([]);
+  });
+});
+
+// A system role slug such as 'reception' is read as users.roleNames.reception.
+describe('system role names', () => {
+  it('every system role has a name in en, fr and pt', () => {
+    const missing: string[] = [];
+    for (const [lang, res] of [['en', en], ['fr', fr], ['pt', pt]] as const) {
+      const names = (res.users as { roleNames: Record<string, unknown> }).roleNames;
+      for (const r of SYSTEM_ROLES) {
+        const v = names[r.slug];
+        if (typeof v !== 'string' || v.trim() === '') missing.push(`${lang} ${r.slug}`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });
