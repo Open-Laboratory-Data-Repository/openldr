@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { projectObservation } from './observation';
+import { projectObservation, UNAUTHORISED_RESULT_STATUSES } from './observation';
+import { projectResource } from './index';
 
 const obs = (valueQuantity: Record<string, unknown>) => ({
   resourceType: 'Observation', id: 'o1', status: 'final', code: { coding: [{ code: 'HIVVM' }] }, valueQuantity,
@@ -47,5 +48,28 @@ describe('projectObservation status and missing-value reason', () => {
 
   it('leaves status null when the Observation has none', () => {
     expect(projectObservation({ resourceType: 'Observation', id: 'o3', code: { coding: [{ code: 'X' }] } }, {}).status).toBeNull();
+  });
+});
+
+describe('projectResource and unauthorised results', () => {
+  const result = (status: string) => ({
+    resourceType: 'Observation', id: 'o9', status, code: { coding: [{ code: 'HIVVM' }] }, valueQuantity: { value: 540 },
+  });
+
+  it('projects a final result', () => {
+    const out = projectResource(result('final'), {});
+    expect(out).toMatchObject({ table: 'lab_results', rows: [{ id: 'o9', status: 'final' }] });
+  });
+
+  it.each(['preliminary', 'registered'])('deletes a %s result instead of projecting it', (status) => {
+    expect(projectResource(result(status), {})).toEqual({ delete: { table: 'lab_results', id: 'o9' } });
+  });
+
+  it.each(['cancelled', 'amended', 'corrected'])('still projects a %s result', (status) => {
+    expect(projectResource(result(status), {})).toMatchObject({ table: 'lab_results', rows: [{ id: 'o9', status }] });
+  });
+
+  it('names the statuses it keeps out', () => {
+    expect(UNAUTHORISED_RESULT_STATUSES).toEqual(['preliminary', 'registered']);
   });
 });

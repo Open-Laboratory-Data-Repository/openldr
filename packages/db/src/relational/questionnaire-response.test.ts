@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { projectQuestionnaireResponse } from './questionnaire-response';
-import { projectResource } from './index';
+import { projectResource, type RelationalResult } from './index';
+
+// projectResource can also answer a delete (an Observation not yet authorised). These resources never do.
+const projectRows = (r: unknown, prov = {}) => projectResource(r, prov) as RelationalResult | null;
 
 const qr = {
   resourceType: 'QuestionnaireResponse',
@@ -36,7 +39,7 @@ describe('projectQuestionnaireResponse', () => {
   });
 
   it('projectResource routes QuestionnaireResponse to questionnaire_responses', () => {
-    const p = projectResource(qr, {});
+    const p = projectRows(qr, {});
     expect(p?.table).toBe('questionnaire_responses');
   });
 });

@@ -1,6 +1,6 @@
 import { type Kysely, sql } from 'kysely';
 
-export type WriteResult = 'written' | 'skipped';
+export type WriteResult = 'written' | 'skipped' | 'deleted';
 
 // Chunk rows per table so a multi-row statement never exceeds the driver's parameter ceiling.
 // Each row contributes one bound parameter PER COLUMN, so the safe rows-per-statement depends on
