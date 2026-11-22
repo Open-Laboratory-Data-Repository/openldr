@@ -162,7 +162,9 @@ bound to `http://hl7.org/fhir/ValueSet/administrative-gender`, after the import 
 
 Receiving a sample records `Specimen.receivedTime`, the receiver (as a Provenance), the sample type
 and its condition. The condition is a CodeableConcept from a value set the lab can extend. The
-seed uses HL7 v2 table 0493 (`http://terminology.hl7.org/ValueSet/v2-0493`). The Specimen gets
+seed is a local value set, `urn:openldr:valueset:sample-condition`, that includes the whole HL7 v2
+table 0493 code system (`http://terminology.hl7.org/CodeSystem/v2-0493`), so a lab can add its own
+conditions to it. The Specimen gets
 `request` pointing to the ServiceRequest, so the two are joined. The order's tests move to "to
 enter" on the worklist.
 
