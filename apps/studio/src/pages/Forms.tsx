@@ -17,6 +17,7 @@ import {
   ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
 } from '@/components/data-table';
 import { createForm, deleteForm, duplicateForm, exportFormBundle, formQuestionnaireUrl, listForms, publishForm, setFormStatus, type FormDefinition, type FormStatus, type FormSummary } from '@/api';
+import { formCreateFromImport } from './form-import';
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -72,12 +73,6 @@ function upsertForm(rows: FormSummary[], form: FormSummary): FormSummary[] {
   const copy = [...rows];
   copy[index] = form;
   return copy;
-}
-
-function isImportableSchema(value: unknown): value is { name: string; fhirResourceType?: string | null; versionLabel?: string | null; targetPages?: string[] | null } {
-  if (!value || typeof value !== 'object') return false;
-  const schema = value as { name?: unknown };
-  return typeof schema.name === 'string';
 }
 
 // Module level — stable, outside the component.
@@ -173,17 +168,12 @@ export function Forms() {
     setActionError(null);
     try {
       const parsed: unknown = JSON.parse(await file.text());
-      if (!isImportableSchema(parsed)) {
+      const input = formCreateFromImport(parsed);
+      if (!input) {
         setActionError(t('forms.importNeedsName'));
         return;
       }
-      const created = await createForm({
-        name: parsed.name,
-        versionLabel: parsed.versionLabel ?? null,
-        fhirResourceType: parsed.fhirResourceType ?? null,
-        targetPages: Array.isArray(parsed.targetPages) ? parsed.targetPages : ['forms'],
-        schema: parsed,
-      });
+      const created = await createForm(input);
       setRows((prev) => upsertForm(prev, toSummary(created)));
       table.setPage(0);
       toast.success(t('forms.toastImported', { name: created.name }));

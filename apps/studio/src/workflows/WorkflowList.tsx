@@ -14,6 +14,7 @@ import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { fetchWorkflows, createWorkflow, deleteWorkflow, duplicateWorkflow, resetWorkflow, setWorkflowEnabled, type Workflow } from '@/api';
+import { workflowCreateFromImport } from './workflow-import';
 
 function newWorkflowId(): string {
   return `wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -24,14 +25,6 @@ function formatDate(iso: string | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString();
-}
-
-function isImportable(value: unknown): value is { name: string; description?: string | null; enabled?: boolean; definition: { nodes: unknown[]; edges: unknown[] } } {
-  if (!value || typeof value !== 'object') return false;
-  const v = value as { name?: unknown; definition?: unknown };
-  if (typeof v.name !== 'string') return false;
-  const def = v.definition as { nodes?: unknown; edges?: unknown } | undefined;
-  return !!def && Array.isArray(def.nodes) && Array.isArray(def.edges);
 }
 
 export function WorkflowList() {
@@ -69,18 +62,12 @@ export function WorkflowList() {
     setActionError(null);
     try {
       const parsed: unknown = JSON.parse(await file.text());
-      if (!isImportable(parsed)) {
+      const input = workflowCreateFromImport(parsed, newWorkflowId());
+      if (!input) {
         setActionError('Import JSON must include a name and a definition with nodes/edges arrays.');
         return;
       }
-      await createWorkflow({
-        id: newWorkflowId(),
-        name: parsed.name,
-        description: parsed.description ?? null,
-        definition: parsed.definition,
-        enabled: parsed.enabled ?? true,
-        createdBy: null,
-      });
+      await createWorkflow(input);
       await load();
       setPage(0);
     } catch (e) {

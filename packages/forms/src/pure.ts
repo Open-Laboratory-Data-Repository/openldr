@@ -23,3 +23,4 @@ export * from './starter-pack';
 export * from './samples/starter-packs';
 export * from './order-rejection-path';
 export * from './map/index';
+export * from './form-input';
