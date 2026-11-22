@@ -65,6 +65,20 @@ describe('ReceiveSampleSheet', () => {
     });
   });
 
+  it('offers only the live tests of an order, not a cancelled one', async () => {
+    const mixed = { ...ORDER, tests: [ORDER.tests[0]!, { ...ORDER.tests[1]!, status: 'entered-in-error' }] };
+    render(<ReceiveSampleSheet order={mixed} onClose={() => {}} onReceived={() => {}} />);
+    await pick('Sample type', 'Sample one');
+    expect(screen.getByRole('checkbox', { name: 'Test one' })).toBeChecked();
+    expect(screen.queryByRole('checkbox', { name: 'Test two' })).toBeNull();
+  });
+
+  it('says to map the tests to the test catalog when they name no sample type', async () => {
+    vi.mocked(api.receptionSampleChoices).mockResolvedValueOnce([]);
+    render(<ReceiveSampleSheet order={ORDER} onClose={() => {}} onReceived={() => {}} />);
+    expect(await screen.findByText(/Map these tests to a sample type in the test catalog/)).toBeInTheDocument();
+  });
+
   it('names the tests the sample serves when the desk leaves one out', async () => {
     vi.mocked(api.receiveReceptionSample).mockResolvedValue(ORDER);
     render(<ReceiveSampleSheet order={ORDER} onClose={() => {}} onReceived={() => {}} />);

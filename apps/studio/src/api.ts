@@ -3940,6 +3940,11 @@ export interface CorrectReceptionOrderInput {
   changes: { priority?: string | null; clinician?: string | null; note?: string | null; patientId?: string };
   reason: string;
 }
+export interface CancelReceptionOrderInput {
+  requisition: string;
+  facilityCode: string | null;
+  reason: string;
+}
 export interface RegisterReceptionPatientInput {
   given: string;
   family: string;
@@ -3962,6 +3967,8 @@ export const registerReceptionOrder = (input: RegisterReceptionOrderInput): Prom
   authFetch('/api/lab/orders', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'register order'));
 export const correctReceptionOrder = (input: CorrectReceptionOrderInput): Promise<ReceptionOrder> =>
   authFetch('/api/lab/orders/correct', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'correct order'));
+export const cancelReceptionOrder = (input: CancelReceptionOrderInput): Promise<ReceptionOrder> =>
+  authFetch('/api/lab/orders/cancel', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'cancel order'));
 export function searchReceptionPatients(q: { identifier?: string; name?: string; birthDate?: string }): Promise<ReceptionPatient[]> {
   const s = new URLSearchParams();
   if (q.identifier) s.set('identifier', q.identifier);

@@ -14,6 +14,7 @@ import { RegisterOrderSheet } from '@/lab/RegisterOrderSheet';
 import { PatientSheet, type PickedPatient } from '@/lab/PatientSheet';
 import { ReceiveSampleSheet } from '@/lab/ReceiveSampleSheet';
 import { CorrectOrderSheet } from '@/lab/CorrectOrderSheet';
+import { CancelOrderSheet } from '@/lab/CancelOrderSheet';
 import { PRIORITY_VALUE_SET, useValueSet } from '@/lab/useValueSet';
 
 /**
@@ -31,6 +32,7 @@ export function Reception() {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [receiving, setReceiving] = useState<ReceptionOrder | null>(null);
   const [correcting, setCorrecting] = useState<ReceptionOrder | null>(null);
+  const [cancelling, setCancelling] = useState<ReceptionOrder | null>(null);
   const [linking, setLinking] = useState<ReceptionOrder | null>(null);
   const seq = useRef(0);
   const priorities = useValueSet(PRIORITY_VALUE_SET);
@@ -139,6 +141,7 @@ export function Reception() {
                   onReceive={() => setReceiving(o)}
                   onLinkPatient={() => setLinking(o)}
                   onCorrect={() => setCorrecting(o)}
+                  onCancel={() => setCancelling(o)}
                 />
               ))}
             </div>
@@ -155,6 +158,7 @@ export function Reception() {
       />
       <ReceiveSampleSheet order={receiving} onClose={() => setReceiving(null)} onReceived={(o) => { setReceiving(null); put(o); }} onCloseAutoFocus={refocus} />
       <CorrectOrderSheet order={correcting} onClose={() => setCorrecting(null)} onCorrected={(o) => { setCorrecting(null); put(o); }} onCloseAutoFocus={refocus} />
+      <CancelOrderSheet order={cancelling} onClose={() => setCancelling(null)} onCancelled={(o) => { setCancelling(null); put(o); }} onCloseAutoFocus={refocus} />
       <PatientSheet
         open={linking !== null}
         onClose={() => setLinking(null)}

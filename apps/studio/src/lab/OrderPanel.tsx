@@ -22,13 +22,15 @@ function localDateTime(value: string, language: string): string {
 
 /** One found order on the Reception page: who sent it, for whom, its tests and its samples. Every
  *  action sits in the panel's ⋯ menu (AGENTS.md section 5). */
-export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorrect }: {
+export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorrect, onCancel }: {
   order: ReceptionOrder;
   /** The priority value set, so the panel shows a priority by its name. */
   priorities: ReceptionCoding[];
   onReceive: () => void;
   onLinkPatient: () => void;
   onCorrect: () => void;
+  /** Offered for an order registered at the desk only. A form order is voided from its form entry. */
+  onCancel: () => void;
 }): JSX.Element {
   const { t, i18n } = useTranslation();
   const [page, setPage] = useState(0);
@@ -79,6 +81,9 @@ export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorr
             <DropdownMenuItem data-testid={`order-receive-${key}`} onSelect={onReceive}>{t('reception.panel.receive')}</DropdownMenuItem>
             <DropdownMenuItem data-testid={`order-link-${key}`} onSelect={onLinkPatient}>{t('reception.panel.linkPatient')}</DropdownMenuItem>
             <DropdownMenuItem data-testid={`order-correct-${key}`} onSelect={onCorrect}>{t('reception.panel.correct')}</DropdownMenuItem>
+            {order.origin === 'lab-desk' && (
+              <DropdownMenuItem data-testid={`order-cancel-${key}`} onSelect={onCancel}>{t('reception.panel.cancel')}</DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

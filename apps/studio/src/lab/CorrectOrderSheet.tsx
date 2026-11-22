@@ -75,7 +75,9 @@ export function CorrectOrderSheet({ order, onClose, onCorrected, onCloseAutoFocu
       <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg" onCloseAutoFocus={onCloseAutoFocus}>
         <SheetHeader className="border-b border-border px-6 py-4">
           <SheetTitle>{t('reception.correct.title')}</SheetTitle>
-          <SheetDescription>{t('reception.correct.description')}</SheetDescription>
+          <SheetDescription>
+            {t(order?.origin === 'lab-desk' ? 'reception.correct.descriptionDesk' : 'reception.correct.description')}
+          </SheetDescription>
         </SheetHeader>
         <section>
           <div className="flex items-center justify-between px-6 py-3">

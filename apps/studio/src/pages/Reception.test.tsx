@@ -18,6 +18,7 @@ vi.mock('@/api', async (orig) => {
     ...actual,
     findReceptionOrders: vi.fn(),
     correctReceptionOrder: vi.fn(),
+    cancelReceptionOrder: vi.fn(),
     registerReceptionPatient: vi.fn(),
     searchReceptionPatients: vi.fn(async () => []),
     searchReceptionFacilities: vi.fn(async () => []),
@@ -154,6 +155,36 @@ describe('Reception', () => {
     openMenu('order-actions-F1|REQ-1');
     const items = (await screen.findAllByRole('menuitem')).map((m) => m.textContent);
     expect(items).toEqual(['Receive sample', 'Link patient', 'Correct order']);
+  });
+
+  it('offers Cancel registration for a desk order only, and shows the cancelled tests after', async () => {
+    const desk: api.ReceptionOrder = { ...ORDER, origin: 'lab-desk' };
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([desk]);
+    vi.mocked(api.cancelReceptionOrder).mockResolvedValue({ ...desk, tests: [{ ...desk.tests[0]!, status: 'entered-in-error' }] });
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-F1|REQ-1');
+    openMenu('order-actions-F1|REQ-1');
+    expect((await screen.findAllByRole('menuitem')).map((m) => m.textContent))
+      .toEqual(['Receive sample', 'Link patient', 'Correct order', 'Cancel registration']);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Cancel registration' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'Wrong test list' } });
+    openMenu('cancel-sheet-menu');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Cancel registration' }));
+    await waitFor(() => expect(api.cancelReceptionOrder).toHaveBeenCalledWith({ requisition: 'REQ-1', facilityCode: 'F1', reason: 'Wrong test list' }));
+    expect(await screen.findByText('Entered in error')).toBeInTheDocument();
+  });
+
+  it('points a desk order\'s Correct order sheet to Cancel registration', async () => {
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([{ ...ORDER, origin: 'lab-desk' }]);
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-F1|REQ-1');
+    openMenu('order-actions-F1|REQ-1');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Correct order' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/use Cancel registration in the order menu/)).toBeInTheDocument();
   });
 
   it('links a patient registered in the patient sheet without a second search', async () => {

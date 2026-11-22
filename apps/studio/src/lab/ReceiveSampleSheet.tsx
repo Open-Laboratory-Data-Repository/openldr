@@ -17,11 +17,14 @@ import { SAMPLE_CONDITION_VALUE_SET, useValueSet } from './useValueSet';
 const NO_CONDITION = '__none__';
 const keyOf = (c: { system: string; code: string }): string => `${c.system}|${c.code}`;
 
-/** One request of the order and the tests it holds. An order saved by the form before slice 1b is
- *  one request holding every test, so a request may name several. */
+/** The request statuses no sample is received for: the server refuses them. */
+const NOT_LIVE: ReadonlySet<string> = new Set(['entered-in-error', 'revoked']);
+
+/** One live request of the order and the tests it holds. An order saved by the form before slice 1b
+ *  is one request holding every test, so a request may name several. */
 function requestsOf(order: ReceptionOrder): Array<{ id: string; names: string }> {
   const by = new Map<string, string[]>();
-  for (const test of order.tests) by.set(test.serviceRequestId, [...(by.get(test.serviceRequestId) ?? []), test.display ?? test.code]);
+  for (const test of order.tests.filter((x) => !NOT_LIVE.has(x.status))) by.set(test.serviceRequestId, [...(by.get(test.serviceRequestId) ?? []), test.display ?? test.code]);
   return [...by.entries()].map(([id, names]) => ({ id, names: names.join(', ') }));
 }
 
