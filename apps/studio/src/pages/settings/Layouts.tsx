@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { LoadingState } from '@/components/ui/spinner';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { NAV } from '@/shell/AppShell';
 import { loadLayouts } from '@/shell/layouts';
 import { deleteLayout, listLayouts, listRoles, saveLayout, type LayoutInput, type LayoutPreset, type RoleRecord } from '@/api';
@@ -118,7 +119,14 @@ export function Layouts() {
             <TableBody className="[&_tr:last-child]:border-b">
               {rows.map((l) => (
                 <TableRow key={l.id}>
-                  <TableCell className="font-medium">{l.name}</TableCell>
+                  <TableCell className="font-medium">
+                    {l.name}
+                    {/* The pack's next update overwrites an edit to this layout, so say which pack
+                        owns it (profile packs design 5.2). */}
+                    {l.ownerPack ? (
+                      <div data-testid="owner-pack" className="min-w-0"><TruncatedText as="div" text={t('layouts.ownerPack', { id: l.ownerPack })} className="max-w-[16rem] text-xs font-normal text-muted-foreground" /></div>
+                    ) : null}
+                  </TableCell>
                   <TableCell>{l.pages.length}</TableCell>
                   <TableCell className="hidden text-muted-foreground sm:table-cell">{pageName(l.startPage)}</TableCell>
                   <TableCell className="hidden text-muted-foreground sm:table-cell">{l.roles.map(roleName).join(', ') || '-'}</TableCell>

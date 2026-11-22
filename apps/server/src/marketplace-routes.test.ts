@@ -618,6 +618,30 @@ describe('marketplace routes', () => {
     expect(res.json().payload.steps).toEqual([{ kind: 'query', label: 'Queries', count: 2 }]);
   });
 
+  it('available detail of a pack lists each role step with its capability keys', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [rolePackReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/' + encodeURIComponent('reg-role-packs::role-pack-1') });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().roles).toEqual([{ slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] }]);
+  });
+
+  it('available detail of a pack whose pack.json does not parse lists no roles', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [packReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/' + encodeURIComponent('reg-packs::demo-pack-1') });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().roles).toEqual([]);
+  });
+
+  it('available detail of a plugin carries no roles field', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [localReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/reg-local::demo-1' });
+    expect(res.statusCode).toBe(200);
+    expect('roles' in res.json()).toBe(false);
+  });
+
   // ── Registries CRUD ──
   describe('registries CRUD', () => {
     it('POST creates → GET lists → PUT disables → DELETE removes', async () => {

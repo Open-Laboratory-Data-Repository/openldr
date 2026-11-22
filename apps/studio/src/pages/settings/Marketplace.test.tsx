@@ -9,7 +9,7 @@ vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual,
     listInstalledArtifacts: vi.fn(), listAvailableArtifacts: vi.fn(), getAvailableArtifact: vi.fn(), getRemovalPlan: vi.fn(), removePlugin: vi.fn(),
-    installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn(), detachArtifact: vi.fn(), refreshRegistry: vi.fn(),
+    installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn(), detachArtifact: vi.fn(), refreshRegistry: vi.fn(), getPackRemoval: vi.fn(), removePack: vi.fn(),
     getPublishStatus: vi.fn(), publishArtifact: vi.fn(),
     // Registries is a real tab now that the page's ⋯ reaches into it.
     listRegistries: vi.fn(), createRegistry: vi.fn(), updateRegistry: vi.fn(), deleteRegistry: vi.fn() };
@@ -298,6 +298,30 @@ describe('Marketplace', () => {
     // Confirm in the AlertDialog (its action button is also labelled "Detach").
     fireEvent.click(await screen.findByRole('button', { name: 'Detach' }));
     await waitFor(() => expect(api.detachArtifact).toHaveBeenCalledWith('demo-form'));
+  });
+
+  it('removes an installed content pack through its prompt, then toasts and reloads the list', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([{ id: 'collection-site', version: '0.1.0', active: true, enabled: true, approvedBy: 'admin', type: 'content-pack', publisher: { name: 'Acme' }, capabilities: [], legacy: false, status: 'installed', failedStep: null, error: null }]);
+    (api.getPackRemoval as any).mockResolvedValue({ roles: ['Sample Clerk'], layouts: ['Collection site'], formsKept: ['Lab request'], holders: [] });
+    (api.removePack as any).mockResolvedValue({ ok: true });
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Installed \(1\)/ }), { button: 0 });
+    fireEvent.click(await screen.findByTestId('card-collection-site'));
+    const menuTrigger = await screen.findByTestId('detail-menu');
+    fireEvent.pointerDown(menuTrigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByTestId('detail-remove-pack')) fireEvent.keyDown(menuTrigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('detail-remove-pack'));
+    expect((await screen.findByTestId('remove-pack-roles')).textContent).toContain('Sample Clerk');
+    // The plugin prompts stay shut for a pack.
+    expect(screen.queryByTestId('remove-plugin-sheet')).toBeNull();
+    const loadsBefore = (api.listInstalledArtifacts as any).mock.calls.length;
+    fireEvent.click(screen.getByTestId('remove-pack-confirm'));
+    await waitFor(() => expect(api.removePack).toHaveBeenCalledWith('collection-site'));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Removed collection-site'));
+    await waitFor(() => expect((api.listInstalledArtifacts as any).mock.calls.length).toBeGreaterThan(loadsBefore));
+    await waitFor(() => expect(screen.queryByTestId('remove-pack-dialog')).toBeNull());
+    expect(api.detachArtifact).not.toHaveBeenCalled();
   });
 
   it('publishes a staged bundle and shows the PR toast', async () => {

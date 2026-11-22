@@ -1,6 +1,6 @@
 import { basename, join } from 'node:path';
 import { readFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
@@ -9,7 +9,7 @@ import {
   verifyBundle, readGrant, isCompatible, readBundle,
   LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
   openBundlePr, fetchRepoIndexJson, repoPathExists, mergeIndexEntry, parseIndex,
-  payloadFileName, type RepoCoords, PublishError,
+  payloadFileName, type RepoCoords, PublishError, parseContentPack, type Bundle,
 } from '@openldr/marketplace';
 import { createRegistryStore, type RegistryRecord } from '@openldr/db';
 import { redact } from '@openldr/core';
@@ -17,6 +17,21 @@ import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
 const VIEW = { preHandler: requireCapability('marketplace.view') };
+
+/** The role steps of a content pack, with their capability keys, for the install screen. The signed
+ *  step summary carries only a count, and the admin must see every capability before confirming
+ *  (profile packs design 5.1a). A pack.json that fails its hash or does not parse lists none: the
+ *  install itself refuses that pack with the real reason. */
+function packRoles(b: Bundle): { slug: string; name: string; capabilities: string[] }[] {
+  const sha = (b.manifest.payload as { packSha256?: string }).packSha256;
+  if (createHash('sha256').update(b.wasm).digest('hex') !== sha) return [];
+  try {
+    const pack = parseContentPack(JSON.parse(new TextDecoder().decode(b.wasm)));
+    return pack.steps.flatMap((s) => (s.kind === 'role' ? [{ slug: s.slug, name: s.name, capabilities: s.capabilities }] : []));
+  } catch {
+    return [];
+  }
+}
 const MANAGE = { preHandler: requireCapability('marketplace.manage') };
 
 function actor(req: FastifyRequest): { id?: string | null; name: string } {
@@ -158,6 +173,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         compatible: isCompatible(b.manifest.compatibility.ceVersion, CE_VERSION),
         ceVersion: CE_VERSION, payload: b.manifest.payload, valid: v.valid,
         ...(v.reason ? { invalidReason: v.reason } : {}),
+        ...(b.manifest.type === 'content-pack' ? { roles: packRoles(b) } : {}),
         registryId: reg.id, registryName: reg.name,
       };
     } catch {
