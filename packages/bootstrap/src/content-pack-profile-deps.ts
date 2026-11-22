@@ -1,5 +1,5 @@
 import type { Kysely } from 'kysely';
-import { fromQuestionnaire, type FormStore } from '@openldr/forms';
+import { canSubmitForm, fromQuestionnaire, type FormStore } from '@openldr/forms';
 import type { FormAccessStore, InternalSchema, MarketplaceInstallStore } from '@openldr/db';
 import type { PluginStore } from '@openldr/plugins';
 import { setFormAccess } from './form-access';
@@ -25,6 +25,12 @@ export async function roleMemberNames(db: Kysely<InternalSchema>, roleId: string
     .map((m) => m.name);
 }
 
+/** The name a pack form is stored under: its title, else the Questionnaire name, else its id. */
+function formName(schema: { name?: string }, questionnaire: unknown): string {
+  const q = questionnaire as { name?: unknown; id?: unknown };
+  return schema.name || (typeof q.name === 'string' && q.name) || (typeof q.id === 'string' && q.id) || 'form';
+}
+
 /** The form members of ProfileDeps over the form store, as form-artifact-install.ts installs a form. */
 export function packFormDeps(deps: {
   forms: FormStore;
@@ -34,13 +40,20 @@ export function packFormDeps(deps: {
   const { forms } = deps;
   return {
     check(questionnaire) {
-      fromQuestionnaire(questionnaire as never);
+      const schema = fromQuestionnaire(questionnaire as never);
+      // The submit route saves a response only when an extractor makes a record from it. A form no
+      // extractor covers loads, but every submission of it is refused, so refuse it here instead.
+      if (!canSubmitForm(schema)) {
+        throw new Error(
+          `the form "${formName(schema, questionnaire)}" could never be saved: it is not bound to an order ` +
+          '(ServiceRequest) and no field is marked as a result',
+        );
+      }
     },
     async install(formId, questionnaire, versionLabel, actorId) {
       const schema = fromQuestionnaire(questionnaire as never);
       const s = schema as { name?: string; fhirResourceType?: string | null; fhirVersion?: string | null; fhirProfileUrl?: string | null; targetPages?: string[] };
-      const q = questionnaire as { name?: unknown; id?: unknown };
-      const name = s.name || (typeof q.name === 'string' && q.name) || (typeof q.id === 'string' && q.id) || 'form';
+      const name = formName(schema, questionnaire);
       const input = {
         name, versionLabel, schema,
         fhirResourceType: s.fhirResourceType ?? null, fhirVersion: s.fhirVersion ?? null,

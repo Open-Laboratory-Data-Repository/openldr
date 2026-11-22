@@ -79,14 +79,26 @@ L'identifiant doit déjà être sous sa forme finale : lettres minuscules, chiff
 ```json
 {
   "kind": "form",
-  "key": "sample-dispatch",
+  "key": "lab-request",
   "questionnaire": {
     "resourceType": "Questionnaire",
-    "title": "Sample dispatch",
+    "title": "Lab request",
     "status": "active",
+    "extension": [{ "url": "urn:corlix:questionnaire:fhir-resource-type", "valueString": "ServiceRequest" }],
     "item": [
-      { "linkId": "batch", "text": "Batch number", "type": "string", "required": true },
-      { "linkId": "sent-on", "text": "Date sent", "type": "date" }
+      { "linkId": "requisition", "text": "Requisition number", "type": "string", "required": true,
+        "extension": [
+          { "url": "urn:corlix:questionnaire:fhir-path", "valueString": "ServiceRequest.identifier.value" },
+          { "url": "urn:corlix:questionnaire:field-extras", "valueString": "{\"fhirDiscriminator\":{\"system\":\"urn:openldr:order:requisition\"},\"fhirValueField\":\"value\"}" }
+        ] },
+      { "linkId": "tests", "text": "Tests requested", "type": "string", "required": true, "repeats": true,
+        "answerValueSet": "urn:openldr:valueset:lab-tests",
+        "extension": [
+          { "url": "urn:corlix:questionnaire:fhir-path", "valueString": "ServiceRequest.code" },
+          { "url": "urn:corlix:questionnaire:field-type", "valueString": "reference" },
+          { "url": "urn:corlix:questionnaire:cardinality", "valueString": "{\"min\":1,\"max\":\"*\"}" },
+          { "url": "urn:corlix:questionnaire:field-extras", "valueString": "{\"referenceMultiple\":true}" }
+        ] }
     ]
   },
   "open": ["sample-clerk"],
@@ -94,7 +106,7 @@ L'identifiant doit déjà être sous sa forme finale : lettres minuscules, chiff
 }
 ```
 
-Le formulaire prend son nom dans le `title` du Questionnaire. Son libellé de version est la version du pack. `open` et `submit` prennent des identifiants de rôle, que le CE convertit en identifiants internes de l'installation où il s'exécute. Une liste vide veut dire tous les rôles qui ont la permission, comme dans le panneau **Accès** du constructeur de formulaires. Pour soumettre, une personne doit aussi pouvoir ouvrir le formulaire.
+Cet exemple est un petit formulaire de demande. L'extension `fhir-resource-type` le lie à une demande d'analyse, le numéro de demande remplit l'identifiant de la demande, et les analyses viennent de celles activées dans le laboratoire. Le formulaire prend son nom dans le `title` du Questionnaire. Son libellé de version est la version du pack. `open` et `submit` prennent des identifiants de rôle, que le CE convertit en identifiants internes de l'installation où il s'exécute. Une liste vide veut dire tous les rôles qui ont la permission, comme dans le panneau **Accès** du constructeur de formulaires. Pour soumettre, une personne doit aussi pouvoir ouvrir le formulaire. Un formulaire doit être lié à une demande d'analyse (`ServiceRequest`) ou avoir un champ marqué comme résultat, sinon l'installation le refuse, car le CE ne pourrait jamais en enregistrer une réponse.
 
 Les codes et les jeux de valeurs d'un Questionnaire appartiennent au pack. Gardez-les dans le dépôt du pack, jamais dans le CE.
 
@@ -136,7 +148,7 @@ Pour l'exemple du site de prélèvement ci-dessus, la liste est :
 [
   { "kind": "role", "label": "Sample Clerk", "count": 3 },
   { "kind": "layout", "label": "Collection site", "count": 3 },
-  { "kind": "form", "label": "Sample dispatch", "count": 1 }
+  { "kind": "form", "label": "Lab request", "count": 1 }
 ]
 ```
 
