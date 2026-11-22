@@ -215,7 +215,9 @@ One Observation per result field, each with its own code from the test catalog.
 
 Unauthorised results stay out of reports and connectors. A preliminary Observation is stored in
 the FHIR store, but the warehouse projection fills `lab_results` only from final, corrected,
-amended and cancelled Observations, and connectors send on the release event, not on save. Today
+amended and cancelled Observations. This applies to every Observation, imported ones included
+(operator, 2026-11-22): an imported preliminary result leaves reports the day slice 1b ships, and
+slice 1b removes existing preliminary rows from `lab_results`, and connectors send on the release event, not on save. Today
 the projection copies every Observation whatever its status.
 
 Submitting moves the test to "To authorise", unless the test does not need review and no value is
@@ -319,8 +321,9 @@ Each slice ships UI, CLI where it applies, docs in three languages and a mobile 
 
 | # | Slice | Depends on |
 |---|---|---|
-| 1 | Groundwork: value set import fix, Task and Provenance in the FHIR store, the local correction path, the warehouse status filter, critical limits, settings, capabilities and roles, seeded value sets, one ServiceRequest per test, the Lab order form as an order form only | none |
-| 2 | Reception: find or register, patient, receive, correct a typo | 1 |
+| 1a | Groundwork that changes nothing existing: value set import fix, Task and Provenance in the FHIR store, the local correction path, critical limits, per-lab sections and review settings, lab-wide settings, capabilities and roles, seeded value sets | none |
+| 1b | Behaviour changes, built with reception: one ServiceRequest per test, the Lab order form as an order form only, the warehouse status filter | 1a |
+| 2 | Reception: find or register, patient, receive, correct a typo | 1a, built together with 1b |
 | 3 | Rejection: return to site, reject a sample, redraw | 2 |
 | 4 | Worklist: `lab_work_items` and the three tabs | 2 |
 | 5 | Result entry and authorisation | 4 |
