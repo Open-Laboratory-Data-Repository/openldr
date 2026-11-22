@@ -154,3 +154,4 @@ export {
 export {
   findByRequisition, indexRequisitions, rebuildRequisitions, requisitionRowOf, type RequisitionRow,
 } from './lab-requisitions';
+export { requesterFacility, requesterPractitionerDisplay, type RequesterFacility } from './relational/requester';

@@ -19,7 +19,7 @@ import { discriminatorEquals, extrasDiscriminator } from '../discriminator'
 import { parseTestDetails } from '../test-details'
 import { ORDER_REJECTION_EXTENSION, isOrderRejectionBinding } from '../order-rejection-path'
 import { orderRejectionOf } from './order-rejection'
-import { isRequesterFacilityBinding, isRequisitionNumberBinding, pickedFacilityOf } from './order-fields'
+import { isRequesterFacilityBinding, isRequisitionNumberBinding, pickedFacilityOf, type PickedFacility } from './order-fields'
 import { readTestDetails } from './test-results'
 import { EXT_CORLIX_FHIR_PATH, EXT_CORLIX_FIELD_EXTRAS, EXT_QUESTIONNAIRE_UNIT, EXT_SDC_OBSERVATION_EXTRACT } from '../extensions'
 
@@ -269,11 +269,15 @@ function nameOf(value: unknown): string | undefined {
  */
 function facilityOf(value: unknown): Reference | undefined {
   const c = pickedFacilityOf(value)
-  if (c) {
-    return { identifier: { ...(c.system ? { system: c.system } : {}), value: c.code }, ...(c.display ? { display: c.display } : {}) }
-  }
+  if (c) return facilityReference(c)
   const name = nameOf(value)
   return name ? { display: name } : undefined
+}
+
+/** A facility from the facility register as the Organization reference an order's requester holds.
+ *  Its code becomes the identifier the warehouse keys on. */
+export function facilityReference(c: PickedFacility): Reference {
+  return { identifier: { ...(c.system ? { system: c.system } : {}), value: c.code }, ...(c.display ? { display: c.display } : {}) }
 }
 
 /**
@@ -289,6 +293,20 @@ function requesterRole(clinician: string | undefined, facility: Reference | unde
     ...(clinician ? { practitioner: { display: clinician } } : {}),
     ...(facility ? { organization: facility } : {}),
   }
+}
+
+/**
+ * An order's requester: the contained PractitionerRole and the reference to it, or undefined when
+ * there is neither a clinician nor a facility. The form extractor and the lab desk (reception, in
+ * @openldr/bootstrap) both write it, so a desk order's facility and clinician read back the same way.
+ */
+export function orderRequester(
+  clinician: string | undefined, facility: Reference | undefined,
+): { contained: PractitionerRole; requester: Reference } | undefined {
+  const role = requesterRole(clinician, facility)
+  if (!role) return undefined
+  const display = clinician ?? facility?.display
+  return { contained: role, requester: { reference: `#${REQUESTER_ID}`, type: 'PractitionerRole', ...(display ? { display } : {}) } }
 }
 
 /**
@@ -342,11 +360,10 @@ export const ServiceRequestExtractor: ResourceExtractor = {
         else clinician = nameOf(value)
       }
     })
-    const requester = requesterRole(clinician, facility)
+    const requester = orderRequester(clinician, facility)
     if (requester) {
-      const display = clinician ?? facility?.display
-      request.contained = [requester]
-      request.requester = { reference: `#${REQUESTER_ID}`, type: 'PractitionerRole', ...(display ? { display } : {}) }
+      request.contained = [requester.contained]
+      request.requester = requester.requester
     }
     // One request per test, with the test's fixed id when the caller gives one. code.text names each
     // after its own test: the warehouse reads text before the first coding's display, and that first

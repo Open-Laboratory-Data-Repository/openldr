@@ -558,6 +558,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     // No route test reaches it through this context. test-catalog-routes.test.ts builds its own fake.
     testCatalog: {} as never,
     labSections: {} as never,
+    labReception: {} as never,
     testMapping: {} as never,
     resultFields: {} as never,
     patientIdentifierSystems: {} as never,
