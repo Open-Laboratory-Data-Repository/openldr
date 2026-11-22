@@ -6,6 +6,96 @@
       "version": "v0.1.12",
       "entries": [
         {
+          "hash": "50272aac6",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The install prompt lists capabilities open, and plainer pack text"
+        },
+        {
+          "hash": "c0e52151c",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "Pack install and removal audit as the CLI actor, with before and after"
+        },
+        {
+          "hash": "0e8d00545",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Profile pack screens show names, pages and plain counts"
+        },
+        {
+          "hash": "cee47c4f2",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "Reinstalling a removed pack updates its forms"
+        },
+        {
+          "hash": "4fcf4e3af",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "Detaching a pack that owns a role needs roles.manage"
+        },
+        {
+          "hash": "2286010ff",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Show what a profile pack installs, and remove it"
+        },
+        {
+          "hash": "6354b46f3",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Market remove detaches a content pack"
+        },
+        {
+          "hash": "02c453c02",
+          "type": "feat",
+          "scope": "server",
+          "title": "Install and detach routes for packs that carry a role"
+        },
+        {
+          "hash": "6be93a660",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Detaching a content pack removes the roles and layouts it made"
+        },
+        {
+          "hash": "59af1f33d",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Audit each role and layout a pack update removes"
+        },
+        {
+          "hash": "f6dab4922",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "A content pack creates its role, layout and forms"
+        },
+        {
+          "hash": "439ae4f56",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Tighten the profile pack checks"
+        },
+        {
+          "hash": "afc0aa982",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Check a pack's needs, role, layout and form steps before writing"
+        },
+        {
+          "hash": "699e29fe4",
+          "type": "feat",
+          "scope": "db",
+          "title": "Record which content pack made a role, layout or form"
+        },
+        {
+          "hash": "69d05d2d9",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "A content pack can carry needs, role, layout and form steps"
+        },
+        {
           "hash": "422523803",
           "type": "fix",
           "scope": "examples",
