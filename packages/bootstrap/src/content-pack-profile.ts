@@ -1,5 +1,6 @@
 import { isCompatible, type ContentPackStep } from '@openldr/marketplace';
 import type { PackItemKind, PackItemStore, RoleStore } from '@openldr/db';
+import { slugify } from '@openldr/rbac';
 import { layoutInputSchema, type LayoutInput, type LayoutList, type LayoutPreset } from './layout-presets';
 
 // The needs, role, layout and form steps of a content pack (profile packs design 5.1 to 5.3).
@@ -45,11 +46,13 @@ const holds = (caps: InstallerCapabilities, key: string): boolean => caps === 'a
 export async function checkProfileSteps(
   deps: ProfileDeps, packId: string, steps: ContentPackStep[], caps: InstallerCapabilities,
 ): Promise<void> {
-  if (steps.some((s) => s.kind === 'role') && !holds(caps, 'roles.manage')) {
+  const items = await deps.packItems.list(packId);
+  // An update that leaves out a role this pack made deletes that role, so it needs roles.manage too.
+  const touchesRoles = steps.some((s) => s.kind === 'role') || items.some((i) => i.kind === 'role');
+  if (touchesRoles && !holds(caps, 'roles.manage')) {
     throw new Error('installing this pack needs the roles.manage capability');
   }
 
-  const items = await deps.packItems.list(packId);
   const ownedId = (kind: PackItemKind, key: string): string | null =>
     items.find((i) => i.kind === kind && i.key === key)?.itemId ?? null;
   const known = new Set(deps.capabilityKeys);
@@ -61,6 +64,7 @@ export async function checkProfileSteps(
     }
   };
   let layouts: LayoutList | null = null;
+  const layoutNames = new Set<string>();
 
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
@@ -74,11 +78,16 @@ export async function checkProfileSteps(
         }
         break;
       case 'role': {
+        // RoleStore.create slugifies the slug, so a slug that is not already its own slug would be
+        // stored under another one and the next run would not find it.
+        if (slugify(step.slug) !== step.slug) {
+          throw new Error(`the role slug ${step.slug} must be lowercase letters, digits and single hyphens`);
+        }
         for (const key of step.capabilities) {
           if (!known.has(key)) throw new Error(`unknown capability: ${key}`);
           if (!holds(caps, key)) throw new Error(`you cannot install a role that grants ${key}, because you do not hold it`);
         }
-        const existing = await deps.roles.getBySlug(step.slug);
+        const existing = await deps.roles.getBySlug(slugify(step.slug));
         if (existing && existing.id !== ownedId('role', step.slug)) {
           throw new Error(`a role with the slug ${step.slug} already exists and this pack did not make it`);
         }
@@ -89,6 +98,10 @@ export async function checkProfileSteps(
         namesEarlierRoles(n, step.roles);
         const parsed = layoutInputSchema.safeParse({ name: step.name, startPage: step.startPage, pages: step.pages, roles: step.roles });
         if (!parsed.success) throw new Error(parsed.error.issues[0].message);
+        if (layoutNames.has(parsed.data.name)) {
+          throw new Error(`step ${n} uses the layout name ${parsed.data.name}, which an earlier step of this pack already uses`);
+        }
+        layoutNames.add(parsed.data.name);
         layouts ??= await deps.layouts.list();
         const existing = layouts.layouts.find((l) => l.name === parsed.data.name);
         if (existing && existing.id !== ownedId('layout', step.key)) {

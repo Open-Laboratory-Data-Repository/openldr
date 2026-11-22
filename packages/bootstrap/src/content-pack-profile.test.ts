@@ -164,6 +164,27 @@ describe('checkProfileSteps', () => {
     expect((err as PackRemovalError).holders).toEqual([{ role: 'old-clerk', users: ['Ann', 'Bob'] }]);
   });
 
+  it('refuses a role slug that slugify would change', async () => {
+    const steps: ContentPackStep[] = [{ kind: 'role', slug: 'sample--clerk', name: 'Sample Clerk', capabilities: ['forms.view'] }];
+    await expect(checkProfileSteps(fakeDeps(), PACK, steps, 'all'))
+      .rejects.toThrow('the role slug sample--clerk must be lowercase letters, digits and single hyphens');
+  });
+
+  it('refuses two layout steps with the same name', async () => {
+    const second: ContentPackStep = { kind: 'layout', key: 'collection-site-2', name: 'Collection site', startPage: null, pages: ['/forms'], roles: [] };
+    await expect(checkProfileSteps(fakeDeps(), PACK, [...STEPS, second], 'all'))
+      .rejects.toThrow('step 5 uses the layout name Collection site, which an earlier step of this pack already uses');
+  });
+
+  it('needs roles.manage for an update that leaves out a role this pack owns', async () => {
+    const deps = fakeDeps({
+      roles: [{ id: 'r2', slug: 'old-clerk' }],
+      items: [{ packId: PACK, kind: 'role', key: 'old-clerk', itemId: 'r2' }],
+    });
+    await expect(checkProfileSteps(deps, PACK, [STEPS[0]], ['marketplace.manage']))
+      .rejects.toThrow('installing this pack needs the roles.manage capability');
+  });
+
   it('passes when an owned role it leaves out has no members', async () => {
     const deps = fakeDeps({
       roles: [{ id: 'r2', slug: 'old-clerk' }],
