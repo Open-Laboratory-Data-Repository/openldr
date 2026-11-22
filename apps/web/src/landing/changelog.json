@@ -6,6 +6,18 @@
       "version": "v0.1.12",
       "entries": [
         {
+          "hash": "422523803",
+          "type": "fix",
+          "scope": "examples",
+          "title": "Fixes from the dev check"
+        },
+        {
+          "hash": "3c43f4955",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "An imported value set lands under the publisher on screen"
+        },
+        {
           "hash": "3b6e4d7d4",
           "type": "fix",
           "scope": "examples",
