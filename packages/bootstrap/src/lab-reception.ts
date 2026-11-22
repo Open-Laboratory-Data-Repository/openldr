@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { sql, type Kysely } from 'kysely';
+import type { Kysely } from 'kysely';
 import type { Logger } from '@openldr/core';
 import {
   CorrectionError, FACILITY_REGISTRY_SYSTEM, findByRequisition, indexRequisitions, persistResources,
@@ -171,6 +171,29 @@ function specimenOf(sp: Json): ReceptionOrder['specimens'][number] {
   };
 }
 
+/**
+ * The sample types an order's tests take: the union, in first-seen order, of each catalog test's
+ * types (the lab's own list when it set one, else the catalog's). Tests outside the catalog take
+ * none. Reception reads an order's Specimens at these types' fixed ids, and the sample choices
+ * offered for an order come from the same list.
+ */
+export async function orderSpecimenTypes(
+  catalog: Pick<TestCatalog, 'get'>, tests: Array<{ system: string; code: string }>,
+): Promise<Array<{ system: string; code: string }>> {
+  const types = new Map<string, { system: string; code: string }>();
+  const seen = new Set<string>();
+  for (const t of tests) {
+    if (t.system !== TEST_CATALOG_SYSTEM || seen.has(t.code)) continue;
+    seen.add(t.code);
+    const test = await catalog.get(t.code);
+    for (const s of test ? (test.lab.specimenTypes ?? test.specimenTypes) : []) {
+      const key = `${s.system}|${s.code}`;
+      if (!types.has(key)) types.set(key, { system: s.system, code: s.code });
+    }
+  }
+  return [...types.values()];
+}
+
 export function createLabReception(deps: LabReceptionDeps): LabReception {
   const { db, fhirStore, catalog } = deps;
 
@@ -178,40 +201,15 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     return (await fhirStore.get('Patient', id)) as Json | null;
   }
 
-  /** Every Specimen that names one of these requests in `request`. The FHIR store has no search
-   *  index, so this is one scan of the Specimens' JSON. */
-  async function specimensNaming(ids: string[]): Promise<Json[]> {
-    if (ids.length === 0) return [];
-    const probes = ids.map((id) => JSON.stringify({ request: [{ reference: `ServiceRequest/${id}` }] }));
-    const rows = await db.selectFrom('fhir.fhir_resources')
-      .select(['id', 'resource'])
-      .where('resource_type', '=', 'Specimen')
-      .where(sql<boolean>`(${sql.join(probes.map((p) => sql`resource @> ${p}::jsonb`), sql` or `)})`)
-      .execute();
-    return rows.map((r) => {
-      const doc = typeof r.resource === 'string' ? JSON.parse(r.resource) as Json : r.resource as unknown as Json;
-      return { ...doc, id: r.id };
-    });
-  }
-
-  /** The Specimens of one order: those at the fixed id of each sample type its tests take (ruling 13),
-   *  and any that names one of its requests. */
+  /** The Specimens of one order, read at their fixed ids: one per sample type its tests take
+   *  (ruling 13). A Specimen with any other id is not shown, so a lookup never scans the store. */
   async function specimensOf(facility: string | null, requisition: string, requests: Json[]): Promise<ReceptionOrder['specimens']> {
-    const found = new Map<string, Json>();
-    const types = new Map<string, { system: string; code: string }>();
-    for (const sr of requests) {
-      for (const t of testsOf(sr)) {
-        if (t.system !== TEST_CATALOG_SYSTEM) continue;
-        const test = await catalog.get(t.code);
-        for (const s of test ? (test.lab.specimenTypes ?? test.specimenTypes) : []) types.set(`${s.system}|${s.code}`, s);
-      }
-    }
-    for (const type of types.values()) {
+    const out: ReceptionOrder['specimens'] = [];
+    for (const type of await orderSpecimenTypes(catalog, requests.flatMap(testsOf))) {
       const sp = (await fhirStore.get('Specimen', labSpecimenId(facility, requisition, type))) as Json | null;
-      if (sp) found.set(String(sp['id']), sp);
+      if (sp) out.push(specimenOf(sp));
     }
-    for (const sp of await specimensNaming(requests.map((r) => String(r['id'])))) found.set(String(sp['id']), sp);
-    return [...found.values()].map(specimenOf).sort((a, b) => a.id.localeCompare(b.id));
+    return out.sort((a, b) => a.id.localeCompare(b.id));
   }
 
   async function orderOf(requisition: string, facility: string | null, ids: string[]): Promise<ReceptionOrder | null> {

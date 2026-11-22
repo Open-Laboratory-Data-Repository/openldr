@@ -7,14 +7,14 @@ import {
 } from '@openldr/db';
 import { createOperations } from '@openldr/terminology';
 import { ORDER_ORIGIN_SYSTEM, ORDER_REQUISITION_SYSTEM, facilityReference, labOrderId, labSpecimenId, orderRequester } from '@openldr/forms';
-import { createLabReception, ReceptionError, type LabReception, type OrderChanges } from './lab-reception';
+import { createLabReception, orderSpecimenTypes, ReceptionError, type LabReception, type OrderChanges } from './lab-reception';
 import { createTestCatalog, TEST_CATALOG_SYSTEM } from './test-catalog';
 
 const silent = { info() {}, error() {}, warn() {}, debug() {}, trace() {}, fatal() {}, child() { return silent; } } as never;
 const LOCAL = 'urn:openldr:cs:local';
 const BLD = { system: LOCAL, code: 'BLD' };
 
-interface World { db: Kysely<InternalSchema>; fhirStore: FhirStore; reception: LabReception }
+interface World { db: Kysely<InternalSchema>; fhirStore: FhirStore; catalog: ReturnType<typeof createTestCatalog>; reception: LabReception }
 
 async function seedTest(db: Kysely<InternalSchema>, code: string, display: string, enabled = true): Promise<void> {
   await db.insertInto('terminology_concepts').values({
@@ -56,7 +56,7 @@ async function world(): Promise<World> {
     { resourceType: 'Patient', id: 'p1', name: [{ given: ['Asha'], family: 'Mrema' }] },
     { resourceType: 'Patient', id: 'p2', name: [{ given: ['Juma'], family: 'Said' }] },
   ] as never);
-  return { db, fhirStore, reception: createLabReception({ db, fhirStore, catalog, logger: silent }) };
+  return { db, fhirStore, catalog, reception: createLabReception({ db, fhirStore, catalog, logger: silent }) };
 }
 
 const cat = (code: string, display: string) => ({ system: TEST_CATALOG_SYSTEM, code, display });
@@ -130,19 +130,31 @@ describe('lab reception, orders', () => {
     ]);
   });
 
-  it('reads a Specimen at the fixed id and one that names a request', async () => {
+  it('reads a Specimen at its fixed id and runs no scan for any other', async () => {
     const [sr] = formOrder('FAC-1', 'R-300', [{ code: 'HB', display: 'Haemoglobin' }]);
     await save(w, [sr!], 'form-capture');
+    const fixed = labSpecimenId('FAC-1', 'R-300', BLD);
     await w.fhirStore.saveMany([
-      { resourceType: 'Specimen', id: labSpecimenId('FAC-1', 'R-300', BLD), status: 'available', type: { coding: [{ ...BLD, display: 'Blood' }] }, receivedTime: '2026-11-22T08:00:00Z' },
-      { resourceType: 'Specimen', id: 'sp-other', status: 'unsatisfactory', request: [{ reference: `ServiceRequest/${sr!.id}` }], condition: [{ coding: [{ system: LOCAL, code: 'HAEM', display: 'Haemolysed' }] }] },
-      { resourceType: 'Specimen', id: 'sp-unrelated', status: 'available', request: [{ reference: 'ServiceRequest/nope' }] },
+      { resourceType: 'Specimen', id: fixed, status: 'available', request: [{ reference: `ServiceRequest/${sr!.id}` }], type: { coding: [{ ...BLD, display: 'Blood' }] }, condition: [{ coding: [{ system: LOCAL, code: 'HAEM', display: 'Haemolysed' }] }], receivedTime: '2026-11-22T08:00:00Z' },
+      // The random-id Specimen of an order rejected through the old form path: not shown.
+      { resourceType: 'Specimen', id: 'sp-random', status: 'unsatisfactory', request: [{ reference: `ServiceRequest/${sr!.id}` }] },
     ] as never);
+    const read: string[] = [];
+    const get = w.fhirStore.get.bind(w.fhirStore);
+    w.fhirStore.get = async (type, id) => { read.push(`${type}/${id}`); return get(type, id); };
     const [o] = await w.reception.findOrders('R-300');
     expect(o!.specimens).toEqual([
-      { id: labSpecimenId('FAC-1', 'R-300', BLD), type: { ...BLD, display: 'Blood' }, condition: null, receivedTime: '2026-11-22T08:00:00Z' },
-      { id: 'sp-other', type: null, condition: 'Haemolysed', receivedTime: null },
-    ].sort((a, b) => a.id.localeCompare(b.id)));
+      { id: fixed, type: { ...BLD, display: 'Blood' }, condition: 'Haemolysed', receivedTime: '2026-11-22T08:00:00Z' },
+    ]);
+    expect(read.filter((r) => r.startsWith('Specimen/'))).toEqual([`Specimen/${fixed}`]);
+  });
+
+  it('lists an order\'s sample types once each, from the catalog tests only', async () => {
+    const types = await orderSpecimenTypes(w.catalog, [
+      { system: TEST_CATALOG_SYSTEM, code: 'HB' }, { system: TEST_CATALOG_SYSTEM, code: 'GLU' },
+      { system: 'http://loinc.org', code: '718-7' }, { system: TEST_CATALOG_SYSTEM, code: 'NOPE' },
+    ]);
+    expect(types).toEqual([BLD]);
   });
 
   it('registers an order at the desk, one request per test, and finds it again', async () => {
