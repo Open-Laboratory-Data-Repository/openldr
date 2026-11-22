@@ -86,6 +86,7 @@ import { createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
 import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-catalog';
+import { createLabSections, type LabSections } from './lab-sections';
 import { catalogStoredExpansion } from './register-fhir-catalog';
 import { createTestMapping, isTestMapRelevantRecord, type TestMapping } from './test-mapping';
 import { createResultFields, type ResultFields } from './result-fields';
@@ -605,6 +606,9 @@ export interface AppContext {
   /** The national test catalog (test catalog S1): the catalog code system, its LOINC links and this
    *  install's own settings for each test. The test catalog routes and CLI share it. */
   testCatalog: TestCatalog;
+  /** The lab's own section list (concepts of urn:openldr:cs:lab-section). The settings routes and
+   *  `openldr lab sections` share it. */
+  labSections: LabSections;
   /** Lab test codes mapped to catalog tests, and the warehouse copy test_map. */
   testMapping: TestMapping;
   /** The result dictionary and its LOINC links (result field mapping spec 4.5). */
@@ -1223,6 +1227,7 @@ const reporting: ReportingApi = {
     db: termDb, admin: termAdmin, ops: terminology.ops,
     onChanged: () => { void testMapping.requestRebuild(); },
   });
+  const labSections = createLabSections({ db: termDb, admin: termAdmin });
   // A changed LOINC link changes the loinc column of test_map's result rows.
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
   const patientIdentifierSystems = createPatientIdentifierSystems({ internalDb: termDb, externalDb, admin: termAdmin });
@@ -2215,6 +2220,7 @@ const reporting: ReportingApi = {
     updateCheck,
     facilityRegistry,
     testCatalog,
+    labSections,
     testMapping,
     resultFields,
     patientIdentifierSystems,
@@ -2299,6 +2305,7 @@ export { duplicateWorkflow, newWorkflowId } from './workflow-duplicate';
 export { setWorkflowEnabled } from './workflow-enabled';
 export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
+export { createLabSections, LabSectionError, LAB_SECTION_CODE, type LabSection, type LabSections } from './lab-sections';
 export { importFacilities, resolveKnownNationalSystem } from './facility-import';
 export {
   createTestCatalog, parseCatalogListQuery, catalogChangeAction, catalogImportAudit, readCatalogImportFile, TestCatalogError,

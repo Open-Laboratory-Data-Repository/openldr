@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   LAB_IDENTITY_FIELDS, LAB_IDENTITY_KEYS, LAB_LOGO_MAX_BYTES, LAB_LOGO_MAX_CHARS,
-  validateLabIdentityValue, toIdentityTokens,
+  validateLabIdentityValue, toIdentityTokens, LAB_ALLOW_SELF_AUTHORISE_KEY, parseAllowSelfAuthorise,
 } from './lab-identity';
 
 const dataUri = (mime: string, bytes: number): string =>
@@ -136,5 +136,17 @@ describe('toIdentityTokens', () => {
 
   it('ignores keys that are not identity fields', () => {
     expect(toIdentityTokens({ 'sync.client_secret': 'nope', 'lab.name': 'X' })).toEqual({ name: 'X' });
+  });
+});
+
+describe('lab.allowSelfAuthorise', () => {
+  it('is its own key, outside the letterhead fields', () => {
+    expect(LAB_ALLOW_SELF_AUTHORISE_KEY).toBe('lab.allowSelfAuthorise');
+    expect(LAB_IDENTITY_KEYS).not.toContain(LAB_ALLOW_SELF_AUTHORISE_KEY);
+  });
+
+  it('reads as false unless the stored text is exactly true', () => {
+    expect(parseAllowSelfAuthorise('true')).toBe(true);
+    for (const v of [undefined, null, '', 'false', 'TRUE', '1', 'yes']) expect(parseAllowSelfAuthorise(v), String(v)).toBe(false);
   });
 });

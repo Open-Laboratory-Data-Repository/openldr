@@ -498,6 +498,8 @@ export interface LabIdentityResponse {
   fields: LabIdentityField[];
   values: LabIdentity;
   logo: { maxBytes: number; mimeTypes: string[] };
+  /** Whether the person who entered a result may also authorise it. Changing it needs lab.settings. */
+  allowSelfAuthorise: boolean;
 }
 
 export const fetchLabIdentity = (): Promise<LabIdentityResponse> =>
@@ -515,6 +517,26 @@ export const fetchLabIdentity = (): Promise<LabIdentityResponse> =>
  *  that had already landed. Reported 2026-08-21. */
 export const saveLabIdentity = (patch: LabIdentity): Promise<LabIdentity> =>
   authFetch('/api/settings/lab', jbody(patch, 'PUT')).then((r) => okJson<LabIdentity>(r, 'save lab identity'));
+
+/** Returns the stored value. Needs lab.settings. */
+export const setAllowSelfAuthorise = (value: boolean): Promise<{ value: boolean }> =>
+  authFetch('/api/settings/lab/allow-self-authorise', jbody({ value }, 'PUT'))
+    .then((r) => okJson<{ value: boolean }>(r, 'save self-authorisation'));
+
+/** One of the lab's sections (a concept of urn:openldr:cs:lab-section). */
+export interface LabSection { code: string; name: string }
+
+export const listLabSections = (): Promise<LabSection[]> =>
+  authFetch('/api/settings/lab/sections').then((r) => okJson<LabSection[]>(r, 'list sections'));
+
+export const addLabSection = (section: LabSection): Promise<LabSection> =>
+  authFetch('/api/settings/lab/sections', jbody(section, 'POST')).then((r) => okJson<LabSection>(r, 'add section'));
+
+/** Keeps the server's words, so "section haem is used by 3 tests" reaches the toast. */
+export async function removeLabSection(code: string): Promise<void> {
+  const r = await authFetch(`/api/settings/lab/sections/${encodeURIComponent(code)}`, { method: 'DELETE' });
+  if (!r.ok) throw new Error(formatApiError('remove section', await errorDetail(r)));
+}
 
 export interface NumberSetting {
   id: string;

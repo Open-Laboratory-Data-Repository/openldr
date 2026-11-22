@@ -8,12 +8,16 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Divider } from '@/components/ui/bleed';
 import { LoadingState } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  fetchLabIdentity, saveLabIdentity, listFacilityImportSources,
+  fetchLabIdentity, saveLabIdentity, listFacilityImportSources, setAllowSelfAuthorise,
   type LabIdentity, type LabIdentityResponse, type FacilityRegisterSource,
 } from '@/api';
+import { useAuth } from '@/auth/AuthProvider';
+import { LabSections } from './LabSections';
 
 const LOGO_KEY = 'lab.logo';
 const TIMEZONE_KEY = 'lab.timezone';
@@ -30,6 +34,13 @@ const TIMEZONE_KEY = 'lab.timezone';
  */
 export function Laboratory(): JSX.Element {
   const { t } = useTranslation();
+  // The switch and the section list are lab settings and need lab.settings; the letterhead keeps
+  // its own gate on the server (settings-routes.ts).
+  const { hasCapability } = useAuth();
+  const canLabSettings = hasCapability('lab.settings');
+  const [allowSelf, setAllowSelf] = useState(false);
+  const [savingSelf, setSavingSelf] = useState(false);
+  const [addingSection, setAddingSection] = useState(false);
   const [meta, setMeta] = useState<LabIdentityResponse | null>(null);
   const [values, setValues] = useState<LabIdentity>({});
   const [loading, setLoading] = useState(true);
@@ -48,7 +59,7 @@ export function Laboratory(): JSX.Element {
   useEffect(() => {
     let cancelled = false;
     void fetchLabIdentity()
-      .then((r) => { if (!cancelled) { setMeta(r); setValues(r.values); } })
+      .then((r) => { if (!cancelled) { setMeta(r); setValues(r.values); setAllowSelf(r.allowSelfAuthorise === true); } })
       .catch(() => { if (!cancelled) setError(t('settings.laboratory.loadError')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -104,6 +115,22 @@ export function Laboratory(): JSX.Element {
     }
   };
 
+  // Saved on its own, the moment it changes, as the feature-flag switches are (General.tsx): it has
+  // its own capability, so it cannot ride on the letterhead's Save.
+  const toggleAllowSelf = async (value: boolean) => {
+    setSavingSelf(true);
+    setAllowSelf(value);
+    try {
+      setAllowSelf((await setAllowSelfAuthorise(value)).value);
+      toast.success(t('settings.laboratory.saved'));
+    } catch (e) {
+      setAllowSelf(!value);
+      toast.error(t('settings.laboratory.allowSelfAuthoriseError', { error: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setSavingSelf(false);
+    }
+  };
+
   if (loading) return <LoadingState />;
   if (!meta) return <p className="p-4 text-xs text-destructive">{error ?? t('settings.laboratory.loadError')}</p>;
 
@@ -141,6 +168,11 @@ export function Laboratory(): JSX.Element {
             <DropdownMenuItem disabled={saving} onSelect={() => { void save(); }}>
               {t('settings.laboratory.save')}
             </DropdownMenuItem>
+            {canLabSettings && (
+              <DropdownMenuItem onSelect={() => setAddingSection(true)}>
+                {t('settings.laboratory.addSection')}
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -216,7 +248,25 @@ export function Laboratory(): JSX.Element {
         </div>
       </div>
 
+      {/* Outside the grid on purpose: the grid's label column is `auto`, so this long label would
+          widen it for every row above and, on a phone, push the switch past the edge. Label left,
+          switch right, and the label wraps. No htmlFor: Switch renders a <button role="switch">,
+          which takes its name from aria-label. */}
+      <div className="flex items-center gap-4">
+        <span className="min-w-0 text-xs text-muted-foreground">{t('settings.laboratory.allowSelfAuthorise')}</span>
+        <span className="shrink-0">
+          <Switch checked={allowSelf} disabled={!canLabSettings || savingSelf}
+            onCheckedChange={(v) => { void toggleAllowSelf(v); }}
+            aria-label={t('settings.laboratory.allowSelfAuthorise')} />
+        </span>
+      </div>
 
+      {canLabSettings && (
+        <>
+          <Divider />
+          <LabSections adding={addingSection} onAddingChange={setAddingSection} />
+        </>
+      )}
     </div>
   );
 }

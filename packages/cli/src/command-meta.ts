@@ -302,6 +302,14 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'ingest': { kind: 'app', capability: 'ingest.run', paths: [inFile('file'), inFile('--config')] },
 
   // layout-routes.ts:11. Any signed-in user may read the list (:35), so it takes the settings view key.
+  // Lab module slice 1a. Each needs lab.settings, the key of the routes it shares a service with:
+  // settings-routes.ts LAB_SETTINGS for sections and the switch, and test-catalog-routes.ts LAB_FIELDS,
+  // which lets lab.settings alone set a test's section and review.
+  'lab sections add': { kind: 'app', capability: 'lab.settings' },
+  'lab sections list': { kind: 'app', capability: 'lab.settings' },
+  'lab sections remove': { kind: 'app', capability: 'lab.settings', destructive: true },
+  'lab settings set': { kind: 'app', capability: 'lab.settings' },
+  'lab tests set': { kind: 'app', capability: 'lab.settings' },
   'layouts delete': { kind: 'app', capability: 'settings.edit_general', destructive: true }, // :61
   'layouts list': { kind: 'app', capability: 'settings.view' },
   // Replaces the layout with this name.
