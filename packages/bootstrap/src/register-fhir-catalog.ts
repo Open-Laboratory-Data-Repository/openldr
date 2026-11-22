@@ -58,10 +58,11 @@ export async function registerFhirCatalogValueSets(db: Kysely<InternalSchema>): 
 
 /**
  * The `storedExpansion` that `createOperations` takes: a set's stored codes, for immutable sets only.
- * Only the bundled catalog's sets are immutable. Their stored codes are their content, because their
- * code systems are not loaded as concepts. Any other set's stored codes are a cache of its compose, and
- * when that compose finds nothing today (every lab test retired, say) the cache may be stale, so it
- * stays empty as before.
+ * The bundled catalog's sets are immutable, and their stored codes are their content, because their
+ * code systems are not loaded as concepts. Migration 105's lab test list (vs-lab-tests) is immutable
+ * too, so it reaches this fallback, but its stored list is empty on purpose, so the fallback returns
+ * nothing for it and changes nothing. Any other set's stored codes are a cache of its compose, and
+ * when that compose finds nothing today the cache may be stale, so it stays empty as before.
  */
 export function catalogStoredExpansion(
   admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'getByUrl' | 'storedCodes'> },

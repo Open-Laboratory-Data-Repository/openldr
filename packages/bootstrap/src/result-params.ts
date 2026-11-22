@@ -23,9 +23,9 @@ export interface ResultBand {
   sex: string | null;
   ageLow: number | null;
   ageHigh: number | null;
-  /** A result at or below this is critical. Absent when the band sets none. Slice 5 flags with it. */
+  /** The critical low limit. Absent when the band sets none. Slice 5 decides how results are flagged against it. */
   criticalLow?: number;
-  /** A result at or above this is critical. Absent when the band sets none. */
+  /** The critical high limit. Absent when the band sets none. Slice 5 decides how results are flagged against it. */
   criticalHigh?: number;
 }
 
