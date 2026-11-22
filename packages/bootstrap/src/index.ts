@@ -86,6 +86,7 @@ import { createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
 import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-catalog';
+import { catalogStoredExpansion } from './register-fhir-catalog';
 import { createTestMapping, isTestMapRelevantRecord, type TestMapping } from './test-mapping';
 import { createResultFields, type ResultFields } from './result-fields';
 import { createPatientIdentifierSystems, type PatientIdentifierSystems } from './patient-identifier-systems';
@@ -1184,6 +1185,8 @@ const reporting: ReportingApi = {
       countConcepts: (q) => termStore.countConcepts(q),
       getResourceByUrl: withLabTestsList(termDb, (u) => termStore.getResourceByUrl(u)),
       translate: (q) => termStore.translate(q),
+      // The bundled FHIR catalog's codes are stored, not loaded as concepts (register-fhir-catalog.ts).
+      storedExpansion: catalogStoredExpansion(termAdmin),
     }),
     admin: termAdmin,
     ontology: termOntology,

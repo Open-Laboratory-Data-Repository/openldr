@@ -185,3 +185,44 @@ describe('expand filter', () => {
     expect(vs.expansion?.contains).toHaveLength(1);
   });
 });
+
+describe('expand falls back to the stored expansion', () => {
+  const genderSystem = 'urn:test:cs:gender';
+  const genderVs: ValueSet = { resourceType: 'ValueSet', url: 'urn:test:vs:gender', status: 'active', compose: { include: [{ system: genderSystem }] } };
+  const stored = [
+    { system: genderSystem, code: 'f', display: 'Female' },
+    { system: genderSystem, code: 'm', display: 'Male' },
+  ];
+
+  it('uses the stored codes when the compose finds no concepts', async () => {
+    const ops = createOperations({ ...memSource([], { [genderVs.url]: genderVs }), storedExpansion: async () => stored });
+    const r = await ops.expand(genderVs.url, {});
+    expect(r.expansion?.total).toBe(2);
+    expect(r.expansion?.contains?.map((c) => c.code)).toEqual(['f', 'm']);
+  });
+
+  it('pages and filters the stored codes like any other expansion', async () => {
+    const ops = createOperations({ ...memSource([], { [genderVs.url]: genderVs }), storedExpansion: async () => stored });
+    const r = await ops.expand(genderVs.url, { filter: 'male', count: 1 });
+    expect(r.expansion?.total).toBe(2);
+    expect(r.expansion?.contains?.map((c) => c.code)).toEqual(['f']);
+  });
+
+  it('never reads the stored codes when the compose finds concepts', async () => {
+    let read = 0;
+    const ops = createOperations({
+      ...memSource(abx, { [abxVs.url]: abxVs }),
+      storedExpansion: async () => { read += 1; return stored; },
+    });
+    const r = await ops.expand(abxVs.url, {});
+    expect(r.expansion?.contains?.map((c) => c.code)).toEqual(['AMP', 'CIP', 'GEN']);
+    expect(read).toBe(0);
+  });
+
+  it('stays empty when the source has no stored codes to offer', async () => {
+    const ops = createOperations(memSource([], { [genderVs.url]: genderVs }));
+    const r = await ops.expand(genderVs.url, {});
+    expect(r.expansion?.total).toBe(0);
+    expect(r.expansion?.contains).toEqual([]);
+  });
+});
