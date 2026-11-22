@@ -29,7 +29,7 @@ function fakeCtx() {
       save: async (d: any) => ({ id: 'vs1', ...d }),
       delete: async () => {},
       duplicate: async (id: string) => ({ id: 'vs2', sourceId: id }),
-      importFhir: async (r: any) => ({ id: 'vs9', url: 'http://imported' }),
+      importFhir: async (r: any, opts?: any) => { importFhirCalls.push({ r, opts }); return { id: 'vs9', url: 'http://imported' }; },
     },
   };
   const ctx = {
@@ -60,6 +60,8 @@ function appWith(ctx: AppContext, roles: string[] = ['lab_admin'], capabilities:
   registerTerminologyAdminRoutes(app, ctx);
   return app;
 }
+
+const importFhirCalls: Array<{ r: unknown; opts: unknown }> = [];
 
 describe('terminology admin RBAC', () => {
   it('a lab_technician cannot mutate terminology (create/import) — 403', async () => {
@@ -115,6 +117,15 @@ describe('terminology admin audit', () => {
     expect(ev).toBeTruthy();
     expect((ev as any).after).toBeNull();
     expect((ev as any).metadata).toMatchObject({ id: 'vs9' });
+  });
+
+  it('passes the publisher a value set is imported into on to the store', async () => {
+    const { ctx } = fakeCtx();
+    const app = appWith(ctx);
+    importFhirCalls.length = 0;
+    const res = await app.inject({ method: 'POST', url: '/api/terminology/valuesets/import?publisherId=pub-system', headers: { 'content-type': 'application/fhir+json' }, payload: JSON.stringify({ resourceType: 'ValueSet', url: 'http://imported', status: 'active' }) });
+    expect(res.statusCode).toBe(201);
+    expect(importFhirCalls[0]?.opts).toEqual({ publisherId: 'pub-system' });
   });
 
   it('best-effort: a failing audit recorder does not break the route', async () => {

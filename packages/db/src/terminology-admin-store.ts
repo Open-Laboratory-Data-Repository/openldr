@@ -255,7 +255,9 @@ export interface TerminologyAdminStore {
     duplicate(id: string): Promise<ValueSet>;
     delete(id: string): Promise<void>;
     expand(id: string, activeOnly?: boolean): Promise<{ codes: ExpandedConcept[]; total: number }>;
-    importFhir(resource: unknown): Promise<ValueSet>;
+    /** Imports one FHIR ValueSet. `publisherId` places it under that publisher, so studio lists it
+     *  there; without one it keeps the resource's own (usually none). */
+    importFhir(resource: unknown, opts?: { publisherId?: string | null }): Promise<ValueSet>;
     importFhirCatalog(resource: unknown): Promise<{ imported: number; skipped: number; valueSet: ValueSet | null }>;
     exportFhir(id: string): Promise<Record<string, unknown>>;
   };
@@ -1189,8 +1191,9 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         await writeExpansionCache(id, result.codes);
         return result;
       },
-      async importFhir(resource) {
+      async importFhir(resource, opts) {
         const input = fhirValueSetToInput(resource);
+        if (opts?.publisherId) input.publisherId = opts.publisherId;
         const saved = await saveValueSet(input);
         await db.updateTable('value_sets').set({ source_json: JSON.stringify(resource) as never }).where('id', '=', saved.id).execute();
         return saved;

@@ -266,7 +266,8 @@ describe('Terminology page', () => {
     const file = new File(['gz bytes'], 'R4.valuesets.json.gz', { type: 'application/gzip' });
     fireEvent.change(input, { target: { files: [file] } });
 
-    await waitFor(() => expect(importSpy).toHaveBeenCalledWith(file));
+    // The import lands under the publisher on screen (pub-loinc is the first one here).
+    await waitFor(() => expect(importSpy).toHaveBeenCalledWith(file, 'pub-loinc'));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Imported 672 value set(s); skipped 0.'));
     expect(screen.queryByText('Imported 672 value set(s); skipped 0.')).not.toBeInTheDocument();
   });
