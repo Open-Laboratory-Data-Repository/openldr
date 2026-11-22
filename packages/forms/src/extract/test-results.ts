@@ -1,7 +1,7 @@
 import type { FhirResource, Observation, Questionnaire, QuestionnaireResponse, QuestionnaireResponseItem } from 'fhir/r4'
 import type { FormSchema } from '../schema/form-schema'
 import { parseTestDetails, type ResultCoding, type TestDetail, type TypedResult } from '../test-details'
-import type { ExtractionContext, ResourceExtractor } from './extract'
+import { orderedTests, type ExtractionContext, type ResourceExtractor } from './extract'
 import { orderRejectionOf } from './order-rejection'
 
 // Bench result entry (docs/superpowers/specs/2026-09-16-bench-result-entry-design.md, 5).
@@ -40,11 +40,14 @@ function rangeOf(result: TypedResult, key: string, ctx: ExtractionContext): Part
   }
 }
 
-function observationsFor(key: string, detail: TestDetail, ctx: ExtractionContext): Observation[] {
+function observationsFor(key: string, detail: TestDetail, ctx: ExtractionContext, orderId: string | null): Observation[] {
   const base = {
     resourceType: 'Observation' as const,
     subject: ctx.subject ?? { display: 'Unknown subject' },
     ...(ctx.authored ? { effectiveDateTime: ctx.authored } : {}),
+    // The result belongs to its own test's order. The warehouse reads basedOn[0] into
+    // lab_results.request_id, so naming every order would join each result to the first test.
+    ...(orderId ? { basedOn: [{ reference: `ServiceRequest/${orderId}` }] } : {}),
   }
   if (detail.rejection) {
     const [system, code] = key.split('|')
@@ -113,6 +116,14 @@ export const TestResultsExtractor: ResourceExtractor = {
     // per-test cancelled Observation. The typed values stay in the response only.
     if (orderRejectionOf(response, questionnaire)) return []
     const answer = parseTestDetails(readTestDetails(response))
-    return Object.entries(answer).flatMap(([key, detail]) => observationsFor(key, detail, ctx))
+    // A detail is keyed `system|code` by its test. Only a test the order names has an order to point
+    // at; any other detail is left to linkToOrder, which points it at every order.
+    const ordered = new Set(orderedTests(response, questionnaire).map((t) => `${t.system}|${t.code}`))
+    const orderIdOf = (key: string): string | null => {
+      if (!ctx.orderIdFor || !ordered.has(key)) return null
+      const cut = key.lastIndexOf('|')
+      return ctx.orderIdFor({ system: key.slice(0, cut), code: key.slice(cut + 1) })
+    }
+    return Object.entries(answer).flatMap(([key, detail]) => observationsFor(key, detail, ctx, orderIdOf(key)))
   },
 }

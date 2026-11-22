@@ -331,6 +331,34 @@ describe('order-level rejection (2026-10-11 spec, part 2)', () => {
     ] },
   })
 
+  it('with orderIdFor, gives each test its id and points each result at its own test only', () => {
+    const model = order()
+    const answers = {
+      tests: [{ system: CATALOG, code: 'FBC' }, { system: CATALOG, code: 'GLU' }],
+      details: {
+        ...typed(null),
+        [`${CATALOG}|GLU`]: { specimen: null, rejection: null, results: [
+          { param: { system: 'urn:openldr:default_result', code: 'GLU' }, resultType: 'numeric', value: 5.1, unit: 'mmol/L' },
+        ] },
+        // A detail for a test the order does not name has no order of its own.
+        [`${CATALOG}|CD4`]: { specimen: null, rejection: { system: REASON.system, code: 'LEAKED' }, results: [] },
+      },
+    }
+    const withIds = { ...ctx, orderIdFor: (t: { system: string; code: string }) => `sr-${t.code}` }
+    const qr = toQuestionnaireResponse(model, answers as never)
+    const q = toQuestionnaire(model)
+    expect((ServiceRequestExtractor.extract(qr, q, withIds) as any[]).map((r) => r.id)).toEqual(['sr-FBC', 'sr-GLU'])
+    const results = TestResultsExtractor.extract(qr, q, withIds) as any[]
+    expect(results.map((o) => [o.code.coding[0].code, o.basedOn])).toEqual([
+      ['HGB', [{ reference: 'ServiceRequest/sr-FBC' }]],
+      ['GLU', [{ reference: 'ServiceRequest/sr-GLU' }]],
+      ['CD4', undefined],
+    ])
+    // Without it, nothing names an order, and linkToOrder links them.
+    expect((TestResultsExtractor.extract(qr, q, ctx) as any[]).every((o) => o.basedOn === undefined)).toBe(true)
+    expect((ServiceRequestExtractor.extract(qr, q, ctx) as any[]).every((r) => r.id === undefined)).toBe(true)
+  })
+
   it('finds the field by its path, not its id', () => {
     expect(orderRejectionFieldId(order())).toBe('rej')
     expect(orderRejectionFieldId(makeSchema({ id: 'x', name: 'X', fields: [] }))).toBeNull()

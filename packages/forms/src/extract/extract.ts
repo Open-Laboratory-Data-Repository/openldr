@@ -41,6 +41,13 @@ export interface ExtractionContext {
    * referenceRange.
    */
   testBands?: ReadonlyMap<string, { name?: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }>
+  /**
+   * The fixed id of the order for one test (lab slices 1b and 2, ruling 1). The forms route builds it
+   * from the facility and the requisition number (`order-ids.ts`). With it, each test's
+   * ServiceRequest gets that id and each test's results point at it. Other callers leave it out:
+   * their requests get minted ids, and their results point at every order (`linkToOrder`).
+   */
+  orderIdFor?: (test: { system: string; code: string }) => string
 }
 
 /** Pluggable extraction of discrete FHIR resources from a filled form (PRD §3.2). */
@@ -137,6 +144,36 @@ export function requesterFacilityAnswers(
  * them, as the extractor writes them (`String(value)`). The extractor keeps the last one as the
  * order's identifier. Same index and walk as `ServiceRequestExtractor`.
  */
+/** One test an order names: the system an answer carries (LOINC when it names none) and its name. */
+export interface OrderedTestAnswer { system: string; code: string; display?: string }
+
+/**
+ * The tests an order names, in answer order, once each. An answer carries its own system: a catalog
+ * test since the Lab order moved to the lab's test list (test catalog S4), LOINC before that. An
+ * answer naming no system predates both and was always LOINC. Display comes from the answer itself
+ * (a picked test carries its name), else from the Questionnaire answerOption. A test picked twice is
+ * one order, since its fixed id comes from the test and two requests for it would share an id.
+ */
+export function orderedTests(response: QuestionnaireResponse, questionnaire: Questionnaire): OrderedTestAnswer[] {
+  const index = indexItems(questionnaire)
+  const out: OrderedTestAnswer[] = []
+  const seen = new Set<string>()
+  walkResponse(response.item, (item) => {
+    const meta = index.get(item.linkId)
+    if (meta?.fhirPath !== 'ServiceRequest.code') return
+    for (const answer of item.answer ?? []) {
+      const code = answer.valueCoding?.code ?? answer.valueString
+      if (!code) continue
+      const system = answer.valueCoding?.system || LOINC
+      if (seen.has(`${system}|${code}`)) continue
+      seen.add(`${system}|${code}`)
+      const display = answer.valueCoding?.display || meta?.answerOptions?.find((o) => o.code === code)?.display
+      out.push({ system, code, ...(display ? { display } : {}) })
+    }
+  })
+  return out
+}
+
 export function requisitionNumberAnswers(response: QuestionnaireResponse, questionnaire: Questionnaire): string[] {
   const index = indexItems(questionnaire)
   const out: string[] = []
@@ -254,9 +291,6 @@ function requesterRole(clinician: string | undefined, facility: Reference | unde
   }
 }
 
-/** One ordered test: its codings (the catalog's LOINC link first, when it has one) and its name. */
-interface OrderedTest { codings: Coding[]; display?: string }
-
 /**
  * Emit one ServiceRequest per test for a requisition form, mapping answers whose field is bound to
  * `ServiceRequest.*` (via the Corlix fhir-path) onto each. Every request carries the same requisition
@@ -276,8 +310,6 @@ export const ServiceRequestExtractor: ResourceExtractor = {
     }
     if (ctx.authored) request.authoredOn = ctx.authored
 
-    const tests: OrderedTest[] = []
-    const seen = new Set<string>()
     let clinician: string | undefined
     let facility: Reference | undefined
     walkResponse(response.item, (item) => {
@@ -288,28 +320,8 @@ export const ServiceRequestExtractor: ResourceExtractor = {
       // field bound to some other ServiceRequest.extension is not swallowed.
       if (isOrderRejectionBinding(path, meta?.discriminator)) return
 
-      // The ordered test(s) → ServiceRequest.code. An answer carries its own system: a catalog test
-      // since the Lab order moved to the lab's test list (test catalog S4), LOINC before that. An answer
-      // naming no system predates both and was always LOINC. Display comes from the answer itself
-      // (a picked test carries its name), else from the Questionnaire answerOption.
-      if (path === 'ServiceRequest.code') {
-        for (const answer of item.answer ?? []) {
-          const code = answer.valueCoding?.code ?? answer.valueString
-          if (!code) continue
-          const system = answer.valueCoding?.system || LOINC
-          const display = answer.valueCoding?.display || meta?.answerOptions?.find((o) => o.code === code)?.display
-          // A test picked twice is one order: its fixed id comes from the test, so two requests
-          // for it would share an id.
-          if (seen.has(`${system}|${code}`)) continue
-          seen.add(`${system}|${code}`)
-          const before = ctx.codingBefore?.get(`${system}|${code}`)
-          tests.push({
-            codings: [...(before ? [before] : []), { system, code, ...(display ? { display } : {}) }],
-            ...(display ? { display } : {}),
-          })
-        }
-        return
-      }
+      // The ordered tests are read by orderedTests below.
+      if (path === 'ServiceRequest.code') return
 
       const value = item.answer?.[0] ? fromAnswer(item.answer[0]) : undefined
       if (value === undefined) return
@@ -336,14 +348,23 @@ export const ServiceRequestExtractor: ResourceExtractor = {
       request.contained = [requester]
       request.requester = { reference: `#${REQUESTER_ID}`, type: 'PractitionerRole', ...(display ? { display } : {}) }
     }
-    // One request per test. code.text names each after its own test: the warehouse reads text before
-    // the first coding's display, and that first coding is often a LOINC link with no name of its own.
+    // One request per test, with the test's fixed id when the caller gives one. code.text names each
+    // after its own test: the warehouse reads text before the first coding's display, and that first
+    // coding is often a LOINC link with no name of its own.
+    const tests = orderedTests(response, questionnaire)
     const requests: ServiceRequest[] = tests.length === 0
       ? [request]
-      : tests.map((test) => ({
-          ...structuredClone(request),
-          code: { coding: test.codings.map((c) => ({ ...c })), ...(test.display ? { text: test.display } : {}) },
-        }))
+      : tests.map(({ system, code, display }) => {
+          const before = ctx.codingBefore?.get(`${system}|${code}`)
+          return {
+            ...structuredClone(request),
+            ...(ctx.orderIdFor ? { id: ctx.orderIdFor({ system, code }) } : {}),
+            code: {
+              coding: [...(before ? [{ ...before }] : []), { system, code, ...(display ? { display } : {}) }],
+              ...(display ? { text: display } : {}),
+            },
+          }
+        })
 
     const rejection = orderRejectionOf(response, questionnaire)
     if (!rejection) return requests
