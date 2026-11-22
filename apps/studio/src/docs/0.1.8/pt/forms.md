@@ -480,7 +480,7 @@ Use esta tarefa para juntar um formulário a partir de um ficheiro `.form.json`.
 
 ### 1. Abrir o menu da página
 
-Em Forms, abra os pontos ao lado da caixa de pesquisa.
+Em Forms, abra os pontos no fim da barra de ferramentas, à direita.
 
 ### 2. Escolher Importar
 

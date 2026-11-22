@@ -480,7 +480,7 @@ Use this to add a form from a `.form.json` file. Import adds a new form. It neve
 
 ### 1. Open the page dots menu
 
-On Forms, open the dots menu beside the search box.
+On Forms, open the dots menu at the right end of the toolbar.
 
 ### 2. Choose Import
 
