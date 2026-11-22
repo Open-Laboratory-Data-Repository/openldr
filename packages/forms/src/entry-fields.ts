@@ -3,6 +3,8 @@ import { ServiceRequestExtractor, requesterFacilityAnswers, requisitionNumberAns
 import { isRequesterFacilityBinding, isRequisitionNumberBinding, pickedFacilityOf, type PickedFacility } from './extract/order-fields'
 import { extractorsForForm } from './routing'
 import { resolveReferenceSource } from './reference-source'
+import type { QuestionnaireResponse, QuestionnaireResponseItem, QuestionnaireResponseItemAnswer } from 'fhir/r4'
+import { fromAnswer } from './answer-value'
 import { toQuestionnaireResponse } from './response'
 import { toQuestionnaire } from './to-questionnaire'
 
@@ -110,19 +112,54 @@ function summaryValue(value: unknown): string | null {
   return displayValue(value)?.slice(0, SUMMARY_VALUE_MAX) ?? null
 }
 
-/** A group's answers, and a field inside a group, are not single top-level answers. */
-const singleFieldsOf = (schema: FormSchema): FormField[] =>
-  schema.fields.filter((f) => f.fieldType !== 'group' && !f.groupId).sort(byOrder)
-
-/** Every answered single field, in form order, with its value written as the summary writes it but
- *  not cut short. What the entry sheet shows. */
-export function entryAnswersOf(schema: FormSchema, answers: Record<string, unknown>): { fieldId: string; label: string; value: string }[] {
-  const out: { fieldId: string; label: string; value: string }[] = []
-  for (const field of singleFieldsOf(schema)) {
-    const value = displayValue(answers[field.id])
-    if (value !== null) out.push({ fieldId: field.id, label: field.displayLabel, value })
+/** One answer on a saved form copy as display text: a quantity as its value and unit, anything else
+ *  as the summary writes a single value, not cut short. */
+function answerText(answer: QuestionnaireResponseItemAnswer): string | null {
+  if (answer.valueQuantity?.value !== undefined) {
+    return [answer.valueQuantity.value, answer.valueQuantity.unit].filter((v) => v !== undefined && v !== '').join(' ')
   }
-  return out
+  return displayValue(fromAnswer(answer))
+}
+
+/** The display text of every answer at or below this item, in order. */
+function partsOf(item: QuestionnaireResponseItem): string[] {
+  return [
+    ...(item.answer ?? []).map(answerText).filter((v): v is string => v !== null),
+    ...(item.item ?? []).flatMap(partsOf),
+  ]
+}
+
+/** One row of the entry sheet. `fieldId` is the item's linkId; for a field inside a group it is the
+ *  child's id. */
+export interface EntryAnswer { fieldId: string; label: string; value: string }
+
+/**
+ * Every answered item of a saved form copy, in the order the copy holds them, which is the form's
+ * order when it was saved. A label is the copy's own item `text` when it carries one, else the
+ * current form's label, else the linkId. Several values are joined with ", ". A group gives one row
+ * per answered child, labelled "<group> / <child>". A test details answer, or any other item with
+ * parts below it, gives the display of each part (a coding's code when it has no display).
+ */
+export function entryAnswersOfResponse(schema: FormSchema, response: QuestionnaireResponse): EntryAnswer[] {
+  const fields = new Map(schema.fields.map((f) => [f.id, f]))
+  const sections = new Set(schema.sections.map((s) => s.id))
+  const labelOf = (item: QuestionnaireResponseItem): string => item.text?.trim() || fields.get(item.linkId)?.displayLabel || item.linkId
+  const rows: EntryAnswer[] = []
+  const push = (fieldId: string, label: string, parts: string[]) => {
+    if (parts.length > 0) rows.push({ fieldId, label, value: parts.join(', ') })
+  }
+
+  const walk = (items: QuestionnaireResponseItem[] | undefined, prefix: string | null): void => {
+    for (const item of items ?? []) {
+      const field = fields.get(item.linkId)
+      const label = prefix ? `${prefix} / ${labelOf(item)}` : labelOf(item)
+      if (!field && sections.has(item.linkId) && !item.answer?.length) walk(item.item, prefix)
+      else if (field?.fieldType === 'group') walk(item.item, label)
+      else push(item.linkId, label, partsOf(item))
+    }
+  }
+  walk(response.item, null)
+  return rows
 }
 
 /** The requisition number, the picked facility coding and the list summary from one set of answers. */
@@ -137,7 +174,8 @@ export function entryValuesOf(schema: FormSchema, answers: Record<string, unknow
   const key = typeof rawKey === 'string' || typeof rawKey === 'number' ? String(rawKey).trim() : ''
   const facility = facilityFieldId ? pickedFacilityOf(answers[facilityFieldId]) : null
 
-  const single = singleFieldsOf(schema)
+  // A group's answers, and a field inside a group, are not single top-level answers.
+  const single = schema.fields.filter((f) => f.fieldType !== 'group' && !f.groupId).sort(byOrder)
   const flagged = single.filter((f) => f.entriesList === true)
   const candidates = flagged.length > 0 ? flagged : single.filter((f) => f.id !== keyFieldId)
 

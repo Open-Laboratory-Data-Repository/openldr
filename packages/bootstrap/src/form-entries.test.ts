@@ -428,25 +428,23 @@ describe('form entries service: list and get', () => {
 });
 
 describe('form entries service: context', () => {
-  const form = { id: 'form-1', schema: orderForm('register') };
-
   it('gives no facility and no choices to an unlimited user', async () => {
     const { db, service } = await world();
-    expect(await service.context(form, { id: 'u1', dataScope: { limited: false } }))
+    expect(await service.context({ id: 'u1', dataScope: { limited: false } }))
       .toEqual({ facility: null, locked: false, choices: null });
     await db.destroy();
   });
 
   it('locks a limit that covers one facility, with the code the picker saves', async () => {
     const { db, service } = await world();
-    const ctx = await service.context(form, { id: 'u1', dataScope: limit({ districts: [{ region: 'Coast', district: 'Kibaha' }] }) });
+    const ctx = await service.context({ id: 'u1', dataScope: limit({ districts: [{ region: 'Coast', district: 'Kibaha' }] }) });
     expect(ctx).toEqual({ facility: { id: 'reg-a', code: 'A1', name: 'Site A' }, locked: true, choices: [{ id: 'reg-a', code: 'A1', name: 'Site A' }] });
     await db.destroy();
   });
 
   it('offers the facilities of a limit that covers several, by name, unlocked', async () => {
     const { db, service } = await world();
-    expect(await service.context(form, { id: 'u1', dataScope: limit({ regions: ['Coast'], facilities: ['reg-c'] }) })).toEqual({
+    expect(await service.context({ id: 'u1', dataScope: limit({ regions: ['Coast'], facilities: ['reg-c'] }) })).toEqual({
       facility: null, locked: false,
       choices: [{ id: 'reg-a', code: 'A1', name: 'Site A' }, { id: 'reg-b', code: 'B1', name: 'Site B' }, { id: 'reg-c', code: 'C1', name: 'Site C' }],
     });
@@ -455,7 +453,7 @@ describe('form entries service: context', () => {
 
   it('gives an empty list to a limited user whose limit covers nothing', async () => {
     const { db, service } = await world();
-    expect(await service.context(form, { id: 'u1', dataScope: limit({ regions: ['Nowhere'] }) }))
+    expect(await service.context({ id: 'u1', dataScope: limit({ regions: ['Nowhere'] }) }))
       .toEqual({ facility: null, locked: false, choices: [] });
     await db.destroy();
   });
@@ -466,7 +464,7 @@ describe('form entries service: context', () => {
       id: 'reg-d', facility_system: 'urn:test:other', facility_code: 'A1', name: 'Site D', region: 'Lake', district: 'Mwanza',
       extras: '{}', source: 'test', created_at: NOW, updated_at: NOW,
     } as never).execute();
-    const ctx = await service.context(form, { id: 'u1', dataScope: limit({ facilities: ['reg-a'] }) });
+    const ctx = await service.context({ id: 'u1', dataScope: limit({ facilities: ['reg-a'] }) });
     expect(ctx.facility).toEqual({ id: 'reg-a', code: 'reg-a', name: 'Site A' });
     await db.destroy();
   });

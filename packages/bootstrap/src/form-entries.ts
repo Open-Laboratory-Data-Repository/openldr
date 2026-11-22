@@ -34,8 +34,8 @@ export interface FormEntriesService {
   }): Promise<{ entries: FormEntry[]; total: number }>;
   /** Null when there is no such entry, or when the user may not see it. */
   get(id: string, user: EntryViewer): Promise<FormEntry | null>;
-  /** The form is taken so the rule can depend on it later; today only the user's limit decides. */
-  context(form: { id: string; schema: FormSchema }, user: EntryViewer): Promise<EntryContext>;
+  /** What the form screen pre-fills. Only the user's limit decides it, so it is the same on every form. */
+  context(user: EntryViewer): Promise<EntryContext>;
 
   /** The facility register row ids a limit covers. Null means no limit. Reads the register itself. */
   facilityIdsOf(scope: DataScope): Promise<string[] | null>;
@@ -87,7 +87,7 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
       return entry.facilityId !== null && ids !== null && ids.includes(entry.facilityId) ? entry : null;
     },
 
-    async context(_form, user) {
+    async context(user) {
       const scope = user.dataScope;
       if (!scope.limited) return { facility: null, locked: false, choices: null };
       const rows = await deps.registryRows();

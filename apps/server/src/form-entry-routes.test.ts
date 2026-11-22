@@ -98,7 +98,7 @@ async function world() {
     saved.set(responseId, { ...toQuestionnaireResponse(schema, answers as never), id: responseId } as never);
     return store.setSaved(e.id, { responseId, resources: [] }, 'active');
   };
-  return { db, store, appFor, add };
+  return { db, store, saved, appFor, add };
 }
 
 const keys = (body: { entries: { entryKey: string }[] }) => body.entries.map((e) => e.entryKey).sort();
@@ -196,6 +196,20 @@ describe('GET /api/forms/entries/:entryId', () => {
       { fieldId: 'num', label: 'Requisition', value: 'CS-1' },
       { fieldId: 'fac', label: 'Facility', value: 'Site A' },
       { fieldId: 'name', label: 'Patient', value: 'y'.repeat(120) },
+    ]);
+    await w.db.destroy();
+  });
+
+  it('keeps the label the saved copy carries after the form is edited', async () => {
+    const w = await world();
+    const e = await w.add('form-1', 'reg-a', 'CS-1', 'u-x', { num: 'CS-1', name: 'Amina' });
+    // The copy as saved, carrying its own wording for the patient field.
+    const qr = w.saved.get(e.saved!.responseId!)! as { item: { linkId: string; item?: { linkId: string; text?: string }[] }[] };
+    qr.item[0]!.item!.find((i) => i.linkId === 'name')!.text = 'Patient name';
+    const res = await w.appFor(all).inject({ url: `/api/forms/entries/${e.id}` });
+    expect(res.json().answers).toEqual([
+      { fieldId: 'num', label: 'Requisition', value: 'CS-1' },
+      { fieldId: 'name', label: 'Patient name', value: 'Amina' },
     ]);
     await w.db.destroy();
   });

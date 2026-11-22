@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { AppContext, EntryViewer } from '@openldr/bootstrap';
 import type { FormEntry } from '@openldr/db';
 import { EVERYTHING } from '@openldr/rbac';
-import { entryAnswersOf, fromQuestionnaireResponse, toQuestionnaire, type FormSchema } from '@openldr/forms';
+import { entryAnswersOfResponse, type FormSchema } from '@openldr/forms';
 import { z } from 'zod';
 import { requireCapability } from './rbac';
 import { formOpenRules } from './forms-routes';
@@ -40,14 +40,15 @@ export function registerFormEntryRoutes(app: FastifyInstance<any, any, any, any>
     return form && (await mayOpen(req, form.id)) ? form : null;
   };
 
-  /** Every answer from the entry's saved form copy. Null when there is none or it cannot be read. */
+  /** Every answer from the entry's saved form copy, with the labels it was saved under where it carries
+   *  them. Null when there is none or it cannot be read. */
   const answersOf = async (entry: FormEntry, schema: FormSchema) => {
     const id = entry.saved?.responseId;
     if (!id) return null;
     try {
       const qr = await ctx.fhirStore.get('QuestionnaireResponse', id);
       if (!qr) return null;
-      return entryAnswersOf(schema, fromQuestionnaireResponse(qr as never, toQuestionnaire(schema)));
+      return entryAnswersOfResponse(schema, qr as never);
     } catch (err) {
       ctx.logger.warn({ err, entryId: entry.id }, 'form entry: the saved form copy could not be read');
       return null;
@@ -65,7 +66,7 @@ export function registerFormEntryRoutes(app: FastifyInstance<any, any, any, any>
   app.get('/api/forms/:id/entry-context', VIEW, async (req, reply) => {
     const form = await openForm(req, (req.params as { id: string }).id);
     if (!form) { reply.code(404); return NOT_FOUND; }
-    return ctx.formEntries.context({ id: form.id, schema: form.schema }, viewerOf(req));
+    return ctx.formEntries.context(viewerOf(req));
   });
 
   app.get('/api/forms/entries/:entryId', VIEW, async (req, reply) => {

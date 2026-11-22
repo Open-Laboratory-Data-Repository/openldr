@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { entryAnswersOf, entryFacilitiesOf, entryFieldsOf, entryKeyOf, entryValuesOf } from './entry-fields'
+import { entryAnswersOfResponse, entryFacilitiesOf, entryFieldsOf, entryKeyOf, entryValuesOf } from './entry-fields'
 import { ServiceRequestExtractor } from './extract/extract'
 import { toQuestionnaireResponse } from './response'
 import { sampleForms } from './samples/forms'
@@ -230,28 +230,77 @@ describe('entryKeyOf', () => {
   })
 })
 
-describe('entryAnswersOf', () => {
-  it('gives every answered single field in form order, uncut and with no limit, written as the summary writes it', () => {
+describe('entryAnswersOfResponse', () => {
+  const read = (form: FormSchema, answers: Record<string, unknown>) =>
+    entryAnswersOfResponse(form, toQuestionnaireResponse(form, answers as never))
+
+  it('gives every answered single field in form order, uncut, written as the summary writes a value', () => {
     const form = requisition([
       { id: 'e', displayLabel: 'E', fieldType: 'number', order: 9 },
       { id: 'a', displayLabel: 'A', fieldType: 'text', order: 1 },
-      { id: 'g', displayLabel: 'G', fieldType: 'group', order: 2 },
-      { id: 'gc', displayLabel: 'In group', fieldType: 'text', order: 3, groupId: 'g' },
       { id: 'b', displayLabel: 'B', fieldType: 'date', order: 5 },
       { id: 'blank', displayLabel: 'Blank', fieldType: 'text', order: 6 },
       { id: 'c', displayLabel: 'C', fieldType: 'boolean', order: 7 },
-      { id: 'd', displayLabel: 'D', fieldType: 'select', order: 8 },
+      { id: 'd', displayLabel: 'D', fieldType: 'facility', order: 8, referenceTarget: 'urn:openldr:cs:facility-registry' },
     ])
-    expect(entryAnswersOf(form, {
-      num: ' R1 ', a: 'x'.repeat(100), g: [{ gc: 'y' }], b: '2026-11-22', blank: '', c: false,
-      d: { system: 's', code: 'only-code' }, e: 4,
+    expect(read(form, {
+      num: ' R1 ', a: 'x'.repeat(100), b: '2026-11-22', blank: '', c: false, d: picked, e: 4,
     })).toEqual([
       { fieldId: 'num', label: 'Requisition', value: 'R1' },
       { fieldId: 'a', label: 'A', value: 'x'.repeat(100) },
       { fieldId: 'b', label: 'B', value: '2026-11-22' },
       { fieldId: 'c', label: 'C', value: 'false' },
-      { fieldId: 'd', label: 'D', value: 'only-code' },
+      { fieldId: 'd', label: 'D', value: 'Kibaha Health Centre' },
       { fieldId: 'e', label: 'E', value: '4' },
+    ])
+  })
+
+  it('joins the values of a multiselect answer with a comma', () => {
+    const form = requisition([{ id: 'm', displayLabel: 'Tests', fieldType: 'multiselect', order: 1 }])
+    expect(read(form, { m: ['hiv-vl', 'cd4'] })).toEqual([{ fieldId: 'm', label: 'Tests', value: 'hiv-vl, cd4' }])
+  })
+
+  it('gives each answered child of a group its own row, labelled with the group', () => {
+    const form = requisition([
+      { id: 'g', displayLabel: 'Contact', fieldType: 'group', order: 1 },
+      { id: 'gn', displayLabel: 'Name', fieldType: 'text', order: 2, groupId: 'g' },
+      { id: 'gp', displayLabel: 'Phone', fieldType: 'text', order: 3, groupId: 'g' },
+      { id: 'after', displayLabel: 'After', fieldType: 'text', order: 4 },
+    ])
+    expect(read(form, { g: [{ gn: 'Juma', gp: '0700' }], after: 'z' })).toEqual([
+      { fieldId: 'gn', label: 'Contact / Name', value: 'Juma' },
+      { fieldId: 'gp', label: 'Contact / Phone', value: '0700' },
+      { fieldId: 'after', label: 'After', value: 'z' },
+    ])
+  })
+
+  it('shows each part of a test details answer, by display or else by code', () => {
+    const form = requisition([{ id: 't', displayLabel: 'Results', fieldType: 'testDetails', order: 1 }])
+    const response = {
+      resourceType: 'QuestionnaireResponse', status: 'completed',
+      item: [{ linkId: 't', item: [{ linkId: 'urn:t|VL', item: [
+        { linkId: 'urn:t|VL#specimen', answer: [{ valueCoding: { system: 's', code: 'plasma', display: 'Plasma' } }] },
+        { linkId: 'urn:t|VL#p|q', answer: [{ valueQuantity: { value: 40, unit: 'copies/mL' } }] },
+        { linkId: 'urn:t|VL#p|r', answer: [{ valueCoding: { system: 's', code: 'DET' } }] },
+      ] }] }],
+    } as never
+    expect(entryAnswersOfResponse(form, response)).toEqual([{ fieldId: 't', label: 'Results', value: 'Plasma, 40 copies/mL, DET' }])
+  })
+
+  it('keeps the label the saved copy carries after the form is edited, and falls back to the form', () => {
+    const form = requisition([{ id: 'a', displayLabel: 'Renamed', fieldType: 'text', order: 1 }])
+    const response = {
+      resourceType: 'QuestionnaireResponse', status: 'completed',
+      item: [
+        { linkId: 'num', answer: [{ valueString: 'R1' }] },
+        { linkId: 'a', text: 'Patient name', answer: [{ valueString: 'Amina' }] },
+        { linkId: 'gone', text: 'Old field', answer: [{ valueString: 'kept' }] },
+      ],
+    } as never
+    expect(entryAnswersOfResponse(form, response)).toEqual([
+      { fieldId: 'num', label: 'Requisition', value: 'R1' },
+      { fieldId: 'a', label: 'Patient name', value: 'Amina' },
+      { fieldId: 'gone', label: 'Old field', value: 'kept' },
     ])
   })
 })
