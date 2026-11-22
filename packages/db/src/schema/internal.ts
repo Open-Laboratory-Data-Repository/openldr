@@ -1221,6 +1221,8 @@ export interface InternalSchema {
   user_preferences: UserPreferencesTable;
   layout_presets: LayoutPresetsTable;
   role_layout_defaults: RoleLayoutDefaultsTable;
+  /** Which content pack made which role, layout or form (migration 135). */
+  content_pack_items: { pack_id: string; kind: string; key: string; item_id: string };
   connectors: ConnectorsTable;
   registries: RegistriesTable;
   plugin_data: PluginDataTable;
