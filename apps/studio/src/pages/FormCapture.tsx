@@ -25,6 +25,7 @@ import type { FormSchema } from '@/forms-runtime/types';
 import { EntriesTab } from '@/forms-entries/EntriesTab';
 import { EntrySheet } from '@/forms-entries/EntrySheet';
 import { NO_SITE_CONTROLS, siteControls, type SiteControls } from '@/forms-entries/siteControls';
+import { enteredAtParts } from '@/forms-entries/format';
 
 function asFormSchema(value: unknown): FormSchema | null {
   if (!value || typeof value !== 'object') return null;
@@ -57,8 +58,8 @@ export function FormCapture() {
   const [entriesVersion, setEntriesVersion] = useState(0);
   // The site rules. Null until read; the form waits, so a clerk's facility is in it from the start.
   const [site, setSite] = useState<SiteControls | null>(null);
-  // A refused repeat number: the server's sentence, the entry that holds it, and the number refused.
-  const [repeat, setRepeat] = useState<{ message: string; entryId: string; value: string } | null>(null);
+  // A refused repeat number: the entry that holds it, and the number refused.
+  const [repeat, setRepeat] = useState<{ entry: FormEntryRepeatError['entry']; value: string } | null>(null);
   const [viewingEntry, setViewingEntry] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,7 +117,7 @@ export function FormCapture() {
       // A repeated number goes beside its field. The answers stay, so the clerk can change it.
       if (err instanceof FormEntryRepeatError) {
         const typed = keyFieldId ? cleaned[keyFieldId] : undefined;
-        setRepeat({ message: err.message, entryId: err.entry.id, value: typed == null ? '' : String(typed) });
+        setRepeat({ entry: err.entry, value: typed == null ? '' : String(typed) });
       } else {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -125,12 +126,21 @@ export function FormCapture() {
     }
   };
 
+  // The server's sentence is English, for the CLI. The screen builds its own in the user's language.
+  // The lab time zone is not known here, so the date and time are the browser's local time.
+  const repeatSentence = (entry: FormEntryRepeatError['entry']) => {
+    const at = enteredAtParts(entry.enteredAt, i18n.language);
+    // The sentence ends on a full stop, so a name that already ends on one, such as "Aisha M.", drops it.
+    const name = entry.enteredByName.replace(/\.$/, '');
+    return t('forms.entries.repeatMessage', { key: entry.entryKey ?? '', date: at.date, time: at.time, name });
+  };
+
   const repeatNotice = repeat ? (
     <span>
-      {repeat.message}{' '}
+      {repeatSentence(repeat.entry)}{' '}
       <Button
         type="button" variant="ghost" className="h-auto p-0 text-xs font-medium underline underline-offset-2 hover:bg-transparent"
-        onClick={() => setViewingEntry(repeat.entryId)}
+        onClick={() => setViewingEntry(repeat.entry.id)}
       >
         {t('forms.entries.viewRepeat')}
       </Button>

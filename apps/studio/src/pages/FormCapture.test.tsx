@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { FormCapture } from './FormCapture';
 import * as api from '../api';
-import '@/i18n';
+import i18n from '@/i18n';
 
 // New-model FormDefinition: schema is a flat FormSchema
 const form: api.FormDefinition = {
@@ -476,9 +476,38 @@ describe('FormCapture entries (design 2026-11-22-form-entries)', () => {
     expect(search).not.toHaveBeenCalled();
   });
 
+  /** The sentence the studio builds, with the date and time in the browser's locale and local time. */
+  const repeatAt = (language: string) => {
+    const d = new Date('2026-11-22T13:50:00.000Z');
+    return { date: d.toLocaleDateString(language, { dateStyle: 'medium' }), time: d.toLocaleTimeString(language, { timeStyle: 'short' }) };
+  };
+
+  it.each([
+    ['en', (a: { date: string; time: string }) => `CS-0001 was already entered on ${a.date} at ${a.time} by Aisha M.`],
+    ['fr', (a: { date: string; time: string }) => `CS-0001 a déjà été saisi le ${a.date} à ${a.time} par Aisha M.`],
+    ['pt', (a: { date: string; time: string }) => `CS-0001 já foi introduzido em ${a.date} às ${a.time} por Aisha M.`],
+  ])('says a repeated number in the user\'s language (%s), not the server\'s English', async (language, sentence) => {
+    vi.spyOn(api, 'submitFormResponse').mockRejectedValue(new api.FormEntryRepeatError('the server sentence, in English', {
+      id: 'e-9', entryKey: 'CS-0001', enteredAt: '2026-11-22T13:50:00.000Z', enteredByName: 'Aisha M.',
+    }));
+    renderAt();
+    fireEvent.change(await screen.findByLabelText('Requisition number'), { target: { value: 'CS-0001' } });
+    clickActionsMenuItem('Submit');
+    const en = repeatAt('en');
+    await screen.findByText(`CS-0001 was already entered on ${en.date} at ${en.time} by Aisha M.`);
+    try {
+      await act(async () => { await i18n.changeLanguage(language); });
+      expect(await screen.findByText(sentence(repeatAt(language)))).toBeInTheDocument();
+      expect(screen.queryByText('the server sentence, in English')).not.toBeInTheDocument();
+    } finally {
+      await act(async () => { await i18n.changeLanguage('en'); });
+    }
+  });
+
   it('shows a repeated number beside the requisition field, keeps the answers, and opens that entry', async () => {
-    const message = 'CS-0001 was already entered on 22 Nov 2026 at 13:50 by aisha.';
-    vi.spyOn(api, 'submitFormResponse').mockRejectedValue(new api.FormEntryRepeatError(message, {
+    const at = repeatAt('en');
+    const message = `CS-0001 was already entered on ${at.date} at ${at.time} by aisha.`;
+    vi.spyOn(api, 'submitFormResponse').mockRejectedValue(new api.FormEntryRepeatError('the server sentence, in English', {
       id: 'e-9', entryKey: 'CS-0001', enteredAt: '2026-11-22T13:50:00.000Z', enteredByName: 'aisha',
     }));
     const getEntry = vi.spyOn(api, 'getFormEntry').mockResolvedValue({

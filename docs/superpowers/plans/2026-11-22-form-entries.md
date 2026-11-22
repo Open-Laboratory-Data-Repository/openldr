@@ -256,7 +256,7 @@ Audit `form.entry.void` with the row before and after and the count re-saved.
 - Test: `packages/cli/src/form-entries.test.ts`
 
 **Interfaces:**
-- `openldr forms entries <form> [--facility <code>] [--status active|incomplete|entered-in-error] [--json]`. `<form>` is a form id or name.
+- `openldr forms entries <form> [--status active|incomplete|entered-in-error] [--entered-by <user id>] [--search <requisition prefix>] [--limit N] [--offset N] [--json]`. `<form>` is a form id or name.
 - `openldr forms void-entry <id> --reason <text> --force`. Without `--force` it prints the entry and exits 1.
 - Both call the service of Tasks 5 and 6. Served mode uses the caller's data limit and capabilities. A local run has no limit. Audit through `cliActor()`.
 

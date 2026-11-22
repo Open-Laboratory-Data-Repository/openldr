@@ -135,7 +135,7 @@ If your account has no data limit, you see every entry of the form. If you are l
 
 A requisition number can be used once per form and per facility. If you submit a number that is already in use, nothing is saved. A message like this one shows under the requisition field:
 
-`CS-0001 was already entered on 22 Nov 2026 at 13:50 by aisha.`
+`CS-0001 was already entered on Nov 22, 2026 at 1:50 PM by aisha.`
 
 1. Select **View that entry** at the end of the message.
 2. Compare that entry with the request in front of you.
@@ -145,7 +145,7 @@ A requisition number can be used once per form and per facility. If you submit a
 
 **Expected result:** **Response captured.** appears. The message goes away as soon as you change the number.
 
-Your answers stay on screen after the refusal, so you do not type them again. If the older entry is the wrong one, ask someone who may mark entries in error to mark it. Its number is then free, and you can submit yours. The server writes this message in English. The time is in the lab's time zone when one is set, otherwise UTC.
+Your answers stay on screen after the refusal, so you do not type them again. If the older entry is the wrong one, ask someone who may mark entries in error to mark it. Its number is then free, and you can submit yours. The message is in your language. The date and time are your browser's local time. The `openldr` CLI gives the same message in English, with the time in the lab's time zone when one is set, otherwise UTC.
 
 Two forms may use the same number, and so may two facilities. A form with no requisition field has no repeat check.
 

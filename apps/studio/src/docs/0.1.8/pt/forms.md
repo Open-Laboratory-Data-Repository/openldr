@@ -135,7 +135,7 @@ Se a sua conta não tem limite de dados, vê todos os registos do formulário. S
 
 Um número de requisição só pode ser usado uma vez por formulário e por unidade. Se submeter um número que já está em uso, nada é guardado. Aparece uma mensagem como esta por baixo do campo do número de requisição:
 
-`CS-0001 was already entered on 22 Nov 2026 at 13:50 by aisha.`
+`CS-0001 já foi introduzido em 22 de nov. de 2026 às 13:50 por aisha.`
 
 1. Selecione **Ver esse registo** no fim da mensagem.
 2. Compare esse registo com o pedido que tem à sua frente.
@@ -145,7 +145,7 @@ Um número de requisição só pode ser usado uma vez por formulário e por unid
 
 **Resultado esperado:** aparece **Response captured.** A mensagem desaparece logo que altera o número.
 
-As suas respostas ficam no ecrã depois da recusa, por isso não precisa de as escrever de novo. Se o registo antigo é que está errado, peça a quem pode marcar registos por erro que o marque. O número dele fica livre e pode submeter o seu. O servidor escreve esta mensagem em inglês. A hora segue o fuso horário do laboratório quando está definido, senão UTC.
+As suas respostas ficam no ecrã depois da recusa, por isso não precisa de as escrever de novo. Se o registo antigo é que está errado, peça a quem pode marcar registos por erro que o marque. O número dele fica livre e pode submeter o seu. A mensagem está na sua língua. A data e a hora são a hora local do seu navegador. A CLI `openldr` dá a mesma mensagem em inglês, com a hora no fuso horário do laboratório quando está definido, senão UTC.
 
 Dois formulários podem usar o mesmo número, e duas unidades também. Um formulário sem campo de número de requisição não verifica repetições.
 

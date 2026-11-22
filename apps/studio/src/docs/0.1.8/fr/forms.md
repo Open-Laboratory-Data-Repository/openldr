@@ -135,7 +135,7 @@ Si votre compte n'a pas de limite de données, vous voyez toutes les saisies du 
 
 Un numéro de demande ne sert qu'une fois par formulaire et par établissement. Si vous envoyez un numéro déjà utilisé, rien n'est enregistré. Un message comme celui-ci s'affiche sous le champ du numéro de demande :
 
-`CS-0001 was already entered on 22 Nov 2026 at 13:50 by aisha.`
+`CS-0001 a déjà été saisi le 22 nov. 2026 à 13:50 par aisha.`
 
 1. Sélectionnez **Voir cette saisie** à la fin du message.
 2. Comparez cette saisie avec la demande que vous avez sous les yeux.
@@ -145,7 +145,7 @@ Un numéro de demande ne sert qu'une fois par formulaire et par établissement. 
 
 **Résultat attendu :** **Response captured.** s'affiche. Le message disparaît dès que vous changez le numéro.
 
-Vos réponses restent à l'écran après le refus, vous n'avez donc pas à les retaper. Si c'est l'ancienne saisie qui est fausse, demandez à une personne autorisée de la marquer comme saisie par erreur. Son numéro redevient libre, et vous pouvez envoyer la vôtre. Le serveur écrit ce message en anglais. L'heure suit le fuseau horaire du laboratoire s'il est défini, sinon UTC.
+Vos réponses restent à l'écran après le refus, vous n'avez donc pas à les retaper. Si c'est l'ancienne saisie qui est fausse, demandez à une personne autorisée de la marquer comme saisie par erreur. Son numéro redevient libre, et vous pouvez envoyer la vôtre. Le message est dans votre langue. La date et l'heure sont l'heure locale de votre navigateur. La CLI `openldr` donne le même message en anglais, avec l'heure du fuseau horaire du laboratoire s'il est défini, sinon UTC.
 
 Deux formulaires peuvent utiliser le même numéro, deux établissements aussi. Un formulaire sans champ de numéro de demande n'a pas de contrôle des répétitions.
 

@@ -594,6 +594,7 @@ export const pt: EnShape = {
       answersUnreadable: "Não foi possível ler as respostas deste registo.",
       noAnswers: "Este registo não tem respostas.",
       viewRepeat: "Ver esse registo",
+      repeatMessage: "{{key}} já foi introduzido em {{date}} às {{time}} por {{name}}.",
       voidTitle: "Marcar {{key}} como introduzido por erro",
       voidIntro: "O registo fica guardado, marcado como introduzido por erro. O pedido, as amostras e os resultados também são marcados, e o número de requisição pode voltar a ser usado.",
       reasonHint: "Porque é que este registo está errado?",

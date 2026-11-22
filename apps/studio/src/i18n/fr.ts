@@ -594,6 +594,7 @@ export const fr: EnShape = {
       answersUnreadable: "Les réponses de cette saisie n’ont pas pu être lues.",
       noAnswers: "Cette saisie n’a aucune réponse.",
       viewRepeat: "Voir cette saisie",
+      repeatMessage: "{{key}} a déjà été saisi le {{date}} à {{time}} par {{name}}.",
       voidTitle: "Marquer {{key}} comme saisie par erreur",
       voidIntro: "La saisie reste enregistrée, marquée comme saisie par erreur. Sa demande, ses échantillons et ses résultats sont aussi marqués, et son numéro de demande peut être réutilisé.",
       reasonHint: "Pourquoi cette saisie est-elle erronée ?",

@@ -598,6 +598,7 @@ export const en = {
       answersUnreadable: "The answers of this entry could not be read.",
       noAnswers: "This entry has no answers.",
       viewRepeat: "View that entry",
+      repeatMessage: "{{key}} was already entered on {{date}} at {{time}} by {{name}}.",
       voidTitle: "Mark {{key}} as entered in error",
       voidIntro: "The entry stays on record, marked as entered in error. Its order, samples and results are marked too, and its requisition number is free to use again.",
       reasonHint: "Why is this entry wrong?",
