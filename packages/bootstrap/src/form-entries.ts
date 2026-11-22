@@ -90,6 +90,7 @@ const VOIDABLE_TYPES = new Set(['QuestionnaireResponse', 'ServiceRequest', 'Spec
 const MAX_REASON = 500;
 const NOT_UPDATED = 'The entry is marked in error, but its saved records were not updated.';
 const NOT_KNOWN = 'The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.';
+const SOME_UNKNOWN = 'Some records this entry made may exist but are not known, so they were not marked.';
 
 /** The same system actor the server's audit helper uses when no one is signed in. */
 const SYSTEM_ACTOR: AuditActor = { actorType: 'system', actorId: null, actorName: 'System' };
@@ -281,9 +282,13 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
 
       // The row after the void: a save that settled meanwhile has recorded what it stored. A save that
       // settles later sees the void in `finish` and marks its records there.
+      const namesNone = entry.saved === null || (entry.saved.responseId === null && entry.saved.resources.length === 0);
       let result: ResaveResult;
       if (entry.saved === null && before.status !== 'incomplete') {
         result = { resaved: 0, skipped: 0, warning: NOT_KNOWN };
+      } else if (before.status === 'incomplete' && namesNone) {
+        // An incomplete save stored something, but no id was found, so nothing can be marked.
+        result = { resaved: 0, skipped: 0, warning: SOME_UNKNOWN };
       } else {
         result = await markInError(entry.id, entry.saved);
       }

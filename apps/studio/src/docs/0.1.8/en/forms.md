@@ -708,6 +708,8 @@ The **Users** and **Facility** forms fill in the Users and Facilities pages. The
 
 **After marking, a message says `The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.`** The server does not know yet which records the entry made. If its save is still running, the records are marked when it finishes.
 
+**After marking, a message says `Some records this entry made may exist but are not known, so they were not marked.`** The entry's save failed part way. It may have stored an order, samples or results, but the server could not find which. The entry is marked and its number is free. Ask an administrator to find those records and correct them.
+
 ## Related guides
 
 Read [Patients](/docs/patients) for received patient records and [Test catalog](/docs/test-catalog) for lab-enabled tests. Read [Workflows](/docs/workflows) for the capture workflow and [Start here](/docs/start-here) for installation and command-line setup. Read [Users](/docs/users) to limit a person to a site, and [Roles](/docs/roles) to give a role **Mark entries as entered in error**.

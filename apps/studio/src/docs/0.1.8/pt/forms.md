@@ -708,6 +708,8 @@ Os formulários **Users** e **Facility** preenchem as páginas Utilizadores e Un
 
 **Depois de marcar, uma mensagem diz `The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.`** O servidor ainda não sabe que dados o registo criou. Se a gravação ainda estiver a decorrer, esses dados são marcados quando ela terminar.
 
+**Depois de marcar, uma mensagem diz `Some records this entry made may exist but are not known, so they were not marked.`** A gravação do registo falhou a meio. Pode ter guardado um pedido, amostras ou resultados, mas o servidor não conseguiu saber quais. O registo está marcado e o número está livre. Peça a um administrador que encontre esses dados e os corrija.
+
 ## Guias relacionados
 
 Leia [Pacientes](/docs/patients) para registos recebidos e [Catálogo de testes](/docs/test-catalog) para testes ativos. Leia [Workflows](/docs/workflows) para o workflow de recolha e [Começar aqui](/docs/start-here) para instalação e CLI. Leia [Utilizadores](/docs/users) para limitar uma pessoa a um local, e [Funções](/docs/roles) para dar a uma função **Marcar registos como introduzidos por erro**.

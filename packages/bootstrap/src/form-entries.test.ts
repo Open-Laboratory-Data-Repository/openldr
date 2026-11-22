@@ -775,13 +775,16 @@ describe('form entries service: voidEntry', () => {
     await w.db.destroy();
   });
 
-  it('voids an incomplete entry with no saved records without sending anything', async () => {
+  it('voids an incomplete entry with no saved records without sending anything, and warns that some may exist', async () => {
     const w = await world();
+    // The save stored something, but no id was found, so the row names no records.
     const e = await settled(w, 'CS-1', 'incomplete', [], null);
     const r = await w.service.voidEntry({ entryId: e.id, reason: 'never finished', user: everyone, actor });
     expect(r).toMatchObject({ entry: { status: 'entered-in-error' }, resaved: 0, skipped: 0 });
-    expect((r as { warning?: string }).warning).toBeUndefined();
+    const warning = 'Some records this entry made may exist but are not known, so they were not marked.';
+    expect((r as { warning?: string }).warning).toBe(warning);
     expect(w.fakes.runs).toHaveLength(0);
+    expect(w.fakes.audits[0]!.details.metadata).toMatchObject({ reason: 'never finished', resaved: 0, skipped: 0, warning });
     await w.db.destroy();
   });
 

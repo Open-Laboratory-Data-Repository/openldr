@@ -375,12 +375,15 @@ describe('POST /api/forms/entries/:entryId/void', () => {
     await w.db.destroy();
   });
 
-  it('voids an incomplete entry with no saved records, with nothing re-saved and no warning', async () => {
+  it('voids an incomplete entry with no saved records, with nothing re-saved and a warning that some may exist', async () => {
     const w = await world();
     const e = await w.store.setSaved((await w.add('form-1', 'reg-a', 'CS-1', 'u-x')).id, { responseId: null, resources: [] }, 'incomplete');
     const res = await voidIt(w.appFor(all, { capabilities: VOID }), e.id, { reason: 'never finished' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ entry: expect.objectContaining({ status: 'entered-in-error' }), resaved: 0, skipped: 0 });
+    expect(res.json()).toEqual({
+      entry: expect.objectContaining({ status: 'entered-in-error' }), resaved: 0, skipped: 0,
+      warning: 'Some records this entry made may exist but are not known, so they were not marked.',
+    });
     expect(w.runs).toHaveLength(0);
     await w.db.destroy();
   });

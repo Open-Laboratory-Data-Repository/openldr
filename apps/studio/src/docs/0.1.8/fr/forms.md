@@ -708,6 +708,8 @@ Les formulaires **Users** et **Facility** remplissent les pages Utilisateurs et 
 
 **Après le marquage, un message affiche `The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.`** Le serveur ne sait pas encore quelles données la saisie a créées. Si sa sauvegarde est encore en cours, elles sont marquées quand cette sauvegarde se termine.
 
+**Après le marquage, un message affiche `Some records this entry made may exist but are not known, so they were not marked.`** La sauvegarde de la saisie a échoué en cours de route. Elle a peut-être enregistré une demande, des échantillons ou des résultats, mais le serveur n'a pas pu savoir lesquels. La saisie est marquée et son numéro est libre. Demandez à un administrateur de retrouver ces données et de les corriger.
+
 ## Guides associés
 
 Lisez [Patients](/docs/patients) pour les dossiers reçus et [Catalogue des tests](/docs/test-catalog) pour les tests activés. Lisez [Workflows](/docs/workflows) pour le workflow de saisie et [Commencer ici](/docs/start-here) pour l'installation et la CLI. Lisez [Utilisateurs](/docs/users) pour limiter une personne à un site, et [Rôles](/docs/roles) pour donner à un rôle **Marquer des saisies comme erronées**.
