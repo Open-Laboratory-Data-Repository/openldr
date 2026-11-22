@@ -261,12 +261,14 @@ duplicates.
 Each saved form submission is an entry. These commands list a form's entries and mark one as
 entered in error. Both go through the app.
 
-    openldr forms entries <form> [--status active|incomplete|entered-in-error] [--limit <n>] [--offset <n>] [--json]
+    openldr forms entries <form> [--status active|incomplete|entered-in-error] [--entered-by <user id>] [--search <requisition prefix>] [--limit <n>] [--offset <n>] [--json]
     openldr forms void-entry <id> --reason <text> [--force] [--json]
 
 `<form>` is a form id or the form's exact name. A name that two forms share is refused, and
 the message names both ids. `entries` prints the requisition number, status, time entered,
-who entered it, facility code and summary of each entry, newest first. `--limit` (1 to 100,
+who entered it, facility code and summary of each entry, newest first. `--entered-by` keeps
+the entries one user id made (up to 200 characters). `--search` keeps the entries whose
+requisition number starts with the text, ignoring case (up to 100 characters). `--limit` (1 to 100,
 default 25) and `--offset` (default 0) page through them. `--json` prints the entries and the
 total. It needs `forms.view`.
 

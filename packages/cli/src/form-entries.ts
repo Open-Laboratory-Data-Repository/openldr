@@ -37,7 +37,7 @@ const summaryText = (e: FormEntry): string => e.summary.map((s) => `${s.label}: 
 
 export async function runFormsEntries(
   form: string,
-  opts: { json: boolean; status?: string; limit: string; offset: string },
+  opts: { json: boolean; status?: string; limit: string; offset: string; enteredBy?: string; search?: string },
 ): Promise<number> {
   if (opts.status !== undefined && !STATUSES.includes(opts.status as FormEntryStatus)) {
     process.stderr.write(`--status must be one of ${STATUSES.join(', ')}\n`);
@@ -47,6 +47,11 @@ export async function runFormsEntries(
   const offset = intIn(opts.offset, 0, Number.MAX_SAFE_INTEGER);
   if (limit === null) { process.stderr.write('--limit must be a whole number from 1 to 100\n'); return 1; }
   if (offset === null) { process.stderr.write('--offset must be a whole number, 0 or more\n'); return 1; }
+  // As the route: an empty value counts as left out, and each has the route's length limit.
+  const enteredBy = opts.enteredBy || undefined;
+  const search = opts.search || undefined;
+  if (enteredBy && enteredBy.length > 200) { process.stderr.write('--entered-by must be 200 characters or fewer\n'); return 1; }
+  if (search && search.length > 100) { process.stderr.write('--search must be 100 characters or fewer\n'); return 1; }
 
   const ctx = await createAppContext(loadConfig());
   try {
@@ -69,6 +74,8 @@ export async function runFormsEntries(
     const result = await ctx.formEntries.list({
       formId: byName[0]!.id, user: caller.viewer, limit, offset,
       ...(opts.status ? { status: opts.status as FormEntryStatus } : {}),
+      ...(enteredBy ? { enteredBy } : {}),
+      ...(search ? { search } : {}),
     });
     if (opts.json) {
       process.stdout.write(JSON.stringify(result, null, 2) + '\n');

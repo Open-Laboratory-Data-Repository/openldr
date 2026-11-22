@@ -59,7 +59,7 @@ const entry = {
   status: 'active', statusBy: null, statusAt: null, statusReason: null, saved: null,
 };
 
-const listOpts = (o: Partial<{ json: boolean; status: string; limit: string; offset: string }> = {}) => ({ json: false, limit: '25', offset: '0', ...o });
+const listOpts = (o: Partial<{ json: boolean; status: string; limit: string; offset: string; enteredBy: string; search: string }> = {}) => ({ json: false, limit: '25', offset: '0', ...o });
 const voidOpts = (o: Partial<{ json: boolean; force: boolean; reason: string }> = {}) => ({ json: false, force: false, reason: 'wrong patient', ...o });
 
 describe('forms entries', () => {
@@ -96,6 +96,24 @@ describe('forms entries', () => {
     expect(await runFormsEntries('form-lab', listOpts({ limit: '0' }))).toBe(1);
     expect(await runFormsEntries('form-lab', listOpts({ limit: '101' }))).toBe(1);
     expect(await runFormsEntries('form-lab', listOpts({ offset: '-1' }))).toBe(1);
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
+
+  it('passes --entered-by to the service, and refuses one over 200 characters', async () => {
+    expect(await runFormsEntries('form-lab', listOpts({ enteredBy: 'u7' }))).toBe(0);
+    expect(mocks.list).toHaveBeenCalledWith(expect.objectContaining({ enteredBy: 'u7' }));
+    mocks.list.mockClear();
+    expect(await runFormsEntries('form-lab', listOpts({ enteredBy: 'x'.repeat(201) }))).toBe(1);
+    expect(err()).toContain('--entered-by');
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
+
+  it('passes --search to the service, and refuses one over 100 characters', async () => {
+    expect(await runFormsEntries('form-lab', listOpts({ search: 'REQ-' }))).toBe(0);
+    expect(mocks.list).toHaveBeenCalledWith(expect.objectContaining({ search: 'REQ-' }));
+    mocks.list.mockClear();
+    expect(await runFormsEntries('form-lab', listOpts({ search: 'x'.repeat(101) }))).toBe(1);
+    expect(err()).toContain('--search');
     expect(mocks.list).not.toHaveBeenCalled();
   });
 

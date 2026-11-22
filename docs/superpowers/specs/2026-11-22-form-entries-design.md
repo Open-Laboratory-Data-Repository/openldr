@@ -237,7 +237,7 @@ A pack still cannot change a form it did not make. This is a change to what CE s
 
 ### 5.7 CLI
 
-- `openldr forms entries <form> [--facility <code>] [--status active|entered-in-error] [--json]`
+- `openldr forms entries <form> [--status active|incomplete|entered-in-error] [--entered-by <user id>] [--search <requisition prefix>] [--limit N] [--offset N] [--json]`
   lists entries.
 - `openldr forms void-entry <id> --reason <text> --force` marks one in error. It refuses
   without `--force`.

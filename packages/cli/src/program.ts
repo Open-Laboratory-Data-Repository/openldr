@@ -1355,10 +1355,12 @@ export function buildProgram(): Command {
     .command('entries <form>')
     .description('List the saved entries of one form, newest first. <form> is a form id or its exact name')
     .option('--status <status>', 'only entries with this status: active, incomplete or entered-in-error')
+    .option('--entered-by <user id>', 'only entries made by this user id')
+    .option('--search <prefix>', 'only entries whose requisition number starts with this, ignoring case')
     .option('--limit <n>', 'how many entries to show, 1 to 100', '25')
     .option('--offset <n>', 'how many entries to skip', '0')
     .option('--json', 'emit JSON', false)
-    .action(async (form: string, opts: { json: boolean; status?: string; limit: string; offset: string }) => {
+    .action(async (form: string, opts: { json: boolean; status?: string; limit: string; offset: string; enteredBy?: string; search?: string }) => {
       try { process.exitCode = await runFormsEntries(form, opts); }
       catch (err) { process.stderr.write(`forms entries failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
