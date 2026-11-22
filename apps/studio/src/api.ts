@@ -2163,6 +2163,8 @@ export interface FormEntry {
   entryKey: string | null; summary: { label: string; value: string }[];
   enteredBy: string; enteredByName: string; enteredAt: string;
   status: FormEntryStatus; statusBy: string | null; statusAt: string | null; statusReason: string | null;
+  /** Who marked it in error, by name. Null when nobody did, or the user no longer exists. */
+  statusByName: string | null;
 }
 /** An entry with every answer of its saved form copy. Null answers: the copy could not be read. */
 export interface FormEntryDetail extends FormEntry { answers: { fieldId: string; label: string; value: string }[] | null }

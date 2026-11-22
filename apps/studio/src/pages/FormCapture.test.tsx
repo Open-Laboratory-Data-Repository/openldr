@@ -447,7 +447,7 @@ describe('FormCapture entries (design 2026-11-22-form-entries)', () => {
     const getEntry = vi.spyOn(api, 'getFormEntry').mockResolvedValue({
       id: 'e-9', formId: 'form-1', facilityId: null, facilityCode: null, facilityName: null, entryKey: 'CS-0001',
       summary: [], enteredBy: 'u-2', enteredByName: 'aisha', enteredAt: '2026-11-22T13:50:00.000Z',
-      status: 'active', statusBy: null, statusAt: null, statusReason: null, answers: [],
+      status: 'active', statusBy: null, statusAt: null, statusReason: null, statusByName: null, answers: [],
     });
     renderAt();
     const num = await screen.findByLabelText('Requisition number');

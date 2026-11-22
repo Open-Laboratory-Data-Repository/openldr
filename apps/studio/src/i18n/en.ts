@@ -590,6 +590,7 @@ export const en = {
       count_other: "{{count}} entries",
       sheetTitle: "Entry",
       sheetHint: "Read only. The answers as they were saved.",
+      removedUser: "a removed user",
       voidedBy: "Marked by",
       voidedAt: "Marked on",
       reason: "Reason",

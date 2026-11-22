@@ -586,6 +586,7 @@ export const pt: EnShape = {
       count_other: "{{count}} registos",
       sheetTitle: "Registo",
       sheetHint: "Só de leitura. As respostas tal como foram guardadas.",
+      removedUser: "um utilizador removido",
       voidedBy: "Marcado por",
       voidedAt: "Marcado em",
       reason: "Motivo",

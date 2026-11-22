@@ -85,6 +85,12 @@ async function world() {
       },
       audit: async (actor, details) => { audits.push({ actor, details }); },
       logger: { warn: () => {}, error: () => {} } as never,
+      // u-manager is a known user; any other id names no user any more.
+      users: {
+        getMany: async (ids: string[]) => ids.includes('u-manager')
+          ? [{ id: 'u-manager', username: 'manager', displayName: 'Mary Manager' }] as never
+          : [],
+      },
     }),
     fhirStore: { get: fhirGet },
     logger: { warn: () => {}, error: () => {}, info: () => {} },
@@ -261,6 +267,35 @@ describe('GET /api/forms/entries/:entryId', () => {
     const s = await w.add('secret', 'reg-a', 'CS-S', 'u-clerk');
     expect((await w.appFor(all).inject({ url: `/api/forms/entries/${s.id}` })).statusCode).toBe(404);
     expect((await w.appFor(all, { capabilities: ['forms.view', 'forms.edit'] }).inject({ url: `/api/forms/entries/${s.id}` })).statusCode).toBe(200);
+    await w.db.destroy();
+  });
+});
+
+describe('who marked an entry in error, by name', () => {
+  it('names a known user on the list and on the read', async () => {
+    const w = await world();
+    const e = await w.add('form-1', 'reg-a', 'CS-1', 'u-x');
+    await w.store.void(e.id, { id: 'u-manager', reason: 'typo' });
+    const app = w.appFor(all);
+    const list = await app.inject({ url: '/api/forms/form-1/entries' });
+    expect(list.json().entries[0]).toMatchObject({ statusBy: 'u-manager', statusByName: 'Mary Manager' });
+    const one = await app.inject({ url: `/api/forms/entries/${e.id}` });
+    expect(one.json()).toMatchObject({ statusBy: 'u-manager', statusByName: 'Mary Manager' });
+    await w.db.destroy();
+  });
+
+  it('gives null for a user that no longer exists, and for an entry nobody marked', async () => {
+    const w = await world();
+    const gone = await w.add('form-1', 'reg-a', 'CS-1', 'u-x');
+    const kept = await w.add('form-1', 'reg-a', 'CS-2', 'u-x');
+    await w.store.void(gone.id, { id: 'u-removed', reason: 'typo' });
+    const app = w.appFor(all);
+    const list = await app.inject({ url: '/api/forms/form-1/entries' });
+    const byKey = new Map(list.json().entries.map((e: { entryKey: string; statusByName: unknown }) => [e.entryKey, e.statusByName]));
+    expect(byKey).toEqual(new Map([['CS-1', null], ['CS-2', null]]));
+    const one = await app.inject({ url: `/api/forms/entries/${gone.id}` });
+    expect(one.json()).toMatchObject({ statusBy: 'u-removed', statusByName: null });
+    expect((await app.inject({ url: `/api/forms/entries/${kept.id}` })).json().statusByName).toBeNull();
     await w.db.destroy();
   });
 });

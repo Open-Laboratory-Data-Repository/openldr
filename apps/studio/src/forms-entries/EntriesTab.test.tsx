@@ -13,7 +13,7 @@ const entry = (over: Partial<api.FormEntry>): api.FormEntry => ({
   id: 'e-1', formId: 'form-1', facilityId: 'f-1', facilityCode: 'FAC-1', facilityName: 'Hill Clinic',
   entryKey: 'CS-0001', summary: [{ label: 'Test', value: 'HIV VL' }, { label: 'Patient', value: 'Amina J.' }],
   enteredBy: 'u-1', enteredByName: 'proofclerk', enteredAt: '2026-11-22T14:20:00.000Z',
-  status: 'active', statusBy: null, statusAt: null, statusReason: null, ...over,
+  status: 'active', statusBy: null, statusAt: null, statusReason: null, statusByName: null, ...over,
 });
 
 const rows = [

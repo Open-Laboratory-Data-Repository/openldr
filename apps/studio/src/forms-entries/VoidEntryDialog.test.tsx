@@ -10,7 +10,7 @@ vi.mock('sonner', () => ({ toast }));
 const entry: api.FormEntry = {
   id: 'e-1', formId: 'form-1', facilityId: null, facilityCode: null, facilityName: null,
   entryKey: 'CS-0001', summary: [], enteredBy: 'u-2', enteredByName: 'aisha', enteredAt: '2026-11-22T13:50:00.000Z',
-  status: 'active', statusBy: null, statusAt: null, statusReason: null,
+  status: 'active', statusBy: null, statusAt: null, statusReason: null, statusByName: null,
 };
 
 function setup() {

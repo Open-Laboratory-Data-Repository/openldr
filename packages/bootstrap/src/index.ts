@@ -847,6 +847,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
     runner: { runAndRecord: (...args) => workflowRunner.runAndRecord(...args) },
     audit: (actor, details) => recordAuditEvent({ audit, logger }, actor, details),
     logger,
+    users,
   });
   const dashboardAccessStore = createDashboardAccessStore(internal.db as unknown as Kysely<InternalSchema>);
   const dashboardAccessCheck = dashboardAccess({ access: dashboardAccessStore });

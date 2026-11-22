@@ -48,10 +48,18 @@ interface VoidFakes {
   logs: { level: string; obj: any; msg: string }[];
   /** What the next run answers. Left out, the run completes. */
   outcome?: () => unknown;
+  /** Each read of the users store, as the ids it asked for. */
+  userReads: string[][];
 }
 
+/** The users the fake users store knows. u9 has a display name; u8 has only a username. */
+const KNOWN_USERS = [
+  { id: 'u9', username: 'manager', displayName: 'Mary Manager' },
+  { id: 'u8', username: 'supervisor', displayName: null },
+];
+
 async function world() {
-  const fakes: VoidFakes = { records: new Map(), runs: [], audits: [], logs: [] };
+  const fakes: VoidFakes = { records: new Map(), runs: [], audits: [], logs: [], userReads: [] };
   const db = await makeMigratedDb();
   const add = (id: string, code: string, name: string, region: string | null, district: string | null) =>
     db.insertInto('facility_registry').values({
@@ -84,6 +92,12 @@ async function world() {
       warn: (obj: any, msg: string) => { fakes.logs.push({ level: 'warn', obj, msg }); },
       error: (obj: any, msg: string) => { fakes.logs.push({ level: 'error', obj, msg }); },
     } as never,
+    users: {
+      getMany: async (ids) => {
+        fakes.userReads.push(ids);
+        return KNOWN_USERS.filter((u) => ids.includes(u.id)) as never;
+      },
+    },
   });
   return { db, store, service, fakes };
 }
@@ -454,6 +468,51 @@ describe('form entries service: list and get', () => {
     expect((await service.get(c.id, { id: 'u9', dataScope: { limited: false } }))?.id).toBe(c.id);
     expect(await service.get('no-such-entry', { id: 'u9', dataScope: { limited: false } })).toBeNull();
     await db.destroy();
+  });
+});
+
+describe('form entries service: who marked an entry in error', () => {
+  const all = { id: 'u9', dataScope: { limited: false } as DataScope };
+  const page = { limit: 25, offset: 0 };
+  async function three() {
+    const w = await world();
+    const add = (entryKey: string) => w.store.create({
+      formId: 'form-1', facilityId: null, facilityCode: null, facilityName: null, entryKey, summary: [],
+      enteredBy: 'u1', enteredByName: 'u1',
+    });
+    const a = await add('CS-1');
+    const b = await add('CS-2');
+    const c = await add('CS-3');
+    const d = await add('CS-4');
+    await w.store.void(a.id, { id: 'u9', reason: 'typo' });
+    await w.store.void(b.id, { id: 'u8', reason: 'typo' });
+    await w.store.void(c.id, { id: 'u-gone', reason: 'typo' });
+    return { ...w, a, b, c, d };
+  }
+
+  it('names each one, display name first, with one users read for the whole page', async () => {
+    const w = await three();
+    const r = await w.service.list({ formId: 'form-1', user: all, ...page });
+    const byKey = new Map(r.entries.map((e) => [e.entryKey, e.statusByName]));
+    expect(byKey).toEqual(new Map([['CS-1', 'Mary Manager'], ['CS-2', 'supervisor'], ['CS-3', null], ['CS-4', null]]));
+    expect(w.fakes.userReads).toHaveLength(1);
+    expect([...w.fakes.userReads[0]!].sort()).toEqual(['u-gone', 'u8', 'u9']);
+    await w.db.destroy();
+  });
+
+  it('names it on a read, and gives null for a user that no longer exists', async () => {
+    const w = await three();
+    expect((await w.service.get(w.a.id, all))?.statusByName).toBe('Mary Manager');
+    expect((await w.service.get(w.c.id, all))?.statusByName).toBeNull();
+    await w.db.destroy();
+  });
+
+  it('reads no users for a page with no marked entry', async () => {
+    const w = await three();
+    const r = await w.service.get(w.d.id, all);
+    expect(r?.statusByName).toBeNull();
+    expect(w.fakes.userReads).toHaveLength(0);
+    await w.db.destroy();
   });
 });
 

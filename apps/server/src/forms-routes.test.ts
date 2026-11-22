@@ -1863,6 +1863,7 @@ describe('form entries on submit', () => {
       runner: { runAndRecord: (...args: [any, any, any]) => (ctx as any).workflows.runner.runAndRecord(...args) },
       audit: async () => {},
       logger: { warn: () => {}, error: () => {} } as never,
+      users: { getMany: async () => [] },
     });
     (ctx as any).labIdentity = { tokens: async () => ({ 'lab.timezone': 'Africa/Dar_es_Salaam' }) };
     (ctx as any).workflows = {

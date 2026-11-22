@@ -56,7 +56,7 @@ const entry = {
   id: 'e1', formId: 'form-lab', facilityId: 'fac-1', facilityCode: 'F001', facilityName: 'Clinic',
   entryKey: 'REQ-1', summary: [{ label: 'Patient', value: 'Ada' }, { label: 'Test', value: 'HIV VL' }],
   enteredBy: 'u1', enteredByName: 'Ada Clerk', enteredAt: '2026-11-22T08:00:00.000Z',
-  status: 'active', statusBy: null, statusAt: null, statusReason: null, saved: null,
+  status: 'active', statusBy: null, statusAt: null, statusReason: null, saved: null, statusByName: null as string | null,
 };
 
 const listOpts = (o: Partial<{ json: boolean; status: string; limit: string; offset: string; enteredBy: string; search: string }> = {}) => ({ json: false, limit: '25', offset: '0', ...o });
@@ -161,6 +161,18 @@ describe('forms void-entry', () => {
     expect(out()).toContain('Patient: Ada; Test: HIV VL');
     expect(err()).toContain('use --force to mark it as entered in error');
     expect(mocks.voidEntry).not.toHaveBeenCalled();
+  });
+
+  it('prints who marked an entry already in error by name, or as a removed user', async () => {
+    const voided = { ...entry, status: 'entered-in-error', statusBy: 'u9', statusAt: '2026-11-22T09:00:00.000Z', statusReason: 'typo' };
+    mocks.get.mockResolvedValue({ ...voided, statusByName: 'Mary Manager' });
+    expect(await runFormsVoidEntry('e1', voidOpts())).toBe(1);
+    expect(out()).toContain('marked in error by: Mary Manager');
+    expect(out()).toContain('reason: typo');
+    mocks.get.mockResolvedValue({ ...voided, statusByName: null });
+    expect(await runFormsVoidEntry('e1', voidOpts())).toBe(1);
+    expect(out()).toContain('marked in error by: a removed user');
+    expect(out()).not.toContain('u9');
   });
 
   it('with --force marks it, audits through the CLI actor, and says what it resaved', async () => {

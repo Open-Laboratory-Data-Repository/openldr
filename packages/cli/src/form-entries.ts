@@ -129,6 +129,14 @@ export async function runFormsVoidEntry(
           `entered at: ${seen.enteredAt}`,
           `by: ${seen.enteredByName}`,
           `summary: ${summaryText(seen)}`,
+          // An entry already marked says who marked it. A user id that names no one is a removed user.
+          ...(seen.status === 'entered-in-error'
+            ? [
+                `marked in error by: ${seen.statusByName ?? (seen.statusBy ? 'a removed user' : '')}`,
+                `marked at: ${seen.statusAt ?? ''}`,
+                `reason: ${seen.statusReason ?? ''}`,
+              ]
+            : []),
         ].join('\n') + '\n');
       }
       process.stderr.write('use --force to mark it as entered in error\n');

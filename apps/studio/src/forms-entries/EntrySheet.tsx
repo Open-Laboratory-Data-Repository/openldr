@@ -38,10 +38,8 @@ export function EntrySheet({ entryId, onClose }: { entryId: string | null; onClo
   }, [entryId]);
 
   const voided = entry?.status === 'entered-in-error';
-  // The row keeps who marked it as a user id. The person who entered it is the one name it holds.
-  const voidedBy = entry?.statusBy
-    ? (entry.statusBy === entry.enteredBy ? entry.enteredByName : entry.statusBy)
-    : null;
+  // Never a raw user id: a marker the server cannot name any more is a removed user.
+  const voidedBy = entry?.statusBy ? (entry.statusByName ?? t(`${P}.removedUser`)) : null;
 
   return (
     <Sheet open={entryId !== null} onOpenChange={(o) => { if (!o) onClose(); }}>

@@ -3,6 +3,7 @@ import { entryFacilitiesOf, entryKeyOf, entryValuesOf, type FacilityAnswer, type
 import type { DataScope } from '@openldr/rbac';
 import type { WorkflowTriggerRunner } from '@openldr/workflows';
 import type { Logger } from '@openldr/core';
+import type { UserStore } from '@openldr/users';
 import type { AuditActor, AuditDetails } from './record-audit';
 import { inDataScope, type ScopeRegistryRow } from './data-scope';
 import { registryConceptCodeById, registryRowIdByConceptCode } from './facility-reconcile';
@@ -26,6 +27,10 @@ export interface EntryFacility { id: string; code: string; name: string }
  *  facility, and `facility` is it. `choices`: the facilities the limit covers, null for no limit. */
 export interface EntryContext { facility: EntryFacility | null; locked: boolean; choices: EntryFacility[] | null }
 
+/** An entry as the list and the read give it. `statusByName` is the display name, else the username, of
+ *  the user in `statusBy`. Null when there is no `statusBy`, or it names no user any more. */
+export type NamedFormEntry = FormEntry & { statusByName: string | null };
+
 /** Who is asking. A limited user sees entries inside the limit and entries they made. */
 export interface EntryViewer { id: string; dataScope: DataScope }
 
@@ -34,9 +39,9 @@ export interface FormEntriesService {
   list(input: {
     formId: string; user: EntryViewer; status?: FormEntryStatus; enteredBy?: string; search?: string;
     limit: number; offset: number;
-  }): Promise<{ entries: FormEntry[]; total: number }>;
+  }): Promise<{ entries: NamedFormEntry[]; total: number }>;
   /** Null when there is no such entry, or when the user may not see it. */
-  get(id: string, user: EntryViewer): Promise<FormEntry | null>;
+  get(id: string, user: EntryViewer): Promise<NamedFormEntry | null>;
   /** What the form screen pre-fills. Only the user's limit decides it, so it is the same on every form. */
   context(user: EntryViewer): Promise<EntryContext>;
 
@@ -62,7 +67,7 @@ export interface FormEntriesService {
   }): Promise<VoidedEntry | 'not-found' | 'already-void'>;
 }
 
-export interface VoidedEntry { entry: FormEntry; resaved: number; skipped: number; warning?: string }
+export interface VoidedEntry { entry: NamedFormEntry; resaved: number; skipped: number; warning?: string }
 
 export interface FormEntriesDeps {
   store: FormEntryStore;
@@ -74,6 +79,8 @@ export interface FormEntriesDeps {
   runner: Pick<WorkflowTriggerRunner, 'runAndRecord'>;
   audit(actor: AuditActor, details: AuditDetails): Promise<void>;
   logger: Pick<Logger, 'warn' | 'error'>;
+  /** Names who marked an entry in error. The row keeps only the user id. */
+  users: Pick<UserStore, 'getMany'>;
 }
 
 /** The record types whose FHIR status allows `entered-in-error`. Each is checked against its schema
@@ -104,6 +111,16 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
     if (!user.dataScope.limited || entry.enteredBy === user.id) return entry;
     const ids = await facilityIdsOf(user.dataScope);
     return entry.facilityId !== null && ids !== null && ids.includes(entry.facilityId) ? entry : null;
+  };
+
+  /** Adds `statusByName` to each entry, with one read of the users for the whole page. */
+  const withNames = async (entries: FormEntry[]): Promise<NamedFormEntry[]> => {
+    const ids = [...new Set(entries.map((e) => e.statusBy).filter((id): id is string => id !== null))];
+    const names = new Map<string, string>();
+    if (ids.length > 0) {
+      for (const u of await deps.users.getMany(ids)) names.set(u.id, u.displayName?.trim() || u.username);
+    }
+    return entries.map((e) => ({ ...e, statusByName: e.statusBy ? names.get(e.statusBy) ?? null : null }));
   };
 
   /** Saves every record of an entry again with the status entered-in-error, through the ingest
@@ -165,14 +182,18 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
 
     async list({ formId, user, status, enteredBy, search, limit, offset }) {
       const ids = await facilityIdsOf(user.dataScope);
-      return deps.store.list({
+      const page = await deps.store.list({
         formId, status, enteredBy, search, limit, offset,
         // A limited user: entries at a facility inside the limit, or entries they made.
         ...(ids === null ? {} : { facilityIds: ids, orEnteredBy: user.id }),
       });
+      return { entries: await withNames(page.entries), total: page.total };
     },
 
-    get,
+    async get(id, user) {
+      const entry = await get(id, user);
+      return entry ? (await withNames([entry]))[0]! : null;
+    },
 
     async context(user) {
       const scope = user.dataScope;
@@ -271,7 +292,7 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
         action: 'form.entry.void', entityType: 'form-entry', entityId: entry.id, before, after: entry,
         metadata: { reason, resaved, skipped, ...(warning ? { warning } : {}) },
       });
-      return { entry, resaved, skipped, ...(warning ? { warning } : {}) };
+      return { entry: (await withNames([entry]))[0]!, resaved, skipped, ...(warning ? { warning } : {}) };
     },
   };
 }
