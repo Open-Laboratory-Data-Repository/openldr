@@ -559,7 +559,7 @@ describe('market commands', () => {
   // ------------------------------------------------------------------
   const installedPack = [{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }];
   const plan = { roles: ['Sample Clerk'], layouts: ['Clerk home'], formsKept: ['Sample intake'], holders: [] };
-  const OPEN_TO_ALL = "These forms were limited to the pack's roles. After removal, anyone who may view forms can open them.";
+  const OPEN_TO_ALL = "If these forms were limited to the pack's roles, anyone who may view forms can open them after removal.";
 
   it('remove pack without --force: prints what it would remove, exits 1 and changes nothing', async () => {
     mockPacks.list.mockResolvedValueOnce(installedPack);

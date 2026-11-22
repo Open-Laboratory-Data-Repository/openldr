@@ -289,6 +289,15 @@ describe('PackageDetail', () => {
       expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: 'reg/pack-1' }), []);
     });
 
+    it('shows no Permissions block, because a content pack declares no capabilities', async () => {
+      mockPackDetail();
+      const ok: CardEntry = { ...packEntry, installed: true, status: 'installed' };
+      render(<PackageDetail entry={ok} onBack={vi.fn()} onInstall={vi.fn()} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} onDetach={vi.fn()} />);
+      expect(await screen.findByText('Specimen types')).toBeTruthy();
+      expect(screen.queryByText('Permissions')).toBeNull();
+      expect(screen.queryByText('No special permissions requested.')).toBeNull();
+    });
+
     it('a failed install shows the step and error, with Install again and Remove', async () => {
       mockPackDetail();
       const failed: CardEntry = { ...packEntry, installed: true, active: true, enabled: true, status: 'failed', failedStep: 2, error: 'boom' };

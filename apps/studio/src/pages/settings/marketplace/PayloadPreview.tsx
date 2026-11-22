@@ -16,7 +16,9 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function PayloadPreview({ payload }: { payload: ArtifactPayloadMeta | null }) {
+/** `expandRoles` shows each role's capabilities from the start. The install prompt sets it, so the
+ *  admin sees every capability a role grants before confirming (design 5.1a). */
+export function PayloadPreview({ payload, expandRoles = false }: { payload: ArtifactPayloadMeta | null; expandRoles?: boolean }) {
   const { t } = useTranslation();
   if (!payload) {
     return <p className="text-sm text-muted-foreground">{t('settings.marketplace.payloadUnavailable')}</p>;
@@ -38,7 +40,7 @@ export function PayloadPreview({ payload }: { payload: ArtifactPayloadMeta | nul
     );
   }
   if (payload.kind === 'content-pack') {
-    return <PackSteps steps={Array.isArray(payload.steps) ? payload.steps : []} roles={payload.roles ?? []} layouts={payload.layouts} />;
+    return <PackSteps steps={Array.isArray(payload.steps) ? payload.steps : []} roles={payload.roles ?? []} layouts={payload.layouts} expandRoles={expandRoles} />;
   }
   // Non-plugin kinds (form/report/test-definition) — fleshed out in sub-project C.
   return <p className="text-sm text-muted-foreground">{t('settings.marketplace.payloadUnavailable')}</p>;
@@ -71,7 +73,7 @@ function layoutLine(t: TFunction, roles: PackRole[], label: string, layout: Pack
   return `${line}, ${t('settings.marketplace.packLayoutDefaultFor', { roles: names.join(', ') })}`;
 }
 
-function PackSteps({ steps, roles, layouts }: { steps: PackStep[]; roles: PackRole[]; layouts?: PackLayout[] }) {
+function PackSteps({ steps, roles, layouts, expandRoles }: { steps: PackStep[]; roles: PackRole[]; layouts?: PackLayout[]; expandRoles: boolean }) {
   const { t } = useTranslation();
   const place = placeInKind(steps);
   const hasRole = steps.some((s) => s.kind === 'role');
@@ -86,7 +88,9 @@ function PackSteps({ steps, roles, layouts }: { steps: PackStep[]; roles: PackRo
     }, () => { /* keys stay as they are */ });
     return () => { live = false; };
   }, [hasRole]);
-  const [open, setOpen] = useState<Set<number>>(new Set());
+  const [open, setOpen] = useState<Set<number>>(
+    () => new Set(expandRoles ? steps.flatMap((s, i) => (s.kind === 'role' ? [i] : [])) : []),
+  );
   const toggle = (i: number) => setOpen((prev) => {
     const next = new Set(prev);
     if (next.has(i)) next.delete(i); else next.add(i);

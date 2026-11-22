@@ -73,6 +73,28 @@ describe('PayloadPreview content pack', () => {
     expect(caps.textContent).toContain('patients.view');
   });
 
+  it('with expandRoles, a role line shows its capabilities from the start', async () => {
+    render(<PayloadPreview expandRoles payload={{
+      kind: 'content-pack', packSha256: 'a'.repeat(64),
+      steps: [{ kind: 'role', label: 'Sample Clerk', count: 2 }],
+      roles: [{ slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view', 'forms.submit'] }],
+    }} />);
+    const caps = screen.getByTestId('pack-role-capabilities');
+    await waitFor(() => expect(caps.textContent).toContain('View forms'));
+    expect(caps.textContent).toContain('Submit forms');
+    expect(screen.getByTestId('pack-role-toggle')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('without expandRoles, a role line starts folded', () => {
+    render(<PayloadPreview payload={{
+      kind: 'content-pack', packSha256: 'a'.repeat(64),
+      steps: [{ kind: 'role', label: 'Sample Clerk', count: 2 }],
+      roles: [{ slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view', 'forms.submit'] }],
+    }} />);
+    expect(screen.queryByTestId('pack-role-capabilities')).toBeNull();
+    expect(screen.getByTestId('pack-role-toggle')).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('a layout line names its pages and the roles it is the default for', () => {
     render(<PayloadPreview payload={{
       kind: 'content-pack', packSha256: 'a'.repeat(64),

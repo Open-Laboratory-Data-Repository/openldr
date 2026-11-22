@@ -44,7 +44,7 @@ Faça isto quando a instalação já não precisar do trabalho que o pacote prep
 
 **Resultado esperado:** aparece a mensagem **removido** com o identificador do pacote. O pacote deixa de constar em **Instalados**. As suas funções e disposições desaparecem.
 
-A remoção mantém os formulários do pacote publicados, com todas as respostas. Arquive um formulário em Formulários se já não o quiser. Um formulário limitado às funções do pacote perde esse limite, e qualquer pessoa que possa ver formulários passa a poder abri-lo. A remoção também não mexe nas listas de códigos, consultas, conjuntos de dados e correspondências que o pacote instalou, nem nos plugins e pacotes de que ele dependia.
+A remoção mantém os formulários do pacote publicados, com todas as respostas. Arquive um formulário em Formulários se já não o quiser. Se estes formulários estavam limitados às funções do pacote, qualquer pessoa que possa ver formulários poderá abri-los após a remoção. A remoção também não mexe nas listas de códigos, consultas, conjuntos de dados e correspondências que o pacote instalou, nem nos plugins e pacotes de que ele dependia.
 
 Se alguém ainda tiver uma das funções do pacote, a janela avisa a vermelho e lista cada função com os seus utilizadores. **Remover** fica desativado. Retire a função a essas pessoas em Utilizadores e volte a abrir a janela.
 

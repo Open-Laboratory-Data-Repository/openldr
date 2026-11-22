@@ -115,7 +115,7 @@ A newer version of the pack updates the role, layout and form it made before. An
 
 If the newer version leaves out a role or layout the older one made, the update deletes it. If someone still holds that role, the update stops before any write and names each role with its users. A form the newer version leaves out stays as it is and no longer belongs to the pack.
 
-Removing the pack deletes its layouts, then its roles. When the pack made a role, removing it needs `roles.manage`, and the message without it is `removing this pack needs the roles.manage capability`. It refuses while anyone holds one of its roles, and lists them. It keeps its forms published, with every response, so an administrator can archive them by hand. Deleting a role takes it off every form's access list, so a form limited to the pack's roles then opens to anyone with `forms.view`. It leaves alone the code systems, queries, datasets and mappings the pack installed, and the bundles named in `needs`.
+Removing the pack deletes its layouts, then its roles. When the pack made a role, removing it needs `roles.manage`, and the message without it is `removing this pack needs the roles.manage capability`. It refuses while anyone holds one of its roles, and lists them. It keeps its forms published, with every response, so an administrator can archive them by hand. Deleting a role takes it off every form's access list. If these forms were limited to the pack's roles, anyone with `forms.view` can open them after removal. It leaves alone the code systems, queries, datasets and mappings the pack installed, and the bundles named in `needs`.
 
 On a central server, a pack acts on that server only. Its roles and layouts stay there. Its forms reach the labs the way any form does.
 

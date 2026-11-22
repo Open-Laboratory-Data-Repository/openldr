@@ -44,7 +44,7 @@ Do this when the install no longer needs the job the pack set up. You need **Man
 
 **Expected result:** a message says **Removed** and the pack's id. The pack is no longer under **Installed**. Its roles and layouts are gone.
 
-Removing keeps the pack's forms published, with every response. Archive a form in Forms if you no longer want it. A form that only the pack's roles could open loses that limit, so anyone who may view forms can then open it. Removing also leaves alone the code lists, queries, datasets and mappings the pack installed, and any plugin or pack it needed.
+Removing keeps the pack's forms published, with every response. Archive a form in Forms if you no longer want it. If these forms were limited to the pack's roles, anyone who may view forms can open them after removal. Removing also leaves alone the code lists, queries, datasets and mappings the pack installed, and any plugin or pack it needed.
 
 If someone still holds one of the pack's roles, the prompt says so in red and lists each role with its users. **Remove** stays off. Take the role from those users in Users, then open the prompt again.
 

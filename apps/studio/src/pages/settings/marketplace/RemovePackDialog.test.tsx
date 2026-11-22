@@ -35,7 +35,7 @@ describe('RemovePackDialog', () => {
   it('says the kept forms open to anyone who may view forms when the pack removes a role', async () => {
     render(<RemovePackDialog packId="collection-site" open onOpenChange={() => {}} onRemoved={() => {}} />);
     const note = await screen.findByTestId('remove-pack-forms-open');
-    expect(note.textContent).toBe("These forms were limited to the pack's roles. After removal, anyone who may view forms can open them.");
+    expect(note.textContent).toBe("If these forms were limited to the pack's roles, anyone who may view forms can open them after removal.");
   });
 
   it('says nothing about form access when the pack removes no role or keeps no form', async () => {

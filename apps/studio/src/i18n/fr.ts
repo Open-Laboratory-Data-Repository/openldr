@@ -1077,7 +1077,7 @@ export const fr: EnShape = {
         rolesGo: 'Rôles supprimés',
         layoutsGo: 'Dispositions supprimées',
         formsStay: 'Formulaires conservés',
-        formsOpen: "Ces formulaires étaient réservés aux rôles du pack. Après la suppression, toute personne autorisée à consulter les formulaires pourra les ouvrir.",
+        formsOpen: "Si ces formulaires étaient réservés aux rôles du pack, toute personne autorisée à consulter les formulaires pourra les ouvrir après la suppression.",
         none: 'Aucun',
         holders: "Des utilisateurs ont encore un rôle de ce pack. Retirez-leur ce rôle d'abord, puis supprimez le pack.",
         holder: '{{role}} : {{users}}',

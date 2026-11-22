@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
@@ -10,7 +10,7 @@ vi.mock('@/api', async (orig) => {
   return { ...actual,
     listInstalledArtifacts: vi.fn(), listAvailableArtifacts: vi.fn(), getAvailableArtifact: vi.fn(), getRemovalPlan: vi.fn(), removePlugin: vi.fn(),
     installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn(), detachArtifact: vi.fn(), refreshRegistry: vi.fn(), getPackRemoval: vi.fn(), removePack: vi.fn(),
-    getPublishStatus: vi.fn(), publishArtifact: vi.fn(),
+    getPublishStatus: vi.fn(), publishArtifact: vi.fn(), getRoleCatalog: vi.fn(async () => ({ groups: [] })),
     // Registries is a real tab now that the page's ⋯ reaches into it.
     listRegistries: vi.fn(), createRegistry: vi.fn(), updateRegistry: vi.fn(), deleteRegistry: vi.fn() };
 });
@@ -197,6 +197,29 @@ describe('Marketplace', () => {
     await waitFor(() => expect(api.installArtifact).toHaveBeenCalledWith('reg/pack-1', []));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Failed at step 1: boom')));
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('the install confirm for a pack that makes a role lists every capability without a click', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [{ ref: 'reg/pack-1', id: 'pack-1', version: '1.0.0', type: 'content-pack', publisher: { id: 'p', name: 'P' }, valid: true }] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    (api.getAvailableArtifact as any).mockResolvedValue({
+      ref: 'reg/pack-1', id: 'pack-1', version: '1.0.0', type: 'content-pack', description: 'd', publisher: { id: 'p', name: 'P' }, capabilities: [],
+      compatibility: { ceVersion: '*' }, compatible: true, ceVersion: '0.1.0',
+      payload: { kind: 'content-pack', packSha256: 'a'.repeat(64), steps: [{ kind: 'role', label: 'Sample Clerk', count: 2 }] },
+      roles: [{ slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view', 'forms.submit'] }],
+      valid: true,
+    });
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('card-reg/pack-1'));
+    // The detail page keeps the list folded until the admin opens it.
+    await screen.findByTestId('pack-role-toggle');
+    expect(screen.queryByTestId('pack-role-capabilities')).toBeNull();
+    await openDetailMenu();
+    fireEvent.click(await screen.findByTestId('detail-install'));
+    const dialog = await screen.findByRole('dialog');
+    const caps = within(dialog).getByTestId('pack-role-capabilities');
+    expect(caps.textContent).toContain('forms.view');
+    expect(caps.textContent).toContain('forms.submit');
   });
 
   it('the type filter offers Content pack', async () => {

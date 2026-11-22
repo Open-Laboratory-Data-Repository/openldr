@@ -1077,7 +1077,7 @@ export const pt: EnShape = {
         rolesGo: 'Funções removidas',
         layoutsGo: 'Disposições removidas',
         formsStay: 'Formulários mantidos',
-        formsOpen: 'Estes formulários estavam limitados às funções do pacote. Após a remoção, qualquer pessoa que possa ver formulários poderá abri-los.',
+        formsOpen: 'Se estes formulários estavam limitados às funções do pacote, qualquer pessoa que possa ver formulários poderá abri-los após a remoção.',
         none: 'Nenhum',
         holders: 'Há utilizadores que ainda têm uma função deste pacote. Retire-lhes a função primeiro e depois remova o pacote.',
         holder: '{{role}}: {{users}}',

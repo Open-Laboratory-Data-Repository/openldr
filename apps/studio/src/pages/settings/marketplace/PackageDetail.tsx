@@ -304,6 +304,9 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
               ) : null}
             </section>
 
+            {/* Permissions are a plugin's capabilities. A content pack declares none, and the roles it
+                makes are listed with their capabilities in its steps. */}
+            {isPack ? null : (
             <section>
               <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{t('settings.marketplace.permissions')}</p>
               {!permissionsKnown ? (
@@ -323,6 +326,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 </ul>
               )}
             </section>
+            )}
 
             {detail ? (
               <section>

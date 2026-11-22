@@ -161,7 +161,7 @@ export function Marketplace() {
             <div className="grid min-h-0 gap-3 overflow-y-auto text-sm">
               <div><span className="font-medium">{t('settings.marketplace.version')}:</span> {consent.entry.version}</div>
               {consent.entry.type === 'content-pack' ? (
-                <PayloadPreview payload={consent.entry.payload ?? null} />
+                <PayloadPreview payload={consent.entry.payload ?? null} expandRoles />
               ) : (
               <div>
                 <div className="mb-1 font-medium">{t('settings.marketplace.requestedCapabilities')}</div>

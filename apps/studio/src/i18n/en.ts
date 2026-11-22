@@ -1081,7 +1081,7 @@ export const en = {
         rolesGo: 'Roles removed',
         layoutsGo: 'Layouts removed',
         formsStay: 'Forms kept',
-        formsOpen: "These forms were limited to the pack's roles. After removal, anyone who may view forms can open them.",
+        formsOpen: "If these forms were limited to the pack's roles, anyone who may view forms can open them after removal.",
         none: 'None',
         holders: 'Users still hold a role from this pack. Take the role from them first, then remove the pack.',
         holder: '{{role}}: {{users}}',

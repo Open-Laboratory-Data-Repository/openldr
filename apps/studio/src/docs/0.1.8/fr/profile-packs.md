@@ -44,7 +44,7 @@ Faites-le quand l'installation n'a plus besoin du métier que le pack a prépar�
 
 **Résultat attendu :** le message **supprimé** s'affiche avec l'identifiant du pack. Le pack ne figure plus sous **Installés**. Ses rôles et ses dispositions ont disparu.
 
-La suppression laisse les formulaires du pack publiés, avec toutes leurs réponses. Archivez un formulaire dans Formulaires si vous n'en voulez plus. Un formulaire réservé aux rôles du pack perd cette limite, et toute personne autorisée à consulter les formulaires peut alors l'ouvrir. Elle ne touche pas non plus aux listes de codes, requêtes, jeux de données et correspondances installés par le pack, ni aux plugins et packs dont il dépendait.
+La suppression laisse les formulaires du pack publiés, avec toutes leurs réponses. Archivez un formulaire dans Formulaires si vous n'en voulez plus. Si ces formulaires étaient réservés aux rôles du pack, toute personne autorisée à consulter les formulaires pourra les ouvrir après la suppression. Elle ne touche pas non plus aux listes de codes, requêtes, jeux de données et correspondances installés par le pack, ni aux plugins et packs dont il dépendait.
 
 Si quelqu'un a encore l'un des rôles du pack, la fenêtre l'indique en rouge et liste chaque rôle avec ses utilisateurs. **Supprimer** reste inactif. Retirez ce rôle à ces personnes dans Utilisateurs, puis rouvrez la fenêtre.
 
