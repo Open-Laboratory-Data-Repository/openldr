@@ -145,11 +145,13 @@ export function EntriesTab({ formId, refreshKey }: {
           <Table wrapperClassName="min-h-0 flex-1">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
-                <TableHead>{t(`${P}.colRequisition`)}</TableHead>
-                <TableHead>{t(`${P}.colSummary`)}</TableHead>
-                <TableHead>{t(`${P}.colEntered`)}</TableHead>
+                {/* Below sm the row must fit 375 px with its menu in reach: narrower padding, no Entered
+                    or By column, the date under the summary, and the summary wraps. */}
+                <TableHead className="px-2 sm:px-4">{t(`${P}.colRequisition`)}</TableHead>
+                <TableHead className="px-2 sm:px-4">{t(`${P}.colSummary`)}</TableHead>
+                <TableHead className="hidden sm:table-cell">{t(`${P}.colEntered`)}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t(`${P}.colBy`)}</TableHead>
-                <TableHead className="w-12" />
+                <TableHead className="w-10 px-1 sm:px-4" />
               </TableRow>
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-b">
@@ -158,26 +160,31 @@ export function EntriesTab({ formId, refreshKey }: {
                 const word = statusWord(e.status);
                 const key = e.entryKey ?? t(`${P}.noKey`);
                 const struck = voided ? 'line-through text-muted-foreground' : '';
+                const summaryText = e.summary.map((s) => s.value).join(', ') || '-';
+                const enteredAt = formatEnteredAt(e.enteredAt, i18n.language);
                 return (
                   <TableRow
                     key={e.id}
                     className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]"
                     onClick={() => setViewing(e.id)}
                   >
-                    <TableCell className={cn('max-w-[8rem] font-medium', struck)}>
+                    <TableCell className={cn('max-w-[7rem] px-2 font-medium sm:max-w-[8rem] sm:px-4', struck)}>
                       <TruncatedText text={key} className="min-w-0" />
                     </TableCell>
-                    <TableCell className="max-w-[16rem]">
-                      <TruncatedText text={e.summary.map((s) => s.value).join(', ') || '-'} className={cn('min-w-0', struck)} />
+                    <TableCell className="px-2 sm:max-w-[16rem] sm:px-4">
+                      {/* A phone wraps the summary; a wider screen keeps it on one line. */}
+                      <span className={cn('block [overflow-wrap:anywhere] sm:hidden', struck)}>{summaryText}</span>
+                      <TruncatedText text={summaryText} className={cn('hidden min-w-0 sm:block', struck)} />
                       {word ? <span className={cn('block text-xs', voided ? 'text-destructive' : 'text-amber-700')}>{word}</span> : null}
+                      <span data-testid="entry-date-line" className={cn('block text-xs text-muted-foreground sm:hidden', struck)}>{enteredAt}</span>
                     </TableCell>
-                    <TableCell className={cn('whitespace-nowrap text-xs', struck || 'text-muted-foreground')}>
-                      {formatEnteredAt(e.enteredAt, i18n.language)}
+                    <TableCell className={cn('hidden whitespace-nowrap text-xs sm:table-cell', struck || 'text-muted-foreground')}>
+                      {enteredAt}
                     </TableCell>
                     <TableCell className={cn('hidden max-w-[10rem] sm:table-cell', struck)}>
                       <TruncatedText text={e.enteredByName} className="min-w-0" />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-10 px-1 sm:px-4">
                       {/* Stops the dots click reaching the row's click-to-view, as on Users. */}
                       <div className="flex items-center justify-end" onClick={(ev) => ev.stopPropagation()}>
                         <DropdownMenu>

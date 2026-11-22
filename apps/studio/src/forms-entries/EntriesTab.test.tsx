@@ -57,8 +57,27 @@ describe('EntriesTab', () => {
     expect(within(voided).getByText('CS-0001').closest('td')).toHaveClass('line-through');
     const incomplete = screen.getByText('CS-0002').closest('tr')!;
     expect(within(incomplete).getByText('Not fully saved')).toBeInTheDocument();
-    expect(screen.getAllByText('HIV VL, Amina J.')).toHaveLength(3);
+    // Each summary is drawn twice: wrapping for a phone, truncated from sm up. CSS shows one.
+    expect(screen.getAllByText('HIV VL, Amina J.')).toHaveLength(6);
     expect(api.listFormEntries).toHaveBeenCalledWith('form-1', expect.objectContaining({ limit: 25, offset: 0 }));
+  });
+
+  it('fits a phone: the date moves under the summary, and the Entered and By columns hide below sm', async () => {
+    render(<EntriesTab formId="form-1" refreshKey={0} />);
+    await screen.findByText('CS-0003');
+    const row = screen.getByText('CS-0003').closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const dateLine = within(row).getByTestId('entry-date-line');
+    expect(cells[1]).toContainElement(dateLine);
+    expect(dateLine).toHaveClass('sm:hidden');
+    expect(dateLine.textContent).toBe(cells[2]!.textContent);
+    expect(cells[2]).toHaveClass('hidden', 'sm:table-cell');
+    expect(cells[3]).toHaveClass('hidden', 'sm:table-cell');
+    expect(cells[4]).toHaveClass('w-10');
+    expect(cells[4]).not.toHaveClass('hidden');
+    const heads = screen.getAllByRole('columnheader');
+    expect(heads[2]).toHaveClass('hidden', 'sm:table-cell');
+    expect(heads[2]).toHaveTextContent('Entered');
   });
 
   it('searches by requisition number', async () => {
