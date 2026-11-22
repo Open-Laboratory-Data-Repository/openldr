@@ -147,6 +147,15 @@ describe('form entry store: one row per saved submission (migration 136)', () =>
     await db.destroy();
   });
 
+  it('remove_leaves_a_voided_entry_in_place', async () => {
+    const { db, store } = await world();
+    const first = await store.create(entry());
+    await store.void(first.id, { id: 'u9', reason: 'typo' });
+    await store.remove(first.id);
+    expect(await store.get(first.id)).toMatchObject({ status: 'entered-in-error', statusReason: 'typo' });
+    await db.destroy();
+  });
+
   it('list_orders_newest_first_with_id_as_tiebreaker', async () => {
     const { db, store } = await world();
     const a = await store.create(entry({ entryKey: 'A' }));

@@ -47,6 +47,7 @@ export interface FormEntryStore {
   list(filter: FormEntryFilter): Promise<{ entries: FormEntry[]; total: number }>;
   /** Records what the save stored. An entry already entered-in-error keeps that status. */
   setSaved(id: string, saved: FormEntrySaved, status: 'active' | 'incomplete'): Promise<FormEntry>;
+  /** Deletes an entry whose save failed. An entry already entered-in-error is kept, so a void is never lost. */
   remove(id: string): Promise<void>;
   /** Null when the entry is already entered-in-error. */
   void(id: string, by: { id: string; reason: string }): Promise<FormEntry | null>;
@@ -148,7 +149,7 @@ export function createFormEntryStore(db: Kysely<InternalSchema>): FormEntryStore
     },
 
     async remove(id) {
-      await db.deleteFrom(T).where('id', '=', id).execute();
+      await db.deleteFrom(T).where('id', '=', id).where('status', '!=', 'entered-in-error').execute();
     },
 
     async void(id, by) {

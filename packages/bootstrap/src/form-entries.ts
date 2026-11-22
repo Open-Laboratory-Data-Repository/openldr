@@ -81,7 +81,7 @@ export interface FormEntriesDeps {
 const VOIDABLE_TYPES = new Set(['QuestionnaireResponse', 'ServiceRequest', 'Specimen', 'Observation', 'DiagnosticReport']);
 const MAX_REASON = 500;
 const NOT_UPDATED = 'The entry is marked in error, but its saved records were not updated.';
-const NOT_KNOWN = 'The entry is marked in error, but the records this entry made are not known, so they were not marked.';
+const NOT_KNOWN = 'The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.';
 
 /** The same system actor the server's audit helper uses when no one is signed in. */
 const SYSTEM_ACTOR: AuditActor = { actorType: 'system', actorId: null, actorName: 'System' };

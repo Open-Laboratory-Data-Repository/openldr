@@ -626,7 +626,7 @@ describe('form entries service: voidEntry', () => {
     if (typeof r === 'string') throw new Error(r);
     expect(r.entry.status).toBe('entered-in-error');
     expect(r).toMatchObject({ resaved: 0, skipped: 0 });
-    expect(r.warning).toMatch(/records this entry made are not known, so they were not marked/);
+    expect(r.warning).toBe('The records this entry made are not known yet. If its save is still running, they will be marked when it finishes.');
     expect(w.fakes.runs).toHaveLength(0);
     expect(w.fakes.audits[0]!.details.metadata).toMatchObject({ warning: r.warning });
     await w.db.destroy();
