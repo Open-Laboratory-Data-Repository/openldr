@@ -47,8 +47,8 @@ const META = {
 beforeEach(() => {
   vi.mocked(toast.success).mockClear();
   vi.mocked(toast.error).mockClear();
-  vi.mocked(api.fetchLabIdentity).mockResolvedValue(META as never);
-  vi.mocked(api.listFacilityImportSources).mockResolvedValue([] as never);
+  vi.mocked(api.fetchLabIdentity).mockReset().mockResolvedValue(META as never);
+  vi.mocked(api.listFacilityImportSources).mockReset().mockResolvedValue([] as never);
   vi.mocked(api.saveLabIdentity).mockClear();
   vi.mocked(api.listLabSections).mockReset().mockResolvedValue([]);
   vi.mocked(api.setAllowSelfAuthorise).mockReset();
@@ -317,9 +317,8 @@ describe('Settings → Laboratory: an account with lab.settings only', () => {
     expect(item?.caps).toEqual(['settings.view', 'lab.settings']);
   });
 
-  it('shows the switch and the Sections table, and leaves the letterhead out when its read is refused', async () => {
+  it('shows the switch and the Sections table, and leaves the letterhead out, without reports.view', async () => {
     for (const c of ['settings.view', 'settings.edit_general', 'reports.view']) auth.lacking.add(c);
-    vi.mocked(api.fetchLabIdentity).mockRejectedValue(new Error('load lab identity failed: insufficient capability'));
     vi.mocked(api.fetchAllowSelfAuthorise).mockResolvedValue({ value: true });
     vi.mocked(api.listLabSections).mockResolvedValue([{ code: 'haem', name: 'Haematology' }]);
     render(<MemoryRouter><Laboratory /></MemoryRouter>);
@@ -336,6 +335,23 @@ describe('Settings → Laboratory: an account with lab.settings only', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: /^actions$/i }), { button: 0, ctrlKey: false });
     expect(await screen.findByRole('menuitem', { name: /^add section$/i })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: /^save$/i })).not.toBeInTheDocument();
+  });
+
+  it('never fetches the letterhead for an account without reports.view', async () => {
+    for (const c of ['settings.view', 'settings.edit_general', 'reports.view']) auth.lacking.add(c);
+    render(<MemoryRouter><Laboratory /></MemoryRouter>);
+    await screen.findByRole('switch', { name: SELF });
+    expect(api.fetchLabIdentity).not.toHaveBeenCalled();
+    expect(api.listFacilityImportSources).not.toHaveBeenCalled();
+  });
+
+  // Review finding, 2026-11-22: the fallback once hung on any failed load, so an admin whose letterhead
+  // read failed (500, network) saw no error at all. It is decided from reports.view now.
+  it('shows the load error to an all-capabilities account whose letterhead load fails', async () => {
+    vi.mocked(api.fetchLabIdentity).mockRejectedValue(new Error('load lab identity failed: 500'));
+    render(<MemoryRouter><Laboratory /></MemoryRouter>);
+    expect(await screen.findByText('Could not load the laboratory identity.')).toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
   it('still shows the load error to an account with neither the letterhead read nor lab.settings', async () => {

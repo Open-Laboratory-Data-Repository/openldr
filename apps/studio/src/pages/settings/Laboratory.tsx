@@ -38,6 +38,10 @@ export function Laboratory(): JSX.Element {
   // its own gate on the server (settings-routes.ts).
   const { hasCapability } = useAuth();
   const canLabSettings = hasCapability('lab.settings');
+  // GET /api/settings/lab needs reports.view (settings-routes.ts). Decided from the capability, never
+  // from a failed load: an account without it does not fetch the letterhead at all, and one with it
+  // sees the load error when the fetch fails, admins included.
+  const canReadLetterhead = hasCapability('reports.view');
   const [allowSelf, setAllowSelf] = useState(false);
   const [savingSelf, setSavingSelf] = useState(false);
   // Only an account with lab.settings reads the switch from its own route, so it does not depend on
@@ -46,7 +50,7 @@ export function Laboratory(): JSX.Element {
   const [addingSection, setAddingSection] = useState(false);
   const [meta, setMeta] = useState<LabIdentityResponse | null>(null);
   const [values, setValues] = useState<LabIdentity>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(canReadLetterhead);
   const [saving, setSaving] = useState(false);
   /** ⛔ The LOAD failure only, because that one is not transient: it replaces the whole page below.
    *  Everything else this page reports (a save, a rejected logo) is a toast, matching Connectors and
@@ -60,6 +64,7 @@ export function Laboratory(): JSX.Element {
   const [registers, setRegisters] = useState<FacilityRegisterSource[]>([]);
 
   useEffect(() => {
+    if (!canReadLetterhead) return undefined;
     let cancelled = false;
     void fetchLabIdentity()
       .then((r) => {
@@ -70,7 +75,7 @@ export function Laboratory(): JSX.Element {
       .catch(() => { if (!cancelled) setError(t('settings.laboratory.loadError')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [t, canLabSettings]);
+  }, [t, canLabSettings, canReadLetterhead]);
 
   useEffect(() => {
     if (!canLabSettings) return undefined;
@@ -83,6 +88,7 @@ export function Laboratory(): JSX.Element {
   }, [t, canLabSettings]);
 
   useEffect(() => {
+    if (!canReadLetterhead) return undefined;
     let cancelled = false;
     // A failure here degrades the picker to an empty list, never the whole page: the letterhead
     // fields have nothing to do with facility registers.
@@ -90,7 +96,7 @@ export function Laboratory(): JSX.Element {
       .then((rows) => { if (!cancelled) setRegisters(rows); })
       .catch(() => { if (!cancelled) setRegisters([]); });
     return () => { cancelled = true; };
-  }, []);
+  }, [canReadLetterhead]);
 
   const set = (key: string, value: string) => {
     setValues((v) => ({ ...v, [key]: value }));
@@ -149,9 +155,9 @@ export function Laboratory(): JSX.Element {
   };
 
   if (loading || !selfLoaded) return <LoadingState />;
-  // An account with lab.settings still gets the switch and the sections when the letterhead read is
-  // refused (it needs reports.view). The letterhead block is then left out, not shown empty.
-  if (!meta && !canLabSettings) return <p className="p-4 text-xs text-destructive">{error ?? t('settings.laboratory.loadError')}</p>;
+  // Without reports.view the letterhead block is left out and an account with lab.settings sees the
+  // switch and the sections. With reports.view a missing letterhead means the load failed.
+  if (!meta && (canReadLetterhead || !canLabSettings)) return <p className="p-4 text-xs text-destructive">{error ?? t('settings.laboratory.loadError')}</p>;
 
   const logo = values[LOGO_KEY] ?? '';
 
