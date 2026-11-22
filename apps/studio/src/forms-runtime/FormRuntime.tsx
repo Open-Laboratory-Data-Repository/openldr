@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -31,6 +31,19 @@ import { BROWSE_TESTS_EN, BrowseTestsSheet, type BrowseTestsCopy } from './Brows
  * threads down through this file's component split. See `FormRuntime`'s own `suggestCopy` doc
  * comment for why this is a plain optional prop rather than `useTranslation` called in this file.
  */
+/**
+ * What the page sets on single fields from outside the schema (design 2026-11-22-form-entries).
+ * `notices`: a line drawn under a field, such as a refused requisition number. `readOnly`: reference
+ * fields that show their answer and cannot be changed. `offerOnly`: reference fields that offer only
+ * these codings. A context, not a prop on every row, since rows nest inside groups.
+ */
+export interface FieldControls {
+  notices?: Record<string, ReactNode>;
+  readOnly?: string[];
+  offerOnly?: Record<string, CodingAnswer[]>;
+}
+const FieldControlsContext = createContext<FieldControls>({});
+
 type SuggestCopy = {
   placeholder?: string;
   loadingLabel?: string;
@@ -55,6 +68,7 @@ export function FormRuntime({
   testDetailsCopy,
   browseCopy,
   orderRejection,
+  fieldControls,
 }: {
   schema: FormSchema;
   submitLabel?: string;
@@ -108,6 +122,8 @@ export function FormRuntime({
    * field's id (null removes it).
    */
   orderRejection?: CodingAnswer | null;
+  /** Per-field settings from the page. See FieldControls. */
+  fieldControls?: FieldControls;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -280,6 +296,7 @@ export function FormRuntime({
   return (
     <TooltipProvider>
     <OrderRejectedContext.Provider value={Boolean(orderRejection)}>
+    <FieldControlsContext.Provider value={fieldControls ?? {}}>
     <form
       id={formId}
       // Field-level `required` (below) is declared for assistive tech, but native validation UI is
@@ -343,6 +360,7 @@ export function FormRuntime({
         </div>
       ) : footer}
     </form>
+    </FieldControlsContext.Provider>
     </OrderRejectedContext.Provider>
     </TooltipProvider>
   );
@@ -380,6 +398,7 @@ function FieldRow({
   browseCopy?: BrowseTestsCopy;
 }) {
   const label = fieldLabel(field);
+  const notice = useContext(FieldControlsContext).notices?.[field.id];
   const [browsing, setBrowsing] = useState(false);
   // Structural, so the runtime names no value set (AGENTS.md section 8): only a reference field that
   // another field depends on can be browsed. On the Lab order that is the Tests field.
@@ -493,6 +512,7 @@ function FieldRow({
           suggestCopy={suggestCopy}
         />
         {error ? <p className="mt-1 text-xs text-destructive" role="alert">{error}</p> : null}
+        {notice ? <div className="mt-1 text-xs text-destructive" role="alert">{notice}</div> : null}
       </div>
     </div>
   );
@@ -542,6 +562,7 @@ function FieldControl({
   suggestCopy?: SuggestCopy;
 }) {
   const label = fieldLabel(field);
+  const controls = useContext(FieldControlsContext);
 
   switch (field.fieldType) {
     case 'boolean':
@@ -705,6 +726,8 @@ function FieldControl({
             onChange={(v) => onChange(v)}
             dependsOnValue={dependsOnValue}
             trailing={trailing}
+            readOnly={controls.readOnly?.includes(field.id) ?? false}
+            offerOnly={controls.offerOnly?.[field.id] ?? null}
           />
         );
       }

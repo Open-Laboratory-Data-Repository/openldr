@@ -431,6 +431,27 @@ describe('FieldEditorSheet', () => {
     });
   });
 
+  describe('Show in entries list switch', () => {
+    it('is off by default and Save emits entriesList: true once switched on', () => {
+      const { onSave } = renderSheet();
+      const sw = screen.getByRole('switch', { name: 'Show in entries list' });
+      expect(sw).toHaveAttribute('aria-checked', 'false');
+      fireEvent.click(sw);
+      expect(sw).toHaveAttribute('aria-checked', 'true');
+
+      const menuTrigger = screen.getByRole('button', { name: 'Field actions' });
+      fireEvent.pointerDown(menuTrigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Save')) fireEvent.keyDown(menuTrigger, { key: 'Enter' });
+      fireEvent.click(screen.getByText('Save'));
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ entriesList: true }));
+    });
+
+    it('shows a flagged field as on', () => {
+      renderSheet({ field: { ...BASE_FIELD, entriesList: true } });
+      expect(screen.getByRole('switch', { name: 'Show in entries list' })).toHaveAttribute('aria-checked', 'true');
+    });
+  });
+
   it('never offers the field itself as a visibility condition', () => {
     renderSheet();
     fireEvent.click(screen.getByRole('button', { name: /add condition/i }));

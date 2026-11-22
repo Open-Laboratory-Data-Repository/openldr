@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -278,6 +279,18 @@ export function FieldEditorSheet({
               }
               placeholder={t('formBuilder.field.unitHint')}
             />
+
+            {/* Entries list summary (design 2026-11-22-form-entries, 5.3). With no field flagged, the
+                list shows the first three answered fields. */}
+            <Label className="whitespace-nowrap">{t('formBuilder.field.entriesList')}</Label>
+            <div className="flex min-w-0 items-center gap-2">
+              <Switch
+                aria-label={t('formBuilder.field.entriesList')}
+                checked={activeDraft.entriesList === true}
+                onCheckedChange={(on) => patchDraft({ entriesList: on || undefined })}
+              />
+              <span className="text-xs text-muted-foreground">{t('formBuilder.field.entriesListHint')}</span>
+            </div>
 
             {/* Required + Enabled checkboxes */}
             <div className="col-span-2 flex items-center gap-6 pt-1">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { isCodingAnswer, type CodingAnswer, type EntityAnswer, type FormField } from '@openldr/forms/pure';
 import { catalogSpecimensFor, referenceSearch, referenceSearchPreview, type ReferenceSearchResponse } from '@/api';
 import { Input } from '@/components/ui/input';
@@ -50,7 +50,7 @@ const keyOf = (v: ReferenceValue): string => {
   return 'reference' in v ? v.reference : `${v.system}|${v.code}`;
 };
 
-export function ReferencePicker({ field, formDefinitionId, preview = false, multiple, value, onChange, dependsOnValue, trailing }: {
+export function ReferencePicker({ field, formDefinitionId, preview = false, multiple, value, onChange, dependsOnValue, trailing, readOnly = false, offerOnly = null }: {
   field: FormField;
   /**
    * Id of the STORED form definition this field belongs to — the `:formId` path segment of
@@ -76,6 +76,10 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
   dependsOnValue?: unknown;
   /** A control drawn inside the right edge of the search box, such as a field's dots menu. */
   trailing?: ReactNode;
+  /** Shows the answer and offers no way to change it, such as a clerk's one facility. */
+  readOnly?: boolean;
+  /** Offers only these codings, filtered here, with no search request. Wins over `dependsOnValue`. */
+  offerOnly?: CodingAnswer[] | null;
 }): JSX.Element {
   const [query, setQuery] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
@@ -104,6 +108,12 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dependsOnKey]);
 
+  // Keyed on the codes, so a new array with the same codings keeps the same list.
+  const offerKey = offerOnly ? offerOnly.map((c) => `${c.system}|${c.code}`).join('\n') : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const offered = useMemo(() => (offerOnly ? offerOnly.map(codingRow) : null), [offerKey]);
+  const narrowed = offered ?? narrowTo;
+
   const selected: ReferenceValue[] = value == null ? [] : Array.isArray(value) ? value : [value];
 
   // Neither a stored form to scope the search to nor an explicit preview opt-in: there is no
@@ -113,12 +123,12 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
 
   const search = useCallback(async (q: string) => {
     if (unavailable) return;
-    if (narrowTo) {
+    if (narrowed) {
       // The narrowed list is a few codes, so it is filtered here, from the first keystroke.
       const needle = q.trim().toLowerCase();
       setRows(needle
-        ? narrowTo.filter((r) => r.display.toLowerCase().includes(needle) || (r.secondary ?? '').toLowerCase().includes(needle))
-        : narrowTo);
+        ? narrowed.filter((r) => r.display.toLowerCase().includes(needle) || (r.secondary ?? '').toLowerCase().includes(needle))
+        : narrowed);
       setError(null);
       setActive(-1);
       return;
@@ -141,7 +151,7 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
     } finally {
       if (requestIdRef.current === requestId) setBusy(false);
     }
-  }, [field, formDefinitionId, preview, unavailable, narrowTo]);
+  }, [field, formDefinitionId, preview, unavailable, narrowed]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -179,6 +189,18 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
   };
 
   const showSingleSelected = !multiple && selected.length > 0;
+
+  if (readOnly) {
+    return (
+      <Input
+        id={field.id}
+        readOnly
+        value={selected.map((v) => labelOf(v)).join(', ')}
+        aria-label={field.displayLabel}
+        className="h-9 bg-muted text-sm"
+      />
+    );
+  }
 
   if (unavailable) {
     return (
@@ -248,7 +270,7 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
         </div>
       )}
 
-      {open && (narrowTo !== null || query.trim().length >= 2) && (
+      {open && (narrowed !== null || query.trim().length >= 2) && (
         <div
           id={`${field.id}-reference-listbox`}
           role="listbox"

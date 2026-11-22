@@ -114,6 +114,12 @@ const referenceForm: api.FormDefinition = {
   },
 };
 
+// Every page load reads the site rules. No limit unless a test says otherwise.
+beforeEach(() => {
+  vi.spyOn(api, 'getFormEntryContext').mockResolvedValue({ facility: null, locked: false, choices: null });
+  vi.spyOn(api, 'listFormEntries').mockResolvedValue({ entries: [], total: 0 });
+});
+
 /**
  * Open the ⋯ "Form actions" DropdownMenu and click a menu item by text.
  * Uses the Radix jsdom pattern: pointerDown on trigger, Enter fallback, then
@@ -370,5 +376,127 @@ describe('FormCapture order rejection (2026-10-11 spec)', () => {
     expect(await screen.findByText('Submit')).toBeInTheDocument();
     expect(screen.queryByText('Reject order')).not.toBeInTheDocument();
     expect(screen.queryByText('Undo rejection')).not.toBeInTheDocument();
+  });
+});
+
+describe('FormCapture entries (design 2026-11-22-form-entries)', () => {
+  const REGISTER = 'urn:openldr:cs:facility-registry';
+  const orderForm: api.FormDefinition = {
+    ...publishedForm,
+    schema: {
+      ...(publishedForm.schema as object),
+      fhirResourceType: 'ServiceRequest',
+      fields: [
+        {
+          id: 'num', fhirPath: 'ServiceRequest.identifier.value', displayLabel: 'Requisition number', description: null,
+          fieldType: 'text', required: false, enabled: true, order: 1, cardinality: { min: 0, max: '1' },
+        },
+        {
+          id: 'fac', fhirPath: 'ServiceRequest.requester', fhirDiscriminator: { type: 'Organization' },
+          displayLabel: 'Referring facility', description: null, fieldType: 'facility', required: false, enabled: true,
+          order: 2, cardinality: { min: 0, max: '1' }, referenceTarget: REGISTER,
+        },
+      ],
+    },
+  };
+  const hill = { id: 'r-1', code: 'FAC-1', name: 'Hill Clinic' };
+  const lake = { id: 'r-2', code: 'FAC-2', name: 'Lake Clinic' };
+
+  const renderAt = (url = '/forms/form-1') => render(
+    <MemoryRouter initialEntries={[url]}>
+      <Routes><Route path="/forms/:id" element={<FormCapture />} /></Routes>
+    </MemoryRouter>,
+  );
+
+  beforeEach(() => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(orderForm);
+    vi.spyOn(api, 'submitFormResponse').mockResolvedValue({ ok: true, entryId: 'e-new' });
+  });
+
+  it('fills a clerk\'s one facility in and locks it', async () => {
+    vi.spyOn(api, 'getFormEntryContext').mockResolvedValue({ facility: hill, locked: true, choices: [hill] });
+    renderAt();
+    const facility = await screen.findByLabelText('Referring facility');
+    expect(facility).toHaveValue('Hill Clinic');
+    expect(facility).toHaveAttribute('readonly');
+    expect(screen.queryByRole('button', { name: /clear hill clinic/i })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Requisition number'), { target: { value: 'CS-0004' } });
+    clickActionsMenuItem('Submit');
+    await waitFor(() => expect(api.submitFormResponse).toHaveBeenCalledWith('form-1', expect.objectContaining({
+      num: 'CS-0004', fac: { system: REGISTER, code: 'FAC-1', display: 'Hill Clinic' },
+    })));
+  });
+
+  it('offers only the facilities of the limit', async () => {
+    vi.spyOn(api, 'getFormEntryContext').mockResolvedValue({ facility: null, locked: false, choices: [hill, lake] });
+    const search = vi.spyOn(api, 'referenceSearch');
+    renderAt();
+    await screen.findByLabelText('Requisition number');
+    fireEvent.focus(screen.getByRole('combobox'));
+    expect(await screen.findByRole('option', { name: /Hill Clinic/ })).toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(2);
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it('shows a repeated number beside the requisition field, keeps the answers, and opens that entry', async () => {
+    const message = 'CS-0001 was already entered on 22 Nov 2026 at 13:50 by aisha.';
+    vi.spyOn(api, 'submitFormResponse').mockRejectedValue(new api.FormEntryRepeatError(message, {
+      id: 'e-9', entryKey: 'CS-0001', enteredAt: '2026-11-22T13:50:00.000Z', enteredByName: 'aisha',
+    }));
+    const getEntry = vi.spyOn(api, 'getFormEntry').mockResolvedValue({
+      id: 'e-9', formId: 'form-1', facilityId: null, facilityCode: null, facilityName: null, entryKey: 'CS-0001',
+      summary: [], enteredBy: 'u-2', enteredByName: 'aisha', enteredAt: '2026-11-22T13:50:00.000Z',
+      status: 'active', statusBy: null, statusAt: null, statusReason: null, answers: [],
+    });
+    renderAt();
+    const num = await screen.findByLabelText('Requisition number');
+    fireEvent.change(num, { target: { value: 'CS-0001' } });
+    clickActionsMenuItem('Submit');
+
+    const note = await screen.findByText(message);
+    expect(num.closest('.grid')).toContainElement(note);
+    expect(screen.getByLabelText('Requisition number')).toHaveValue('CS-0001');
+    expect(screen.queryByText('Response captured.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'View that entry' }));
+    await waitFor(() => expect(getEntry).toHaveBeenCalledWith('e-9'));
+
+    // A changed number takes the note away.
+    fireEvent.change(screen.getByLabelText('Requisition number'), { target: { value: 'CS-0002' } });
+    await waitFor(() => expect(screen.queryByText(message)).not.toBeInTheDocument());
+  });
+
+  it('shows a site refusal at the top of the form', async () => {
+    vi.spyOn(api, 'submitFormResponse').mockRejectedValue(new Error('submit form response failed: this entry names a facility outside your limit'));
+    renderAt();
+    fireEvent.change(await screen.findByLabelText('Requisition number'), { target: { value: 'CS-0005' } });
+    clickActionsMenuItem('Submit');
+    expect(await screen.findByText(/this entry names a facility outside your limit/)).toBeInTheDocument();
+  });
+
+  it('opens the Entries tab from the link, and keeps the typed answers across tabs', async () => {
+    renderAt('/forms/form-1?tab=entries');
+    expect(await screen.findByText('No entries yet.')).toBeInTheDocument();
+    expect(api.listFormEntries).toHaveBeenCalledWith('form-1', expect.objectContaining({ offset: 0 }));
+    expect(screen.getByRole('tab', { name: 'Entries' })).toHaveAttribute('data-state', 'active');
+
+    const newTab = screen.getByRole('tab', { name: 'New entry' });
+    fireEvent.mouseDown(newTab, { button: 0 });
+    fireEvent.change(await screen.findByLabelText('Requisition number'), { target: { value: 'CS-0006' } });
+    const entriesTab = screen.getByRole('tab', { name: 'Entries' });
+    fireEvent.mouseDown(entriesTab, { button: 0 });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'New entry' }), { button: 0 });
+    expect(screen.getByLabelText('Requisition number')).toHaveValue('CS-0006');
+  });
+
+  it('reads the entries again after a save', async () => {
+    renderAt('/forms/form-1?tab=entries');
+    await screen.findByText('No entries yet.');
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'New entry' }), { button: 0 });
+    fireEvent.change(await screen.findByLabelText('Requisition number'), { target: { value: 'CS-0007' } });
+    clickActionsMenuItem('Submit');
+    expect(await screen.findByText('Response captured.')).toBeInTheDocument();
+    await waitFor(() => expect(api.listFormEntries).toHaveBeenCalledTimes(2));
   });
 });
