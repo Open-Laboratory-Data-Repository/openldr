@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { entryFacilitiesOf, entryFieldsOf, entryKeyOf, entryValuesOf } from './entry-fields'
+import { entryAnswersOf, entryFacilitiesOf, entryFieldsOf, entryKeyOf, entryValuesOf } from './entry-fields'
 import { ServiceRequestExtractor } from './extract/extract'
 import { toQuestionnaireResponse } from './response'
 import { sampleForms } from './samples/forms'
@@ -227,5 +227,31 @@ describe('entryKeyOf', () => {
       fields: [makeField({ id: 'n', displayLabel: 'N', fieldType: 'text', order: 0, fhirPath: 'ServiceRequest.identifier.value' })],
     })
     expect(entryKeyOf(form, { n: 'R1' })).toBeNull()
+  })
+})
+
+describe('entryAnswersOf', () => {
+  it('gives every answered single field in form order, uncut and with no limit, written as the summary writes it', () => {
+    const form = requisition([
+      { id: 'e', displayLabel: 'E', fieldType: 'number', order: 9 },
+      { id: 'a', displayLabel: 'A', fieldType: 'text', order: 1 },
+      { id: 'g', displayLabel: 'G', fieldType: 'group', order: 2 },
+      { id: 'gc', displayLabel: 'In group', fieldType: 'text', order: 3, groupId: 'g' },
+      { id: 'b', displayLabel: 'B', fieldType: 'date', order: 5 },
+      { id: 'blank', displayLabel: 'Blank', fieldType: 'text', order: 6 },
+      { id: 'c', displayLabel: 'C', fieldType: 'boolean', order: 7 },
+      { id: 'd', displayLabel: 'D', fieldType: 'select', order: 8 },
+    ])
+    expect(entryAnswersOf(form, {
+      num: ' R1 ', a: 'x'.repeat(100), g: [{ gc: 'y' }], b: '2026-11-22', blank: '', c: false,
+      d: { system: 's', code: 'only-code' }, e: 4,
+    })).toEqual([
+      { fieldId: 'num', label: 'Requisition', value: 'R1' },
+      { fieldId: 'a', label: 'A', value: 'x'.repeat(100) },
+      { fieldId: 'b', label: 'B', value: '2026-11-22' },
+      { fieldId: 'c', label: 'C', value: 'false' },
+      { fieldId: 'd', label: 'D', value: 'only-code' },
+      { fieldId: 'e', label: 'E', value: '4' },
+    ])
   })
 })

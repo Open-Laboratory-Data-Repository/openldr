@@ -1,8 +1,8 @@
-import type { FormEntry, FormEntrySaved, FormEntryStore } from '@openldr/db';
+import type { FormEntry, FormEntrySaved, FormEntryStatus, FormEntryStore } from '@openldr/db';
 import { entryFacilitiesOf, entryKeyOf, entryValuesOf, type FacilityAnswer, type FormSchema } from '@openldr/forms';
 import type { DataScope } from '@openldr/rbac';
 import { inDataScope, type ScopeRegistryRow } from './data-scope';
-import { registryRowIdByConceptCode } from './facility-reconcile';
+import { registryConceptCodeById, registryRowIdByConceptCode } from './facility-reconcile';
 
 // Form entries (design 2026-11-22-form-entries). The submit route writes an entry row before the
 // save runs, so a repeated requisition number is refused before anything is stored, then settles the
@@ -16,7 +16,27 @@ export class EntrySiteError extends Error {
   }
 }
 
+/** A facility as the form's picker names it: the register row id, the code the picker saves, the name. */
+export interface EntryFacility { id: string; code: string; name: string }
+
+/** The site rules the form screen applies before a submission. `locked`: the limit covers exactly one
+ *  facility, and `facility` is it. `choices`: the facilities the limit covers, null for no limit. */
+export interface EntryContext { facility: EntryFacility | null; locked: boolean; choices: EntryFacility[] | null }
+
+/** Who is asking. A limited user sees entries inside the limit and entries they made. */
+export interface EntryViewer { id: string; dataScope: DataScope }
+
 export interface FormEntriesService {
+  /** One page of a form's entries the user may see, newest first. `total` counts every match. */
+  list(input: {
+    formId: string; user: EntryViewer; status?: FormEntryStatus; enteredBy?: string; search?: string;
+    limit: number; offset: number;
+  }): Promise<{ entries: FormEntry[]; total: number }>;
+  /** Null when there is no such entry, or when the user may not see it. */
+  get(id: string, user: EntryViewer): Promise<FormEntry | null>;
+  /** The form is taken so the rule can depend on it later; today only the user's limit decides. */
+  context(form: { id: string; schema: FormSchema }, user: EntryViewer): Promise<EntryContext>;
+
   /** The facility register row ids a limit covers. Null means no limit. Reads the register itself. */
   facilityIdsOf(scope: DataScope): Promise<string[] | null>;
   /** Checks the site rules, then writes the row. Throws EntrySiteError or FormEntryRepeat. */
@@ -44,11 +64,40 @@ const OUTSIDE = 'this entry names a facility outside your limit';
 export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesService {
   const idsIn = (rows: ScopeRegistryRow[], scope: Extract<DataScope, { limited: true }>): string[] =>
     rows.filter((r) => inDataScope(r, scope)).map((r) => r.id);
+  const facilityIdsOf = async (scope: DataScope): Promise<string[] | null> =>
+    scope.limited ? idsIn(await deps.registryRows(), scope) : null;
 
   return {
-    async facilityIdsOf(scope) {
-      if (!scope.limited) return null;
-      return idsIn(await deps.registryRows(), scope);
+    facilityIdsOf,
+
+    async list({ formId, user, status, enteredBy, search, limit, offset }) {
+      const ids = await facilityIdsOf(user.dataScope);
+      return deps.store.list({
+        formId, status, enteredBy, search, limit, offset,
+        // A limited user: entries at a facility inside the limit, or entries they made.
+        ...(ids === null ? {} : { facilityIds: ids, orEnteredBy: user.id }),
+      });
+    },
+
+    async get(id, user) {
+      const entry = await deps.store.get(id);
+      if (!entry) return null;
+      if (!user.dataScope.limited || entry.enteredBy === user.id) return entry;
+      const ids = await facilityIdsOf(user.dataScope);
+      return entry.facilityId !== null && ids !== null && ids.includes(entry.facilityId) ? entry : null;
+    },
+
+    async context(_form, user) {
+      const scope = user.dataScope;
+      if (!scope.limited) return { facility: null, locked: false, choices: null };
+      const rows = await deps.registryRows();
+      // The code a register field saves depends on the whole register, so map every row first.
+      const codeById = registryConceptCodeById(rows);
+      const choices = rows.filter((r) => inDataScope(r, scope))
+        .map((r) => ({ id: r.id, code: codeById.get(r.id)!, name: r.name }))
+        .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+      const only = choices.length === 1 ? choices[0]! : null;
+      return { facility: only, locked: only !== null, choices };
     },
 
     async begin({ form, answers, user }) {

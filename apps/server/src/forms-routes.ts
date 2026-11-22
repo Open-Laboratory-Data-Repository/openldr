@@ -176,9 +176,10 @@ const formAccessInput = z.object({
   submit: z.array(z.string().min(1).max(100)).max(200),
 });
 
-export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
-  // Per-form access (design 2026-11-18-roles-scope, part 1). An editor manages every form, so sees
-  // every form; anyone else sees and opens only the forms their roles may open.
+/** Per-form access (design 2026-11-18-roles-scope, part 1). An editor manages every form, so sees
+ *  every form; anyone else sees and opens only the forms their roles may open. The entries routes
+ *  use the same rule. */
+export function formOpenRules(ctx: Pick<AppContext, 'formAccess'>) {
   const formUser = (req: FastifyRequest) => ({ roleIds: req.user?.roleIds ?? [], capabilities: req.user?.capabilities ?? [] });
   const isEditor = (req: FastifyRequest) => (req.user?.capabilities ?? []).includes('forms.edit');
   const mayOpen = async (req: FastifyRequest, id: string) => isEditor(req) || ctx.formAccess.mayOpen(formUser(req), id);
@@ -187,6 +188,11 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     const seen = await ctx.formAccess.visible(formUser(req), forms.map((f) => f.id));
     return forms.filter((f) => seen.has(f.id));
   }
+  return { formUser, isEditor, mayOpen, openable };
+}
+
+export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
+  const { formUser, mayOpen, openable } = formOpenRules(ctx);
 
   app.get('/api/forms', VIEW, async (req) => openable(req, await ctx.forms.list()));
 

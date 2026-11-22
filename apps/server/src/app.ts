@@ -24,6 +24,7 @@ import { registerUsersRoutes } from './users-routes';
 import { registerAccessKeyRoutes } from './access-key-routes';
 import { registerRolesRoutes } from './roles-routes';
 import { registerFormsRoutes } from './forms-routes';
+import { registerFormEntryRoutes } from './form-entry-routes';
 import { registerCodeSuggestionRoutes } from './code-suggestion-routes';
 import { registerReferenceSearchRoutes } from './reference-search-routes';
 import { registerReportDesignRoutes } from './report-designs-routes';
@@ -184,6 +185,7 @@ export async function buildApp(ctx: AppContext) {
   registerAccessKeyRoutes(app, ctx);
   registerRolesRoutes(app, ctx);
   registerFormsRoutes(app, ctx);
+  registerFormEntryRoutes(app, ctx);
   registerCodeSuggestionRoutes(app, ctx);
   registerReferenceSearchRoutes(app, ctx, {
     Patient: createPatientResolver(ctx.store.db as never, ctx.targetEngine),

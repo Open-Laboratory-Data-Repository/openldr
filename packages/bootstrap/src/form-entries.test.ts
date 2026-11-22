@@ -344,3 +344,130 @@ describe('repeatMessage', () => {
     expect(repeatMessage({ ...entry, enteredByName: 'Aisha M.' })).toBe('CS-0001 was already entered on 22 Nov 2026 at 10:50 by Aisha M.');
   });
 });
+
+describe('form entries service: list and get', () => {
+  /** Entries on form-1: one at site A by u1, one at site B by u2, one at site C by u1, one with no
+   *  facility by u2. Written straight to the store, as begin would leave them. */
+  async function seeded() {
+    const w = await world();
+    const add = (facilityId: string | null, entryKey: string, enteredBy: string) => w.store.create({
+      formId: 'form-1', facilityId, facilityCode: null, facilityName: null, entryKey, summary: [],
+      enteredBy, enteredByName: enteredBy,
+    });
+    const a = await add('reg-a', 'CS-A', 'u1');
+    const b = await add('reg-b', 'CS-B', 'u2');
+    const c = await add('reg-c', 'CS-C', 'u1');
+    const none = await add(null, 'CS-N', 'u2');
+    await w.store.create({ formId: 'form-2', facilityId: 'reg-a', facilityCode: null, facilityName: null, entryKey: 'X', summary: [], enteredBy: 'u1', enteredByName: 'u1' });
+    return { ...w, a, b, c, none };
+  }
+  const keys = (r: { entries: { entryKey: string | null }[] }) => r.entries.map((e) => e.entryKey).sort();
+  const page = { limit: 25, offset: 0 };
+
+  it('shows an unlimited user every entry of the form, and only that form', async () => {
+    const { db, service } = await seeded();
+    const r = await service.list({ formId: 'form-1', user: { id: 'u9', dataScope: { limited: false } }, ...page });
+    expect(keys(r)).toEqual(['CS-A', 'CS-B', 'CS-C', 'CS-N']);
+    expect(r.total).toBe(4);
+    await db.destroy();
+  });
+
+  it('shows a limited user the entries inside the limit and the ones they made, nothing else', async () => {
+    const { db, service } = await seeded();
+    // u2 limited to site A: site A's entry, and u2's own site B and no-facility entries.
+    const r = await service.list({ formId: 'form-1', user: { id: 'u2', dataScope: limit({ facilities: ['reg-a'] }) }, ...page });
+    expect(keys(r)).toEqual(['CS-A', 'CS-B', 'CS-N']);
+    expect(r.total).toBe(3);
+    // u3 limited to site B by district: site B only.
+    const d = await service.list({ formId: 'form-1', user: { id: 'u3', dataScope: limit({ districts: [{ region: 'Coast', district: 'Bagamoyo' }] }) }, ...page });
+    expect(keys(d)).toEqual(['CS-B']);
+    await db.destroy();
+  });
+
+  it('shows a limited user whose limit covers no facility only their own entries', async () => {
+    const { db, service } = await seeded();
+    expect(keys(await service.list({ formId: 'form-1', user: { id: 'u1', dataScope: limit({}) }, ...page }))).toEqual(['CS-A', 'CS-C']);
+    expect(keys(await service.list({ formId: 'form-1', user: { id: 'u9', dataScope: limit({ regions: ['Nowhere'] }) }, ...page }))).toEqual([]);
+    await db.destroy();
+  });
+
+  it('a filter for another person or site never widens what a limited user sees', async () => {
+    const { db, service } = await seeded();
+    const scope = limit({ facilities: ['reg-a'] });
+    // u3 asks for u1's entries: only u1's entry at site A, never site C.
+    expect(keys(await service.list({ formId: 'form-1', user: { id: 'u3', dataScope: scope }, enteredBy: 'u1', ...page }))).toEqual(['CS-A']);
+    expect(keys(await service.list({ formId: 'form-1', user: { id: 'u3', dataScope: scope }, search: 'CS-C', ...page }))).toEqual([]);
+    await db.destroy();
+  });
+
+  it('passes status, person, search and paging through', async () => {
+    const { db, service, store, b } = await seeded();
+    await store.void(b.id, { id: 'u9', reason: 'typo' });
+    const all = { id: 'u9', dataScope: { limited: false } as DataScope };
+    expect(keys(await service.list({ formId: 'form-1', user: all, status: 'entered-in-error', ...page }))).toEqual(['CS-B']);
+    expect(keys(await service.list({ formId: 'form-1', user: all, enteredBy: 'u1', ...page }))).toEqual(['CS-A', 'CS-C']);
+    expect(keys(await service.list({ formId: 'form-1', user: all, search: 'cs-n', ...page }))).toEqual(['CS-N']);
+    const p = await service.list({ formId: 'form-1', user: all, limit: 1, offset: 1 });
+    expect(p.entries).toHaveLength(1);
+    expect(p.total).toBe(4);
+    await db.destroy();
+  });
+
+  it('get gives a limited user an entry inside the limit or their own, and null for any other', async () => {
+    const { db, service, a, b, c, none } = await seeded();
+    const u2 = { id: 'u2', dataScope: limit({ facilities: ['reg-a'] }) };
+    expect((await service.get(a.id, u2))?.id).toBe(a.id);
+    expect((await service.get(b.id, u2))?.id).toBe(b.id);
+    expect((await service.get(none.id, u2))?.id).toBe(none.id);
+    expect(await service.get(c.id, u2)).toBeNull();
+    expect(await service.get(c.id, { id: 'u2', dataScope: limit({}) })).toBeNull();
+    expect((await service.get(c.id, { id: 'u9', dataScope: { limited: false } }))?.id).toBe(c.id);
+    expect(await service.get('no-such-entry', { id: 'u9', dataScope: { limited: false } })).toBeNull();
+    await db.destroy();
+  });
+});
+
+describe('form entries service: context', () => {
+  const form = { id: 'form-1', schema: orderForm('register') };
+
+  it('gives no facility and no choices to an unlimited user', async () => {
+    const { db, service } = await world();
+    expect(await service.context(form, { id: 'u1', dataScope: { limited: false } }))
+      .toEqual({ facility: null, locked: false, choices: null });
+    await db.destroy();
+  });
+
+  it('locks a limit that covers one facility, with the code the picker saves', async () => {
+    const { db, service } = await world();
+    const ctx = await service.context(form, { id: 'u1', dataScope: limit({ districts: [{ region: 'Coast', district: 'Kibaha' }] }) });
+    expect(ctx).toEqual({ facility: { id: 'reg-a', code: 'A1', name: 'Site A' }, locked: true, choices: [{ id: 'reg-a', code: 'A1', name: 'Site A' }] });
+    await db.destroy();
+  });
+
+  it('offers the facilities of a limit that covers several, by name, unlocked', async () => {
+    const { db, service } = await world();
+    expect(await service.context(form, { id: 'u1', dataScope: limit({ regions: ['Coast'], facilities: ['reg-c'] }) })).toEqual({
+      facility: null, locked: false,
+      choices: [{ id: 'reg-a', code: 'A1', name: 'Site A' }, { id: 'reg-b', code: 'B1', name: 'Site B' }, { id: 'reg-c', code: 'C1', name: 'Site C' }],
+    });
+    await db.destroy();
+  });
+
+  it('gives an empty list to a limited user whose limit covers nothing', async () => {
+    const { db, service } = await world();
+    expect(await service.context(form, { id: 'u1', dataScope: limit({ regions: ['Nowhere'] }) }))
+      .toEqual({ facility: null, locked: false, choices: [] });
+    await db.destroy();
+  });
+
+  it('gives the code the register maps a row to, which is the row id when two rows share a code', async () => {
+    const { db, service } = await world();
+    await db.insertInto('facility_registry').values({
+      id: 'reg-d', facility_system: 'urn:test:other', facility_code: 'A1', name: 'Site D', region: 'Lake', district: 'Mwanza',
+      extras: '{}', source: 'test', created_at: NOW, updated_at: NOW,
+    } as never).execute();
+    const ctx = await service.context(form, { id: 'u1', dataScope: limit({ facilities: ['reg-a'] }) });
+    expect(ctx.facility).toEqual({ id: 'reg-a', code: 'reg-a', name: 'Site A' });
+    await db.destroy();
+  });
+});

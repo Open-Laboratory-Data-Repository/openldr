@@ -92,8 +92,8 @@ export function entryKeyOf(schema: FormSchema, answers: Record<string, unknown>)
   return read.at(-1)?.trim() || null
 }
 
-/** One answer as a short display string, or null when it is empty or not a single answer. */
-function summaryValue(value: unknown): string | null {
+/** One answer as a display string, or null when it is empty or not a single answer. */
+function displayValue(value: unknown): string | null {
   let text: string | null = null
   if (typeof value === 'string') text = value.trim()
   else if (typeof value === 'number' || typeof value === 'boolean') text = String(value)
@@ -102,7 +102,27 @@ function summaryValue(value: unknown): string | null {
     if (typeof display === 'string' && display.trim()) text = display.trim()
     else if (typeof code === 'string' && code.trim()) text = code.trim()
   }
-  return text ? text.slice(0, SUMMARY_VALUE_MAX) : null
+  return text || null
+}
+
+/** One answer as a short display string for the list summary. */
+function summaryValue(value: unknown): string | null {
+  return displayValue(value)?.slice(0, SUMMARY_VALUE_MAX) ?? null
+}
+
+/** A group's answers, and a field inside a group, are not single top-level answers. */
+const singleFieldsOf = (schema: FormSchema): FormField[] =>
+  schema.fields.filter((f) => f.fieldType !== 'group' && !f.groupId).sort(byOrder)
+
+/** Every answered single field, in form order, with its value written as the summary writes it but
+ *  not cut short. What the entry sheet shows. */
+export function entryAnswersOf(schema: FormSchema, answers: Record<string, unknown>): { fieldId: string; label: string; value: string }[] {
+  const out: { fieldId: string; label: string; value: string }[] = []
+  for (const field of singleFieldsOf(schema)) {
+    const value = displayValue(answers[field.id])
+    if (value !== null) out.push({ fieldId: field.id, label: field.displayLabel, value })
+  }
+  return out
 }
 
 /** The requisition number, the picked facility coding and the list summary from one set of answers. */
@@ -117,8 +137,7 @@ export function entryValuesOf(schema: FormSchema, answers: Record<string, unknow
   const key = typeof rawKey === 'string' || typeof rawKey === 'number' ? String(rawKey).trim() : ''
   const facility = facilityFieldId ? pickedFacilityOf(answers[facilityFieldId]) : null
 
-  // A group's answers, and a field inside a group, are not single top-level answers.
-  const single = schema.fields.filter((f) => f.fieldType !== 'group' && !f.groupId).sort(byOrder)
+  const single = singleFieldsOf(schema)
   const flagged = single.filter((f) => f.entriesList === true)
   const candidates = flagged.length > 0 ? flagged : single.filter((f) => f.id !== keyFieldId)
 
