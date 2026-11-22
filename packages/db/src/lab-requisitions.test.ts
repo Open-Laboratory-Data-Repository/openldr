@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { makeMigratedDb } from './migrations/internal/test-helpers';
 import { createFhirStore } from './fhir-store';
 import { findByRequisition, indexRequisitions, rebuildRequisitions, requisitionRowOf } from './lab-requisitions';
+import { requesterFacility } from './relational/requester';
 
 const REQ_SYSTEM = 'urn:openldr:order:requisition';
 
@@ -65,6 +66,23 @@ describe('requisitionRowOf', () => {
     expect(requisitionRowOf({ resourceType: 'ServiceRequest', id: 'c', identifier: [{ value: 'N' }] })?.facility).toBeNull();
   });
 
+  it('names the same facility as the warehouse requester_code, trimmed', () => {
+    const cases = [
+      perTest('a', 'N'),
+      multiCoding('b', 'N'),
+      { resourceType: 'ServiceRequest', id: 'c', identifier: [{ value: 'N' }], requester: { type: 'Organization', identifier: { value: 'FAC-9' } } },
+      // Any direct requester with an identifier, as requesterFacility reads it.
+      { resourceType: 'ServiceRequest', id: 'd', identifier: [{ value: 'N' }], requester: { type: 'PractitionerRole', identifier: { value: 'FAC-5' } } },
+      // A contained Organization is not a facility to requesterFacility, so not here either.
+      { resourceType: 'ServiceRequest', id: 'e', identifier: [{ value: 'N' }], requester: { reference: '#org' }, contained: [{ resourceType: 'Organization', id: 'org', identifier: [{ value: 'FAC-X' }] }] },
+    ];
+    for (const sr of cases) expect(requisitionRowOf(sr)?.facility, sr.id).toBe(requesterFacility(sr).code);
+    expect(requisitionRowOf(cases[3]!)?.facility).toBe('FAC-5');
+    expect(requisitionRowOf(cases[4]!)?.facility).toBeNull();
+    const spaced = { resourceType: 'ServiceRequest', id: 'f', identifier: [{ value: 'N' }], requester: { identifier: { value: ' FAC-2 ' } } };
+    expect(requisitionRowOf(spaced)?.facility).toBe('FAC-2');
+  });
+
   it('gives null for another resource type', () => {
     expect(requisitionRowOf({ resourceType: 'Observation', id: 'o1', identifier: [{ value: 'N' }] })).toBeNull();
   });
@@ -98,6 +116,13 @@ describe('lab_requisitions', () => {
     expect(await db.selectFrom('lab_requisitions').selectAll().execute()).toEqual([]);
   });
 
+  it('indexRequisitions stamps updated_at again on an update', async () => {
+    await db.insertInto('lab_requisitions').values({ service_request_id: 'sr-a', requisition: 'R-1', facility: null, updated_at: new Date('2020-01-01') }).execute();
+    await indexRequisitions(db, [perTest('sr-a', 'R-1')]);
+    const row = await db.selectFrom('lab_requisitions').select('updated_at').executeTakeFirstOrThrow();
+    expect(new Date(row.updated_at).getFullYear()).toBeGreaterThan(2020);
+  });
+
   it('indexRequisitions keeps the last copy when one batch holds a request twice', async () => {
     expect(await indexRequisitions(db, [perTest('sr-a', 'R-1'), perTest('sr-a', 'R-2')])).toBe(1);
     expect(await db.selectFrom('lab_requisitions').select(['service_request_id', 'requisition']).execute())
@@ -116,6 +141,11 @@ describe('lab_requisitions', () => {
     const store = createFhirStore(db);
     await store.saveMany([perTest('sr-a', 'R-1'), multiCoding('sr-b', 'OLD-1'), { resourceType: 'ServiceRequest', id: 'sr-c', status: 'active', intent: 'order', subject: { display: 'x' } }] as never);
     await db.insertInto('lab_requisitions').values({ service_request_id: 'sr-gone', requisition: 'R-1', facility: null }).execute();
+    // A request still in the store that lost its number: only the "not refreshed" sweep removes it.
+    await store.save({ resourceType: 'ServiceRequest', id: 'sr-d', status: 'active', intent: 'order', subject: { display: 'x' } } as never);
+    await db.insertInto('lab_requisitions').values({ service_request_id: 'sr-d', requisition: 'R-9', facility: null, updated_at: new Date('2020-01-01') }).execute();
+    // A row newer than the rebuild for a request not in the store: only the "not current" sweep removes it.
+    await db.insertInto('lab_requisitions').values({ service_request_id: 'sr-later', requisition: 'R-1', facility: null, updated_at: new Date('2999-01-01') }).execute();
     expect(await rebuildRequisitions(db)).toEqual({ indexed: 2 });
     expect(await db.selectFrom('lab_requisitions').select(['service_request_id', 'requisition', 'facility']).orderBy('service_request_id').execute()).toEqual([
       { service_request_id: 'sr-a', requisition: 'R-1', facility: 'FAC-1' },

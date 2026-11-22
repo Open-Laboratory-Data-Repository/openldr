@@ -1,5 +1,6 @@
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import type { InternalSchema } from './schema/internal';
+import { requesterFacility } from './relational/requester';
 
 // Finds a ServiceRequest by its requisition number, whatever saved it: a form, sync or ingest.
 // The FHIR store has no search index, so `lab_requisitions` (internal migration 139) holds one row
@@ -33,33 +34,10 @@ function requisitionOf(sr: Json): string | null {
   return isObject(first) ? trimmed(first['value']) : null;
 }
 
-function identifierValue(ref: unknown): string | null {
-  if (!isObject(ref) || !isObject(ref['identifier'])) return null;
-  return trimmed(ref['identifier']['value']);
-}
-
-/** The requesting facility's code. A form order points `requester` at a contained PractitionerRole
- *  (`#requester`) whose `organization.identifier.value` is the code. A requester that is itself an
- *  Organization reference with an identifier gives that value. Anything else gives null. */
+/** The requesting facility's code, read by the warehouse's own `requesterFacility` (which fills
+ *  `lab_requests.requester_code`), so both name the same facility. Trimmed here. */
 function facilityOf(sr: Json): string | null {
-  const requester = sr['requester'];
-  if (!isObject(requester)) return null;
-  const reference = typeof requester['reference'] === 'string' ? requester['reference'] : null;
-  if (reference?.startsWith('#')) {
-    const id = reference.slice(1);
-    const contained = Array.isArray(sr['contained']) ? sr['contained'] : [];
-    const target = contained.find((c): c is Json => isObject(c) && c['id'] === id);
-    if (!target) return null;
-    if (target['resourceType'] === 'PractitionerRole') return identifierValue(target['organization']);
-    if (target['resourceType'] === 'Organization') {
-      const ids = target['identifier'];
-      const first = Array.isArray(ids) ? ids[0] : undefined;
-      return isObject(first) ? trimmed(first['value']) : null;
-    }
-    return null;
-  }
-  if (requester['type'] === 'Organization' || requester['type'] === undefined) return identifierValue(requester);
-  return null;
+  return trimmed(requesterFacility(sr).code);
 }
 
 /** The lookup row of one ServiceRequest, or null when it has no id or no requisition number. */
@@ -95,7 +73,7 @@ export async function indexRequisitions(db: Kysely<InternalSchema>, srs: Record<
       .onConflict((oc) => oc.column('service_request_id').doUpdateSet((eb) => ({
         requisition: eb.ref('excluded.requisition'),
         facility: eb.ref('excluded.facility'),
-        updated_at: new Date(),
+        updated_at: sql<Date>`now()`,
       })))
       .execute();
   }
@@ -143,11 +121,24 @@ export async function fillRequisitions(db: Kysely<InternalSchema>): Promise<numb
   return indexed;
 }
 
-/** Empties the table and indexes every current ServiceRequest again, in one transaction. This also
- *  drops the rows of ServiceRequests deleted since they were indexed. */
+/** Indexes every current ServiceRequest again, then drops the rows the fill did not touch: those of
+ *  requests deleted from the store, or that no longer have a number. No single transaction and no
+ *  full-table delete first, so the projection hooks keep writing while it runs. A row the projection
+ *  writes during the rebuild carries a newer `updated_at` and stays. */
 export async function rebuildRequisitions(db: Kysely<InternalSchema>): Promise<{ indexed: number }> {
-  return db.transaction().execute(async (trx) => {
-    await trx.deleteFrom('lab_requisitions').execute();
-    return { indexed: await fillRequisitions(trx) };
-  });
+  const started = await sql<{ now: Date }>`select now() as now`.execute(db);
+  const since = started.rows[0]!.now;
+  const indexed = await fillRequisitions(db);
+  await db.deleteFrom('lab_requisitions').where('updated_at', '<', since).execute();
+  // A left join, not `not exists`: pg-mem has no correlated subqueries.
+  const orphans = await db.selectFrom('lab_requisitions as r')
+    .leftJoin('fhir.fhir_current as c', (j) => j.onRef('c.id', '=', 'r.service_request_id').on('c.resource_type', '=', 'ServiceRequest'))
+    .select('r.service_request_id')
+    .where('c.id', 'is', null)
+    .execute();
+  const ids = orphans.map((o) => o.service_request_id);
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    await db.deleteFrom('lab_requisitions').where('service_request_id', 'in', ids.slice(i, i + CHUNK)).execute();
+  }
+  return { indexed };
 }
