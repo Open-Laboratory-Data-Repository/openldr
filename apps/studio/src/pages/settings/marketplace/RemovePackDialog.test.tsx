@@ -32,6 +32,24 @@ describe('RemovePackDialog', () => {
     expect(screen.queryByText(/removePack\./)).toBeNull();
   });
 
+  it('says the kept forms open to anyone who may view forms when the pack removes a role', async () => {
+    render(<RemovePackDialog packId="collection-site" open onOpenChange={() => {}} onRemoved={() => {}} />);
+    const note = await screen.findByTestId('remove-pack-forms-open');
+    expect(note.textContent).toBe("These forms were limited to the pack's roles. After removal, anyone who may view forms can open them.");
+  });
+
+  it('says nothing about form access when the pack removes no role or keeps no form', async () => {
+    (api.getPackRemoval as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ...removal, roles: [] });
+    const { unmount } = render(<RemovePackDialog packId="collection-site" open onOpenChange={() => {}} onRemoved={() => {}} />);
+    await screen.findByTestId('remove-pack-forms');
+    expect(screen.queryByTestId('remove-pack-forms-open')).toBeNull();
+    unmount();
+    (api.getPackRemoval as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ...removal, formsKept: [] });
+    render(<RemovePackDialog packId="collection-site" open onOpenChange={() => {}} onRemoved={() => {}} />);
+    await screen.findByTestId('remove-pack-forms');
+    expect(screen.queryByTestId('remove-pack-forms-open')).toBeNull();
+  });
+
   it('disables confirm and names the users when someone still holds a role', async () => {
     (api.getPackRemoval as ReturnType<typeof vi.fn>).mockResolvedValue({ ...removal, holders: [{ role: 'Sample Clerk', users: ['amina', 'joseph'] }] });
     render(<RemovePackDialog packId="collection-site" open onOpenChange={() => {}} onRemoved={() => {}} />);

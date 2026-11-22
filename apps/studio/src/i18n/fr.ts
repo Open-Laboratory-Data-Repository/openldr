@@ -1064,7 +1064,12 @@ export const fr: EnShape = {
       typeContentPack: 'Pack de contenu',
       packSteps: 'Étapes',
       packStep: { 'code-system': 'Système de codes', 'value-set': 'Ensemble de valeurs', 'facility-register': 'Registre des établissements', 'link-matching': 'Appariement de liens', 'custom-queries': 'Requêtes personnalisées', 'test-mappings': 'Correspondances de tests', 'result-mappings': 'Correspondances de résultats', datasets: 'Jeux de données', needs: 'Dépend de', role: 'Rôle', layout: 'Disposition', form: 'Formulaire' },
-      packStepCount: { needs: '{{count}} paquets', role: '{{count}} capacités', layout: '{{count}} pages' },
+      packStepCount: {
+        needs_one: '{{count}} paquet', needs_other: '{{count}} paquets',
+        role_one: '{{count}} capacité', role_other: '{{count}} capacités',
+        layout_one: '{{count}} page', layout_other: '{{count}} pages',
+      },
+      packLayoutDefaultFor: 'par défaut pour {{roles}}',
       packRoleShow: 'Afficher les capacités de {{name}}',
       removePack: {
         title: 'Supprimer {{id}}',
@@ -1072,6 +1077,7 @@ export const fr: EnShape = {
         rolesGo: 'Rôles supprimés',
         layoutsGo: 'Dispositions supprimées',
         formsStay: 'Formulaires conservés',
+        formsOpen: "Ces formulaires étaient réservés aux rôles du pack. Après la suppression, toute personne autorisée à consulter les formulaires pourra les ouvrir.",
         none: 'Aucun',
         holders: "Des utilisateurs ont encore un rôle de ce pack. Retirez-leur ce rôle d'abord, puis supprimez le pack.",
         holder: '{{role}} : {{users}}',

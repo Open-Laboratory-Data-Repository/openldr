@@ -52,7 +52,10 @@ beforeAll(async () => {
   rolePackRegistryDir = await mkdtemp(join(tmpdir(), 'mkt-role-pack-registry-'));
   {
     const rkp = generatePublisherKeypair();
-    const pack = { formatVersion: 1, steps: [{ kind: 'role', slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] }] };
+    const pack = { formatVersion: 1, steps: [
+      { kind: 'role', slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] },
+      { kind: 'layout', key: 'collection-site', name: 'Collection site', startPage: '/forms', pages: ['/forms', '/patients'], roles: ['sample-clerk'] },
+    ] };
     const packBytes = new TextEncoder().encode(JSON.stringify(pack));
     const packSha = createHash('sha256').update(packBytes).digest('hex');
     const manifest = { schemaVersion: 1, type: 'content-pack', id: 'role-pack', version: '1.0.0', publisher: { id: 'acme', name: 'Acme', keyFingerprint: '0'.repeat(64) }, compatibility: { ceVersion: '*' }, capabilities: [], payload: { kind: 'content-pack', packSha256: packSha, steps: summarizeContentPack(parseContentPack(pack)) } };
@@ -191,7 +194,7 @@ function realPackInstaller(owned: { kind: 'role' | 'layout' | 'form'; key: strin
         remove: async () => undefined,
       },
       roleMembers: async () => [],
-      layouts: { list: async () => ({ layouts: [], roleOrder: [] }), save: none, remove: none },
+      layouts: { list: async () => ({ layouts: [], roleOrder: [] }), save: async (id: string | null, input: object) => ({ id: id ?? 'l1', ...input }), remove: none },
       forms: { install: none, check: () => undefined, setAccess: none, name: async () => null },
       installedVersion: async () => null,
       capabilityKeys: ['forms.view', 'roles.manage', 'marketplace.manage'],
@@ -618,7 +621,7 @@ describe('marketplace routes', () => {
 
   it('detach of a pack whose role users still hold gives 409 and the holders', async () => {
     const { runtime } = fakePlugins();
-    const holders = [{ role: 'sample-clerk', users: ['Ann', 'Bob'] }];
+    const holders = [{ role: 'Sample Clerk', users: ['Ann', 'Bob'] }];
     const marketplacePacks = { check: async () => ({ steps: [] }), install: async () => ({}), detach: async () => { throw new PackRemovalError(holders); }, list: async () => [{ artifactId: 'demo-pack', version: '1.0.0', kind: 'content-pack', status: 'installed' }] };
     const { app } = await appWith({}, runtime, { marketplacePacks, seed: [localReg()] });
     const res = await app.inject({ method: 'POST', url: '/api/marketplace/demo-pack/detach' });
@@ -652,20 +655,30 @@ describe('marketplace routes', () => {
     expect(res.json().roles).toEqual([{ slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] }]);
   });
 
-  it('available detail of a pack whose pack.json does not parse lists no roles', async () => {
+  it('available detail of a pack lists each layout step with its pages and role slugs', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [rolePackReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/' + encodeURIComponent('reg-role-packs::role-pack-1') });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().layouts).toEqual([{ key: 'collection-site', name: 'Collection site', pages: ['/forms', '/patients'], roles: ['sample-clerk'] }]);
+  });
+
+  it('available detail of a pack whose pack.json does not parse lists no roles and no layouts', async () => {
     const { runtime } = fakePlugins();
     const { app } = await appWith({}, runtime, { seed: [packReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/' + encodeURIComponent('reg-packs::demo-pack-1') });
     expect(res.statusCode).toBe(200);
     expect(res.json().roles).toEqual([]);
+    expect(res.json().layouts).toEqual([]);
   });
 
-  it('available detail of a plugin carries no roles field', async () => {
+  it('available detail of a plugin carries no roles or layouts field', async () => {
     const { runtime } = fakePlugins();
     const { app } = await appWith({}, runtime, { seed: [localReg()] });
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/reg-local::demo-1' });
     expect(res.statusCode).toBe(200);
     expect('roles' in res.json()).toBe(false);
+    expect('layouts' in res.json()).toBe(false);
   });
 
   // ── Registries CRUD ──

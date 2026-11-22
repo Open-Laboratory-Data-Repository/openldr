@@ -391,6 +391,11 @@ async function removePack(ctx: AppContext, id: string, version: string | undefin
       `  roles: ${list(plan.roles)}`,
       `  layouts: ${list(plan.layouts)}`,
       `forms kept: ${list(plan.formsKept)}`,
+      // Deleting a role takes it off every form's access list, and an empty list lets in anyone
+      // who may view forms.
+      ...(plan.roles.length > 0 && plan.formsKept.length > 0
+        ? ["  These forms were limited to the pack's roles. After removal, anyone who may view forms can open them."]
+        : []),
       ...held,
       'use --force to remove it',
     ].join('\n') + '\n');

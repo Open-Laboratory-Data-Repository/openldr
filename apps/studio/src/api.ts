@@ -2900,11 +2900,16 @@ export interface ArtifactPayloadMeta {
   /** Not signed and not in the manifest. The studio copies it here from the detail's `roles`, so the
    *  install prompt can list each role's capabilities. */
   roles?: PackRole[];
+  /** Copied the same way from the detail's `layouts`, so a layout line can name its pages. */
+  layouts?: PackLayout[];
   [k: string]: unknown;
 }
 export interface PackStep { kind: string; label: string; count: number }
 /** A content pack's role step, read from its pack.json by the available detail route. */
 export interface PackRole { slug: string; name: string; capabilities: string[] }
+/** A content pack's layout step, read from its pack.json by the available detail route. `roles`
+ *  holds the slugs of the roles it is the default for. */
+export interface PackLayout { key: string; name: string; pages: string[]; roles: string[] }
 export interface AvailableArtifactDetail extends AvailableArtifact {
   compatible: boolean;
   ceVersion: string;
@@ -2912,6 +2917,8 @@ export interface AvailableArtifactDetail extends AvailableArtifact {
   payload: ArtifactPayloadMeta;
   /** content-pack only: each role step with its capability keys. */
   roles?: PackRole[];
+  /** content-pack only: each layout step with its pages and role slugs. Absent from an older server. */
+  layouts?: PackLayout[];
 }
 export interface InstalledArtifact {
   id: string;

@@ -25,7 +25,7 @@ La fenêtre d'installation affiche une ligne par étape, dans l'ordre où le pac
 
 - **Dépend de** liste les plugins et les packs qui doivent être installés avant, et combien. S'il en manque un, ou si sa version sort de l'intervalle indiqué, l'installation s'arrête avant toute écriture.
 - **Rôle** donne le nom du rôle et le nombre de capacités qu'il accorde. Sélectionnez la flèche à droite de la ligne pour voir chaque capacité par son nom.
-- **Disposition** donne le nom de la barre latérale et le nombre de pages qu'elle affiche.
+- **Disposition** donne le nom de la barre latérale, ses pages et les rôles pour lesquels elle est la disposition par défaut. Un serveur plus ancien n'affiche que le nombre de pages.
 - **Formulaire** donne le titre du formulaire, sans nombre.
 
 Les étapes plus anciennes, comme **Système de codes** ou **Jeux de données**, affichent un simple nombre. Le guide [Marketplace](/docs/marketplace) les explique.
@@ -44,7 +44,7 @@ Faites-le quand l'installation n'a plus besoin du métier que le pack a prépar�
 
 **Résultat attendu :** le message **supprimé** s'affiche avec l'identifiant du pack. Le pack ne figure plus sous **Installés**. Ses rôles et ses dispositions ont disparu.
 
-La suppression laisse les formulaires du pack publiés, avec toutes leurs réponses. Archivez un formulaire dans Formulaires si vous n'en voulez plus. Elle ne touche pas non plus aux listes de codes, requêtes, jeux de données et correspondances installés par le pack, ni aux plugins et packs dont il dépendait.
+La suppression laisse les formulaires du pack publiés, avec toutes leurs réponses. Archivez un formulaire dans Formulaires si vous n'en voulez plus. Un formulaire réservé aux rôles du pack perd cette limite, et toute personne autorisée à consulter les formulaires peut alors l'ouvrir. Elle ne touche pas non plus aux listes de codes, requêtes, jeux de données et correspondances installés par le pack, ni aux plugins et packs dont il dépendait.
 
 Si quelqu'un a encore l'un des rôles du pack, la fenêtre l'indique en rouge et liste chaque rôle avec ses utilisateurs. **Supprimer** reste inactif. Retirez ce rôle à ces personnes dans Utilisateurs, puis rouvrez la fenêtre.
 

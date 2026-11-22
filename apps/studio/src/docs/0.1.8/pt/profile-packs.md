@@ -25,7 +25,7 @@ A janela de instalação mostra uma linha por passo, pela ordem em que o pacote 
 
 - **Depende de** lista os plugins e pacotes que têm de estar instalados antes, e quantos são. Se faltar um, ou se a versão estiver fora do intervalo indicado, a instalação para antes de escrever.
 - **Função** indica o nome da função e quantas capacidades concede. Selecione a seta à direita da linha para ver cada capacidade pelo nome.
-- **Disposição** indica o nome da barra lateral e quantas páginas mostra.
+- **Disposição** indica o nome da barra lateral, as suas páginas e as funções para as quais é a predefinição. Um servidor mais antigo mostra apenas quantas páginas tem.
 - **Formulário** indica o título do formulário, sem número.
 
 Os passos mais antigos, como **Sistema de códigos** ou **Conjuntos de dados**, mostram apenas um número. O guia [Marketplace](/docs/marketplace) explica-os.
@@ -44,7 +44,7 @@ Faça isto quando a instalação já não precisar do trabalho que o pacote prep
 
 **Resultado esperado:** aparece a mensagem **removido** com o identificador do pacote. O pacote deixa de constar em **Instalados**. As suas funções e disposições desaparecem.
 
-A remoção mantém os formulários do pacote publicados, com todas as respostas. Arquive um formulário em Formulários se já não o quiser. A remoção também não mexe nas listas de códigos, consultas, conjuntos de dados e correspondências que o pacote instalou, nem nos plugins e pacotes de que ele dependia.
+A remoção mantém os formulários do pacote publicados, com todas as respostas. Arquive um formulário em Formulários se já não o quiser. Um formulário limitado às funções do pacote perde esse limite, e qualquer pessoa que possa ver formulários passa a poder abri-lo. A remoção também não mexe nas listas de códigos, consultas, conjuntos de dados e correspondências que o pacote instalou, nem nos plugins e pacotes de que ele dependia.
 
 Se alguém ainda tiver uma das funções do pacote, a janela avisa a vermelho e lista cada função com os seus utilizadores. **Remover** fica desativado. Retire a função a essas pessoas em Utilizadores e volte a abrir a janela.
 

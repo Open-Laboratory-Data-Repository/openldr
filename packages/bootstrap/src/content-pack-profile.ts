@@ -36,7 +36,7 @@ export interface ProfileDeps {
 /** The capabilities of the person installing. 'all' when nothing limits them, as on the CLI. */
 export type InstallerCapabilities = readonly string[] | 'all';
 
-/** An update or removal would drop a role that users still hold. */
+/** An update or removal would drop a role that users still hold. `role` is the role name. */
 export class PackRemovalError extends Error {
   constructor(readonly holders: { role: string; users: string[] }[]) {
     super(`users still hold a role this pack made: ${holders.map((h) => `${h.role} (${h.users.join(', ')})`).join('; ')}`);
@@ -135,7 +135,7 @@ export async function checkProfileSteps(
   if (holders.length > 0) throw new PackRemovalError(holders);
 }
 
-/** The users holding each role among `items` that still exists. Other kinds are skipped. */
+/** The users holding each role among `items` that still exists, by role name. Other kinds are skipped. */
 async function findHolders(deps: ProfileDeps, items: PackItem[]): Promise<{ role: string; users: string[] }[]> {
   const holders: { role: string; users: string[] }[] = [];
   for (const item of items) {
@@ -143,7 +143,7 @@ async function findHolders(deps: ProfileDeps, items: PackItem[]): Promise<{ role
     const role = await deps.roles.get(item.itemId);
     if (!role) continue;
     const users = await deps.roleMembers(role.id);
-    if (users.length > 0) holders.push({ role: role.slug, users });
+    if (users.length > 0) holders.push({ role: role.name, users });
   }
   return holders;
 }

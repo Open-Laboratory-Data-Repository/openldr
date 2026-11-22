@@ -1068,7 +1068,12 @@ export const en = {
       typeContentPack: 'Content pack',
       packSteps: 'Steps',
       packStep: { 'code-system': 'Code system', 'value-set': 'Value set', 'facility-register': 'Facility register', 'link-matching': 'Link matching', 'custom-queries': 'Custom queries', 'test-mappings': 'Test mappings', 'result-mappings': 'Result mappings', datasets: 'Datasets', needs: 'Needs', role: 'Role', layout: 'Layout', form: 'Form' },
-      packStepCount: { needs: '{{count}} bundles', role: '{{count}} capabilities', layout: '{{count}} pages' },
+      packStepCount: {
+        needs_one: '{{count}} bundle', needs_other: '{{count}} bundles',
+        role_one: '{{count}} capability', role_other: '{{count}} capabilities',
+        layout_one: '{{count}} page', layout_other: '{{count}} pages',
+      },
+      packLayoutDefaultFor: 'default for {{roles}}',
       packRoleShow: 'Show the capabilities of {{name}}',
       removePack: {
         title: 'Remove {{id}}',
@@ -1076,6 +1081,7 @@ export const en = {
         rolesGo: 'Roles removed',
         layoutsGo: 'Layouts removed',
         formsStay: 'Forms kept',
+        formsOpen: "These forms were limited to the pack's roles. After removal, anyone who may view forms can open them.",
         none: 'None',
         holders: 'Users still hold a role from this pack. Take the role from them first, then remove the pack.',
         holder: '{{role}}: {{users}}',

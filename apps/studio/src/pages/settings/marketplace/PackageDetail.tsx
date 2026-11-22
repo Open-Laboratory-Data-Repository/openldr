@@ -76,10 +76,14 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
   const declaresSites = entry.type === 'plugin' && Boolean(pluginUi?.sites?.widget || pluginUi?.sites?.panel);
   const [sitesOpen, setSitesOpen] = useState(false);
   const isPack = entry.type === 'content-pack';
-  // The detail's `roles` (each role step's capability keys, read from pack.json) rides along on the
-  // payload, so the install prompt can list every capability the pack grants.
+  // The detail's `roles` and `layouts` (read from pack.json) ride along on the payload, so the
+  // install prompt can list every capability the pack grants and every page a layout shows.
   const packPayload = detail?.payload
-    ? ('roles' in detail && detail.roles ? { ...detail.payload, roles: detail.roles } : detail.payload)
+    ? {
+        ...detail.payload,
+        ...('roles' in detail && detail.roles ? { roles: detail.roles } : {}),
+        ...('layouts' in detail && detail.layouts ? { layouts: detail.layouts } : {}),
+      }
     : entry.payload ?? null;
   // For registry items, detail must be loaded so the acknowledged capabilities are the real,
   // signed set. Installed/local items (no ref) carry their capabilities on the entry already.

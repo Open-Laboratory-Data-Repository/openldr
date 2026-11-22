@@ -15,7 +15,7 @@ const STEPS: ContentPackStep[] = [
 
 interface Fake {
   items?: PackItem[];
-  roles?: { id: string; slug: string }[];
+  roles?: { id: string; slug: string; name?: string }[];
   layouts?: { id: string; name: string }[];
   members?: Record<string, string[]>;
   installed?: Record<string, string>;
@@ -24,7 +24,7 @@ interface Fake {
 
 function fakeDeps(f: Fake = {}): ProfileDeps {
   const roles = f.roles ?? [];
-  const role = (r: { id: string; slug: string }) => ({ ...r, name: r.slug, description: null, isSystem: false, locked: false, capabilities: [], memberCount: 0 });
+  const role = (r: { id: string; slug: string; name?: string }) => ({ ...r, name: r.name ?? r.slug, description: null, isSystem: false, locked: false, capabilities: [], memberCount: 0 });
   const unused = () => { throw new Error('the check phase must not write'); };
   return {
     packItems: {
@@ -153,7 +153,7 @@ describe('checkProfileSteps', () => {
 
   it('refuses to leave out an owned role that users still hold', async () => {
     const deps = fakeDeps({
-      roles: [{ id: 'r1', slug: 'sample-clerk' }, { id: 'r2', slug: 'old-clerk' }],
+      roles: [{ id: 'r1', slug: 'sample-clerk' }, { id: 'r2', slug: 'old-clerk', name: 'Old Clerk' }],
       items: [
         { packId: PACK, kind: 'role', key: 'sample-clerk', itemId: 'r1' },
         { packId: PACK, kind: 'role', key: 'old-clerk', itemId: 'r2' },
@@ -162,7 +162,7 @@ describe('checkProfileSteps', () => {
     });
     const err = await checkProfileSteps(deps, PACK, STEPS, 'all').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PackRemovalError);
-    expect((err as PackRemovalError).holders).toEqual([{ role: 'old-clerk', users: ['Ann', 'Bob'] }]);
+    expect((err as PackRemovalError).holders).toEqual([{ role: 'Old Clerk', users: ['Ann', 'Bob'] }]);
   });
 
   it('refuses a role slug that slugify would change', async () => {
@@ -429,7 +429,7 @@ describe('removeProfileItems', () => {
     const onRemoved = vi.fn(async () => undefined);
     const err = await removeProfileItems(m.deps, PACK, onRemoved, 'all').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PackRemovalError);
-    expect((err as PackRemovalError).holders).toEqual([{ role: 'sample-clerk', users: ['Ann'] }, { role: 'old-clerk', users: ['Bob', 'Cy'] }]);
+    expect((err as PackRemovalError).holders).toEqual([{ role: 'Sample Clerk', users: ['Ann'] }, { role: 'Old Clerk', users: ['Bob', 'Cy'] }]);
     expect(m.deps.roles.remove).not.toHaveBeenCalled();
     expect(m.deps.layouts.remove).not.toHaveBeenCalled();
     expect(m.deps.packItems.remove).not.toHaveBeenCalled();
@@ -502,7 +502,7 @@ describe('previewRemoval', () => {
     vi.mocked(m.deps.packItems.put).mockClear();
     await expect(previewRemoval(m.deps, PACK)).resolves.toEqual({
       roles: ['Sample Clerk'], layouts: ['Collection site'], formsKept: ['Lab request'],
-      holders: [{ role: 'sample-clerk', users: ['Ann'] }],
+      holders: [{ role: 'Sample Clerk', users: ['Ann'] }],
     });
     expect(m.deps.roles.remove).not.toHaveBeenCalled();
     expect(m.deps.layouts.remove).not.toHaveBeenCalled();

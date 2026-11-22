@@ -14,6 +14,16 @@ vi.mock('@/api', async (orig) => {
     // Registries is a real tab now that the page's ⋯ reaches into it.
     listRegistries: vi.fn(), createRegistry: vi.fn(), updateRegistry: vi.fn(), deleteRegistry: vi.fn() };
 });
+// Records the props the remove-pack prompt gets on every render, then renders the real prompt.
+const packDialogProps = vi.hoisted(() => [] as { packId: string; open: boolean }[]);
+vi.mock('./marketplace/RemovePackDialog', async (orig) => {
+  const actual = await orig<typeof import('./marketplace/RemovePackDialog')>();
+  const { createElement } = await import('react');
+  return { RemovePackDialog: (p: Parameters<typeof actual.RemovePackDialog>[0]) => {
+    packDialogProps.push({ packId: p.packId, open: p.open });
+    return createElement(actual.RemovePackDialog, p);
+  } };
+});
 import * as api from '@/api';
 import { toast } from 'sonner';
 import { Marketplace } from './Marketplace';
@@ -322,6 +332,11 @@ describe('Marketplace', () => {
     await waitFor(() => expect((api.listInstalledArtifacts as any).mock.calls.length).toBeGreaterThan(loadsBefore));
     await waitFor(() => expect(screen.queryByTestId('remove-pack-dialog')).toBeNull());
     expect(api.detachArtifact).not.toHaveBeenCalled();
+    // While it closes, the prompt keeps the pack id, so its title never reads "Remove ".
+    const opened = packDialogProps.findIndex((p) => p.open);
+    expect(opened).toBeGreaterThanOrEqual(0);
+    expect(packDialogProps.slice(opened).filter((p) => !p.open).length).toBeGreaterThan(0);
+    expect(packDialogProps.slice(opened).every((p) => p.packId === 'collection-site')).toBe(true);
   });
 
   it('publishes a staged bundle and shows the PR toast', async () => {

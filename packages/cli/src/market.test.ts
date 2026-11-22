@@ -548,28 +548,39 @@ describe('market commands', () => {
   // remove of a content pack
   // ------------------------------------------------------------------
   const installedPack = [{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }];
-  const plan = { roles: ['sample-clerk'], layouts: ['clerk-home'], formsKept: ['sample-intake'], holders: [] };
+  const plan = { roles: ['Sample Clerk'], layouts: ['Clerk home'], formsKept: ['Sample intake'], holders: [] };
+  const OPEN_TO_ALL = "These forms were limited to the pack's roles. After removal, anyone who may view forms can open them.";
 
   it('remove pack without --force: prints what it would remove, exits 1 and changes nothing', async () => {
     mockPacks.list.mockResolvedValueOnce(installedPack);
     mockPacks.removal.mockResolvedValueOnce(plan);
     const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: false, json: false }));
     expect(code).toBe(1);
-    expect(err).toContain('sample-clerk');
-    expect(err).toContain('clerk-home');
-    expect(err).toContain('sample-intake');
+    expect(err).toContain('roles: Sample Clerk');
+    expect(err).toContain('layouts: Clerk home');
+    expect(err).toContain('forms kept: Sample intake');
+    expect(err).toContain(`forms kept: Sample intake\n  ${OPEN_TO_ALL}\n`);
     expect(err).toContain('use --force to remove it');
     expect(mockPacks.detach).not.toHaveBeenCalled();
     expect(mockPluginRemoval.runWholePluginRemove).not.toHaveBeenCalled();
     expect(mockCtx.close).toHaveBeenCalled();
   });
 
+  it('remove pack without --force: says nothing about form access when the pack removes no role or keeps no form', async () => {
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce({ ...plan, roles: [] });
+    expect((await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: false, json: false }))).err).not.toContain(OPEN_TO_ALL);
+    mockPacks.list.mockResolvedValueOnce(installedPack);
+    mockPacks.removal.mockResolvedValueOnce({ ...plan, formsKept: [] });
+    expect((await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: false, json: false }))).err).not.toContain(OPEN_TO_ALL);
+  });
+
   it('remove pack without --force: names who holds a role', async () => {
     mockPacks.list.mockResolvedValueOnce(installedPack);
-    mockPacks.removal.mockResolvedValueOnce({ ...plan, holders: [{ role: 'sample-clerk', users: ['Ann', 'Ben'] }] });
+    mockPacks.removal.mockResolvedValueOnce({ ...plan, holders: [{ role: 'Sample Clerk', users: ['Ann', 'Ben'] }] });
     const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: false, json: false }));
     expect(code).toBe(1);
-    expect(err).toContain('sample-clerk: Ann, Ben');
+    expect(err).toContain('Sample Clerk: Ann, Ben');
     expect(mockPacks.detach).not.toHaveBeenCalled();
   });
 
@@ -602,25 +613,25 @@ describe('market commands', () => {
     mockPacks.removal.mockResolvedValueOnce(plan);
     expect(await runMarketRemoveCommand('demo-pack', undefined, { force: true, json: true })).toBe(0);
     const out = JSON.parse(writeSpy.mock.calls.map((c) => String(c[0])).join(''));
-    expect(out).toEqual({ removed: 'demo-pack', roles: ['sample-clerk'], layouts: ['clerk-home'], formsKept: ['sample-intake'] });
+    expect(out).toEqual({ removed: 'demo-pack', roles: ['Sample Clerk'], layouts: ['Clerk home'], formsKept: ['Sample intake'] });
   });
 
   it('remove pack --force: a held role exits 1, names the users and does not detach', async () => {
     mockPacks.list.mockResolvedValueOnce(installedPack);
-    mockPacks.removal.mockResolvedValueOnce({ ...plan, holders: [{ role: 'sample-clerk', users: ['Ann'] }] });
+    mockPacks.removal.mockResolvedValueOnce({ ...plan, holders: [{ role: 'Sample Clerk', users: ['Ann'] }] });
     const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: true, json: false }));
     expect(code).toBe(1);
-    expect(err).toContain('sample-clerk: Ann');
+    expect(err).toContain('Sample Clerk: Ann');
     expect(mockPacks.detach).not.toHaveBeenCalled();
   });
 
   it('remove pack --force: a role taken between the check and the detach still exits 1', async () => {
     mockPacks.list.mockResolvedValueOnce(installedPack);
     mockPacks.removal.mockResolvedValueOnce(plan);
-    mockPacks.detach.mockRejectedValueOnce(new PackRemovalError([{ role: 'sample-clerk', users: ['Cy'] }]));
+    mockPacks.detach.mockRejectedValueOnce(new PackRemovalError([{ role: 'Sample Clerk', users: ['Cy'] }]));
     const { code, err } = await stderrOf(() => runMarketRemoveCommand('demo-pack', undefined, { force: true, json: false }));
     expect(code).toBe(1);
-    expect(err).toContain('sample-clerk: Cy');
+    expect(err).toContain('Sample Clerk: Cy');
   });
 
   it('remove pack with a version: refuses', async () => {

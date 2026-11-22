@@ -9,7 +9,7 @@ import {
   verifyBundle, readGrant, isCompatible, readBundle,
   LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
   openBundlePr, fetchRepoIndexJson, repoPathExists, mergeIndexEntry, parseIndex,
-  payloadFileName, type RepoCoords, PublishError, parseContentPack, type Bundle,
+  payloadFileName, type RepoCoords, PublishError, parseContentPack, type Bundle, type ContentPackStep,
 } from '@openldr/marketplace';
 import { createRegistryStore, type RegistryRecord } from '@openldr/db';
 import { redact } from '@openldr/core';
@@ -18,19 +18,29 @@ import { recordAudit } from './audit-helper';
 
 const VIEW = { preHandler: requireCapability('marketplace.view') };
 
-/** The role steps of a content pack, with their capability keys, for the install screen. The signed
- *  step summary carries only a count, and the admin must see every capability before confirming
- *  (profile packs design 5.1a). A pack.json that fails its hash or does not parse lists none: the
- *  install itself refuses that pack with the real reason. */
-function packRoles(b: Bundle): { slug: string; name: string; capabilities: string[] }[] {
+/** The steps of a content pack's pack.json, read for the install screen. The signed step summary
+ *  carries only counts. A pack.json that fails its hash or does not parse gives no steps: the install
+ *  itself refuses that pack with the real reason. */
+function packSteps(b: Bundle): ContentPackStep[] {
   const sha = (b.manifest.payload as { packSha256?: string }).packSha256;
   if (createHash('sha256').update(b.wasm).digest('hex') !== sha) return [];
   try {
-    const pack = parseContentPack(JSON.parse(new TextDecoder().decode(b.wasm)));
-    return pack.steps.flatMap((s) => (s.kind === 'role' ? [{ slug: s.slug, name: s.name, capabilities: s.capabilities }] : []));
+    return parseContentPack(JSON.parse(new TextDecoder().decode(b.wasm))).steps;
   } catch {
     return [];
   }
+}
+
+/** The role steps, with their capability keys. The admin must see every capability before
+ *  confirming (profile packs design 5.1a). */
+function packRoles(steps: ContentPackStep[]): { slug: string; name: string; capabilities: string[] }[] {
+  return steps.flatMap((s) => (s.kind === 'role' ? [{ slug: s.slug, name: s.name, capabilities: s.capabilities }] : []));
+}
+
+/** The layout steps, with their page paths and the slugs of the roles they are the default for
+ *  (design 5.4). */
+function packLayouts(steps: ContentPackStep[]): { key: string; name: string; pages: string[]; roles: string[] }[] {
+  return steps.flatMap((s) => (s.kind === 'layout' ? [{ key: s.key, name: s.name, pages: s.pages, roles: s.roles }] : []));
 }
 const MANAGE = { preHandler: requireCapability('marketplace.manage') };
 
@@ -165,6 +175,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     try {
       const b = await (await sourceFor(reg)).getBundle(ref);
       const v = verifyBundle(b);
+      const steps = b.manifest.type === 'content-pack' ? packSteps(b) : null;
       return {
         ref: packRef(reg.id, ref), id: b.manifest.id, version: b.manifest.version, type: b.manifest.type,
         description: b.manifest.description, readme: b.manifest.readme, license: b.manifest.license,
@@ -173,7 +184,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         compatible: isCompatible(b.manifest.compatibility.ceVersion, CE_VERSION),
         ceVersion: CE_VERSION, payload: b.manifest.payload, valid: v.valid,
         ...(v.reason ? { invalidReason: v.reason } : {}),
-        ...(b.manifest.type === 'content-pack' ? { roles: packRoles(b) } : {}),
+        ...(steps ? { roles: packRoles(steps), layouts: packLayouts(steps) } : {}),
         registryId: reg.id, registryName: reg.name,
       };
     } catch {

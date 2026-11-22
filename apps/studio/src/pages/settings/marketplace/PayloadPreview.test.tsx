@@ -73,6 +73,65 @@ describe('PayloadPreview content pack', () => {
     expect(caps.textContent).toContain('patients.view');
   });
 
+  it('a layout line names its pages and the roles it is the default for', () => {
+    render(<PayloadPreview payload={{
+      kind: 'content-pack', packSha256: 'a'.repeat(64),
+      steps: [
+        { kind: 'role', label: 'Sample Clerk', count: 3 },
+        { kind: 'layout', label: 'Collection site', count: 4 },
+      ],
+      roles: [{ slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] }],
+      layouts: [{ key: 'collection-site', name: 'Collection site', pages: ['/forms', '/patients', '/docs', '/odd-page'], roles: ['sample-clerk'] }],
+    }} />);
+    const row = screen.getAllByTestId('pack-step')[1];
+    expect(row.textContent).toContain('Collection site (Forms, Patients, Docs, /odd-page), default for Sample Clerk');
+    expect(row.textContent).not.toContain('4 pages');
+  });
+
+  it('a layout line keeps the page count when the server sends no layouts', () => {
+    render(<PayloadPreview payload={{
+      kind: 'content-pack', packSha256: 'a'.repeat(64),
+      steps: [{ kind: 'layout', label: 'Collection site', count: 3 }],
+    }} />);
+    expect(screen.getByTestId('pack-step').textContent).toContain('3 pages');
+  });
+
+  it('two role steps with one name each show their own capabilities', async () => {
+    render(<PayloadPreview payload={{
+      kind: 'content-pack', packSha256: 'a'.repeat(64),
+      steps: [
+        { kind: 'role', label: 'Clerk', count: 1 },
+        { kind: 'role', label: 'Clerk', count: 1 },
+      ],
+      roles: [
+        { slug: 'clerk-a', name: 'Clerk', capabilities: ['forms.view'] },
+        { slug: 'clerk-b', name: 'Clerk', capabilities: ['forms.submit'] },
+      ],
+    }} />);
+    fireEvent.click(screen.getAllByTestId('pack-role-toggle')[1]);
+    const caps = await screen.findByTestId('pack-role-capabilities');
+    await waitFor(() => expect(caps.textContent).toContain('Submit forms'));
+    expect(caps.textContent).not.toContain('View forms');
+  });
+
+  it('a count of one reads in the singular', () => {
+    render(<PayloadPreview payload={{
+      kind: 'content-pack', packSha256: 'a'.repeat(64),
+      steps: [
+        { kind: 'needs', label: 'sample-tracking', count: 1 },
+        { kind: 'role', label: 'Clerk', count: 1 },
+        { kind: 'layout', label: 'Home', count: 1 },
+      ],
+    }} />);
+    const rows = screen.getAllByTestId('pack-step');
+    expect(rows[0].textContent).toContain('1 bundle');
+    expect(rows[0].textContent).not.toContain('1 bundles');
+    expect(rows[1].textContent).toContain('1 capability');
+    expect(rows[1].textContent).not.toContain('1 capabilities');
+    expect(rows[2].textContent).toContain('1 page');
+    expect(rows[2].textContent).not.toContain('1 pages');
+  });
+
   it('names the bundles a needs step waits for', () => {
     render(<PayloadPreview payload={{
       kind: 'content-pack', packSha256: 'a'.repeat(64),

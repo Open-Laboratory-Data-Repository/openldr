@@ -1064,7 +1064,12 @@ export const pt: EnShape = {
       typeContentPack: 'Pacote de conteúdo',
       packSteps: 'Passos',
       packStep: { 'code-system': 'Sistema de códigos', 'value-set': 'Conjunto de valores', 'facility-register': 'Registo de unidades', 'link-matching': 'Correspondência de ligações', 'custom-queries': 'Consultas personalizadas', 'test-mappings': 'Correspondências de testes', 'result-mappings': 'Correspondências de resultados', datasets: 'Conjuntos de dados', needs: 'Depende de', role: 'Função', layout: 'Disposição', form: 'Formulário' },
-      packStepCount: { needs: '{{count}} pacotes', role: '{{count}} capacidades', layout: '{{count}} páginas' },
+      packStepCount: {
+        needs_one: '{{count}} pacote', needs_other: '{{count}} pacotes',
+        role_one: '{{count}} capacidade', role_other: '{{count}} capacidades',
+        layout_one: '{{count}} página', layout_other: '{{count}} páginas',
+      },
+      packLayoutDefaultFor: 'predefinição para {{roles}}',
       packRoleShow: 'Mostrar as capacidades de {{name}}',
       removePack: {
         title: 'Remover {{id}}',
@@ -1072,6 +1077,7 @@ export const pt: EnShape = {
         rolesGo: 'Funções removidas',
         layoutsGo: 'Disposições removidas',
         formsStay: 'Formulários mantidos',
+        formsOpen: 'Estes formulários estavam limitados às funções do pacote. Após a remoção, qualquer pessoa que possa ver formulários poderá abri-los.',
         none: 'Nenhum',
         holders: 'Há utilizadores que ainda têm uma função deste pacote. Retire-lhes a função primeiro e depois remova o pacote.',
         holder: '{{role}}: {{users}}',

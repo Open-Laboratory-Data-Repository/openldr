@@ -34,6 +34,10 @@ export function Marketplace() {
   const [installed, setInstalled] = useState<InstalledArtifact[]>([]);
   const [consent, setConsent] = useState<{ entry: CardEntry; capabilities: unknown[] } | null>(null);
   const [pendingRemove, setPendingRemove] = useState<CardEntry | null>(null);
+  // The pack the remove prompt last showed. It outlives pendingRemove, so the prompt's title keeps
+  // the id while it closes.
+  const [removePackId, setRemovePackId] = useState('');
+  if (pendingRemove?.type === 'content-pack' && pendingRemove.id !== removePackId) setRemovePackId(pendingRemove.id);
   const [pendingDetach, setPendingDetach] = useState<CardEntry | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -198,7 +202,7 @@ export function Marketplace() {
       {/* A content pack's removal deletes its roles and layouts and keeps its forms (profile packs
           design 5.3). Someone still holding one of its roles blocks it. */}
       <RemovePackDialog
-        packId={pendingRemove?.type === 'content-pack' ? pendingRemove.id : ''}
+        packId={removePackId}
         open={pendingRemove?.type === 'content-pack'}
         onOpenChange={(o) => { if (!o) setPendingRemove(null); }}
         onRemoved={() => {

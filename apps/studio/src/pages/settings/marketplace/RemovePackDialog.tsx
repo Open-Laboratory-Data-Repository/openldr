@@ -84,6 +84,11 @@ export function RemovePackDialog({ packId, open, onOpenChange, onRemoved }: {
                 <NameList testId="remove-pack-roles" title={t(`${P}.rolesGo`)} names={removal.roles} />
                 <NameList testId="remove-pack-layouts" title={t(`${P}.layoutsGo`)} names={removal.layouts} />
                 <NameList testId="remove-pack-forms" title={t(`${P}.formsStay`)} names={removal.formsKept} />
+                {/* Deleting a role takes it off every form's access list. An empty list lets in
+                    anyone who may view forms. */}
+                {removal.roles.length > 0 && removal.formsKept.length > 0 ? (
+                  <p data-testid="remove-pack-forms-open" className="m-0 -mt-3 text-muted-foreground">{t(`${P}.formsOpen`)}</p>
+                ) : null}
               </>
             ) : null}
             {blocked ? (

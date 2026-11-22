@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { ChevronRight } from 'lucide-react';
-import { getRoleCatalog, type ArtifactPayloadMeta, type PackRole, type PackStep } from '@/api';
+import { getRoleCatalog, type ArtifactPayloadMeta, type PackLayout, type PackRole, type PackStep } from '@/api';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { NAV } from '@/shell/AppShell';
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -36,7 +38,7 @@ export function PayloadPreview({ payload }: { payload: ArtifactPayloadMeta | nul
     );
   }
   if (payload.kind === 'content-pack') {
-    return <PackSteps steps={Array.isArray(payload.steps) ? payload.steps : []} roles={payload.roles ?? []} />;
+    return <PackSteps steps={Array.isArray(payload.steps) ? payload.steps : []} roles={payload.roles ?? []} layouts={payload.layouts} />;
   }
   // Non-plugin kinds (form/report/test-definition) — fleshed out in sub-project C.
   return <p className="text-sm text-muted-foreground">{t('settings.marketplace.payloadUnavailable')}</p>;
@@ -45,8 +47,33 @@ export function PayloadPreview({ payload }: { payload: ArtifactPayloadMeta | nul
 /** Kinds whose count reads as a phrase ("3 capabilities"). Older kinds keep the bare number. */
 const COUNT_PHRASE = new Set(['needs', 'role', 'layout']);
 
-function PackSteps({ steps, roles }: { steps: PackStep[]; roles: PackRole[] }) {
+/** For each step, its place among the steps of the same kind. The server lists role and layout
+ *  steps in pack order, so the n-th role step is the n-th entry of `roles`. A name could repeat. */
+function placeInKind(steps: PackStep[]): number[] {
+  const seen = new Map<string, number>();
+  return steps.map((s) => {
+    const n = seen.get(s.kind) ?? 0;
+    seen.set(s.kind, n + 1);
+    return n;
+  });
+}
+
+/** "Collection site (Forms, Patients, Docs), default for Sample Clerk". A known page shows its
+ *  sidebar label, an unknown one its path. A role shows its name when the pack makes it. */
+function layoutLine(t: TFunction, roles: PackRole[], label: string, layout: PackLayout): string {
+  const pages = layout.pages.map((path) => {
+    const nav = NAV.find((n) => n.to === path);
+    return nav ? t(nav.labelKey) : path;
+  });
+  const line = `${label} (${pages.join(', ')})`;
+  if (layout.roles.length === 0) return line;
+  const names = layout.roles.map((slug) => roles.find((r) => r.slug === slug)?.name ?? slug);
+  return `${line}, ${t('settings.marketplace.packLayoutDefaultFor', { roles: names.join(', ') })}`;
+}
+
+function PackSteps({ steps, roles, layouts }: { steps: PackStep[]; roles: PackRole[]; layouts?: PackLayout[] }) {
   const { t } = useTranslation();
+  const place = placeInKind(steps);
   const hasRole = steps.some((s) => s.kind === 'role');
   // Capability labels come from the same catalog the Roles page uses. Until it loads, or if it
   // fails, a capability shows as its key: the admin still sees every one before confirming.
@@ -71,8 +98,11 @@ function PackSteps({ steps, roles }: { steps: PackStep[]; roles: PackRole[] }) {
       <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{t('settings.marketplace.packSteps')}</p>
       <ol className="m-0 list-none space-y-1 rounded-md border border-border p-3 text-[13px]">
         {steps.map((s, i) => {
-          const role = s.kind === 'role' ? roles.find((r) => r.name === s.label) : undefined;
-          const count = s.kind === 'form'
+          const role = s.kind === 'role' ? roles[place[i]] : undefined;
+          // An older server sends no layouts. The line then keeps its page count.
+          const layout = s.kind === 'layout' ? layouts?.[place[i]] : undefined;
+          const label = layout ? layoutLine(t, roles, s.label, layout) : s.label;
+          const count = s.kind === 'form' || layout
             ? null
             : COUNT_PHRASE.has(s.kind) ? t(`settings.marketplace.packStepCount.${s.kind}`, { count: s.count }) : String(s.count);
           const expanded = open.has(i);
@@ -84,7 +114,7 @@ function PackSteps({ steps, roles }: { steps: PackStep[]; roles: PackRole[] }) {
                 <span className="min-w-0 [overflow-wrap:anywhere]">
                   <span className="font-medium text-foreground">{t(`settings.marketplace.packStep.${s.kind}`, { defaultValue: s.kind })}</span>
                   <span className="text-muted-foreground" aria-hidden="true"> · </span>
-                  <span className="text-muted-foreground">{s.label}</span>
+                  <span className="text-muted-foreground">{label}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-1">
                   {count !== null ? <span className="font-mono text-[12px] text-foreground/90">{count}</span> : null}
