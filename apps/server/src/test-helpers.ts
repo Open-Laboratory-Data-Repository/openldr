@@ -579,6 +579,8 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     decryptSecret: (b: string) => b,
     marketplaceForms: {} as never,
     marketplacePacks: {} as never,
+    // No content pack owns anything, so the roles and layouts lists carry ownerPack: null.
+    packItems: { list: async () => [], owners: async () => new Map(), put: async () => {}, remove: async () => {} },
     terminology: { ops: {} as never, admin: buildFakeAdmin(), ontology: buildFakeOntology(), loaders: buildFakeLoaders(), ingestOntologyWithConcepts: async () => ({ conceptsLoaded: 0 }) },
     terminologyJobs: {
       enqueue: async () => ({} as any),

@@ -74,7 +74,7 @@ function fakeProfile(items: Array<{ packId: string; kind: string; key: string; i
       save: vi.fn(async (id: string | null, input: { name: string }) => ({ id: id ?? 'l-new', name: input.name, startPage: null, pages: ['/forms'], roles: [] })),
       remove: vi.fn(async (id: string) => ({ id, name: id, startPage: null, pages: ['/forms'], roles: [] })),
     },
-    forms: { install: vi.fn(async () => 'f-new'), check: vi.fn(), setAccess: vi.fn(async () => undefined) },
+    forms: { install: vi.fn(async () => 'f-new'), check: vi.fn(), setAccess: vi.fn(async () => undefined), name: vi.fn(async (_id: string): Promise<string | null> => null) },
     installedVersion: vi.fn(async () => null),
     capabilityKeys: ['forms.view', 'roles.manage'],
   };

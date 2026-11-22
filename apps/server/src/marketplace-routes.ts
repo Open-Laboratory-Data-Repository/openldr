@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError, PluginStillStopping, ActiveVersionRemoval, REMOVE_KEEPS, type RemoveKeep } from '@openldr/bootstrap';
+import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError, PluginStillStopping, ActiveVersionRemoval, PackRemovalError, REMOVE_KEEPS, type RemoveKeep } from '@openldr/bootstrap';
 import {
   verifyBundle, readGrant, isCompatible, readBundle,
   LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
@@ -206,7 +206,9 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       const a = actor(req);
       const acknowledgedCapabilities = (body.acknowledgedCapabilities as Capability[] | undefined) ?? b.manifest.capabilities;
       if (b.manifest.type === 'content-pack') {
-        return await ctx.marketplacePacks.install(b, { actor: a, sourceRef: ref });
+        // The caller's capabilities, as requireCapability reads them. A pack cannot grant more than
+        // its installer holds (profile packs design 5.1a). Never 'all' from a request.
+        return await ctx.marketplacePacks.install(b, { actor: { ...a, capabilities: req.user?.capabilities ?? [] }, sourceRef: ref });
       }
       if (b.manifest.type === 'form-template') {
         const installed = await ctx.marketplaceForms.install(b, {
@@ -409,11 +411,22 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     }
   });
 
-  app.post('/api/marketplace/:id/detach', MANAGE, async (req) => {
+  const isInstalledPack = async (id: string): Promise<boolean> =>
+    (await ctx.marketplacePacks.list()).some((r) => r.artifactId === id);
+
+  app.post('/api/marketplace/:id/detach', MANAGE, async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    const isPack = (await ctx.marketplacePacks.list()).some((r) => r.artifactId === id);
-    if (isPack) await ctx.marketplacePacks.detach(id, { actor: actor(req) });
-    else await ctx.marketplaceForms.detach(id, { actor: actor(req) });
+    if (await isInstalledPack(id)) {
+      try {
+        await ctx.marketplacePacks.detach(id, { actor: actor(req) });
+      } catch (err) {
+        if (!(err instanceof PackRemovalError)) throw err;
+        reply.code(409);
+        return { error: err.message, holders: err.holders };
+      }
+    } else {
+      await ctx.marketplaceForms.detach(id, { actor: actor(req) });
+    }
     return { ok: true };
   });
 
@@ -436,8 +449,11 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
     return removeWhole(id, 'all', req, reply).then((r) => ('error' in r ? r : { ok: true }));
   });
 
+  // A content pack id answers with what detach would remove and who holds its roles. A plugin id
+  // answers with what a plugin removal would stop.
   app.get('/api/marketplace/:id/removal', MANAGE, async (req) => {
     const { id } = req.params as { id: string };
+    if (await isInstalledPack(id)) return ctx.marketplacePacks.removal(id);
     return ctx.pluginRemoval.plan(id);
   });
 

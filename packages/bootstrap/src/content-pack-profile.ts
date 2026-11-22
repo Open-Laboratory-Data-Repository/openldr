@@ -25,6 +25,8 @@ export interface ProfileDeps {
     check(questionnaire: unknown): void;
     /** Sets who may open and submit the form. Takes role slugs. */
     setAccess(formId: string, access: { open: string[]; submit: string[] }): Promise<void>;
+    /** The form's name, or null when the form no longer exists. */
+    name(formId: string): Promise<string | null>;
   };
   /** Installed version of a plugin or content pack, or null. */
   installedVersion(bundleId: string): Promise<string | null>;
@@ -212,7 +214,8 @@ export async function dropLeftOut(
   return removeItems(deps, packId, items, onRemoved);
 }
 
-/** What removing a whole pack takes out: names of the roles and layouts, keys of the forms kept. */
+/** What removing a whole pack takes out: names of the roles and layouts, and of the forms kept.
+ *  A kept form that no longer exists shows its key. */
 export interface Removal { roles: string[]; layouts: string[]; formsKept: string[] }
 
 // Layouts name roles, so they go first. Forms go last, and only lose their owner.
@@ -229,8 +232,19 @@ export async function removeProfileItems(
   const items = inRemovalOrder(await deps.packItems.list(packId));
   const holders = await findHolders(deps, items);
   if (holders.length > 0) throw new PackRemovalError(holders);
+  // Named before removeItems forgets the items, while their form ids are still at hand.
+  const formsKept = await formNames(deps, items);
   const out = await removeItems(deps, packId, items, onRemoved);
-  return { roles: out.roles.map((r) => r.name), layouts: out.layouts.map((r) => r.name), formsKept: out.formsKept };
+  return { roles: out.roles.map((r) => r.name), layouts: out.layouts.map((r) => r.name), formsKept };
+}
+
+/** The name of each form among `items`, or its key when the form no longer exists. */
+async function formNames(deps: ProfileDeps, items: PackItem[]): Promise<string[]> {
+  const names: string[] = [];
+  for (const item of items) {
+    if (item.kind === 'form') names.push((await deps.forms.name(item.itemId)) ?? item.key);
+  }
+  return names;
 }
 
 /** What removeProfileItems would do, for the confirm prompt. Writes nothing. Items an admin already
@@ -247,10 +261,9 @@ export async function previewRemoval(deps: ProfileDeps, packId: string): Promise
       layouts ??= await deps.layouts.list();
       const layout = layouts.layouts.find((l) => l.id === item.itemId);
       if (layout) out.layouts.push(layout.name);
-    } else {
-      out.formsKept.push(item.key);
     }
   }
+  out.formsKept = await formNames(deps, items);
   return { ...out, holders: await findHolders(deps, items) };
 }
 

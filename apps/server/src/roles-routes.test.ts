@@ -143,12 +143,15 @@ type AuditRecord = { actorType: string; actorId: string | null; actorName: strin
 function fakeCtx() {
   const { store, seedRole, assign } = buildFakeRoleStore();
   const auditEvents: AuditRecord[] = [];
+  /** Role id to the id of the content pack that made it. */
+  const roleOwners = new Map<string, string>();
   const ctx = {
     roles: store,
+    packItems: { owners: async (kind: string) => (kind === 'role' ? roleOwners : new Map()) },
     audit: { record: async (e: AuditRecord) => { auditEvents.push(e); return { ...e, id: `audit-${auditEvents.length}`, occurredAt: new Date().toISOString() }; } },
     logger: { error() {}, warn() {}, info() {} },
   } as unknown as AppContext & { __auditEvents: AuditRecord[] };
-  return { ctx, auditEvents, seedRole, assign };
+  return { ctx, auditEvents, seedRole, assign, roleOwners };
 }
 
 function appWithUser(ctx: AppContext, capabilities: string[]) {
@@ -173,6 +176,16 @@ describe('roles routes — CRUD happy paths', () => {
     const body = res.json() as RoleRecord[];
     expect(body).toHaveLength(1);
     expect(body[0].slug).toBe('lab_technician');
+  });
+
+  it('GET /api/roles names the pack that made a role, and null for one made by hand', async () => {
+    const { ctx, seedRole, roleOwners } = fakeCtx();
+    const packRole = seedRole({ slug: 'sample-clerk', name: 'Sample Clerk', capabilities: ['forms.view'] });
+    seedRole({ slug: 'bench', name: 'Bench', capabilities: ['forms.view'] });
+    roleOwners.set(packRole, 'collection-site');
+    const app = appWithUser(ctx, ['roles.view']);
+    const body = (await app.inject({ method: 'GET', url: '/api/roles' })).json() as Array<RoleRecord & { ownerPack: string | null }>;
+    expect(body.map((r) => [r.slug, r.ownerPack])).toEqual([['sample-clerk', 'collection-site'], ['bench', null]]);
   });
 
   it('GET /api/roles/catalog returns capability groups (roles.view)', async () => {

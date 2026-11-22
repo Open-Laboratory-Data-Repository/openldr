@@ -50,6 +50,7 @@ function fakeDeps(f: Fake = {}): ProfileDeps {
       install: vi.fn(unused),
       check: vi.fn(f.formCheck ?? (() => undefined)),
       setAccess: vi.fn(unused),
+      name: vi.fn(async () => null),
     },
     installedVersion: vi.fn(async (id: string) => (f.installed ?? { 'sample-tracking': '0.1.0' })[id] ?? null),
     capabilityKeys: ['forms.view', 'forms.submit', 'patients.view', 'roles.manage', 'marketplace.manage'],
@@ -253,6 +254,10 @@ function memDeps(opts: { failFormInstallTimes?: number } = {}) {
       }),
       check: vi.fn(),
       setAccess: vi.fn(async (fid: string, a: { open: string[]; submit: string[] }) => { access.set(fid, a); }),
+      name: vi.fn(async (fid: string) => {
+        const f = forms.get(fid);
+        return f ? ((f.questionnaire as { title?: string }).title ?? null) : null;
+      }),
     },
     installedVersion: vi.fn(async () => '0.1.0'),
     capabilityKeys: ALL_CAPS,
@@ -440,7 +445,7 @@ describe('removeProfileItems', () => {
     const [formId] = [...m.forms.keys()];
     const seen: string[] = [];
     const out = await removeProfileItems(m.deps, PACK, async (r) => { seen.push(`${r.kind}:${r.itemId}`); });
-    expect(out).toEqual({ roles: ['Sample Clerk'], layouts: ['Collection site'], formsKept: ['lab-request'] });
+    expect(out).toEqual({ roles: ['Sample Clerk'], layouts: ['Collection site'], formsKept: ['Lab request'] });
     expect(seen).toEqual([`layout:${layoutId}`, `role:${roleId}`]);
     expect(m.roles.size).toBe(0);
     expect(m.layouts.size).toBe(0);
@@ -460,6 +465,12 @@ describe('removeProfileItems', () => {
     expect(m.items).toEqual([]);
   });
 
+  it('names a kept form by its key when the form no longer exists', async () => {
+    const m = memDeps();
+    m.items.push({ packId: PACK, kind: 'form', key: 'old-request', itemId: 'f-gone' });
+    await expect(removeProfileItems(m.deps, PACK)).resolves.toEqual({ roles: [], layouts: [], formsKept: ['old-request'] });
+  });
+
   it('a pack that made nothing removes nothing', async () => {
     const m = memDeps();
     await expect(removeProfileItems(m.deps, PACK)).resolves.toEqual({ roles: [], layouts: [], formsKept: [] });
@@ -475,7 +486,7 @@ describe('previewRemoval', () => {
     vi.mocked(m.deps.roleMembers).mockImplementation(async () => ['Ann']);
     vi.mocked(m.deps.packItems.put).mockClear();
     await expect(previewRemoval(m.deps, PACK)).resolves.toEqual({
-      roles: ['Sample Clerk'], layouts: ['Collection site'], formsKept: ['lab-request'],
+      roles: ['Sample Clerk'], layouts: ['Collection site'], formsKept: ['Lab request'],
       holders: [{ role: 'sample-clerk', users: ['Ann'] }],
     });
     expect(m.deps.roles.remove).not.toHaveBeenCalled();
@@ -483,6 +494,12 @@ describe('previewRemoval', () => {
     expect(m.deps.packItems.remove).not.toHaveBeenCalled();
     expect(m.deps.packItems.put).not.toHaveBeenCalled();
     expect(m.items).toHaveLength(4);
+  });
+
+  it('names a kept form by its key when the form no longer exists', async () => {
+    const m = memDeps();
+    m.items.push({ packId: PACK, kind: 'form', key: 'old-request', itemId: 'f-gone' });
+    await expect(previewRemoval(m.deps, PACK)).resolves.toEqual({ roles: [], layouts: [], formsKept: ['old-request'], holders: [] });
   });
 });
 
