@@ -6,6 +6,96 @@
       "version": "v0.1.12",
       "entries": [
         {
+          "hash": "276b35b11",
+          "type": "fix",
+          "scope": "lab",
+          "title": "Say what the critical limits and role texts do now"
+        },
+        {
+          "hash": "f30dae0af",
+          "type": "fix",
+          "scope": "lab",
+          "title": "Match a picked range on its critical limits too"
+        },
+        {
+          "hash": "ebeddb0ba",
+          "type": "fix",
+          "scope": "lab",
+          "title": "Keep each node's lab sections out of sync"
+        },
+        {
+          "hash": "747c7a580",
+          "type": "fix",
+          "scope": "rbac",
+          "title": "Leave a custom role alone when it holds a system slug"
+        },
+        {
+          "hash": "c30d02575",
+          "type": "fix",
+          "scope": "lab",
+          "title": "Show the letterhead load error to every account that can read it"
+        },
+        {
+          "hash": "84fd26009",
+          "type": "fix",
+          "scope": "lab",
+          "title": "Open Settings, Laboratory for lab.settings"
+        },
+        {
+          "hash": "9d7e5bfaf",
+          "type": "feat",
+          "scope": "lab",
+          "title": "Lab sections and self-authorisation, in the app and the CLI"
+        },
+        {
+          "hash": "bbc9beb97",
+          "type": "fix",
+          "scope": "db",
+          "title": "137 down() keeps the concepts of a coding system it did not create"
+        },
+        {
+          "hash": "e12956ba4",
+          "type": "fix",
+          "scope": "lab",
+          "title": "Lab.settings alone sets a test's section and review"
+        },
+        {
+          "hash": "7f3a02f48",
+          "type": "feat",
+          "scope": "lab",
+          "title": "Per-lab sections and review settings, and the seeded lab lists"
+        },
+        {
+          "hash": "9b87956c3",
+          "type": "feat",
+          "scope": "rbac",
+          "title": "Lab capabilities and a Reception role"
+        },
+        {
+          "hash": "60629919c",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Critical limits on reference bands"
+        },
+        {
+          "hash": "56b837574",
+          "type": "feat",
+          "scope": "db",
+          "title": "A lab corrects its own records, with a Provenance"
+        },
+        {
+          "hash": "fb3e47dc0",
+          "type": "feat",
+          "scope": "fhir",
+          "title": "Task and Provenance resources, and the Specimen and ServiceRequest fields the lab needs"
+        },
+        {
+          "hash": "e8cf559ab",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "The bundled FHIR value sets expand"
+        },
+        {
           "hash": "740ce9fab",
           "type": "fix",
           "scope": "studio",
