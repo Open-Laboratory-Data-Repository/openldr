@@ -1,6 +1,8 @@
 import type { FormEntry, FormEntrySaved, FormEntryStatus, FormEntryStore } from '@openldr/db';
 import { entryFacilitiesOf, entryKeyOf, entryValuesOf, type FacilityAnswer, type FormSchema } from '@openldr/forms';
 import type { DataScope } from '@openldr/rbac';
+import type { WorkflowTriggerRunner } from '@openldr/workflows';
+import type { AuditActor, AuditDetails } from './record-audit';
 import { inDataScope, type ScopeRegistryRow } from './data-scope';
 import { registryConceptCodeById, registryRowIdByConceptCode } from './facility-reconcile';
 
@@ -49,13 +51,34 @@ export interface FormEntriesService {
    *  `somethingStored` says the save stored records even when `stored` names none, because their
    *  ids could not be found. Left out, it is worked out from `stored`. */
   finish(entryId: string, outcome: { ok: boolean; stored: FormEntrySaved; somethingStored?: boolean }): Promise<FormEntry | null>;
+
+  /** Marks an entry entered in error, which frees its number, then saves every record it made again
+   *  with that FHIR status. The row is marked first and stays marked if the re-save fails; `warning`
+   *  then says the records were not updated. `skipped` counts records that could not be read or whose
+   *  type has no such status. Throws when the reason is empty or longer than 500 characters. */
+  voidEntry(input: {
+    entryId: string; reason: string; user: { id: string; name: string; dataScope: DataScope }; actor: AuditActor;
+  }): Promise<VoidedEntry | 'not-found' | 'already-void'>;
 }
+
+export interface VoidedEntry { entry: FormEntry; resaved: number; skipped: number; warning?: string }
 
 export interface FormEntriesDeps {
   store: FormEntryStore;
   /** Every facility register row. A limit and a picked code are both resolved against all of them. */
   registryRows(): Promise<ScopeRegistryRow[]>;
+  /** Reads the records an entry made, to mark them in error. */
+  fhir: { get(resourceType: string, id: string): Promise<Record<string, unknown> | null> };
+  /** Runs the ingest workflow that saves them again, the same one the submit route uses. */
+  runner: Pick<WorkflowTriggerRunner, 'runAndRecord'>;
+  audit(actor: AuditActor, details: AuditDetails): Promise<void>;
 }
+
+/** The record types whose FHIR status allows `entered-in-error`. Each is checked against its schema
+ *  in packages/fhir/src/resources. A record of any other type is left as it is. */
+const VOIDABLE_TYPES = new Set(['QuestionnaireResponse', 'ServiceRequest', 'Specimen', 'Observation', 'DiagnosticReport']);
+const MAX_REASON = 500;
+const NOT_UPDATED = 'The entry is marked in error, but its saved records were not updated.';
 
 const EMPTY_LIMIT = 'your data limit names no facility, so you cannot enter this form';
 const FREE_TEXT = "this form's facility field is free text, so it cannot be used by a user limited to a site";
@@ -66,6 +89,14 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
     rows.filter((r) => inDataScope(r, scope)).map((r) => r.id);
   const facilityIdsOf = async (scope: DataScope): Promise<string[] | null> =>
     scope.limited ? idsIn(await deps.registryRows(), scope) : null;
+
+  const get = async (id: string, user: EntryViewer): Promise<FormEntry | null> => {
+    const entry = await deps.store.get(id);
+    if (!entry) return null;
+    if (!user.dataScope.limited || entry.enteredBy === user.id) return entry;
+    const ids = await facilityIdsOf(user.dataScope);
+    return entry.facilityId !== null && ids !== null && ids.includes(entry.facilityId) ? entry : null;
+  };
 
   return {
     facilityIdsOf,
@@ -79,13 +110,7 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
       });
     },
 
-    async get(id, user) {
-      const entry = await deps.store.get(id);
-      if (!entry) return null;
-      if (!user.dataScope.limited || entry.enteredBy === user.id) return entry;
-      const ids = await facilityIdsOf(user.dataScope);
-      return entry.facilityId !== null && ids !== null && ids.includes(entry.facilityId) ? entry : null;
-    },
+    get,
 
     async context(user) {
       const scope = user.dataScope;
@@ -154,6 +179,62 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
       }
       // An order may exist, so the row keeps the number until someone marks it in error.
       return deps.store.setSaved(entryId, outcome.stored, 'incomplete');
+    },
+
+    async voidEntry({ entryId, reason: raw, user, actor }) {
+      const reason = raw.trim();
+      if (reason.length === 0 || reason.length > MAX_REASON) {
+        throw new Error(`a reason of 1 to ${MAX_REASON} characters is required`);
+      }
+      const before = await get(entryId, user);
+      if (!before) return 'not-found';
+      // The row is the source of truth: once marked, a failed re-save does not undo it.
+      const entry = await deps.store.void(entryId, { id: user.id, reason });
+      if (!entry) return 'already-void';
+
+      const refs = [
+        ...(before.saved?.responseId ? [{ resourceType: 'QuestionnaireResponse', id: before.saved.responseId }] : []),
+        ...(before.saved?.resources ?? []),
+      ];
+      let skipped = 0;
+      const changed: Record<string, unknown>[] = [];
+      for (const ref of refs) {
+        if (!VOIDABLE_TYPES.has(ref.resourceType)) { skipped += 1; continue; }
+        let record: Record<string, unknown> | null = null;
+        try {
+          record = await deps.fhir.get(ref.resourceType, ref.id);
+        } catch {
+          record = null;
+        }
+        if (!record) { skipped += 1; continue; }
+        changed.push({ ...record, status: 'entered-in-error' });
+      }
+
+      let resaved = 0;
+      let warning: string | undefined;
+      if (changed.length > 0) {
+        const bundle = {
+          resourceType: 'Bundle', type: 'transaction',
+          entry: changed.map((resource) => ({
+            resource, request: { method: 'PUT', url: `${String(resource.resourceType)}/${String(resource.id)}` },
+          })),
+        };
+        try {
+          const outcome = await deps.runner.runAndRecord('wf-ingest', 'form', {
+            method: 'POST', body: bundle, headers: {}, query: {}, __provenance: { sourceSystem: 'form-capture' },
+          });
+          if (outcome && outcome.status === 'completed' && !outcome.held) resaved = changed.length;
+          else warning = outcome ? `${NOT_UPDATED} Check run ${outcome.runId}.` : `${NOT_UPDATED} The ingest workflow is missing or disabled.`;
+        } catch {
+          warning = NOT_UPDATED;
+        }
+      }
+
+      await deps.audit(actor, {
+        action: 'form.entry.void', entityType: 'form-entry', entityId: entry.id, before, after: entry,
+        metadata: { reason, resaved, skipped, ...(warning ? { warning } : {}) },
+      });
+      return { entry, resaved, skipped, ...(warning ? { warning } : {}) };
     },
   };
 }

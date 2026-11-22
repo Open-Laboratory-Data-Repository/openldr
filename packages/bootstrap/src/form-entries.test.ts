@@ -40,7 +40,17 @@ function orderForm(facility: 'register' | 'free-text' | 'none'): FormSchema {
 const limit = (over: Partial<Extract<DataScope, { limited: true }>>): DataScope =>
   ({ limited: true, facilities: [], districts: [], regions: [], ...over });
 
+/** What the void path reads, sends and audits. `records` stands in for the FHIR store. */
+interface VoidFakes {
+  records: Map<string, Record<string, unknown>>;
+  runs: { workflowId: string; source: string; input: any }[];
+  audits: { actor: unknown; details: any }[];
+  /** What the next run answers. Left out, the run completes. */
+  outcome?: () => unknown;
+}
+
 async function world() {
+  const fakes: VoidFakes = { records: new Map(), runs: [], audits: [] };
   const db = await makeMigratedDb();
   const add = (id: string, code: string, name: string, region: string | null, district: string | null) =>
     db.insertInto('facility_registry').values({
@@ -54,8 +64,23 @@ async function world() {
   const store = createFormEntryStore(db as unknown as Kysely<InternalSchema>);
   const service = createFormEntriesService({
     store, registryRows: () => readScopeRegistryRows(db as unknown as Kysely<InternalSchema>),
+    fhir: {
+      get: async (type, id) => {
+        if (id === 'broken') throw new Error('db gone');
+        const r = fakes.records.get(`${type}/${id}`);
+        return r ? (structuredClone(r) as never) : null;
+      },
+    },
+    runner: {
+      runAndRecord: async (workflowId, source, input) => {
+        fakes.runs.push({ workflowId, source, input });
+        if (fakes.outcome) return fakes.outcome() as never;
+        return { runId: 'run-1', correlationId: null, status: 'completed', error: null, nodeMeta: {} };
+      },
+    },
+    audit: async (actor, details) => { fakes.audits.push({ actor, details }); },
   });
-  return { db, store, service };
+  return { db, store, service, fakes };
 }
 
 /** The coding a register facility field saves: the register concept code. */
@@ -467,5 +492,163 @@ describe('form entries service: context', () => {
     const ctx = await service.context({ id: 'u1', dataScope: limit({ facilities: ['reg-a'] }) });
     expect(ctx.facility).toEqual({ id: 'reg-a', code: 'reg-a', name: 'Site A' });
     await db.destroy();
+  });
+});
+
+describe('form entries service: voidEntry', () => {
+  const actor = { actorType: 'user' as const, actorId: 'u9', actorName: 'manager' };
+  const everyone = { id: 'u9', name: 'Manager', dataScope: { limited: false } as DataScope };
+
+  /** An entry settled as `status`, with these saved records held by the fake FHIR store. */
+  async function settled(w: Awaited<ReturnType<typeof world>>, key: string, status: 'active' | 'incomplete', resources: { resourceType: string; id: string }[], responseId: string | null) {
+    const e = await w.store.create({
+      formId: 'form-1', facilityId: 'reg-a', facilityCode: 'A1', facilityName: 'Site A', entryKey: key,
+      summary: [], enteredBy: 'u1', enteredByName: 'Clerk One',
+    });
+    return w.store.setSaved(e.id, { responseId, resources }, status);
+  }
+  const hold = (w: Awaited<ReturnType<typeof world>>, resourceType: string, id: string, status?: string) =>
+    w.fakes.records.set(`${resourceType}/${id}`, { resourceType, id, ...(status ? { status } : {}), note: 'kept' });
+
+  it('marks the row and re-saves every record as entered-in-error in one bundle', async () => {
+    const w = await world();
+    hold(w, 'QuestionnaireResponse', 'qr-1', 'completed');
+    hold(w, 'ServiceRequest', 'sr-1', 'active');
+    hold(w, 'Specimen', 'sp-1');
+    hold(w, 'Observation', 'ob-1', 'final');
+    hold(w, 'DiagnosticReport', 'dr-1', 'final');
+    const e = await settled(w, 'CS-1', 'active', [
+      { resourceType: 'ServiceRequest', id: 'sr-1' }, { resourceType: 'Specimen', id: 'sp-1' },
+      { resourceType: 'Observation', id: 'ob-1' }, { resourceType: 'DiagnosticReport', id: 'dr-1' },
+    ], 'qr-1');
+
+    const r = await w.service.voidEntry({ entryId: e.id, reason: '  typed the wrong number  ', user: everyone, actor });
+    if (typeof r === 'string') throw new Error(r);
+    expect(r.entry).toMatchObject({ id: e.id, status: 'entered-in-error', statusBy: 'u9', statusReason: 'typed the wrong number' });
+    expect(r).toMatchObject({ resaved: 5, skipped: 0 });
+    expect(r.warning).toBeUndefined();
+
+    expect(w.fakes.runs).toHaveLength(1);
+    const run = w.fakes.runs[0]!;
+    expect(run.workflowId).toBe('wf-ingest');
+    expect(run.source).toBe('form');
+    expect(run.input).toMatchObject({ method: 'POST', headers: {}, query: {}, __provenance: { sourceSystem: 'form-capture' } });
+    expect(run.input.body).toMatchObject({ resourceType: 'Bundle', type: 'transaction' });
+    const sent = run.input.body.entry as { resource: Record<string, unknown>; request: { method: string; url: string } }[];
+    expect(sent.map((x) => x.request)).toEqual([
+      { method: 'PUT', url: 'QuestionnaireResponse/qr-1' }, { method: 'PUT', url: 'ServiceRequest/sr-1' },
+      { method: 'PUT', url: 'Specimen/sp-1' }, { method: 'PUT', url: 'Observation/ob-1' }, { method: 'PUT', url: 'DiagnosticReport/dr-1' },
+    ]);
+    // Only the status changes; the rest of each record is sent as stored.
+    for (const x of sent) expect(x.resource).toMatchObject({ status: 'entered-in-error', note: 'kept' });
+    await w.db.destroy();
+  });
+
+  it('audits form.entry.void with the row before and after and what was re-saved', async () => {
+    const w = await world();
+    hold(w, 'ServiceRequest', 'sr-1', 'active');
+    const e = await settled(w, 'CS-1', 'active', [{ resourceType: 'ServiceRequest', id: 'sr-1' }], null);
+    await w.service.voidEntry({ entryId: e.id, reason: 'typo', user: everyone, actor });
+    expect(w.fakes.audits).toHaveLength(1);
+    const a = w.fakes.audits[0]!;
+    expect(a.actor).toEqual(actor);
+    expect(a.details).toMatchObject({
+      action: 'form.entry.void', entityType: 'form-entry', entityId: e.id,
+      before: { id: e.id, status: 'active' }, after: { id: e.id, status: 'entered-in-error' },
+      metadata: { reason: 'typo', resaved: 1, skipped: 0 },
+    });
+    expect(a.details.metadata).not.toHaveProperty('warning');
+    await w.db.destroy();
+  });
+
+  it('skips and counts a record it cannot read, and a type whose status cannot be entered-in-error', async () => {
+    const w = await world();
+    hold(w, 'ServiceRequest', 'sr-1', 'active');
+    hold(w, 'Patient', 'pt-1');
+    const e = await settled(w, 'CS-1', 'active', [
+      { resourceType: 'ServiceRequest', id: 'sr-1' }, { resourceType: 'Specimen', id: 'gone' },
+      { resourceType: 'Observation', id: 'broken' }, { resourceType: 'Patient', id: 'pt-1' },
+    ], 'qr-missing');
+    const r = await w.service.voidEntry({ entryId: e.id, reason: 'typo', user: everyone, actor });
+    if (typeof r === 'string') throw new Error(r);
+    expect(r).toMatchObject({ resaved: 1, skipped: 4 });
+    const sent = w.fakes.runs[0]!.input.body.entry as { request: { url: string } }[];
+    expect(sent.map((x) => x.request.url)).toEqual(['ServiceRequest/sr-1']);
+    await w.db.destroy();
+  });
+
+  it('keeps the row voided and says so when the re-save does not complete', async () => {
+    for (const outcome of [
+      () => ({ runId: 'run-2', correlationId: null, status: 'failed', error: 'boom', nodeMeta: {} }),
+      () => null,
+      () => ({ runId: 'run-3', correlationId: null, status: 'completed', error: null, nodeMeta: {}, held: { count: 1, reasons: ['no map'] } }),
+      () => { throw new Error('run store down'); },
+    ]) {
+      const w = await world();
+      w.fakes.outcome = outcome;
+      hold(w, 'ServiceRequest', 'sr-1', 'active');
+      const e = await settled(w, 'CS-1', 'active', [{ resourceType: 'ServiceRequest', id: 'sr-1' }], null);
+      const r = await w.service.voidEntry({ entryId: e.id, reason: 'typo', user: everyone, actor });
+      if (typeof r === 'string') throw new Error(r);
+      expect(r.entry.status).toBe('entered-in-error');
+      expect(r.resaved).toBe(0);
+      expect(r.skipped).toBe(0);
+      expect(r.warning).toMatch(/not updated/);
+      expect((await w.store.get(e.id))!.status).toBe('entered-in-error');
+      expect(w.fakes.audits[0]!.details.metadata).toMatchObject({ resaved: 0, warning: r.warning });
+      await w.db.destroy();
+    }
+  });
+
+  it('answers already-void for an entry already marked, and changes nothing more', async () => {
+    const w = await world();
+    const e = await settled(w, 'CS-1', 'active', [], null);
+    expect(typeof (await w.service.voidEntry({ entryId: e.id, reason: 'first', user: everyone, actor }))).toBe('object');
+    expect(await w.service.voidEntry({ entryId: e.id, reason: 'second', user: everyone, actor })).toBe('already-void');
+    expect((await w.store.get(e.id))!.statusReason).toBe('first');
+    expect(w.fakes.audits).toHaveLength(1);
+    await w.db.destroy();
+  });
+
+  it('voids an incomplete entry with no saved records without sending anything', async () => {
+    const w = await world();
+    const e = await settled(w, 'CS-1', 'incomplete', [], null);
+    const r = await w.service.voidEntry({ entryId: e.id, reason: 'never finished', user: everyone, actor });
+    expect(r).toMatchObject({ entry: { status: 'entered-in-error' }, resaved: 0, skipped: 0 });
+    expect((r as { warning?: string }).warning).toBeUndefined();
+    expect(w.fakes.runs).toHaveLength(0);
+    await w.db.destroy();
+  });
+
+  it('answers not-found for a missing entry or one the user may not see, and leaves it alone', async () => {
+    const w = await world();
+    const e = await settled(w, 'CS-1', 'active', [], null);
+    const outside = { id: 'u2', name: 'Other', dataScope: limit({ facilities: ['reg-b'] }) };
+    expect(await w.service.voidEntry({ entryId: e.id, reason: 'typo', user: outside, actor })).toBe('not-found');
+    expect(await w.service.voidEntry({ entryId: 'no-such', reason: 'typo', user: everyone, actor })).toBe('not-found');
+    expect((await w.store.get(e.id))!.status).toBe('active');
+    expect(w.fakes.audits).toHaveLength(0);
+    await w.db.destroy();
+  });
+
+  it('frees the number: the same requisition at the same site can be entered again', async () => {
+    const w = await world();
+    const answers = { num: 'CS-9', fac: pick('A1', 'Site A') };
+    const first = await w.service.begin({ form: { id: 'form-1', schema: orderForm('register') }, answers, user: user({ limited: false }) });
+    await expect(w.service.begin({ form: { id: 'form-1', schema: orderForm('register') }, answers, user: user({ limited: false }) }))
+      .rejects.toBeInstanceOf(FormEntryRepeat);
+    await w.service.voidEntry({ entryId: first.id, reason: 'typo', user: everyone, actor });
+    const again = await w.service.begin({ form: { id: 'form-1', schema: orderForm('register') }, answers, user: user({ limited: false }) });
+    expect(again.id).not.toBe(first.id);
+    await w.db.destroy();
+  });
+
+  it('refuses an empty or too long reason before touching the row', async () => {
+    const w = await world();
+    const e = await settled(w, 'CS-1', 'active', [], null);
+    await expect(w.service.voidEntry({ entryId: e.id, reason: '   ', user: everyone, actor })).rejects.toThrow(/reason/);
+    await expect(w.service.voidEntry({ entryId: e.id, reason: 'x'.repeat(501), user: everyone, actor })).rejects.toThrow(/reason/);
+    expect((await w.store.get(e.id))!.status).toBe('active');
+    await w.db.destroy();
   });
 });

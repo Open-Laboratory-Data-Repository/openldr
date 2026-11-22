@@ -6,6 +6,7 @@ import { sampleForms, type FormDefinition, type FormInput, type FormVersion, typ
 import { projectServiceRequest } from '@openldr/db';
 import { formAccess } from '@openldr/bootstrap';
 import { registerFormsRoutes } from './forms-routes';
+import { registerFormEntryRoutes } from './form-entry-routes';
 
 /** No form limited to any role: today's rule for every form (design 2026-11-18-roles-scope). */
 const noLists = {
@@ -1833,7 +1834,13 @@ describe('form entries on submit', () => {
     const store = createFormEntryStore(db as never);
     const ctx = fakeCtx();
     const runs: any[] = [];
-    (ctx as any).formEntries = createFormEntriesService({ store, registryRows: () => readScopeRegistryRows(db as never) });
+    (ctx as any).formEntries = createFormEntriesService({
+      store, registryRows: () => readScopeRegistryRows(db as never),
+      // Every saved record reads back as stored; the void re-save goes through the same fake runner.
+      fhir: { get: async (type: string, id: string) => ({ resourceType: type, id, status: 'active' }) },
+      runner: { runAndRecord: (...args: [any, any, any]) => (ctx as any).workflows.runner.runAndRecord(...args) },
+      audit: async () => {},
+    });
     (ctx as any).labIdentity = { tokens: async () => ({ 'lab.timezone': 'Africa/Dar_es_Salaam' }) };
     (ctx as any).workflows = {
       runner: {
@@ -1858,7 +1865,16 @@ describe('form entries on submit', () => {
     const submit = (app: ReturnType<typeof appFor>, formId: string, answers: Record<string, unknown>) =>
       app.inject({ method: 'POST', url: `/api/forms/${formId}/responses`, payload: { answers } });
     const rows = async (formId: string) => (await store.list({ formId, limit: 50, offset: 0 })).entries;
-    return { db, store, ctx, runs, appFor, createForm, submit, rows };
+    /** Marks an entry in error through the real void route. */
+    const voidEntry = async (entryId: string) => {
+      const app = Fastify();
+      app.addHook('onRequest', async (req) => {
+        req.user = { id: 'u-manager', username: 'manager', displayName: null, roles: [], roleIds: [], capabilities: ['forms.view', 'forms.void_entries'], dataScope: { limited: false } } as never;
+      });
+      registerFormEntryRoutes(app, withAccess(ctx) as never);
+      return app.inject({ method: 'POST', url: `/api/forms/entries/${entryId}/void`, payload: { reason: 'typed the wrong patient' } });
+    };
+    return { db, store, ctx, runs, appFor, createForm, submit, rows, voidEntry };
   }
 
   it('answers the unchanged success body plus entryId, and the row names what the save stored', async () => {
@@ -2115,6 +2131,28 @@ describe('form entries on submit', () => {
     expect(again.statusCode).toBe(409);
     expect(again.json()).toMatchObject({ error: 'entry-repeat', entry: { id: row!.id, entryKey: 'CS-2' } });
     expect(w.runs).toHaveLength(1);
+    await w.db.destroy();
+  });
+
+  it('takes the same requisition number at the same site again once the entry is marked in error', async () => {
+    const w = await world();
+    const formId = await w.createForm();
+    const first = await w.submit(w.appFor(), formId, { num: 'CS-0001', fac: siteA });
+    expect(first.statusCode).toBe(201);
+    expect((await w.submit(w.appFor(), formId, { num: 'CS-0001', fac: siteA })).statusCode).toBe(409);
+
+    const voided = await w.voidEntry(first.json().entryId);
+    expect(voided.statusCode).toBe(200);
+    expect(voided.json()).toMatchObject({ entry: { status: 'entered-in-error' }, skipped: 0 });
+    // The re-save went through the same ingest workflow as the submit, every record marked in error.
+    const resave = w.runs[w.runs.length - 1];
+    expect(resave.__provenance).toEqual({ sourceSystem: 'form-capture' });
+    expect(resave.body.entry.length).toBe(voided.json().resaved);
+    expect(resave.body.entry.every((x: any) => x.resource.status === 'entered-in-error')).toBe(true);
+
+    const again = await w.submit(w.appFor(), formId, { num: 'CS-0001', fac: siteA });
+    expect(again.statusCode).toBe(201);
+    expect(again.json().entryId).not.toBe(first.json().entryId);
     await w.db.destroy();
   });
 

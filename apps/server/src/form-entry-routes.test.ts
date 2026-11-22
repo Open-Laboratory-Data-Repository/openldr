@@ -62,17 +62,30 @@ async function world() {
   const access = accessStore();
   // The saved form copies, keyed by id, as the FHIR store would hold them.
   const saved = new Map<string, Record<string, unknown>>();
+  // Other saved records, keyed `Type/id`, and what the void route sends and audits.
+  const records = new Map<string, Record<string, unknown>>();
+  const runs: any[] = [];
+  const audits: any[] = [];
+  const fhirGet = async (type: string, id: string) => {
+    if (id === 'qr-broken') throw new Error('db gone');
+    return type === 'QuestionnaireResponse' ? (saved.get(id) ?? null) : (records.get(`${type}/${id}`) ?? null);
+  };
   const ctx = {
     forms: { get: async (id: string) => (id === 'form-1' || id === 'secret' ? { id, name: id, schema } : null) },
     formAccessStore: access,
     formAccess: formAccess({ access }),
-    formEntries: createFormEntriesService({ store, registryRows: () => readScopeRegistryRows(db as never) }),
-    fhirStore: {
-      get: async (type: string, id: string) => {
-        if (id === 'qr-broken') throw new Error('db gone');
-        return type === 'QuestionnaireResponse' ? (saved.get(id) ?? null) : null;
+    formEntries: createFormEntriesService({
+      store, registryRows: () => readScopeRegistryRows(db as never),
+      fhir: { get: fhirGet as never },
+      runner: {
+        runAndRecord: async (_w: string, _s: string, input: unknown) => {
+          runs.push(input);
+          return { runId: 'run-v', correlationId: null, status: 'completed', error: null, nodeMeta: {} };
+        },
       },
-    },
+      audit: async (actor, details) => { audits.push({ actor, details }); },
+    }),
+    fhirStore: { get: fhirGet },
     logger: { warn: () => {}, error: () => {}, info: () => {} },
   };
 
@@ -98,7 +111,7 @@ async function world() {
     saved.set(responseId, { ...toQuestionnaireResponse(schema, answers as never), id: responseId } as never);
     return store.setSaved(e.id, { responseId, resources: [] }, 'active');
   };
-  return { db, store, saved, appFor, add };
+  return { db, store, saved, records, runs, audits, appFor, add };
 }
 
 const keys = (body: { entries: { entryKey: string }[] }) => body.entries.map((e) => e.entryKey).sort();
@@ -270,6 +283,85 @@ describe('GET /api/forms/:id/entry-context', () => {
     const w = await world();
     expect((await w.appFor(siteA).inject({ url: '/api/forms/nope/entry-context' })).statusCode).toBe(404);
     expect((await w.appFor(siteA).inject({ url: '/api/forms/secret/entry-context' })).statusCode).toBe(404);
+    await w.db.destroy();
+  });
+});
+
+describe('POST /api/forms/entries/:entryId/void', () => {
+  const VOID = ['forms.view', 'forms.void_entries'];
+  const voidIt = (app: ReturnType<Awaited<ReturnType<typeof world>>['appFor']>, id: string, payload: unknown) =>
+    app.inject({ method: 'POST', url: `/api/forms/entries/${id}/void`, payload: payload as never });
+
+  it('marks the entry, re-saves its records, and audits with the caller as actor', async () => {
+    const w = await world();
+    const e = await w.add('form-1', 'reg-a', 'CS-1', 'u-x', { num: 'CS-1' });
+    w.records.set('ServiceRequest/sr-1', { resourceType: 'ServiceRequest', id: 'sr-1', status: 'active' });
+    await w.store.setSaved(e.id, { responseId: e.saved!.responseId, resources: [{ resourceType: 'ServiceRequest', id: 'sr-1' }] }, 'active');
+
+    const res = await voidIt(w.appFor(all, { capabilities: VOID }), e.id, { reason: ' wrong patient ' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ entry: { id: e.id, status: 'entered-in-error', statusBy: 'u-clerk', statusReason: 'wrong patient' }, resaved: 2, skipped: 0 });
+    expect(body).not.toHaveProperty('warning');
+    expect(w.runs).toHaveLength(1);
+    expect(w.runs[0].body.entry.map((x: any) => [x.request.url, x.resource.status])).toEqual([
+      [`QuestionnaireResponse/${e.saved!.responseId}`, 'entered-in-error'], ['ServiceRequest/sr-1', 'entered-in-error'],
+    ]);
+    expect(w.audits).toHaveLength(1);
+    expect(w.audits[0].actor).toEqual({ actorType: 'user', actorId: 'u-clerk', actorName: 'clerk' });
+    expect(w.audits[0].details).toMatchObject({ action: 'form.entry.void', entityId: e.id, metadata: { reason: 'wrong patient', resaved: 2, skipped: 0 } });
+    await w.db.destroy();
+  });
+
+  it('answers 409 already-void for an entry already marked', async () => {
+    const w = await world();
+    const e = await w.add('form-1', 'reg-a', 'CS-1', 'u-x');
+    const app = w.appFor(all, { capabilities: VOID });
+    expect((await voidIt(app, e.id, { reason: 'typo' })).statusCode).toBe(200);
+    const again = await voidIt(app, e.id, { reason: 'typo' });
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toEqual({ error: 'already-void' });
+    await w.db.destroy();
+  });
+
+  it('voids an incomplete entry with no saved records, with nothing re-saved and no warning', async () => {
+    const w = await world();
+    const e = await w.store.setSaved((await w.add('form-1', 'reg-a', 'CS-1', 'u-x')).id, { responseId: null, resources: [] }, 'incomplete');
+    const res = await voidIt(w.appFor(all, { capabilities: VOID }), e.id, { reason: 'never finished' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ entry: expect.objectContaining({ status: 'entered-in-error' }), resaved: 0, skipped: 0 });
+    expect(w.runs).toHaveLength(0);
+    await w.db.destroy();
+  });
+
+  it('answers 400 for a missing, empty or too long reason', async () => {
+    const w = await world();
+    const e = await w.add('form-1', 'reg-a', 'CS-1', 'u-x');
+    const app = w.appFor(all, { capabilities: VOID });
+    for (const payload of [{}, { reason: '' }, { reason: '   ' }, { reason: 'x'.repeat(501) }, { reason: 5 }]) {
+      expect((await voidIt(app, e.id, payload)).statusCode, JSON.stringify(payload).slice(0, 40)).toBe(400);
+    }
+    expect((await w.store.get(e.id))!.status).toBe('active');
+    await w.db.destroy();
+  });
+
+  it('answers 404 for an entry the caller may not see, of a form they may not open, or that does not exist', async () => {
+    const w = await world();
+    const b = await w.add('form-1', 'reg-b', 'CS-B', 'u-y');
+    const s = await w.add('secret', 'reg-a', 'CS-S', 'u-x');
+    expect((await voidIt(w.appFor(siteA, { capabilities: VOID }), b.id, { reason: 'typo' })).statusCode).toBe(404);
+    expect((await voidIt(w.appFor(all, { capabilities: VOID }), s.id, { reason: 'typo' })).statusCode).toBe(404);
+    expect((await voidIt(w.appFor(all, { capabilities: VOID }), 'no-such', { reason: 'typo' })).statusCode).toBe(404);
+    expect((await w.store.get(b.id))!.status).toBe('active');
+    expect((await w.store.get(s.id))!.status).toBe('active');
+    await w.db.destroy();
+  });
+
+  it('needs forms.void_entries', async () => {
+    const w = await world();
+    const e = await w.add('form-1', 'reg-a', 'CS-1', 'u-x');
+    expect((await voidIt(w.appFor(all, { capabilities: ['forms.view', 'forms.submit', 'forms.edit'] }), e.id, { reason: 'typo' })).statusCode).toBe(403);
+    expect((await w.store.get(e.id))!.status).toBe('active');
     await w.db.destroy();
   });
 });

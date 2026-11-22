@@ -6,12 +6,14 @@ import { entryAnswersOfResponse, type FormSchema } from '@openldr/forms';
 import { z } from 'zod';
 import { requireCapability } from './rbac';
 import { formOpenRules } from './forms-routes';
+import { actorFromRequest } from './audit-helper';
 
 // The entries of a form (design 2026-11-22-form-entries, 5.2 and 5.3). A limited user sees the
 // entries inside the limit and the entries they made. An entry the caller may not see answers 404,
 // the same as one that does not exist, so its existence never leaks.
 
 const VIEW = { preHandler: requireCapability('forms.view') };
+const VOID = { preHandler: requireCapability('forms.void_entries') };
 const NOT_FOUND = { error: 'not found' };
 
 /** An empty value, as a query string sends a cleared box, counts as left out. */
@@ -24,6 +26,8 @@ const listQuery = z.object({
   enteredBy: opt(z.string().max(200)),
   search: opt(z.string().max(100)),
 });
+
+const voidBody = z.object({ reason: z.string().trim().min(1).max(500) });
 
 /** The caller as the entries rules see them. A missing limit is no limit, as on the submit route. */
 const viewerOf = (req: FastifyRequest): EntryViewer => ({
@@ -74,5 +78,24 @@ export function registerFormEntryRoutes(app: FastifyInstance<any, any, any, any>
     const form = entry ? await openForm(req, entry.formId) : null;
     if (!entry || !form) { reply.code(404); return NOT_FOUND; }
     return { ...entry, answers: await answersOf(entry, form.schema) };
+  });
+
+  // Design 5.5: mark an entry entered in error. The row is marked first; a failed re-save of its
+  // records comes back as `warning`, with the row still marked.
+  app.post('/api/forms/entries/:entryId/void', VOID, async (req, reply) => {
+    const b = voidBody.safeParse(req.body ?? {});
+    if (!b.success) { reply.code(400); return { error: 'a reason of 1 to 500 characters is required' }; }
+    const entryId = (req.params as { entryId: string }).entryId;
+    const viewer = viewerOf(req);
+    // The same rule as reading it: an entry of a form the caller may not open is not there.
+    const seen = await ctx.formEntries.get(entryId, viewer);
+    if (!seen || !(await openForm(req, seen.formId))) { reply.code(404); return NOT_FOUND; }
+    const result = await ctx.formEntries.voidEntry({
+      entryId, reason: b.data.reason, actor: actorFromRequest(req),
+      user: { ...viewer, name: req.user?.displayName || req.user?.username || viewer.id },
+    });
+    if (result === 'not-found') { reply.code(404); return NOT_FOUND; }
+    if (result === 'already-void') { reply.code(409); return { error: 'already-void' }; }
+    return result;
   });
 }

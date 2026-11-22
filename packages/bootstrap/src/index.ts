@@ -842,6 +842,10 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const formEntries = createFormEntriesService({
     store: formEntryStore,
     registryRows: () => readScopeRegistryRows(internal.db as unknown as Kysely<InternalSchema>),
+    // The FHIR store and the workflow runner are made further down. These run only on a request.
+    fhir: { get: (type, id) => canonicalFhirStore.get(type, id) as Promise<Record<string, unknown> | null> },
+    runner: { runAndRecord: (...args) => workflowRunner.runAndRecord(...args) },
+    audit: (actor, details) => recordAuditEvent({ audit, logger }, actor, details),
   });
   const dashboardAccessStore = createDashboardAccessStore(internal.db as unknown as Kysely<InternalSchema>);
   const dashboardAccessCheck = dashboardAccess({ access: dashboardAccessStore });
