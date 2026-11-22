@@ -6,6 +6,144 @@
       "version": "v0.1.12",
       "entries": [
         {
+          "hash": "740ce9fab",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The repeat message in the user's language, and the plan matches the spec"
+        },
+        {
+          "hash": "24e023bf2",
+          "type": "fix",
+          "scope": "cli",
+          "title": "A local void records the OS user as the marker"
+        },
+        {
+          "hash": "d74daf30b",
+          "type": "fix",
+          "scope": "server",
+          "title": "A void warns when an entry's records are not known"
+        },
+        {
+          "hash": "c98e2a06d",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The entries list fits a phone, with its menu in reach"
+        },
+        {
+          "hash": "ff86cd041",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The entry context names the facility's system, so a locked site always saves"
+        },
+        {
+          "hash": "7d3620f19",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A locked clerk is never offered another facility, and plainer entry screens"
+        },
+        {
+          "hash": "a839b866d",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show who marked an entry in error by name"
+        },
+        {
+          "hash": "53c4c1997",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The entries of a form, and marking one as entered in error"
+        },
+        {
+          "hash": "64c211cae",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Forms entries filters by person and requisition, like the route"
+        },
+        {
+          "hash": "19dfb9a0b",
+          "type": "feat",
+          "scope": "cli",
+          "title": "List form entries and mark one as entered in error"
+        },
+        {
+          "hash": "ac1c0ae9c",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Hide page forms from the forms list, and limit the seeded Lab order"
+        },
+        {
+          "hash": "c5c8b8890",
+          "type": "fix",
+          "scope": "server",
+          "title": "Plainer void warning during a save, and a voided entry is never removed"
+        },
+        {
+          "hash": "9c974106a",
+          "type": "fix",
+          "scope": "server",
+          "title": "A late marking of a voided entry's records is audited"
+        },
+        {
+          "hash": "a5dc2d32d",
+          "type": "fix",
+          "scope": "server",
+          "title": "A voided entry never loses its records or its status"
+        },
+        {
+          "hash": "302e7305e",
+          "type": "feat",
+          "scope": "server",
+          "title": "Mark a form entry as entered in error"
+        },
+        {
+          "hash": "c376fda19",
+          "type": "fix",
+          "scope": "server",
+          "title": "An entry shows every answer, with the labels it was saved under"
+        },
+        {
+          "hash": "8e61cae5b",
+          "type": "feat",
+          "scope": "server",
+          "title": "List and read the entries of a form, within the user's data limit"
+        },
+        {
+          "hash": "c9574561e",
+          "type": "fix",
+          "scope": "server",
+          "title": "The repeat check uses the requisition number the order carries"
+        },
+        {
+          "hash": "19ce29f1d",
+          "type": "fix",
+          "scope": "server",
+          "title": "A failed save always settles its entry, and every facility field is checked against the limit"
+        },
+        {
+          "hash": "2047ff2cc",
+          "type": "feat",
+          "scope": "server",
+          "title": "A saved form records an entry, and a repeated requisition number is refused"
+        },
+        {
+          "hash": "85dbbbf8d",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Find a form's requisition, facility and list summary fields"
+        },
+        {
+          "hash": "b996b8b74",
+          "type": "feat",
+          "scope": "rbac",
+          "title": "A capability to mark form entries as entered in error"
+        },
+        {
+          "hash": "44a71e05c",
+          "type": "feat",
+          "scope": "db",
+          "title": "A table of form entries, with one active entry per requisition number"
+        },
+        {
           "hash": "a31f35ab5",
           "type": "fix",
           "scope": "marketplace",
