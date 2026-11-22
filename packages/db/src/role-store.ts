@@ -32,6 +32,9 @@ export interface UpdateRoleInput {
 export interface CapabilityReconciliation {
   created: string[];
   granted: Array<{ slug: string; roleId: string; capability: string }>;
+  /** System slugs held by a lab's own custom role. The seed leaves that role alone and does not
+   *  create the system role while the slug is taken. The caller logs a warning for each. */
+  blocked: Array<{ slug: string; roleId: string; name: string }>;
 }
 
 /** Preset-vs-actual capability drift, for `openldr roles doctor` and any future UI.
@@ -330,9 +333,17 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       const ledger = await readLedger();
       const created: string[] = [];
       const granted: CapabilityReconciliation['granted'] = [];
+      const blocked: CapabilityReconciliation['blocked'] = [];
 
       for (const def of SYSTEM_ROLES) {
         const existing = await store.getBySlug(def.slug);
+        // A custom role can hold a system slug: create() makes 'reception' from a role named
+        // Reception. Granting the preset's keys to it would change a role the lab owns. Leave it
+        // alone and report it. The system role is not created while the slug is taken.
+        if (existing && !existing.isSystem) {
+          blocked.push({ slug: def.slug, roleId: existing.id, name: existing.name });
+          continue;
+        }
         if (!existing) {
           const id = randomUUID();
           await db.insertInto('roles').values({ id, slug: def.slug, name: def.name, description: def.description, is_system: true }).execute();
@@ -377,7 +388,7 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       // was DISABLED for this pass — recording keys we deliberately did not grant would burn a
       // new capability's one free grant and permanently withhold it from the unlocked presets.
       if (ledger !== null) await recordLedger();
-      return { created, granted };
+      return { created, granted, blocked };
     },
     async diagnoseCapabilities() {
       const ledger = await readLedger();

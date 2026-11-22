@@ -310,6 +310,42 @@ describe('RoleStore', () => {
     await db.destroy();
   });
 
+  // A lab made its own role named Reception before the lab module. create() slugs it to
+  // 'reception', the same slug as the new system role. The seed must leave that role alone.
+  it('leaves a custom role holding a system slug unchanged and reports it', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    const systemReception = (await store.getBySlug('reception'))!;
+    await db.deleteFrom('role_capabilities').where('role_id', '=', systemReception.id).execute();
+    await db.deleteFrom('roles').where('id', '=', systemReception.id).execute();
+    const custom = await store.create({ name: 'Reception', capabilities: ['forms.view'] });
+    expect(custom.slug).toBe('reception');
+    expect(custom.isSystem).toBe(false);
+
+    const result = await store.seedSystemRoles();
+    const again = await store.seedSystemRoles();
+
+    expect(result.blocked).toEqual([{ slug: 'reception', roleId: custom.id, name: 'Reception' }]);
+    expect(again.blocked).toEqual([{ slug: 'reception', roleId: custom.id, name: 'Reception' }]);
+    expect(result.created).toEqual([]);
+    expect(result.granted.filter((g) => g.roleId === custom.id)).toEqual([]);
+    const after = (await store.getBySlug('reception'))!;
+    expect(after.id).toBe(custom.id);
+    expect(after.isSystem).toBe(false);
+    expect(after.capabilities).toEqual(['forms.view']);
+    expect((await db.selectFrom('roles').select('id').where('slug', '=', 'reception').execute())).toHaveLength(1);
+    await db.destroy();
+  });
+
+  it('reports nothing blocked on an ordinary install', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    expect((await store.seedSystemRoles()).blocked).toEqual([]);
+    expect((await store.seedSystemRoles()).blocked).toEqual([]);
+    await db.destroy();
+  });
+
   it('reports created roles on a fresh install and grants nothing on the second run', async () => {
     const db = await makeMigratedDb();
     const store = createRoleStore(db);

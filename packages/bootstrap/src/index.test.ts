@@ -4,7 +4,7 @@ import { createAppSettingsStore, createReportStore, createRoleStore, referenceCa
 import { createDashboardStore, createColumnPolicyStore, joinableTablesForClient, NO_SCOPE_LINK } from '@openldr/dashboards';
 import { createFormStore } from '@openldr/forms';
 import type { Config } from '@openldr/config';
-import { createAppContext, capabilityBackfillEvents, buildReportingForTest, widgetSqlToRun, checkedWidgetSqlToRun, DashboardQueryError, type AppContext } from './index';
+import { createAppContext, capabilityBackfillEvents, warnBlockedSystemRoles, buildReportingForTest, widgetSqlToRun, checkedWidgetSqlToRun, DashboardQueryError, type AppContext } from './index';
 import { truncateTables } from './danger';
 
 const cfg: Config = Object.freeze({
@@ -310,6 +310,20 @@ describe('boot-time capability reconciliation audit', () => {
   // An ordinary restart changes nothing; it must not write an event, or the signal is worthless.
   it('emits no events when nothing was granted', () => {
     expect(capabilityBackfillEvents([])).toEqual([]);
+  });
+
+  // A custom role holding a system slug is left alone by the seed. The operator learns why the
+  // system role is missing from this warning.
+  it('warns once for each system slug a custom role holds', () => {
+    const calls: Array<[Record<string, unknown>, string]> = [];
+    const logger = { warn: (obj: Record<string, unknown>, msg: string) => { calls.push([obj, msg]); } };
+
+    warnBlockedSystemRoles(logger, [{ slug: 'reception', roleId: 'r-custom', name: 'Reception' }]);
+    warnBlockedSystemRoles(logger, []);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toEqual({ slug: 'reception', roleId: 'r-custom', roleName: 'Reception' });
+    expect(calls[0][1]).toMatch(/custom role holds a system role slug/);
   });
 });
 

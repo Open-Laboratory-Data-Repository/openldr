@@ -699,6 +699,20 @@ export function capabilityBackfillEvents(
   }));
 }
 
+/** Log a warning for each system slug that a lab's own custom role holds. The seed left that role
+ *  alone and did not create the system role, so an operator needs to know why it is missing. */
+export function warnBlockedSystemRoles(
+  logger: { warn: (obj: Record<string, unknown>, msg: string) => void },
+  blocked: CapabilityReconciliation['blocked'],
+): void {
+  for (const b of blocked) {
+    logger.warn(
+      { slug: b.slug, roleId: b.roleId, roleName: b.name },
+      'a custom role holds a system role slug; the system role was not created and the custom role was left unchanged',
+    );
+  }
+}
+
 /** Everything about an `AppContext` that depends on WHICH PROCESS is building it, rather than on
  *  configuration. Optional in full, so every existing call site keeps its meaning. */
 export interface AppContextOptions {
@@ -816,8 +830,9 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   // pre-migration DB or a transient connection failure logs a warning and never aborts boot.
   const reconciliation = await roles.seedSystemRoles().catch((err) => {
     logger.warn({ err }, 'system-role seed failed');
-    return { created: [], granted: [] } as CapabilityReconciliation;
+    return { created: [], granted: [], blocked: [] } as CapabilityReconciliation;
   });
+  warnBlockedSystemRoles(logger, reconciliation.blocked);
   // Reconciliation can GRANT a capability without an operator asking — the mechanism that repairs
   // a capability added to the catalog after this install's roles were created. Record it, so the
   // change is traceable rather than appearing as if by magic after an upgrade. recordAuditEvent is
