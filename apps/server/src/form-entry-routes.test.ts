@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
 import { createFormEntriesService, formAccess, readScopeRegistryRows } from '@openldr/bootstrap';
-import { createFormEntryStore, type FormAccess, type FormAccessStore } from '@openldr/db';
+import { createFormEntryStore, registryConceptRows, type FormAccess, type FormAccessStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { toQuestionnaireResponse, type FormSchema } from '@openldr/forms';
+import { sampleForms, toQuestionnaireResponse, type FormSchema } from '@openldr/forms';
 import { registerFormEntryRoutes } from './form-entry-routes';
 import './auth-plugin';
 
@@ -183,6 +183,21 @@ describe('GET /api/forms/:id/entries', () => {
     await w.db.destroy();
   });
 
+  it("names each facility's system, the same one the facility picker saves", async () => {
+    const w = await world();
+    const body = (await w.appFor(siteA).inject({ url: '/api/forms/form-1/entry-context' })).json();
+    // The picker's codings are the register's concepts: publishRegistryConcepts writes
+    // registryConceptRows into terminology_concepts, and reference search answers with their system
+    // and code (apps/server/src/reference-search-routes.ts).
+    const [concept] = registryConceptRows([{ id: 'reg-a', name: 'Site A', facilityCode: 'A1' }]);
+    expect(body.facility).toMatchObject({ system: concept!.system, code: concept!.code });
+    for (const c of body.choices) expect(c.system).toBe(concept!.system);
+    // The seeded Lab order's facility field searches that same code system.
+    const seeded = sampleForms.find((f) => f.id === 'sample-order')!.fields.find((f) => f.id === 'fld-ord-ref-facility')!;
+    expect(body.facility.system).toBe(seeded.referenceTarget);
+    await w.db.destroy();
+  });
+
   it('answers 404 for a form that does not exist or that the caller may not open', async () => {
     const w = await world();
     await w.add('secret', 'reg-a', 'CS-S', 'u-x');
@@ -305,10 +320,10 @@ describe('GET /api/forms/:id/entry-context', () => {
     const w = await world();
     const ctxOf = async (scope: Scope | undefined) => (await w.appFor(scope).inject({ url: '/api/forms/form-1/entry-context' })).json();
     expect(await ctxOf(siteA)).toEqual({
-      facility: { id: 'reg-a', code: 'A1', name: 'Site A' }, locked: true, choices: [{ id: 'reg-a', code: 'A1', name: 'Site A' }],
+      facility: { id: 'reg-a', system: REGISTRY, code: 'A1', name: 'Site A' }, locked: true, choices: [{ id: 'reg-a', system: REGISTRY, code: 'A1', name: 'Site A' }],
     });
     expect(await ctxOf(coast)).toEqual({
-      facility: null, locked: false, choices: [{ id: 'reg-a', code: 'A1', name: 'Site A' }, { id: 'reg-b', code: 'B1', name: 'Site B' }],
+      facility: null, locked: false, choices: [{ id: 'reg-a', system: REGISTRY, code: 'A1', name: 'Site A' }, { id: 'reg-b', system: REGISTRY, code: 'B1', name: 'Site B' }],
     });
     expect(await ctxOf(all)).toEqual({ facility: null, locked: false, choices: null });
     expect(await ctxOf(undefined)).toEqual({ facility: null, locked: false, choices: null });

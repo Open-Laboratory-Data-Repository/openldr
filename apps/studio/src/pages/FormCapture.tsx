@@ -75,7 +75,7 @@ export function FormCapture() {
       // A failed read leaves the form open. The server applies the same rules on submit.
       if (parsed) {
         void getFormEntryContext(loaded.id)
-          .then((context) => siteControls(loaded.id, parsed, context))
+          .then((context) => siteControls(parsed, context))
           .catch(() => NO_SITE_CONTROLS)
           .then((controls) => { if (!cancelled) setSite(controls); });
       }
@@ -224,7 +224,6 @@ export function FormCapture() {
               initialAnswers={site.initialAnswers}
               fieldControls={{
                 readOnly: site.readOnly,
-                shown: site.shown,
                 offerOnly: site.offerOnly,
                 disabled: site.noFacility,
                 notices: {

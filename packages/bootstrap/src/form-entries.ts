@@ -6,7 +6,7 @@ import type { Logger } from '@openldr/core';
 import type { UserStore } from '@openldr/users';
 import type { AuditActor, AuditDetails } from './record-audit';
 import { inDataScope, type ScopeRegistryRow } from './data-scope';
-import { registryConceptCodeById, registryRowIdByConceptCode } from './facility-reconcile';
+import { registryConceptById, registryRowIdByConceptCode } from './facility-reconcile';
 
 // Form entries (design 2026-11-22-form-entries). The submit route writes an entry row before the
 // save runs, so a repeated requisition number is refused before anything is stored, then settles the
@@ -20,8 +20,9 @@ export class EntrySiteError extends Error {
   }
 }
 
-/** A facility as the form's picker names it: the register row id, the code the picker saves, the name. */
-export interface EntryFacility { id: string; code: string; name: string }
+/** A facility as the form's picker names it: the register row id, the system and code the picker
+ *  saves, and the name. */
+export interface EntryFacility { id: string; system: string; code: string; name: string }
 
 /** The site rules the form screen applies before a submission. `locked`: the limit covers exactly one
  *  facility, and `facility` is it. `choices`: the facilities the limit covers, null for no limit. */
@@ -200,9 +201,9 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
       if (!scope.limited) return { facility: null, locked: false, choices: null };
       const rows = await deps.registryRows();
       // The code a register field saves depends on the whole register, so map every row first.
-      const codeById = registryConceptCodeById(rows);
+      const conceptById = registryConceptById(rows);
       const choices = rows.filter((r) => inDataScope(r, scope))
-        .map((r) => ({ id: r.id, code: codeById.get(r.id)!, name: r.name }))
+        .map((r) => ({ id: r.id, ...conceptById.get(r.id)!, name: r.name }))
         .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
       const only = choices.length === 1 ? choices[0]! : null;
       return { facility: only, locked: only !== null, choices };

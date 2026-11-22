@@ -2168,7 +2168,8 @@ export interface FormEntry {
 }
 /** An entry with every answer of its saved form copy. Null answers: the copy could not be read. */
 export interface FormEntryDetail extends FormEntry { answers: { fieldId: string; label: string; value: string }[] | null }
-export interface EntryFacility { id: string; code: string; name: string }
+/** `system` and `code` are the coding the facility picker saves for this facility. */
+export interface EntryFacility { id: string; system: string; code: string; name: string }
 /** The site rules for the form screen. `locked`: the user's limit covers one facility, `facility`.
  *  `choices`: the facilities the limit covers, null for no limit. */
 export interface FormEntryContext { facility: EntryFacility | null; locked: boolean; choices: EntryFacility[] | null }

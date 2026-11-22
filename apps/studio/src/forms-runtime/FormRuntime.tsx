@@ -40,8 +40,6 @@ import { BROWSE_TESTS_EN, BrowseTestsSheet, type BrowseTestsCopy } from './Brows
 export interface FieldControls {
   notices?: Record<string, ReactNode>;
   readOnly?: string[];
-  /** What a read-only field shows when it holds no answer. */
-  shown?: Record<string, string>;
   offerOnly?: Record<string, CodingAnswer[]>;
   /** Reference fields drawn empty and disabled: there is nothing the user may pick. */
   disabled?: string[];
@@ -731,7 +729,6 @@ function FieldControl({
             dependsOnValue={dependsOnValue}
             trailing={trailing}
             readOnly={controls.readOnly?.includes(field.id) ?? false}
-            readOnlyText={controls.shown?.[field.id]}
             offerOnly={controls.offerOnly?.[field.id] ?? null}
             disabled={controls.disabled?.includes(field.id) ?? false}
           />

@@ -527,7 +527,7 @@ describe('form entries service: context', () => {
   it('locks a limit that covers one facility, with the code the picker saves', async () => {
     const { db, service } = await world();
     const ctx = await service.context({ id: 'u1', dataScope: limit({ districts: [{ region: 'Coast', district: 'Kibaha' }] }) });
-    expect(ctx).toEqual({ facility: { id: 'reg-a', code: 'A1', name: 'Site A' }, locked: true, choices: [{ id: 'reg-a', code: 'A1', name: 'Site A' }] });
+    expect(ctx).toEqual({ facility: { id: 'reg-a', system: REGISTRY, code: 'A1', name: 'Site A' }, locked: true, choices: [{ id: 'reg-a', system: REGISTRY, code: 'A1', name: 'Site A' }] });
     await db.destroy();
   });
 
@@ -535,7 +535,7 @@ describe('form entries service: context', () => {
     const { db, service } = await world();
     expect(await service.context({ id: 'u1', dataScope: limit({ regions: ['Coast'], facilities: ['reg-c'] }) })).toEqual({
       facility: null, locked: false,
-      choices: [{ id: 'reg-a', code: 'A1', name: 'Site A' }, { id: 'reg-b', code: 'B1', name: 'Site B' }, { id: 'reg-c', code: 'C1', name: 'Site C' }],
+      choices: [{ id: 'reg-a', system: REGISTRY, code: 'A1', name: 'Site A' }, { id: 'reg-b', system: REGISTRY, code: 'B1', name: 'Site B' }, { id: 'reg-c', system: REGISTRY, code: 'C1', name: 'Site C' }],
     });
     await db.destroy();
   });
@@ -554,7 +554,7 @@ describe('form entries service: context', () => {
       extras: '{}', source: 'test', created_at: NOW, updated_at: NOW,
     } as never).execute();
     const ctx = await service.context({ id: 'u1', dataScope: limit({ facilities: ['reg-a'] }) });
-    expect(ctx.facility).toEqual({ id: 'reg-a', code: 'reg-a', name: 'Site A' });
+    expect(ctx.facility).toEqual({ id: 'reg-a', system: REGISTRY, code: 'reg-a', name: 'Site A' });
     await db.destroy();
   });
 });

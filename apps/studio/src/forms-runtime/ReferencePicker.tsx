@@ -50,7 +50,7 @@ const keyOf = (v: ReferenceValue): string => {
   return 'reference' in v ? v.reference : `${v.system}|${v.code}`;
 };
 
-export function ReferencePicker({ field, formDefinitionId, preview = false, multiple, value, onChange, dependsOnValue, trailing, readOnly = false, readOnlyText, offerOnly = null, disabled = false }: {
+export function ReferencePicker({ field, formDefinitionId, preview = false, multiple, value, onChange, dependsOnValue, trailing, readOnly = false, offerOnly = null, disabled = false }: {
   field: FormField;
   /**
    * Id of the STORED form definition this field belongs to — the `:formId` path segment of
@@ -78,8 +78,6 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
   trailing?: ReactNode;
   /** Shows the answer and offers no way to change it, such as a clerk's one facility. */
   readOnly?: boolean;
-  /** What a read-only picker shows when it holds no answer. */
-  readOnlyText?: string;
   /** Drawn empty and disabled: there is nothing the user may pick. */
   disabled?: boolean;
   /** Offers only these codings, filtered here, with no search request. Wins over `dependsOnValue`. */
@@ -203,7 +201,7 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
       <Input
         id={field.id}
         readOnly
-        value={selected.length > 0 ? selected.map((v) => labelOf(v)).join(', ') : (readOnlyText ?? '')}
+        value={selected.map((v) => labelOf(v)).join(', ')}
         aria-label={field.displayLabel}
         className="h-9 bg-muted text-sm"
       />
