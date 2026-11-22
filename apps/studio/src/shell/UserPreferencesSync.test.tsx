@@ -51,6 +51,8 @@ function app(initial = '/') {
           <Route path="/" element={<StartPageGate><div data-testid="dashboard">dashboard</div></StartPageGate>} />
           <Route path="/reports" element={<div data-testid="reports">reports <Link to="/">home</Link></div>} />
           <Route path="/query" element={<div data-testid="query">query <Link to="/">home</Link></div>} />
+          <Route path="/reception" element={<div data-testid="reception">reception</div>} />
+          <Route path="/terminology" element={<div data-testid="terminology">terminology</div>} />
         </Routes>
       </MemoryRouter>
     </ThemeProvider>,
@@ -106,6 +108,28 @@ describe('first page', () => {
     fireEvent.click(screen.getByText('home'));
     expect(await screen.findByTestId('query')).toBeTruthy();
     expect(screen.queryByTestId('dashboard')).toBeNull();
+  });
+
+  it('sends a user whose only gated page is Reception to Reception, not Terminology', async () => {
+    caps = ['lab.receive'];
+    (api.getMyPreferences as any).mockResolvedValue({});
+    app('/');
+    expect(await screen.findByTestId('reception')).toBeTruthy();
+    expect(screen.queryByTestId('terminology')).toBeNull();
+  });
+
+  it('keeps the first sidebar page for a user who holds lab.receive and other pages', async () => {
+    caps = ['lab.receive', 'query.run'];
+    (api.getMyPreferences as any).mockResolvedValue({});
+    app('/');
+    expect(await screen.findByTestId('query')).toBeTruthy();
+  });
+
+  it('keeps Terminology first for a user with no gated page', async () => {
+    caps = [];
+    (api.getMyPreferences as any).mockResolvedValue({});
+    app('/');
+    expect(await screen.findByTestId('terminology')).toBeTruthy();
   });
 
   it("uses that user's saved first page when they can open it", async () => {

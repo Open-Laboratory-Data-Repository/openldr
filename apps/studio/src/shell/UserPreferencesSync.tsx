@@ -81,6 +81,18 @@ export function UserPreferencesSync() {
  * A user who cannot open the Dashboard is sent on every visit: to their saved first page, else the
  * first page in their sidebar. `/` is Access denied for them (demo.4 item 6).
  */
+/** The pages of a lab desk role. A user whose capability-gated pages are only these lands there,
+ *  not on a page every user sees (Terminology), which the desk cannot use. */
+const DESK_PAGES: ReadonlySet<string> = new Set(['/reception']);
+
+/** The first page for a user who cannot open the Dashboard: their first sidebar page, unless every
+ *  page their capabilities open is a desk page, and then the first of those. */
+function firstPage(shown: Array<{ to: string; caps?: string[] }>): string | undefined {
+  const gated = shown.filter((n) => n.to !== '/' && n.caps);
+  if (gated.length > 0 && gated.every((n) => DESK_PAGES.has(n.to))) return gated[0]!.to;
+  return shown.find((n) => n.to !== '/')?.to;
+}
+
 export function StartPageGate({ children }: { children: ReactNode }) {
   const { user, hasCapability } = useAuth();
   const { loaded: prefsLoaded, prefs } = useUserPreferences();
@@ -105,6 +117,6 @@ export function StartPageGate({ children }: { children: ReactNode }) {
   const shown = visibleNav(hasCapability, layout);
   const target = [prefs.startPage, layout?.startPage ?? undefined]
     .find((p): p is string => !!p && p !== '/' && shown.some((n) => n.to === p))
-    ?? (dashboard ? undefined : shown.find((n) => n.to !== '/')?.to);
+    ?? (dashboard ? undefined : firstPage(shown));
   return target ? <Navigate to={target} replace /> : <>{children}</>;
 }
