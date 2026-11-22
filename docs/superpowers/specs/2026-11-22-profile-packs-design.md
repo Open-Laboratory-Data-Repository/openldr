@@ -122,6 +122,10 @@ Installing a bundle needs `marketplace.manage` (`apps/server/src/marketplace-rou
 Making a role by hand needs `roles.manage` (`apps/server/src/roles-routes.ts:40`). A pack
 with a role step needs both.
 
+An update of a pack that already made a role needs `roles.manage` too, even when the new
+version has no role step, because the update deletes a role it leaves out. Removing such a
+pack needs `roles.manage` as well, because removal deletes its roles.
+
 A pack cannot grant a capability the person installing it does not hold. The check phase
 refuses and names the capability. This needs no banned list, and nobody can use a pack to
 give out more than they have.
@@ -164,6 +168,9 @@ a content pack:
    them. An admin can still archive them by hand. Removal does not unpublish them. On a
    server, archiving a form queues a delete for every lab that syncs from it
    (`packages/forms/src/store.ts:343`), and a pack removal must not do that on its own.
+   Deleting the pack's role does change one thing. It takes the role off each form's access
+   list, so a form that was limited to that role becomes open to everyone who may view
+   forms. The remove prompt, the CLI and the guides say so.
 4. Leaves code systems, queries, datasets and mappings alone, as removal does today.
 5. Leaves plugins and packs named in `needs` alone.
 6. Deletes the install record.
@@ -182,15 +189,23 @@ server to its sites is a later piece.
 
 ### 5.4 What the admin sees
 
-The install screen already lists a pack's steps with counts. It gains four lines:
+The install screen already lists a pack's steps with counts. It gains a line per new step:
 
 ```
 Collection site 0.1.0
-  Needs      nothing
   Role       Sample Clerk (3 capabilities)
+               forms.view
+               forms.submit
+               patients.view
   Layout     Collection site (Forms, Patients, Docs), default for Sample Clerk
-  Forms      Lab request, Sample dispatch
+  Form       Lab request
+  Form       Sample dispatch
 ```
+
+The role line lists every capability it grants, by its label from the Roles page, or by its
+key until the labels load. The install prompt shows the list open. The pack's detail page
+folds it behind a toggle. Each form has its own line. A pack with no `needs` step shows no
+Needs line. A `needs` step shows the bundles it waits for.
 
 The installed pack's detail page gets "Remove" in its dots menu. The confirm prompt is a
 Dialog, because it is a destructive confirm (AGENTS.md section 5).
@@ -228,6 +243,13 @@ generator writes the pack, and the repo checks it.
 - On a server, a pack acts on that server only.
 - No report, dashboard or workflow step in this version.
 - No first-run screen in this version.
+
+Three more calls came up during the build:
+
+- Removing a pack that made a role needs `roles.manage`, the same as installing it.
+- Removal keeps the pack's record of its forms, so installing it again updates the same
+  forms and does not copy them.
+- No "Needs nothing" line. A pack with no `needs` step shows no Needs line at all.
 
 ## 7. Left to the builder
 
