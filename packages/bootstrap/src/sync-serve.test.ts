@@ -32,6 +32,20 @@ describe('servePull', () => {
     expect(records.filter((r) => String(r.entityType) === 'facility_registry')).toEqual([]);
   });
 
+  // A row for the lab's own section system logged before writes stopped logging it. Serving it would
+  // make each lab's reconcile replace its own list with central's.
+  it('serves no record for the local-only lab section system', async () => {
+    const db = await makeMigratedDb();
+    await db.insertInto('reference_change_log').values({
+      entity_type: 'terminology_system', entity_id: 'urn:openldr:cs:lab-section', op: 'upsert', content_hash: '1',
+    } as never).execute();
+
+    const { records, nextSeq } = await servePull(stubCtx(db), 0);
+
+    expect(records.filter((r) => r.entityId === 'urn:openldr:cs:lab-section')).toEqual([]);
+    expect(nextSeq).toBeGreaterThan(0);
+  });
+
   it('⛔ serves a DELETE, not the draft body, for a design edited since it was published', async () => {
     // The hazard slice T3 exists to close, by its second route. `reference_change_log` stores only
     // (entity_id, content_hash) — the BODY is read live at pull time (see fetchReferenceBody above).

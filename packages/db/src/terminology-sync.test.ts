@@ -27,6 +27,19 @@ describe('markTerminologyChanged', () => {
     await db.destroy();
   });
 
+  it('sends no signal for a local-only system such as the lab sections', async () => {
+    const db = await makeMigratedDb();
+    const before = await db.selectFrom('terminology_systems').select(['url', 'generation'])
+      .where('url', '=', 'urn:openldr:cs:lab-section').execute();
+
+    await markTerminologyChanged(db, 'urn:openldr:cs:lab-section');
+
+    expect(await db.selectFrom('reference_change_log').selectAll().execute()).toEqual([]);
+    expect(await db.selectFrom('terminology_systems').select(['url', 'generation'])
+      .where('url', '=', 'urn:openldr:cs:lab-section').execute()).toEqual(before);
+    await db.destroy();
+  });
+
   it('a second bump advances generation to 2 and appends a distinct signal (no dedup)', async () => {
     const db = await makeMigratedDb();
     await markTerminologyChanged(db, 'http://example.org/cs');

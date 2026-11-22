@@ -62,7 +62,8 @@ export function createLabSections(deps: LabSectionsDeps): LabSections {
       // terms.create is an upsert, so an existing code is refused here rather than renamed.
       if (await find(code)) throw new LabSectionError(`section ${code} already exists`, 'conflict');
       // The admin store's own write, as the Terminology page adds a concept to a local system. It
-      // signals the change for sync and needs no value set refresh.
+      // needs no value set refresh. The section system is local to each node, so the write sends
+      // no sync change signal (isLocalOnlyTerminologySystem in @openldr/db).
       await admin.terms.create({ system: LAB_SECTION_SYSTEM, code, display: trimmed, status: 'ACTIVE' });
       return { code, name: trimmed };
     },

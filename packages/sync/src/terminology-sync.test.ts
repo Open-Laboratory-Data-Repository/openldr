@@ -67,6 +67,28 @@ describe('createTerminologyBulkSync.syncSystem', () => {
     expect(sys?.resource_id).toBe('loinc-1');
   });
 
+  // Each lab keeps its own section list. A central that still sends the system must not replace it.
+  it('leaves the local-only lab section system untouched', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const LAB_SECTION = 'urn:openldr:cs:lab-section';
+    await db.insertInto('terminology_concepts')
+      .values({ system: LAB_SECTION, code: 'haem', display: 'Haematology', status: 'ACTIVE', properties: null } as never)
+      .execute();
+    const systemBefore = await db.selectFrom('terminology_systems').selectAll().where('url', '=', LAB_SECTION).execute();
+    let fetched = 0;
+    const deps: TerminologyBulkDeps = {
+      ...baseDeps(db),
+      fetchConceptsPage: async () => { fetched++; return { concepts: [{ code: 'micro', display: 'Micro', status: 'ACTIVE', properties: null }], nextCode: null }; },
+      fetchMapElementsPage: async () => ({ elements: [], nextKey: null }),
+    };
+
+    await createTerminologyBulkSync(deps).syncSystem(LAB_SECTION, { generation: 3 });
+
+    expect(fetched).toBe(0);
+    expect((await conceptsFor(db, LAB_SECTION)).map((r) => r.code)).toEqual(['haem']);
+    expect(await db.selectFrom('terminology_systems').selectAll().where('url', '=', LAB_SECTION).execute()).toEqual(systemBefore);
+  });
+
   it('re-sync where central DROPPED one concept deletes it (whole-system reconcile); the rest remain', async () => {
     const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
     const mk = (pages: ConceptsPage[]): TerminologyBulkDeps => ({

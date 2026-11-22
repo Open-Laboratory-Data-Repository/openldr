@@ -12,11 +12,22 @@ import { recordReferenceChange } from './reference-change-log';
 // Call these at import-OPERATION completion (after all concept/element rows are written), NOT per batch.
 // Task B2 wires the call sites; this module just builds + tests the primitives.
 
+/** Code systems each node keeps for itself. They never sync: a write sends no change signal, central
+ *  serves no pull record for them, and a lab's reconcile leaves them alone. A lab pulling a central
+ *  system deletes every local concept the pull lacks, so a synced section list would wipe each lab's
+ *  own. urn:openldr:cs:lab-section must equal LAB_SECTION_SYSTEM in migration 137. */
+export const LOCAL_ONLY_TERMINOLOGY_SYSTEMS: readonly string[] = ['urn:openldr:cs:lab-section'];
+
+export function isLocalOnlyTerminologySystem(systemUrl: string): boolean {
+  return LOCAL_ONLY_TERMINOLOGY_SYSTEMS.includes(systemUrl);
+}
+
 /** Bump a code-system's generation by 1 and emit one deduped reference_change_log signal
  *  (entity_type='terminology_system', entity_id=systemUrl, op='upsert', content_hash=<new generation>).
  *  Runs in its own transaction. If no terminology_systems row exists yet (a concept-only import with no
  *  prior saveSystem CodeSystem header), a minimal registry row is created so the signal has a home. */
 export async function markTerminologyChanged(db: Kysely<InternalSchema>, systemUrl: string): Promise<void> {
+  if (isLocalOnlyTerminologySystem(systemUrl)) return;
   await db.transaction().execute(async (trx) => {
     const cur = await trx
       .selectFrom('terminology_systems')

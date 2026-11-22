@@ -1,4 +1,4 @@
-import { SUSPENDED_REFERENCE_ENTITY_TYPES } from '@openldr/db';
+import { SUSPENDED_REFERENCE_ENTITY_TYPES, isLocalOnlyTerminologySystem } from '@openldr/db';
 import { formSyncBody, type FormRow } from '@openldr/forms';
 import type {
   PullRecord,
@@ -49,6 +49,9 @@ export async function servePull(ctx: AppContext, fromSeq: number): Promise<PullR
     // branch below — `fetchReferenceBody` has no case for it, so falling through would emit a
     // delete the lab has no applier for.
     if (SUSPENDED_REFERENCE_ENTITY_TYPES.includes(entityType)) continue;
+    // A system each node keeps for itself (the lab's sections). Writes no longer log it, but a row
+    // logged before that must not reach a lab, whose reconcile would wipe the lab's own list.
+    if (entityType === 'terminology_system' && isLocalOnlyTerminologySystem(r.entity_id)) continue;
     if (r.op === 'delete') {
       records.push({ seq, entityType, entityId: r.entity_id, op: 'delete' });
       continue;

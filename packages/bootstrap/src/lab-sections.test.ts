@@ -132,4 +132,17 @@ describe('lab sections', () => {
     expect(e.kind).toBe('not-found');
     expect(e.message).toBe('no section haem');
   });
+
+  // A lab pulling from a central wipes every local concept of a synced system. The section list is
+  // each node's own, so adding or removing a section must log no sync change.
+  it('adds and removes sections without writing a sync change row', async () => {
+    const { db, sections } = await build();
+    const before = await db.selectFrom('reference_change_log').selectAll().execute();
+    await sections.addSection('haem', 'Haematology');
+    await sections.addSection('micro', 'Microbiology');
+    await sections.removeSection('haem');
+    const after = await db.selectFrom('reference_change_log').selectAll().execute();
+    expect(after).toEqual(before);
+    expect(after.filter((r) => r.entity_id === LAB_SECTION_SYSTEM)).toEqual([]);
+  });
 });
