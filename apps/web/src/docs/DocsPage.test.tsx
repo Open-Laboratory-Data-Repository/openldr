@@ -2,6 +2,18 @@ import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { DocsPage, stripLeadingH1 } from './DocsPage';
+import { APP_VERSION } from './content';
+
+// One test swaps in its own page body; every other test reads the real docs.
+const pageOverride = vi.hoisted(() => ({ body: null as string | null }));
+vi.mock('./content', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./content')>();
+  return {
+    ...actual,
+    docPage: (...args: Parameters<typeof actual.docPage>) =>
+      pageOverride.body == null ? actual.docPage(...args) : { body: pageOverride.body, localeUsed: 'en' as const },
+  };
+});
 
 function renderDocs(path: string) {
   return render(
@@ -353,5 +365,15 @@ describe('DocsPage', () => {
     expect(document.getElementById('1-install-using-your-connection-details')).not.toBeNull();
     expect(document.getElementById('1-install-using-your-connection-details-1')).not.toBeNull();
     expect(document.querySelectorAll('[id="1-install-using-your-connection-details"]')).toHaveLength(1);
+  });
+
+  it("renders an examples link with the site's version", () => {
+    pageOverride.body = '# Examples\n\n[examples/dashboards](https://github.com/o/r/tree/v{{version}}/examples/dashboards)';
+    try {
+      renderDocs('/docs/getting-started');
+      expect(screen.getByRole('link', { name: 'examples/dashboards' })).toHaveAttribute('href', `https://github.com/o/r/tree/v${APP_VERSION}/examples/dashboards`);
+    } finally {
+      pageOverride.body = null;
+    }
   });
 });

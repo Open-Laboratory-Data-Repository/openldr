@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { FocusedScreenshot, focusedScreenshot } from './FocusedScreenshot';
 import { DottedIllustration, isDottedIllustration } from './DottedIllustration';
 import { CLI_PLATFORM_MARKER, cliPlatformMarkdown, type CliPlatform } from './cliPlatform';
+import { withDocsVersion } from './version-link';
+import { DOCS_VERSION } from './version';
 
 function text(children: ReactNode): string {
   if (Array.isArray(children)) return children.map(text).join('');
@@ -113,7 +115,7 @@ export function DocMarkdown({
     a(props) {
       const href = typeof props.href === 'string' ? props.href : '';
       if (/^https?:\/\//.test(href)) {
-        return <a href={href} target="_blank" rel="noopener noreferrer">{props.children}</a>;
+        return <a href={withDocsVersion(href, DOCS_VERSION)} target="_blank" rel="noopener noreferrer">{props.children}</a>;
       }
       // Internal docs link (e.g. /docs/report-designer): use a router Link so it resolves
       // against the app basename (/studio) instead of a bare absolute href that drops it.

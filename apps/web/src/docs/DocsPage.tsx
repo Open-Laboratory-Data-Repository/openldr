@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  APP_VERSION,
   DOC_VERSIONS,
   DEFAULT_DOC_VERSION,
   DOC_LOCALES,
@@ -29,6 +30,7 @@ import { hasWebFocus, WebFocusedScreenshot } from './WebFocusedScreenshot';
 import { OPERATOR_PLATFORM_MARKER, OPERATOR_PAGES, operatorExample, operatorMarkdown, operatorText } from './operatorGuide';
 import { SERVER_COMMANDS, serverMarkdown, serverScene, serverPlatform } from './serverGuide';
 import { TerminalCodeBlock } from './TerminalCodeBlock';
+import { withDocsVersion } from './version-link';
 
 function textContent(children: ReactNode): string {
   if (Array.isArray(children)) return children.map(textContent).join('');
@@ -233,7 +235,7 @@ function markdownComponents(platform: InstallPlatform, locale: DocLocale, page: 
         return <Link to={href}>{children}</Link>;
       }
       return (
-        <a href={href} target="_blank" rel="noreferrer noopener">
+        <a href={href && withDocsVersion(href, APP_VERSION)} target="_blank" rel="noreferrer noopener">
           {children}
         </a>
       );
