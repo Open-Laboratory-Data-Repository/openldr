@@ -2534,6 +2534,8 @@ export const pt: EnShape = {
     startPage: "Página inicial",
     startPageNone: "Painel",
     pages: "Páginas",
+    pluginPages: 'Páginas de plugins',
+    pluginPagesFailed: 'Não foi possível ler as páginas de plugins: {{error}}',
     roles: "Predefinição para as funções",
     rolesUnavailable: "Não foi possível ler as funções, por isso as predefinições ficam como estão.",
     errRequired: "Dê um nome à disposição e pelo menos uma página.",

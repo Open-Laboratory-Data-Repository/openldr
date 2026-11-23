@@ -2646,6 +2646,8 @@ export const en = {
     startPage: "Start page",
     startPageNone: "Dashboard",
     pages: "Pages",
+    pluginPages: 'Plugin pages',
+    pluginPagesFailed: 'Plugin pages could not be read: {{error}}',
     roles: "Default for roles",
     rolesUnavailable: "Roles could not be read, so role defaults stay as they are.",
     errRequired: "Give the layout a name and at least one page.",

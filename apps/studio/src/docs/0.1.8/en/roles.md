@@ -212,7 +212,7 @@ A plugin's permissions stay on the roles that hold them when the plugin is disab
 
 **A plugin's group is missing.** The plugin is disabled or removed, or it adds no permissions. Check Marketplace.
 
-**A person does not see a plugin in the main menu.** Their roles do not hold the permission the plugin asks for, or their layout does not list the plugin's page. Check their roles, then Layouts.
+**A person does not see a plugin in the main menu.** Their roles do not hold the permission the plugin asks for, or their layout does not list the plugin's page. Check their roles, then the plugin's checkbox under **Plugin pages** in their layout (see [Layouts](/docs/layouts)).
 
 ## Related guides
 

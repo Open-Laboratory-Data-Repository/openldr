@@ -212,7 +212,7 @@ As permissões de um plugin ficam nas funções que as têm quando o plugin é d
 
 **Falta o grupo de um plugin.** O plugin está desativado ou removido, ou não acrescenta permissões. Verifique Marketplace.
 
-**Uma pessoa não vê um plugin no menu principal.** As suas funções não têm a permissão que o plugin pede, ou o seu layout não lista a página do plugin. Verifique as suas funções e depois Layouts.
+**Uma pessoa não vê um plugin no menu principal.** As suas funções não têm a permissão que o plugin pede, ou o seu layout não lista a página do plugin. Verifique as suas funções e depois a caixa do plugin em **Plugin pages** no seu layout (veja [Layouts](/docs/layouts)).
 
 ## Guias relacionados
 

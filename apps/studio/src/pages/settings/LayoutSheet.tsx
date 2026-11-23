@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
+import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,11 +10,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { NAV } from '@/shell/AppShell';
-import type { LayoutInput, LayoutPreset, RoleRecord } from '@/api';
+import { listPluginUis, type LayoutInput, type LayoutPreset, type PluginUiEntry, type RoleRecord } from '@/api';
 
 // Docs always shows, so it is not offered as a page to pick.
 const PAGES = NAV.filter((n) => n.to !== '/docs');
 const NONE = '__none__';
+const pluginPath = (id: string) => `/x/${id}`;
 
 /** Create or edit one layout. Save is in the sheet's ⋯ menu (AGENTS.md §5). `roles` is null when
  *  the roles could not be read: the role checkboxes are then hidden and the layout keeps its own. */
@@ -28,6 +30,22 @@ export function LayoutSheet({ open, layout, roles, onOpenChange, onSave }: {
   const [draft, setDraft] = useState<LayoutInput>({ name: '', startPage: null, pages: [], roles: [] });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Plugin pages the admin can see, one checkbox each. Loaded beside the sheet, never blocking it.
+  // On failure the list stays empty and the stored /x paths are kept as they are on save.
+  const [plugins, setPlugins] = useState<PluginUiEntry[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void listPluginUis()
+      .then((list) => { if (!cancelled) setPlugins(Array.isArray(list) ? list : []); })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setPlugins([]);
+        toast.error(t('layouts.pluginPagesFailed', { error: e instanceof Error ? e.message : String(e) }));
+      });
+    return () => { cancelled = true; };
+  }, [open, t]);
 
   useEffect(() => {
     if (!open) return;
@@ -45,9 +63,9 @@ export function LayoutSheet({ open, layout, roles, onOpenChange, onSave }: {
     if (busy) return;
     if (!draft.name.trim() || draft.pages.length === 0) { setError(t('layouts.errRequired')); return; }
     setBusy(true);
-    // Pages in sidebar order, whatever order they were ticked in. Paths this sheet has no
-    // checkbox for, such as a plugin page (/x/<id>) a profile pack listed, are kept after them
-    // in their stored order, so a rename never drops them.
+    // Pages in sidebar order, whatever order they were ticked in. Plugin pages (/x/<id>) come
+    // after them in their stored order, a newly ticked one last. A path with no checkbox, such as
+    // a plugin page that could not be read, is kept the same way, so a rename never drops it.
     const managed = new Set(PAGES.map((p) => p.to));
     const pages = [
       ...PAGES.map((p) => p.to).filter((to) => draft.pages.includes(to)),
@@ -93,6 +111,7 @@ export function LayoutSheet({ open, layout, roles, onOpenChange, onSave }: {
             <SelectContent>
               <SelectItem value={NONE}>{t('layouts.startPageNone')}</SelectItem>
               {PAGES.filter((p) => draft.pages.includes(p.to)).map((p) => <SelectItem key={p.to} value={p.to}>{t(p.labelKey)}</SelectItem>)}
+              {plugins.filter((p) => draft.pages.includes(pluginPath(p.id))).map((p) => <SelectItem key={p.id} value={pluginPath(p.id)}>{p.nav.label}</SelectItem>)}
             </SelectContent>
           </Select>
 
@@ -105,6 +124,20 @@ export function LayoutSheet({ open, layout, roles, onOpenChange, onSave }: {
               </label>
             ))}
           </div>
+
+          {plugins.length > 0 ? (
+            <>
+              <span className="self-start whitespace-nowrap pt-0.5 font-medium">{t('layouts.pluginPages')}</span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {plugins.map((p) => (
+                  <label key={p.id} className="flex min-w-0 items-center gap-2">
+                    <Checkbox data-testid={`layout-plugin-${p.id}`} checked={draft.pages.includes(pluginPath(p.id))} onCheckedChange={(v) => togglePage(pluginPath(p.id), v === true)} />
+                    <span className="truncate">{p.nav.label}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : null}
 
           <span className="self-start whitespace-nowrap pt-0.5 font-medium">{t('layouts.roles')}</span>
           {roles === null ? (

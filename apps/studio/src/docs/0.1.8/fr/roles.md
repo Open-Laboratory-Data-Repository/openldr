@@ -212,7 +212,7 @@ Les permissions d'un plugin restent sur les rôles qui les ont quand le plugin e
 
 **Le groupe d'un plugin manque.** Le plugin est désactivé ou retiré, ou il n'ajoute aucune permission. Vérifiez Marketplace.
 
-**Une personne ne voit pas un plugin dans le menu principal.** Ses rôles n'ont pas la permission que demande le plugin, ou sa mise en page ne liste pas la page du plugin. Vérifiez ses rôles, puis Layouts.
+**Une personne ne voit pas un plugin dans le menu principal.** Ses rôles n'ont pas la permission que demande le plugin, ou sa mise en page ne liste pas la page du plugin. Vérifiez ses rôles, puis la case du plugin sous **Plugin pages** dans sa mise en page (voir [Layouts](/docs/layouts)).
 
 ## Guides associés
 

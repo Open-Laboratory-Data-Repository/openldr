@@ -6,9 +6,11 @@ import '@/i18n';
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: () => ({ user: { id: 'u1', roles: [] }, hasCapability: () => true }) }));
 vi.mock('@/api', async (orig) => ({
   ...(await orig<typeof import('@/api')>()),
-  listLayouts: vi.fn(), saveLayout: vi.fn(), deleteLayout: vi.fn(), listRoles: vi.fn(),
+  listLayouts: vi.fn(), saveLayout: vi.fn(), deleteLayout: vi.fn(), listRoles: vi.fn(), listPluginUis: vi.fn(),
 }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import * as api from '@/api';
+import { toast } from 'sonner';
 import { Layouts } from './Layouts';
 
 const bench = { id: 'l1', name: 'Bench', startPage: '/forms', pages: ['/forms', '/patients'], roles: ['tech'] };
@@ -20,6 +22,12 @@ const roles = [
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.listRoles).mockResolvedValue(roles as never);
+  vi.mocked(api.listPluginUis).mockResolvedValue([]);
+});
+
+const pluginEntry = (id: string, label: string) => ({
+  id, version: '0.1.0', nav: { label, icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1',
+  hasWebview: true, hasDeclarative: false, declarative: null,
 });
 
 const page = () => render(<MemoryRouter><Layouts /></MemoryRouter>);
@@ -94,6 +102,58 @@ describe('Settings, Layouts', () => {
     await openMenu(screen.getByTestId('layout-sheet-menu'));
     fireEvent.click(await screen.findByTestId('layout-save'));
     await waitFor(() => expect(api.saveLayout).toHaveBeenCalledWith('l2', { name: 'Lab bench', startPage: '/x/lab', pages: ['/', '/x/lab', '/x/other'], roles: [] }));
+  });
+
+  it('offers a checkbox per plugin page, by its nav label, and keeps plugin pages in stored order', async () => {
+    const lab = { id: 'l2', name: 'Lab', startPage: null, pages: ['/', '/x/other', '/x/lab'], roles: [] };
+    vi.mocked(api.listLayouts).mockResolvedValue({ layouts: [lab], roleOrder: [] });
+    vi.mocked(api.saveLayout).mockResolvedValue(lab);
+    vi.mocked(api.listPluginUis).mockResolvedValue([pluginEntry('lab', 'Laboratory'), pluginEntry('whonet', 'WHONET'), pluginEntry('other', 'Other')] as never);
+    page();
+    await openMenu(await screen.findByLabelText('Actions for Lab'));
+    fireEvent.click(await screen.findByTestId('layout-edit'));
+    const labBox = await screen.findByTestId('layout-plugin-lab');
+    expect(labBox.getAttribute('data-state')).toBe('checked');
+    expect(screen.getByTestId('layout-plugin-whonet').getAttribute('data-state')).toBe('unchecked');
+    expect(labBox.closest('label')!.textContent).toBe('Laboratory');
+    expect(screen.getByText('Plugin pages')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('layout-plugin-whonet'));
+    fireEvent.click(screen.getByTestId('layout-page-/forms'));
+    await openMenu(screen.getByTestId('layout-sheet-menu'));
+    fireEvent.click(await screen.findByTestId('layout-save'));
+    await waitFor(() => expect(api.saveLayout).toHaveBeenCalledWith('l2', {
+      name: 'Lab', startPage: null, pages: ['/', '/forms', '/x/other', '/x/lab', '/x/whonet'], roles: [],
+    }));
+  });
+
+  it('unticking a plugin page drops it, and clears it as the start page', async () => {
+    const lab = { id: 'l2', name: 'Lab', startPage: '/x/lab', pages: ['/', '/x/lab'], roles: [] };
+    vi.mocked(api.listLayouts).mockResolvedValue({ layouts: [lab], roleOrder: [] });
+    vi.mocked(api.saveLayout).mockResolvedValue(lab);
+    vi.mocked(api.listPluginUis).mockResolvedValue([pluginEntry('lab', 'Laboratory')] as never);
+    page();
+    await openMenu(await screen.findByLabelText('Actions for Lab'));
+    fireEvent.click(await screen.findByTestId('layout-edit'));
+    fireEvent.click(await screen.findByTestId('layout-plugin-lab'));
+    await openMenu(screen.getByTestId('layout-sheet-menu'));
+    fireEvent.click(await screen.findByTestId('layout-save'));
+    await waitFor(() => expect(api.saveLayout).toHaveBeenCalledWith('l2', { name: 'Lab', startPage: null, pages: ['/'], roles: [] }));
+  });
+
+  it('when plugin pages cannot be read, the sheet still opens, a toast says so, and stored plugin pages are kept', async () => {
+    const lab = { id: 'l2', name: 'Lab', startPage: '/x/lab', pages: ['/', '/x/lab'], roles: [] };
+    vi.mocked(api.listLayouts).mockResolvedValue({ layouts: [lab], roleOrder: [] });
+    vi.mocked(api.saveLayout).mockResolvedValue(lab);
+    vi.mocked(api.listPluginUis).mockRejectedValue(new Error('list plugin UIs failed (500)'));
+    page();
+    await openMenu(await screen.findByLabelText('Actions for Lab'));
+    fireEvent.click(await screen.findByTestId('layout-edit'));
+    await screen.findByTestId('layout-name');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Plugin pages could not be read: list plugin UIs failed (500)'));
+    expect(screen.queryByText('Plugin pages')).toBeNull();
+    await openMenu(screen.getByTestId('layout-sheet-menu'));
+    fireEvent.click(await screen.findByTestId('layout-save'));
+    await waitFor(() => expect(api.saveLayout).toHaveBeenCalledWith('l2', { name: 'Lab', startPage: '/x/lab', pages: ['/', '/x/lab'], roles: [] }));
   });
 
   it('does not save a layout with no name or no pages', async () => {

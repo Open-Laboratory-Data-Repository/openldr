@@ -2534,6 +2534,8 @@ export const fr: EnShape = {
     startPage: "Page de démarrage",
     startPageNone: "Tableau de bord",
     pages: "Pages",
+    pluginPages: 'Pages des plugins',
+    pluginPagesFailed: "Les pages des plugins n'ont pas pu être lues : {{error}}",
     roles: "Par défaut pour les rôles",
     rolesUnavailable: "Les rôles n'ont pas pu être lus, les valeurs par défaut restent inchangées.",
     errRequired: "Donnez un nom à la disposition et au moins une page.",

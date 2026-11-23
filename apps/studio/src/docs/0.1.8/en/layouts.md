@@ -42,6 +42,8 @@ Select the pages this sidebar should show. Choose at least one. Docs always rema
 
 ![Select the pages this sidebar should show. Docs always remains available.](layouts-guide-pages.png)
 
+A plugin page has its own checkbox under **Plugin pages**, named as the main menu names it. Only plugins you can open are listed. While a layout is in use, a plugin shows in the sidebar only when the layout lists it. If the plugin list cannot be read, a message says so, and the layout keeps the plugin pages it already had.
+
 ### 5. Choose the start page
 
 Open **Start page** and choose a selected page. The example chooses Reports. The default option is Dashboard.
