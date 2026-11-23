@@ -133,7 +133,7 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `forms` | List form definitions; extract answers from a QuestionnaireResponse; set which roles may open and submit a form. |
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see **Facilities** in the studio's Docs). |
-| `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog. |
+| `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog, `set` a test's turnaround times and review, `loinc-hints` for a LOINC code, and `result-fields` to link, add or make result fields from LOINC. |
 | `lab` | `requisitions rebuild --force` rebuilds the index that finds an order by its requisition number. Needs **Danger zone**. |
 | `query` | Custom queries: `export` them to a JSON file, `import` them from one (`--force` replaces existing names and needs **Manage saved queries**; without it, an import adds new queries with no group). |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
@@ -467,9 +467,51 @@ Link result fields to LOINC:
 
 Each change is recorded in the audit log as the signed-in account.
 
+Set a test's turnaround times and review:
+
+### 18. Set turnaround and review for one test
+
+```sh
+{{operator:cli-en-19}}
+```
+
+![Set turnaround and review for one test.](guide:operator-cli-en-19)
+
+- `--expected-tat` is the hours from receipt to release that the lab aims for. `--critical-tat` is the hours after which the test is overdue. Each takes a number above 0, or `none` to clear it.
+- `--requires-verification` takes `true` or `false`. A test without it set reads `true`.
+- `set` changes only the flags you give. It works only where this install owns the catalog. CE stores these values. The lab plugin does not use them yet.
+- `export` and `import` carry the same values in the columns `expected_tat_hours`, `critical_tat_hours` and `requires_verification`. Verification is written `yes` or `no`. An import reads yes, no, true or false.
+
+LOINC hints and result fields from LOINC need LOINC loaded, with its ontology built. Load it from a folder that holds the unzipped LOINC release:
+
+### 19. Load LOINC and build its ontology
+
+```sh
+{{operator:cli-en-20}}
+```
+
+![Load LOINC and build its ontology.](guide:operator-cli-en-20)
+
+An install that loaded LOINC before LOINC hints were added must import it again. Until then, the hints suggest no unit.
+
+Read the hints for a LOINC code, and make result fields from LOINC:
+
+### 20. Read LOINC hints and make result fields
+
+```sh
+{{operator:cli-en-21}}
+```
+
+![Read LOINC hints and make result fields.](guide:operator-cli-en-21)
+
+- `loinc-hints <code>` prints LOINC's name, class and the category it matches, the result type and unit, the specimens, the answers and, for a panel, its member tests. `--json` prints the same as JSON. Without LOINC and its ontology, it says there are no hints.
+- `result-fields from-loinc <code...>` makes a result field for each code. With `--panel`, it makes one for each member test of each panel. A field or answer set that is already there is reused, so running it again makes nothing new.
+- `result-fields add --display <text>` adds one field to the result dictionary. `--code` sets its code. Without it, the code is made from the name, such as `HAEMOGLOBIN_A1C`. `--unit` sets its UCUM unit. A code that is already there is refused.
+- Neither command ticks the field on a test. Tick it in the test sheet, or with `test-catalog params --set`. A lab that receives its dictionary from central cannot add fields.
+
 ## Install a content pack
 
-### 18. Preview an approved content pack before installing
+### 21. Preview an approved content pack before installing
 
 ```sh
 {{operator:cli-en-18}}

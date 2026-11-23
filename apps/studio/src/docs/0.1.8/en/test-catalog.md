@@ -66,7 +66,7 @@ Continue in the open test sheet. You can configure this lab and result fields af
 
 ### 1. Check the LOINC field
 
-Enter a confirmed LOINC code if you have one, or leave it blank. When LOINC is loaded, search and select a term. Here it is not loaded, so typed codes are checked for format only.
+Enter a confirmed LOINC code if you have one, or leave it blank. When LOINC is loaded, search and select a term. Here it is not loaded, so typed codes are checked for format only. When LOINC is loaded, picking a code also fills some empty fields. [Fill a test from LOINC](#fill-a-test-from-loinc) explains what it fills.
 
 ![LOINC is optional. If the dictionary is absent, this installation checks typed code format only.](test-catalog-guide-loinc.png)
 
@@ -167,6 +167,8 @@ Clear the search if you no longer need it. Open the Tests dots menu and select *
 ![Export CSV downloads active catalog tests in an importable format.](test-catalog-guide-export.png)
 
 **Expected result:** The browser downloads a CSV in the columns the import wizard understands. Export contains active catalog tests, not just a visible row.
+
+The file has three columns for turnaround and review: `expected_tat_hours`, `critical_tat_hours` and `requires_verification`. Verification is written `yes` or `no`. In the import wizard, the same columns are **Expected TAT (hours)**, **Critical TAT (hours)** and **Requires verification (yes/no)**. An import reads yes, no, true or false. A TAT cell that is not a number refuses its row.
 
 ## Choose and map your test-list file
 
@@ -302,13 +304,19 @@ Enter the lower and upper bounds for your actual test. Blank bounds are open. Th
 
 ### 3. Enter the unit
 
-Set the unit used by this band. Use the same meaning and scale as the actual result.
+Set the unit used by this band. Use the same meaning and scale as the actual result. A new range starts with the result field's own unit.
+
+Type part of a unit, such as `mmol`, and pick it from the UCUM list. UCUM is the standard list of units. If your unit is not in the list, select **Use "mmol/litre"** (the row shows what you typed) to keep it. The range then shows **Not a UCUM unit**. The unit is still saved. A unit saved earlier opens as it was and is not checked again.
 
 ![Set the unit used by this reference band.](test-catalog-guide-range-unit.png)
 
 ### 4. Check sex and age restrictions
 
 Set any sex or age limits that apply. An unrestricted band should have no such restriction.
+
+Fill **Age from** and **Age to**, then choose **Age in**: **Days**, **Months** or **Years**. A range with no unit chosen counts in years. Both ages are inside the range. A range from 0 to 28 days fits a baby on day 28, not on day 29. A baby born today is 0 days old. Ages count from the birth date to today's date at this lab. The lab's date comes from **Time zone** in [Laboratory](/docs/laboratory). With no time zone set, the date is UTC.
+
+A range with no name shows a label made from its limits. **Age to** `28` in days alone reads `up to 28 days`. **Age from** `18` in years alone reads `18+ years`.
 
 ![Sex and age limits restrict who this band applies to. Leave them open only for an unrestricted band.](test-catalog-guide-range-context.png)
 
@@ -323,6 +331,47 @@ Open the test sheet dots menu and select **Save**.
 ![Save stores the selected result fields and reference bands.](test-catalog-guide-parameter-save.png)
 
 **Expected result:** The selected fields, result types and reference bands are saved with the test.
+
+## Set the turnaround time and review
+
+Record how fast results of this test should come back, and whether a second person checks them. TAT means turnaround time. CE stores these with the test. The lab plugin does not use them yet.
+
+1. Open the test row dots menu and select **Edit**.
+2. Type in **Expected TAT (hours)**, below the specimens, the hours from receipt to release that the lab aims for. The example uses `4`.
+3. Type in **Critical TAT (hours)** the hours after which the test is overdue, or leave it empty.
+4. Leave **Requires verification** on when a second person must check each result. Switch it off when it is not needed.
+5. Open the test sheet dots menu and select **Save**.
+
+**Expected result:** The test keeps the two times and the switch. Each time must be a number above 0. An empty time has no target. A lab that receives its catalog from central sees these values as text and cannot change them.
+
+## Fill a test from LOINC
+
+When LOINC is loaded, picking a LOINC code in the test sheet fills some of the test for you. It fills only fields that are still empty. It never changes a field you filled or a result parameter already ticked.
+
+1. Open the test sheet with **Add test** or **Edit**.
+2. Type part of the name or code in the LOINC field and pick the term.
+3. Read the line under **Category**. When LOINC's class matches a category here, it is chosen if the category was empty. Otherwise the line says `LOINC suggests Chemistry.` or that the class matches no category.
+4. Read the line under the specimens. When the list was empty and one specimen type matches exactly, it is ticked. Other matches are only suggested.
+5. Open the dots menu beside **Result parameters** and select **Use LOINC's result field**. For a panel code, select **Fill from panel** instead.
+6. Check each result parameter added, then open the test sheet dots menu and select **Save**.
+
+**Expected result:** **Use LOINC's result field** ticks one result field for the code. **Fill from panel** ticks one field for each test in the panel, in LOINC's order. A field already in the dictionary is reused, so running either one again adds nothing new. A new range on a number field starts with LOINC's unit. A coded field gets LOINC's answer list as its value set.
+
+Opening a saved test shows the LOINC lines but fills nothing. Only a code you pick in the sheet fills fields. A specimen type is ticked by itself only when it is mapped to its SNOMED code in [Terminology](/docs/terminology).
+
+## Add a result field from the test
+
+Use this when the test needs a result field that is not in the result dictionary yet. A lab that receives its dictionary from central cannot add fields.
+
+1. Open the test sheet with **Add test** or **Edit**.
+2. Open the dots menu beside **Result parameters** and select **Add field**.
+3. Type the field's name in **Name**. The example uses `Haemoglobin A1c`.
+4. Leave **Code** empty to make one from the name, such as `HAEMOGLOBIN_A1C`, or type your own code.
+5. Choose the **Type**. For a number, pick its **Unit** from UCUM. For a coded field, choose its **Value set**.
+6. Open the **Add result field** dots menu and select **Save**.
+7. Open the test sheet dots menu and select **Save**.
+
+**Expected result:** The new field is ticked on the test with the type you chose, and it appears in **Result fields**. A code that is already in the dictionary is refused. Give another code, or tick the field that is there.
 
 ## Link a received test code to the catalog
 
@@ -506,6 +555,17 @@ pnpm openldr ingest data/example-lab-data.json
 
 For an installed Linux or macOS copy, use `./openldr` instead of `pnpm openldr`. On Windows, use `.\openldr.ps1` from your installation folder, such as `C:\openldr_ce`. Replace the example folder with your real folder. Start here shows the full platform steps.
 
+## Before using LOINC hints
+
+LOINC hints, **Use LOINC's result field** and **Fill from panel** need LOINC loaded on this install, with its ontology built. Without them, the test sheet shows no LOINC lines and no LOINC menu items. **Add field** still works. An administrator loads LOINC from the CLI, from a folder that holds the unzipped LOINC release:
+
+```shell
+./openldr terminology import loinc data/loinc --accept-license
+./openldr terminology ontology build cs-url-LOINC data/loinc
+```
+
+On Windows, use `.\openldr.ps1` instead of `./openldr`. An install that loaded LOINC before LOINC hints were added must import LOINC again. Until then, LOINC suggests no unit. The website's CLI page lists the commands for LOINC hints and result fields.
+
 ## Before changing shared catalog data
 
 A catalog received from central has read-only shared definitions. Local availability, local specimen choices and local names remain this lab's settings.
@@ -527,6 +587,12 @@ Retiring a test hides it from the default active list. It can be restored. Catal
 **A code is still unmapped.** Check whether you selected Tests or Results. Mapping one level does not map the other.
 
 **Save refuses a critical limit.** The message names the field and band, for example `HGB range 1: the critical low limit must be at or below the low limit.` Correct the limit and save again.
+
+**No LOINC line appears under a field.** LOINC or its ontology is not loaded on this install. See [Before using LOINC hints](#before-using-loinc-hints).
+
+**LOINC suggests no unit.** This install loaded LOINC before LOINC hints were added. Import LOINC again.
+
+**A range shows Not a UCUM unit.** The unit you kept is not in the UCUM list. It is saved as typed. Pick the same unit from the list if one exists.
 
 **The page reports a stale warehouse copy.** Open Observed actions and choose Rebuild warehouse copy. The page reports a failure if it cannot rebuild.
 

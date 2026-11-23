@@ -66,7 +66,7 @@ Continue no painel aberto. Pode configurar este laboratório e os campos de resu
 
 ### 1. Verificar o campo LOINC
 
-Introduza um código LOINC confirmado se o tiver, ou deixe vazio. Quando LOINC estiver carregado, pesquise e selecione um termo. Aqui não está carregado, pelo que apenas verifica o formato dos códigos introduzidos.
+Introduza um código LOINC confirmado se o tiver, ou deixe vazio. Quando LOINC estiver carregado, pesquise e selecione um termo. Aqui não está carregado, pelo que apenas verifica o formato dos códigos introduzidos. Quando LOINC está carregado, escolher um código também preenche alguns campos vazios. [Preencher um exame a partir do LOINC](#preencher-um-exame-a-partir-do-loinc) explica o que preenche.
 
 ![LOINC é opcional. Sem o dicionário, a instalação verifica apenas o formato dos códigos introduzidos.](test-catalog-guide-loinc.png)
 
@@ -167,6 +167,8 @@ Limpe a pesquisa se já não precisar dela. Abra os pontos de Tests e selecione 
 ![Export CSV descarrega testes ativos do catálogo num formato importável.](test-catalog-guide-export.png)
 
 **Resultado esperado:** o navegador descarrega um CSV com as colunas aceites pelo assistente. A exportação contém testes ativos do catálogo, não apenas uma linha visível.
+
+O ficheiro tem três colunas para o tempo de resposta e a verificação: `expected_tat_hours`, `critical_tat_hours` e `requires_verification`. A verificação escreve-se `yes` ou `no`. No assistente de importação, estas colunas são **Tempo de resposta esperado (horas)**, **Tempo de resposta crítico (horas)** e **Requer verificação (yes/no)**. Uma importação lê yes, no, true ou false. Uma célula de tempo que não seja um número faz recusar a sua linha.
 
 ## Escolher e associar o ficheiro de testes
 
@@ -302,13 +304,19 @@ Introduza os limites inferior e superior do teste real. Limites vazios ficam abe
 
 ### 3. Introduzir a unidade
 
-Defina a unidade usada pelo intervalo. Use o mesmo significado e escala do resultado real.
+Defina a unidade usada pelo intervalo. Use o mesmo significado e escala do resultado real. Um novo intervalo começa com a unidade do campo de resultado.
+
+Escreva parte da unidade, por exemplo `mmol`, e escolha-a na lista UCUM. UCUM é a lista padrão de unidades. Se a sua unidade não estiver na lista, selecione **Usar "mmol/litre"** (a linha mostra o que escreveu) para a manter. O intervalo mostra então **Não é uma unidade UCUM**. A unidade fica guardada na mesma. Uma unidade guardada antes abre como estava e não é verificada de novo.
 
 ![Defina a unidade deste intervalo de referência.](test-catalog-guide-range-unit.png)
 
 ### 4. Verificar restrições de sexo e idade
 
 Defina os limites de sexo ou idade aplicáveis. Um intervalo sem restrições não deve tê-los.
+
+Preencha **Idade de** e **Idade até**, depois escolha **Idade em**: **Dias**, **Meses** ou **Anos**. Um intervalo sem unidade escolhida conta em anos. As duas idades estão dentro do intervalo. Um intervalo de 0 a 28 dias serve a um bebé no dia 28, não no dia 29. Um bebé nascido hoje tem 0 dias. A idade conta da data de nascimento até à data de hoje neste laboratório. Essa data vem de **Fuso horário** em [Laboratório](/docs/laboratory). Sem fuso horário, a data é em UTC.
+
+Um intervalo sem nome mostra uma etiqueta feita dos seus limites. **Idade até** `28` em dias sozinha dá `até 28 dias`. **Idade de** `18` em anos sozinha dá `18 anos ou mais`.
 
 ![Os limites de sexo e idade restringem a aplicação do intervalo. Deixe abertos apenas num intervalo sem restrições.](test-catalog-guide-range-context.png)
 
@@ -323,6 +331,47 @@ Abra os pontos do painel do teste e selecione **Save**.
 ![Save guarda os campos de resultado e os intervalos selecionados.](test-catalog-guide-parameter-save.png)
 
 **Resultado esperado:** os campos, os tipos de resultado e os intervalos selecionados ficam guardados com o teste.
+
+## Definir o tempo de resposta e a verificação
+
+Registe em quanto tempo os resultados deste exame devem voltar, e se uma segunda pessoa os verifica. O CE guarda-os com o exame. O plugin de laboratório ainda não os usa.
+
+1. Abra os pontos da linha e selecione **Editar**.
+2. Escreva em **Tempo de resposta esperado (horas)**, abaixo das amostras, as horas da receção à libertação que o laboratório pretende. O exemplo usa `4`.
+3. Escreva em **Tempo de resposta crítico (horas)** as horas após as quais o exame está atrasado, ou deixe vazio.
+4. Deixe **Requer verificação** ligado quando uma segunda pessoa tem de verificar cada resultado. Desligue-o quando não for preciso.
+5. Abra os pontos do painel do exame e selecione **Guardar**.
+
+**Resultado esperado:** o exame guarda os dois tempos e o interruptor. Cada tempo tem de ser um número acima de 0. Um tempo vazio não tem meta. Um laboratório que recebe o catálogo do central vê estes valores como texto e não os pode alterar.
+
+## Preencher um exame a partir do LOINC
+
+Quando LOINC está carregado, escolher um código LOINC no painel do exame preenche parte do exame. Preenche apenas os campos ainda vazios. Nunca altera um campo que preencheu nem um parâmetro de resultado já marcado.
+
+1. Abra o painel do exame com **Adicionar exame** ou **Editar**.
+2. Escreva parte do nome ou do código em **Código LOINC** e escolha o termo.
+3. Leia a linha abaixo de **Categoria**. Quando a classe LOINC corresponde a uma categoria aqui, é escolhida se a categoria estava vazia. Caso contrário, a linha diz `O LOINC sugere Chemistry.` ou que a classe não corresponde a nenhuma categoria.
+4. Leia a linha abaixo das amostras. Quando a lista estava vazia e um só tipo de amostra corresponde exatamente, fica marcado. As outras correspondências são apenas sugeridas.
+5. Abra os pontos ao lado de **Parâmetros de resultado** e selecione **Usar o campo de resultado do LOINC**. Para um código de painel, selecione **Preencher a partir do painel**.
+6. Verifique cada parâmetro adicionado, depois abra os pontos do painel do exame e selecione **Guardar**.
+
+**Resultado esperado:** **Usar o campo de resultado do LOINC** marca um campo de resultado para o código. **Preencher a partir do painel** marca um campo para cada exame do painel, pela ordem do LOINC. Um campo que já está no dicionário é reutilizado, por isso repetir qualquer um deles não adiciona nada de novo. Um novo intervalo num campo numérico começa com a unidade do LOINC. Um campo codificado recebe a lista de respostas do LOINC como conjunto de valores.
+
+Abrir um exame guardado mostra as linhas LOINC mas não preenche nada. Só um código escolhido no painel preenche campos. Um tipo de amostra só fica marcado sozinho quando está associado ao seu código SNOMED em [Terminologia](/docs/terminology).
+
+## Adicionar um campo de resultado a partir do exame
+
+Use isto quando o exame precisa de um campo de resultado que ainda não está no dicionário de resultados. Um laboratório que recebe o dicionário do central não pode adicionar campos.
+
+1. Abra o painel do exame com **Adicionar exame** ou **Editar**.
+2. Abra os pontos ao lado de **Parâmetros de resultado** e selecione **Adicionar campo**.
+3. Escreva o nome do campo em **Nome**. O exemplo usa `Haemoglobin A1c`.
+4. Deixe **Código** vazio para criar um a partir do nome, por exemplo `HAEMOGLOBIN_A1C`, ou escreva o seu próprio código.
+5. Escolha o **Tipo**. Para um número, escolha a **Unidade** no UCUM. Para um campo codificado, escolha o **Conjunto de valores**.
+6. Abra os pontos de **Adicionar campo de resultado** e selecione **Guardar**.
+7. Abra os pontos do painel do exame e selecione **Guardar**.
+
+**Resultado esperado:** o novo campo fica marcado no exame com o tipo escolhido e aparece em **Campos de resultado**. Um código que já está no dicionário é recusado. Dê outro código, ou marque o campo que já existe.
 
 ## Ligar um código de teste recebido ao catálogo
 
@@ -506,6 +555,17 @@ pnpm openldr ingest data/example-lab-data.json
 
 Numa instalação Linux ou macOS, use `./openldr` em vez de `pnpm openldr`. No Windows, use `.\openldr.ps1` na pasta da instalação, como `C:\openldr_ce`. Substitua a pasta de exemplo pela real. Começar aqui mostra os passos de cada plataforma.
 
+## Antes de usar as sugestões LOINC
+
+As sugestões LOINC, **Usar o campo de resultado do LOINC** e **Preencher a partir do painel** precisam do LOINC carregado nesta instalação, com a sua ontologia construída. Sem eles, o painel do exame não mostra linhas LOINC nem ações LOINC. **Adicionar campo** continua a funcionar. Um administrador carrega o LOINC a partir do CLI, de uma pasta com a versão LOINC descompactada:
+
+```shell
+./openldr terminology import loinc data/loinc --accept-license
+./openldr terminology ontology build cs-url-LOINC data/loinc
+```
+
+No Windows, use `.\openldr.ps1` em vez de `./openldr`. Uma instalação que carregou o LOINC antes de existirem as sugestões LOINC tem de importar o LOINC de novo. Até lá, o LOINC não sugere nenhuma unidade. A página CLI do site lista os comandos das sugestões LOINC e dos campos de resultado.
+
 ## Antes de alterar dados partilhados do catálogo
 
 Um catálogo recebido do central tem definições partilhadas de leitura. A disponibilidade, as escolhas de amostras e os nomes locais continuam a ser definições deste laboratório.
@@ -527,6 +587,12 @@ Retirar um teste oculta-o da lista ativa predefinida. Pode ser restaurado. Os te
 **Um código continua sem associação.** Verifique se selecionou Tests ou Results. Associar um nível não associa o outro.
 
 **Guardar recusa um limite crítico.** A mensagem, em inglês, indica o campo e o intervalo, por exemplo `HGB range 1: the critical low limit must be at or below the low limit.` Corrija o limite e guarde de novo.
+
+**Não aparece nenhuma linha LOINC abaixo de um campo.** O LOINC ou a sua ontologia não está carregado nesta instalação. Veja [Antes de usar as sugestões LOINC](#antes-de-usar-as-sugestoes-loinc).
+
+**O LOINC não sugere nenhuma unidade.** Esta instalação carregou o LOINC antes de existirem as sugestões LOINC. Importe o LOINC de novo.
+
+**Um intervalo mostra Não é uma unidade UCUM.** A unidade que manteve não está na lista UCUM. Fica guardada como foi escrita. Escolha a mesma unidade na lista, se existir.
 
 **A página indica uma cópia do armazém desatualizada.** Abra as ações de Observed e escolha Rebuild warehouse copy. A página indica falha se não conseguir reconstruir.
 

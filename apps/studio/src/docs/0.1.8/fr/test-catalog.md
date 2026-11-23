@@ -66,7 +66,7 @@ Continuez dans le panneau ouvert. Vous pourrez configurer ce laboratoire et les 
 
 ### 1. Vérifier le champ LOINC
 
-Saisissez un code LOINC confirmé si vous en avez un, sinon laissez vide. Lorsque LOINC est chargé, recherchez et sélectionnez un terme. Ici il n'est pas chargé, donc seul le format des codes saisis est vérifié.
+Saisissez un code LOINC confirmé si vous en avez un, sinon laissez vide. Lorsque LOINC est chargé, recherchez et sélectionnez un terme. Ici il n'est pas chargé, donc seul le format des codes saisis est vérifié. Lorsque LOINC est chargé, choisir un code remplit aussi certains champs vides. [Remplir un examen depuis LOINC](#remplir-un-examen-depuis-loinc) explique ce qu'il remplit.
 
 ![LOINC est facultatif. Sans dictionnaire, l'installation vérifie uniquement le format des codes saisis.](test-catalog-guide-loinc.png)
 
@@ -167,6 +167,8 @@ Effacez la recherche si elle est inutile. Ouvrez les points de Tests et sélecti
 ![Export CSV télécharge les tests actifs dans un format importable.](test-catalog-guide-export.png)
 
 **Résultat attendu :** le navigateur télécharge un CSV avec les colonnes comprises par l'assistant d'importation. L'export contient les tests actifs du catalogue, pas seulement une ligne visible.
+
+Le fichier a trois colonnes pour le délai et la vérification : `expected_tat_hours`, `critical_tat_hours` et `requires_verification`. La vérification s'écrit `yes` ou `no`. Dans l'assistant d'importation, ces colonnes sont **Délai attendu (heures)**, **Délai critique (heures)** et **Vérification requise (yes/no)**. Une importation lit yes, no, true ou false. Une cellule de délai qui n'est pas un nombre fait refuser sa ligne.
 
 ## Choisir le fichier de tests et associer ses colonnes
 
@@ -302,13 +304,19 @@ Saisissez les bornes inférieure et supérieure de votre vrai test. Une borne vi
 
 ### 3. Saisir l'unité
 
-Définissez l'unité de l'intervalle. Utilisez le même sens et la même échelle que le résultat réel.
+Définissez l'unité de l'intervalle. Utilisez le même sens et la même échelle que le résultat réel. Un nouvel intervalle commence avec l'unité du champ de résultat.
+
+Saisissez une partie de l'unité, par exemple `mmol`, et choisissez-la dans la liste UCUM. UCUM est la liste standard des unités. Si votre unité n'est pas dans la liste, sélectionnez **Utiliser « mmol/litre »** (la ligne reprend ce que vous avez saisi) pour la garder. L'intervalle affiche alors **Pas une unité UCUM**. L'unité est quand même enregistrée. Une unité enregistrée avant s'ouvre telle quelle et n'est pas vérifiée de nouveau.
 
 ![Définissez l'unité de cet intervalle de référence.](test-catalog-guide-range-unit.png)
 
 ### 4. Vérifier les restrictions de sexe et d'âge
 
 Définissez les limites de sexe ou d'âge applicables. Un intervalle sans restriction ne doit pas en avoir.
+
+Remplissez **Âge de** et **Âge à**, puis choisissez **Âge en** : **Jours**, **Mois** ou **Années**. Un intervalle sans unité choisie compte en années. Les deux âges sont dans l'intervalle. Un intervalle de 0 à 28 jours convient à un bébé au jour 28, pas au jour 29. Un bébé né aujourd'hui a 0 jour. L'âge compte de la date de naissance à la date du jour dans ce laboratoire. Cette date vient de **Fuseau horaire** dans [Laboratoire](/docs/laboratory). Sans fuseau horaire, la date est en UTC.
+
+Un intervalle sans nom affiche une étiquette faite de ses limites. **Âge à** `28` en jours seul donne `jusqu'à 28 jours`. **Âge de** `18` en années seul donne `18 ans et plus`.
 
 ![Les limites de sexe et d'âge restreignent l'application de cet intervalle. Laissez-les ouvertes seulement pour un intervalle sans restriction.](test-catalog-guide-range-context.png)
 
@@ -323,6 +331,47 @@ Ouvrez les points du panneau de test et sélectionnez **Save**.
 ![Save enregistre les champs de résultat et les intervalles sélectionnés.](test-catalog-guide-parameter-save.png)
 
 **Résultat attendu :** les champs, types de résultat et intervalles de référence sélectionnés sont enregistrés avec le test.
+
+## Définir le délai de rendu et la vérification
+
+Indiquez en combien de temps les résultats de cet examen doivent revenir, et si une seconde personne les vérifie. CE les enregistre avec l'examen. Le plugin de laboratoire ne les utilise pas encore.
+
+1. Ouvrez les points de la ligne et sélectionnez **Modifier**.
+2. Saisissez dans **Délai attendu (heures)**, sous les prélèvements, les heures visées entre la réception et la validation. L'exemple utilise `4`.
+3. Saisissez dans **Délai critique (heures)** les heures après lesquelles l'examen est en retard, ou laissez vide.
+4. Laissez **Vérification requise** activé quand une seconde personne doit vérifier chaque résultat. Désactivez-le si ce n'est pas nécessaire.
+5. Ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** l'examen garde les deux délais et l'interrupteur. Chaque délai doit être un nombre supérieur à 0. Un délai vide n'a pas de cible. Un laboratoire qui reçoit son catalogue du central voit ces valeurs en texte et ne peut pas les modifier.
+
+## Remplir un examen depuis LOINC
+
+Lorsque LOINC est chargé, choisir un code LOINC dans le panneau de l'examen remplit une partie de l'examen. Il remplit seulement les champs encore vides. Il ne change jamais un champ que vous avez rempli ni un paramètre de résultat déjà coché.
+
+1. Ouvrez le panneau de l'examen avec **Ajouter un examen** ou **Modifier**.
+2. Saisissez une partie du nom ou du code dans **Code LOINC** et choisissez le terme.
+3. Lisez la ligne sous **Catégorie**. Si la classe LOINC correspond à une catégorie ici, elle est choisie quand la catégorie était vide. Sinon la ligne indique `LOINC suggère Chemistry.` ou que la classe ne correspond à aucune catégorie.
+4. Lisez la ligne sous les prélèvements. Si la liste était vide et qu'un seul type de prélèvement correspond exactement, il est coché. Les autres correspondances sont seulement suggérées.
+5. Ouvrez les points à côté de **Paramètres de résultat** et sélectionnez **Utiliser le champ de résultat de LOINC**. Pour un code de panel, sélectionnez plutôt **Remplir depuis le panel**.
+6. Vérifiez chaque paramètre ajouté, puis ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** **Utiliser le champ de résultat de LOINC** coche un champ de résultat pour le code. **Remplir depuis le panel** coche un champ pour chaque examen du panel, dans l'ordre de LOINC. Un champ déjà dans le dictionnaire est réutilisé, donc relancer l'un ou l'autre n'ajoute rien de nouveau. Un nouvel intervalle sur un champ numérique commence avec l'unité de LOINC. Un champ codé reçoit la liste de réponses de LOINC comme jeu de valeurs.
+
+Ouvrir un examen enregistré affiche les lignes LOINC mais ne remplit rien. Seul un code choisi dans le panneau remplit des champs. Un type de prélèvement n'est coché tout seul que s'il est associé à son code SNOMED dans [Terminologie](/docs/terminology).
+
+## Ajouter un champ de résultat depuis l'examen
+
+Faites-le quand l'examen a besoin d'un champ de résultat qui n'est pas encore dans le dictionnaire des résultats. Un laboratoire qui reçoit son dictionnaire du central ne peut pas ajouter de champ.
+
+1. Ouvrez le panneau de l'examen avec **Ajouter un examen** ou **Modifier**.
+2. Ouvrez les points à côté de **Paramètres de résultat** et sélectionnez **Ajouter un champ**.
+3. Saisissez le nom du champ dans **Nom**. L'exemple utilise `Haemoglobin A1c`.
+4. Laissez **Code** vide pour en créer un à partir du nom, par exemple `HAEMOGLOBIN_A1C`, ou saisissez votre propre code.
+5. Choisissez le **Type**. Pour un nombre, choisissez son **Unité** dans UCUM. Pour un champ codé, choisissez son **Jeu de valeurs**.
+6. Ouvrez les points de **Ajouter un champ de résultat** et sélectionnez **Enregistrer**.
+7. Ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** le nouveau champ est coché sur l'examen avec le type choisi, et il apparaît dans **Champs de résultat**. Un code déjà présent dans le dictionnaire est refusé. Donnez un autre code, ou cochez le champ existant.
 
 ## Relier un code de test reçu au catalogue
 
@@ -506,6 +555,17 @@ pnpm openldr ingest data/example-lab-data.json
 
 Pour une installation Linux ou macOS, utilisez `./openldr` plutôt que `pnpm openldr`. Sous Windows, utilisez `.\openldr.ps1` depuis le dossier d'installation, comme `C:\openldr_ce`. Remplacez l'exemple par votre vrai dossier. Commencer ici détaille chaque plateforme.
 
+## Avant d'utiliser les suggestions LOINC
+
+Les suggestions LOINC, **Utiliser le champ de résultat de LOINC** et **Remplir depuis le panel** exigent LOINC chargé sur cette installation, avec son ontologie construite. Sans eux, le panneau de l'examen n'affiche aucune ligne LOINC ni aucune action LOINC. **Ajouter un champ** fonctionne toujours. Un administrateur charge LOINC depuis le CLI, à partir d'un dossier qui contient la version LOINC décompressée :
+
+```shell
+./openldr terminology import loinc data/loinc --accept-license
+./openldr terminology ontology build cs-url-LOINC data/loinc
+```
+
+Sous Windows, utilisez `.\openldr.ps1` au lieu de `./openldr`. Une installation qui a chargé LOINC avant l'ajout des suggestions LOINC doit importer LOINC de nouveau. Sinon, LOINC ne suggère aucune unité. La page CLI du site web liste les commandes des suggestions LOINC et des champs de résultat.
+
 ## Avant de modifier les données partagées du catalogue
 
 Un catalogue reçu du central a des définitions partagées en lecture seule. La disponibilité, les choix de prélèvements et les noms locaux restent les réglages de ce laboratoire.
@@ -527,6 +587,12 @@ Retirer un test le masque de la liste active par défaut. Il peut être restaur�
 **Un code reste sans association.** Vérifiez si vous avez choisi Tests ou Results. Associer un niveau n'associe pas l'autre.
 
 **L'enregistrement refuse un seuil critique.** Le message, en anglais, nomme le champ et l'intervalle, par exemple `HGB range 1: the critical low limit must be at or below the low limit.` Corrigez le seuil et enregistrez de nouveau.
+
+**Aucune ligne LOINC n'apparaît sous un champ.** LOINC ou son ontologie n'est pas chargé sur cette installation. Voir [Avant d'utiliser les suggestions LOINC](#avant-d-utiliser-les-suggestions-loinc).
+
+**LOINC ne suggère aucune unité.** Cette installation a chargé LOINC avant l'ajout des suggestions LOINC. Importez LOINC de nouveau.
+
+**Un intervalle affiche Pas une unité UCUM.** L'unité gardée n'est pas dans la liste UCUM. Elle est enregistrée telle que saisie. Choisissez la même unité dans la liste si elle existe.
 
 **La page signale une copie d'entrepôt périmée.** Ouvrez les actions de Observed et choisissez Rebuild warehouse copy. La page signale un échec si la reconstruction est impossible.
 
