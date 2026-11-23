@@ -1079,6 +1079,7 @@ export const pt: EnShape = {
       pluginPermissionUsed: '{{label}} ({{key}}): {{description}} Necessária para executar: {{actions}}.',
       pluginPermissionUnused: '{{label}} ({{key}}): {{description}}',
       pluginActionNeeds: 'A ação {{action}} precisa de: {{list}}.',
+      pluginActionAlsoRunBy: 'A ação {{action}} também pode ser executada por quem tiver: {{list}}.',
       pluginActionOr: ' ou ',
       approveInstall: 'Aprovar e instalar',
       cancel: 'Cancelar',

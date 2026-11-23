@@ -72,7 +72,7 @@ describe('pluginPermissionLines', () => {
   };
 
   it('lists each declared permission with the actions that need it', () => {
-    expect(pluginPermissionLines(payload, 'en', i18n.getFixedT('en'))).toEqual([
+    expect(pluginPermissionLines(payload, 'en', i18n.getFixedT('en')).slice(0, 2)).toEqual([
       'Review isolates (whonet.review): See and correct held isolates. Needed to run: review, correct.',
       'Export (whonet.export): Download the WHONET file.',
     ]);
@@ -95,8 +95,17 @@ describe('pluginPermissionLines', () => {
       'Action publish needs: Edit forms or View reports.',
       'Action sync needs: some.unknown.',
     ]);
-    // An action that also lists a declared permission is already named on that permission's line.
-    expect(pluginPermissionLines(payload, 'en', i18n.getFixedT('en'))).toHaveLength(2);
+  });
+  it('names a CE capability on an action that also lists a plugin key', () => {
+    // correct: ['whonet.review', 'forms.edit'] means anyone with Edit forms can run correct.
+    const lines = pluginPermissionLines(payload, 'en', i18n.getFixedT('en'));
+    expect(lines).toHaveLength(3);
+    expect(lines[2]).toBe('Action correct can also be run by anyone with: Edit forms.');
+    for (const lng of ['fr', 'pt']) {
+      const l = pluginPermissionLines(payload, lng, i18n.getFixedT(lng))[2];
+      expect(l, lng).toContain('correct');
+      expect(l, lng).not.toMatch(/settings\.|roles\.|\{\{|forms\.edit|anyone/);
+    }
   });
   it('the CE-only action line exists in fr and pt', () => {
     const p = { kind: 'plugin', actionPermissions: { publish: ['forms.edit'] } };

@@ -1083,6 +1083,7 @@ export const en = {
       pluginPermissionUsed: '{{label}} ({{key}}): {{description}} Needed to run: {{actions}}.',
       pluginPermissionUnused: '{{label}} ({{key}}): {{description}}',
       pluginActionNeeds: 'Action {{action}} needs: {{list}}.',
+      pluginActionAlsoRunBy: 'Action {{action}} can also be run by anyone with: {{list}}.',
       pluginActionOr: ' or ',
       approveInstall: 'Approve & install',
       cancel: 'Cancel',

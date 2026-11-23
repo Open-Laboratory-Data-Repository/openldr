@@ -123,8 +123,9 @@ interface DeclaredPermission {
 
 /** Lines for the install consent. First one line per permission a plugin declares: its label and
  *  description in the page language (English when the plugin gave none), its key, and the actions
- *  that need it. Then one line per action that needs only CE capabilities, named by the role
- *  editor's translated label, or by the key when there is none.
+ *  that need it. Then one line per action whose list has any CE capability, naming those
+ *  capabilities by the role editor's translated label (or by the key when there is none). When the
+ *  list also has one of the plugin's own keys, the line says holders of the CE capability can run it too.
  *  Reads `payload.permissions` and `payload.actionPermissions` from the signed manifest. A payload
  *  without them gives no lines. */
 export function pluginPermissionLines(
@@ -146,15 +147,18 @@ export function pluginPermissionLines(
       ? t('settings.marketplace.pluginPermissionUsed', opts)
       : t('settings.marketplace.pluginPermissionUnused', opts);
   });
-  const ceOnly: string[] = [];
+  const ceLines: string[] = [];
   for (const [action, list] of Object.entries(actions)) {
     if (!Array.isArray(list) || list.length === 0) continue;
     const keys = list.filter((k): k is string => typeof k === 'string');
-    if (keys.some((k) => declared.has(k))) continue;
-    const names = keys.map((k) => t(`roles.capability.${k}.label`, { defaultValue: k }));
-    ceOnly.push(t('settings.marketplace.pluginActionNeeds', {
+    const ce = keys.filter((k) => !declared.has(k));
+    if (ce.length === 0) continue;
+    const names = ce.map((k) => t(`roles.capability.${k}.label`, { defaultValue: k }));
+    // An action that also lists one of the plugin's own keys: holders of the CE capability can run it too.
+    const msg = ce.length === keys.length ? 'pluginActionNeeds' : 'pluginActionAlsoRunBy';
+    ceLines.push(t(`settings.marketplace.${msg}`, {
       action, list: names.join(t('settings.marketplace.pluginActionOr')), interpolation: { escapeValue: false },
     }));
   }
-  return [...own, ...ceOnly];
+  return [...own, ...ceLines];
 }

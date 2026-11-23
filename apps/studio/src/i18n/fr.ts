@@ -1079,6 +1079,7 @@ export const fr: EnShape = {
       pluginPermissionUsed: '{{label}} ({{key}}) : {{description}} Nécessaire pour exécuter : {{actions}}.',
       pluginPermissionUnused: '{{label}} ({{key}}) : {{description}}',
       pluginActionNeeds: 'L\'action {{action}} nécessite : {{list}}.',
+      pluginActionAlsoRunBy: 'L\'action {{action}} peut aussi être exécutée par toute personne ayant : {{list}}.',
       pluginActionOr: ' ou ',
       approveInstall: 'Approuver et installer',
       cancel: 'Annuler',
