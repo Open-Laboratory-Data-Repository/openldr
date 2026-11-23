@@ -79,7 +79,8 @@ describe('LinkMatchingSheet', () => {
 
     await waitFor(() => expect(linkMatchingFacilityCodes).toHaveBeenLastCalledWith({ registerUrl: OTHER }));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('dry run failed'));
-    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    expect(await screen.findByText('Could not load the codes for this register. Choose another register, or close and reopen this sheet to try again.')).toBeInTheDocument();
+    expect(screen.queryByText(/reload the page/i)).not.toBeInTheDocument();
     expect(screen.queryByText('dry run failed')).not.toBeInTheDocument();
     expect(screen.queryByText(/no codes would be linked/i)).not.toBeInTheDocument();
     expect(screen.queryByText('MICAN')).not.toBeInTheDocument();

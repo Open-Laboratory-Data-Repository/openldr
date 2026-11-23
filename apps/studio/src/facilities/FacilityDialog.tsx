@@ -92,9 +92,10 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   const [initialAnswers, setInitialAnswers] = useState<RuntimeAnswers>({});
 
   const [saving, setSaving] = useState(false);
-  // More than one published facility form. Kept in the sheet, in place of the form: the operator
-  // must archive one in the Form Builder, and a toast would leave an empty sheet with no reason.
-  const [ambiguousForm, setAmbiguousForm] = useState<string | null>(null);
+  // Why the form cannot be shown: more than one facility form is published, the published one is
+  // invalid, or it could not load. Kept in the sheet in the form's place, so the sheet is never
+  // blank or wrong once a toast closes.
+  const [formProblem, setFormProblem] = useState<string | null>(null);
 
   // The ⋯ "Save" menu item lives outside the FormRuntime-rendered <form> (it's in a toolbar row
   // under the SheetHeader, not a footer). Save proxies a click to this hidden submit button so the
@@ -192,7 +193,7 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   // Load the published 'facilities' form schema whenever the dialog opens.
   useEffect(() => {
     if (!open) return;
-    setAmbiguousForm(null);
+    setFormProblem(null);
     setSaving(false);
     setSchema(null);
     setFormDefId(null);
@@ -219,7 +220,7 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
         // rather than capture a facility through an arbitrary one. Sorted so the message reads the
         // same on every install regardless of that server-side order.
         if (summaries.length > 1) {
-          setAmbiguousForm(t('facilities.ambiguousForm', { names: summaries.map((s) => s.name).sort().join(', ') }));
+          setFormProblem(t('facilities.ambiguousForm', { names: summaries.map((s) => s.name).sort().join(', ') }));
           return;
         }
         const summary = summaries[0];
@@ -227,8 +228,11 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
         if (cancelled) return;
         const parsed = FormSchemaZ.safeParse(def.schema);
         if (!parsed.success) {
-          setNoForm(true);
-          toast.error(`Facility form schema is invalid: ${parsed.error.issues[0]?.message ?? 'unknown'}`);
+          // Not `noForm`: a form IS published, so "none exists yet" would send the operator to
+          // publish one. Name the real reason in the form's place, and toast it too.
+          const reason = parsed.error.issues[0]?.message ?? 'unknown';
+          setFormProblem(t('facilities.formSchemaInvalid', { reason }));
+          toast.error(`Facility form schema is invalid: ${reason}`);
           return;
         }
         const loaded = parsed.data as FormSchema;
@@ -242,7 +246,10 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
         else setInitialAnswers(defaultSystem ? { 'fld-fac-system': defaultSystem } : {});
       })
       .catch((e: unknown) => {
-        if (!cancelled) toast.error(e instanceof Error ? e.message : String(e));
+        if (cancelled) return;
+        // The toast says why; the line in the form's place stays after it closes.
+        setFormProblem(t('common.formLoadFailed'));
+        toast.error(e instanceof Error ? e.message : String(e));
       })
       // Guarded too: an abandoned load clearing this flag would report the CURRENT, still-pending
       // load as finished, leaving the dialog blank instead of loading.
@@ -363,8 +370,8 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
             </div>
           )}
 
-          {ambiguousForm ? (
-            <div className="px-6 py-8 text-center text-sm text-muted-foreground">{ambiguousForm}</div>
+          {formProblem ? (
+            <div className="px-6 py-8 text-center text-sm text-muted-foreground">{formProblem}</div>
           ) : null}
 
           {schemaLoading ? (

@@ -320,6 +320,8 @@ export const en = {
   // Only the value sets table is translated so far — the rest of the Terminology page is still
   // hardcoded English.
   terminology: {
+    loadFailed: 'Could not load terminology. Reload the page to try again.',
+    ontologyLoadFailed: 'Could not read the ontology distribution for this coding system. Close and reopen to try again.',
     csColSource: 'Source',
     csSource: { core: 'OpenLDR', ingest: 'Received data', import: 'Imported', pack: 'Content pack', register: 'Facility register', user: 'Created here' },
     vsSearchPlaceholder: 'Search value sets',
@@ -1779,6 +1781,8 @@ export const en = {
     noFormHelp: 'Facilities are entered through a published form targeting the Facilities page, and none exists yet — create one, or publish a draft, in the Form Builder.',
     openForms: 'Open Form Builder',
     ambiguousForm: 'More than one facility form is published ({{names}}). Facilities can only be captured through one — archive or deactivate the others in the Form Builder, then reopen this dialog.',
+    formSchemaInvalid: 'The published facility form cannot be used: {{reason}}. Fix it in the Form Builder, then reopen this sheet.',
+    staleRows: 'The latest change could not load. These rows are from before it.',
     editTitle: 'Edit facility',
     newTitle: 'New facility',
     editDesc: 'Update this facility’s details.',
@@ -1992,6 +1996,7 @@ export const en = {
       overrideNeedsReupload: 'This option changes how the file is read, so the check has to run again with it. Use the actions menu above. The file you already uploaded is reused, so nothing is sent twice, and the summary you review will be the one that gets applied.',
       overrideAppliedToRun: 'This validation already ran with that option on, so the summary below is what will be applied.',
       runLoading: 'Checking the import run…',
+      runPollFailed: 'Could not read the progress of this import run. It may still be running on the server. Close and reopen this sheet to check again.',
       // The worker's own phase string, verbatim — it is free text the worker chooses, not a token
       // this app can translate (see FacilityImportRunView.phase).
       runPhase: 'Phase: {{phase}}',
@@ -2210,6 +2215,7 @@ export const en = {
       linkMatchingApply_one: 'Link {{count}} code',
       linkMatchingApply_other: 'Link {{count}} codes',
       linkMatchingEmpty: 'No codes would be linked.',
+      linkMatchingLoadFailed: 'Could not load the codes for this register. Choose another register, or close and reopen this sheet to try again.',
       linkMatchingPickFirst: 'Choose a register to see which codes would be linked.',
       linkMatchingDone_one: 'Linked {{count}} code.',
       linkMatchingDone_other: 'Linked {{count}} codes.',

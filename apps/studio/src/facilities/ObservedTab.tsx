@@ -134,6 +134,9 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
   const [scanning, setScanning] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  // The last publish's counts. The unmapped, missing and conflicting totals are work still to do,
+  // so they stay in the page after the toast closes.
+  const [publishSummary, setPublishSummary] = useState<string | null>(null);
 
   const runScan = useCallback(async () => {
     setScanning(true);
@@ -160,7 +163,9 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
     setPublishing(true);
     try {
       const result = await publishFacilities({ apply: true });
-      toast.success(t('facilities.observed.publishDone', { ...result }));
+      const summary = t('facilities.observed.publishDone', { ...result });
+      setPublishSummary(summary);
+      toast.success(summary);
       setPage(0);
       await reload({ background: true });
     } catch (e) {
@@ -320,6 +325,10 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
         </div>
       ) : (
         actionsPortalTarget && createPortal(actionsMenu, actionsPortalTarget)
+      )}
+
+      {publishSummary && (
+        <p className="mx-4 mt-2 text-xs text-muted-foreground" data-testid="observed-publish-summary">{publishSummary}</p>
       )}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, FolderInput, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
+import { LoadFailed } from '../../components/ui/load-failed';
 import {
   buildOntology,
   getOntologyDistribution,
@@ -55,6 +57,7 @@ export function OntologyDistributionDialog({
   systemType,
   onReingestQueued,
 }: OntologyDistributionDialogProps): JSX.Element {
+  const { t } = useTranslation();
   const uploadManaged = !!systemType;
   const [dist, setDist] = useState<DistState>(null);
   const [loading, setLoading] = useState(false);
@@ -151,10 +154,14 @@ export function OntologyDistributionDialog({
         <DialogContent className="w-[560px] p-0">
           <div className="flex flex-col gap-1 border-b border-border px-6 py-0">
             <DialogTitle>Ontology distribution for {systemName}</DialogTitle>
-            {(status === 'none' || dist === null) && (
+            {/* After a failed read, "no distribution is linked" would be a guess. */}
+            {loadFailed && (
+              <DialogDescription className="sr-only">{t('terminology.ontologyLoadFailed')}</DialogDescription>
+            )}
+            {!loadFailed && (status === 'none' || dist === null) && (
               <DialogDescription>No ontology distribution is linked for this coding system.</DialogDescription>
             )}
-            {status !== 'none' && dist !== null && (
+            {!loadFailed && status !== 'none' && dist !== null && (
               <DialogDescription className="sr-only">Manage the linked ontology distribution.</DialogDescription>
             )}
           </div>
@@ -165,6 +172,9 @@ export function OntologyDistributionDialog({
             </div>
           ) : (
             <>
+            {loadFailed ? (
+              <LoadFailed className="min-h-[8rem]" message={t('terminology.ontologyLoadFailed')} />
+            ) : (
             <div className="flex flex-col gap-4 px-6 py-5">
               {/* Staleness is judged by whether the source files on disk changed. Upload-managed
                   systems have no persistent source (the extraction dir is deleted after ingest) and
@@ -256,12 +266,13 @@ export function OntologyDistributionDialog({
               )}
 
             </div>
+            )}
             <div className="flex items-center justify-between gap-2 border-t border-border px-6 py-3">
               <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => onOpenChange(false)}>
                 Close
               </Button>
               <div className="flex justify-end gap-2">
-                {(uploadManaged || canRebuild) && (
+                {!loadFailed && (uploadManaged || canRebuild) && (
                   <Button
                     variant="outline"
                     size="sm"

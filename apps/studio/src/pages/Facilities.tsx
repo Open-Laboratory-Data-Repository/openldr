@@ -988,8 +988,9 @@ export function Facilities() {
       void reloadHealth();
     } catch (e) {
       // Left OPEN on failure. A stale-count 409 means the selection moved under the operator, and
-      // closing the dialog would hide the question the toast explains.
-      actionFailed(e);
+      // closing the dialog would hide the question the toast explains. The toast stays until the
+      // operator closes it: the reason is a count they must read before choosing again.
+      toast.error(e instanceof Error ? e.message : String(e), { duration: Infinity });
     } finally {
       setBulkDeleting(false);
     }
@@ -1200,6 +1201,12 @@ export function Facilities() {
               nothing at all when no filter is set. */}
           <ActiveFilterChips columns={columns} filters={table.filters} onChange={applyFilters} />
         </div>
+
+        {/* A reload failed over rows already shown. They stay, but must not pass for the result of
+            the filter, search or page the operator just chose. Kept after the toast closes. */}
+        {error && rows.length > 0 && (
+          <p className="mx-4 mt-2 text-xs text-muted-foreground">{t('facilities.staleRows')}</p>
+        )}
 
         {/* Minor 4: a lab with rows already imported but no published form sees Add/Edit greyed
             out with no explanation anywhere else on the page — this names the cause and links to

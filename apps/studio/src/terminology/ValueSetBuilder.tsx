@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { LoadFailed, useLoadErrorToast } from '../components/ui/load-failed';
+import { LoadFailed } from '../components/ui/load-failed';
 import {
   saveValueSet,
   expandValueSet,
@@ -87,7 +87,15 @@ export function ValueSetBuilder({
   const [savedId, setSavedId] = useState<string | null>(valueSet?.id ?? null);
   // A failed expansion. The preview says it could not load rather than keep showing an old one.
   const [previewError, setPreviewError] = useState<string | null>(null);
-  useLoadErrorToast(previewError);
+  // One toast for one outage. The publisher list and the expansion load together when the editor
+  // opens, and both fail when the server is down. A load that works clears it, so a later failure
+  // toasts again.
+  const loadToastShown = useRef(false);
+  const loadFailedToast = useCallback((message: string) => {
+    if (loadToastShown.current) return;
+    loadToastShown.current = true;
+    toast.error(message);
+  }, []);
 
   const composeInput = useMemo<ValueSetInput>(() => ({
     url: url.trim(),
@@ -110,17 +118,19 @@ export function ValueSetBuilder({
       // codes instead, the ones forms and `openldr terminology expand` see.
       setPreview(stored.length > 0 || !url ? stored : await expandValueSetByUrl(url));
       setPreviewError(null);
+      loadToastShown.current = false;
     } catch (e) {
       setPreview([]);
       setPreviewError((e as Error).message);
+      loadFailedToast((e as Error).message);
     } finally {
       setPreviewBusy(false);
     }
-  }, []);
+  }, [loadFailedToast]);
 
   useEffect(() => {
-    void listPublishers().then(setPublishers).catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
-  }, []);
+    void listPublishers().then(setPublishers).catch((e: unknown) => { loadFailedToast(e instanceof Error ? e.message : String(e)); });
+  }, [loadFailedToast]);
 
   useEffect(() => {
     if (valueSet?.id) void refreshPreview(valueSet.id, valueSet.url);

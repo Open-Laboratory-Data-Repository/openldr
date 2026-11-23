@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';
+import '@/i18n';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { toast } from 'sonner';
 import { OntologyDistributionDialog } from './OntologyDistributionDialog';
@@ -99,5 +100,8 @@ describe('ontology dialogs', () => {
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('get distribution failed: 503'));
     expect(screen.queryByText(/No ontology index yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No ontology distribution is linked/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Could not read the ontology distribution for this coding system. Close and reopen to try again.').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /rebuild/i })).not.toBeInTheDocument();
   });
 });

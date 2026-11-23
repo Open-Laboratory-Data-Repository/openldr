@@ -69,7 +69,7 @@ describe('Terminology page', () => {
     vi.spyOn(api, 'listCodingSystems').mockRejectedValue(new Error('list coding systems failed: 503'));
     render(<MemoryRouter><Terminology /></MemoryRouter>);
 
-    await waitFor(() => expect(screen.getAllByText('Could not load this list. Reload the page to try again.').length).toBeGreaterThan(0));
+    expect(await screen.findByText('Could not load terminology. Reload the page to try again.')).toBeInTheDocument();
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(toast.error).toHaveBeenCalledWith('list coding systems failed: 503');
     expect(screen.queryByText('list coding systems failed: 503')).not.toBeInTheDocument();

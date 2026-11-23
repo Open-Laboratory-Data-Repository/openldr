@@ -611,7 +611,7 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('import facilities failed: Invalid Record Length: columns length is 3, got 2 on line 4'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('import facilities failed: Invalid Record Length: columns length is 3, got 2 on line 4', { duration: Infinity }));
     expect(screen.queryByText(/invalid record length/i)).not.toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
@@ -1399,7 +1399,7 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/larger than the upload limit/i)));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/larger than the upload limit/i), { duration: Infinity }));
     expect(toast.error).not.toHaveBeenCalledWith(expect.stringMatching(/67108864-byte/));
   });
 
@@ -1853,6 +1853,32 @@ describe('ImportFacilitiesSheet', () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('import run not found: run-b1'));
     expect(screen.queryByText(/import run not found: run-b1/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/checking the import run/i)).not.toBeInTheDocument();
+    // Kept after the toast closes: Review is never blank.
+    expect(screen.getByText(/could not read the progress of this import run/i)).toBeInTheDocument();
+  });
+
+  it('A2b: a poll that fails after a progress read hides the stale progress and says it could not read it', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+      mocked(api.getFacilityImportRun)
+        .mockResolvedValueOnce(runView({ status: 'validating' }))
+        .mockRejectedValue(new Error('gateway timeout'));
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      await uploadNow();
+      expect(await screen.findByText('Validating the uploaded file.')).toBeInTheDocument();
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(3100); });
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('gateway timeout'));
+      expect(screen.queryByText('Validating the uploaded file.')).not.toBeInTheDocument();
+      expect(screen.getByText(/could not read the progress of this import run/i)).toBeInTheDocument();
+      expect(screen.getByText(/may still be running on the server/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // ⛔ The status label is a DYNAMIC lookup (`runStatus.${status}`), so a missing or misspelled key

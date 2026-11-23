@@ -132,7 +132,7 @@ export function LinkMatchingSheet({ open, onOpenChange, onLinked, initialRegiste
           ) : loading ? (
             <LoadingState className="min-h-[16rem]" label={t('common.loading')} />
           ) : error ? (
-            <LoadFailed />
+            <LoadFailed message={t('facilities.observed.linkMatchingLoadFailed')} />
           ) : toLink.length === 0 ? (
             <StripedEmpty className="min-h-[16rem]">
               <span className="text-sm text-muted-foreground">{t('facilities.observed.linkMatchingEmpty')}</span>

@@ -405,6 +405,23 @@ describe('ObservedTab', () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('0 discovered, 0 created, 0 updated.'));
   });
 
+  it('keeps the publish counts in the page as a muted line after the toast', async () => {
+    (publishFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({
+      resolved: 5, unmapped: 3, targetMissing: 1, nonFacilityTarget: 0, ambiguous: 2, written: 5,
+    });
+    show();
+    await screen.findByText('Dodoma');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /reports/i })) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: /reports/i }));
+
+    const line = '5 resolved, 3 unmapped, 1 target missing, 0 non-facility target(s), 2 conflicting, 5 written.';
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(line));
+    expect(screen.getByTestId('observed-publish-summary')).toHaveTextContent(line);
+  });
+
   it('a failed scan shows a toast and keeps the list', async () => {
     (scanObservedFacilities as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('scan refused'));
     show();

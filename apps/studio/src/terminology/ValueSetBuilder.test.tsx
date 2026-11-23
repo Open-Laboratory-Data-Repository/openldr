@@ -111,4 +111,16 @@ describe('ValueSetBuilder errors', () => {
     expect(screen.getByPlaceholderText('urn:openldr:valueset:my-set')).toHaveValue('urn:openldr:vs:custom');
     expect(onSaved).not.toHaveBeenCalled();
   });
+
+  it('one outage gives one toast, when the publisher list and the expansion both fail', async () => {
+    vi.spyOn(api, 'listValueSets').mockResolvedValue([]);
+    vi.spyOn(api, 'listPublishers').mockRejectedValue(new Error('Failed to fetch'));
+    vi.spyOn(api, 'expandValueSet').mockRejectedValue(new Error('Failed to fetch'));
+    render(<ValueSetBuilder valueSet={saved} systems={[]} defaultPublisherId="pub-local" onSaved={() => {}} onCancel={() => {}} />);
+
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    await waitFor(() => expect(api.listPublishers).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
 });

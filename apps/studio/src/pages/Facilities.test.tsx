@@ -213,6 +213,21 @@ describe('Facilities page', () => {
     expect(screen.queryByText('No facilities yet.')).not.toBeInTheDocument();
   });
 
+  it('a failed page change keeps the old rows under a muted line saying they are from before', async () => {
+    listFacilitiesMock.mockResolvedValueOnce(makePage(makeRows(50), { total: 150 }))
+      .mockRejectedValue(new Error('list facilities failed: 503'));
+    window.history.replaceState({}, '', '/facilities');
+    show();
+    await screen.findByText('Facility 0');
+    expect(screen.queryByText('The latest change could not load. These rows are from before it.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('list facilities failed: 503'));
+    expect(screen.getByText('The latest change could not load. These rows are from before it.')).toBeInTheDocument();
+    expect(screen.getByText('Facility 0')).toBeInTheDocument();
+  });
+
   it.each(['create', 'edit'] as const)('reloads the bounded filtered page after %s instead of appending the saved facility', async (operation) => {
     const original = makeRows(50);
     const saved = { ...sampleFacility, id: operation === 'edit' ? 'f0' : 'off-page', name: 'Outside current filter' };
@@ -1683,7 +1698,7 @@ describe('Facilities page', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }));
 
       await waitFor(() => expect(toast.error)
-        .toHaveBeenCalledWith('this selection now matches 5 facilities, not the 2 that were reviewed'));
+        .toHaveBeenCalledWith('this selection now matches 5 facilities, not the 2 that were reviewed', { duration: Infinity }));
       expect(toast.success).not.toHaveBeenCalled();
       expect(screen.queryByText(/not the 2 that were reviewed/i)).not.toBeInTheDocument();
     });

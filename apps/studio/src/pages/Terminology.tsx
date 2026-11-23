@@ -635,7 +635,7 @@ export function Terminology(): JSX.Element {
             {loading ? (
               <LoadingState label="Loading terminology…" className="flex-1" />
             ) : loadError && !activeSection ? (
-              <LoadFailed />
+              <LoadFailed message={t('terminology.loadFailed')} />
             ) : !activeSection ? (
               /* No publisher selected */
               <StripedEmpty className="flex-1">

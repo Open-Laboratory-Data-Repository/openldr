@@ -909,7 +909,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         setChecksAsked((n) => n + 1);
       }
     } catch (err) {
-      toast.error(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
+      // Stays until closed. A refused upload (a 409 because a worker holds this register's run, a
+      // file the server cannot parse) carries a reason the operator must read before trying again.
+      toast.error(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)), { duration: Infinity });
     } finally {
       setUploading(false);
     }
@@ -1694,12 +1696,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           {step === 3 && runId && !run && !pollFailed && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">{t('facilities.import.runLoading')}</p>
           )}
+          {/* The poll gave up. Kept after the toast closes, so Review is never blank and never shows
+              the last progress it read as if it were current. */}
+          {step === 3 && runId && pollFailed && (
+            <p className="mx-6 mt-4 text-sm text-muted-foreground">{t('facilities.import.runPollFailed')}</p>
+          )}
           {step === 3 && run && run.status === 'interrupted' && (
             <div role="status" className="mx-6 mt-4 flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive">
               <p>{t('facilities.import.interruptedNotice')}</p><InterruptionBadge interruptions={run.interruptions} />
             </div>
           )}
-          {step === 3 && run && RUN_ACTIVE_STATUSES.includes(run.status) && (
+          {step === 3 && run && !pollFailed && RUN_ACTIVE_STATUSES.includes(run.status) && (
             <div className="mx-6 mt-4 rounded-md border border-border px-3 py-2 text-xs space-y-1">
               <div className="flex flex-wrap items-center gap-2"><p className="font-medium">{t(`facilities.import.runStatus.${run.status}`)}</p><InterruptionBadge interruptions={run.interruptions} /></div>
               {run.phase && <p className="text-muted-foreground">{t('facilities.import.runPhase', { phase: run.phase })}</p>}

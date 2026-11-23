@@ -330,6 +330,20 @@ describe('FacilityDialog', () => {
     render(<FacilityDialog open facility={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('get form failed: 503'));
     expect(screen.queryByText(/get form failed/i)).not.toBeInTheDocument();
+    // The sheet is not blank once the toast closes.
+    expect(screen.getByText('Could not load this form. Reload the page to try again.')).toBeInTheDocument();
+  });
+
+  it('an invalid published form names the real reason, not "no form is published"', async () => {
+    (api.getForm as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: FORM_DEFINITION_ID, name: 'Facility', versionLabel: null, fhirResourceType: null, status: 'published', active: true,
+      schema: { not: 'a form schema' }, targetPages: ['facilities'], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+    });
+    render(<FacilityDialog open facility={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+
+    expect(await screen.findByText(/The published facility form cannot be used:/)).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/^Facility form schema is invalid:/));
+    expect(screen.queryByText(/none exists yet/)).not.toBeInTheDocument();
   });
 
   // ── Task 5: admin-area suggestions (zone/region/district/council) ───────────────────────────
