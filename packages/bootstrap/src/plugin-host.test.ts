@@ -7,6 +7,7 @@ import type { HostPlugin } from '@openldr/plugins';
 import { createPluginHost, CE_READ_OPS, type PluginHostDeps } from './plugin-host';
 import { createPatientIndex } from './patient-index';
 import { pluginPatientRefs } from './plugin-patient-ref';
+import { bandFit, matchBand, SEX_OPTIONS, type ResultBand } from './result-params';
 import { capabilitiesUnderScope } from '@openldr/rbac';
 import { buildPatientIndexFixture, seedIdentifier, seedPatient } from './test-support/patient-index-fixture';
 
@@ -107,7 +108,7 @@ describe('plugin host: ce_read', () => {
   it('knows the first set of ops', () => {
     expect([...CE_READ_OPS]).toEqual([
       'patients.search', 'patients.get', 'patients.getMany', 'patients.register', 'valueset.expand', 'valueset.lookup',
-      'testCatalog.list', 'testCatalog.get', 'facilities.search', 'facilities.get', 'caller.get',
+      'testCatalog.list', 'testCatalog.get', 'testCatalog.resultParams', 'facilities.search', 'facilities.get', 'caller.get',
     ]);
   });
 
@@ -755,5 +756,171 @@ describe('plugin host: facilities.get', () => {
     const admin = createPluginHost(fakeDeps({ facilityRegistry: reg as any })).forCall(plugin([{ kind: 'host:ce-read' }]), EVERYONE);
     expect(await admin.ce_read({ op: 'facilities.get', input: { id: 'fac-9' } })).toEqual(notFound);
     expect((await admin.ce_read({ op: 'facilities.get', input: {} }) as any).error.code).toBe('INVALID_REQUEST');
+  });
+});
+
+describe('plugin host: testCatalog.resultParams', () => {
+  const T = (code: string) => ({ system: 'urn:openldr:cs:test-catalog', code });
+  const BANDS: ResultBand[] = [
+    { name: 'Adult men', low: 13, high: 17, unit: 'g/dL', sex: 'male', ageLow: 18, ageHigh: null },
+    { name: 'Adult women', low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null },
+  ];
+  /** resultParamsFor with the catalog's own band rules, so the bands answered are what CE picks. */
+  const resultParamsFor = vi.fn(async (tests: Array<{ system: string; code: string }>, patient: { sex?: string | null; ageYears?: number | null }) =>
+    tests.map((test) => ({
+      test,
+      params: [{
+        system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null, bands: BANDS,
+        unit: 'g/dL', display: 'HGB', band: matchBand(BANDS, patient), fits: BANDS.map((b) => bandFit(b, patient)),
+      }],
+    })));
+
+  async function fixture() {
+    const f = await buildPatientIndexFixture();
+    await seedPatient(f.externalDb, { id: 'p-1', surname: 'Mwanza', firstname: 'Ruth', dob: '1990-01-05', sex: 'F', org: 'Organization/fac-1' });
+    await seedPatient(f.externalDb, { id: 'p-2', surname: 'Mwale', firstname: 'John', dob: '1985-03-04', sex: 'M', org: 'Organization/fac-2' });
+    const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, engine: 'postgres', refKey: randomBytes(32) });
+    const fhir: Record<string, unknown> = {
+      'Patient/p-1': { resourceType: 'Patient', id: 'p-1', gender: 'female', birthDate: '1990-01-05' },
+      'Patient/p-2': { resourceType: 'Patient', id: 'p-2', gender: 'male', birthDate: '1985-03-04' },
+    };
+    resultParamsFor.mockClear();
+    const deps = fakeDeps({
+      patients: index,
+      testCatalog: { list: vi.fn(), get: vi.fn(), resultParamsFor } as any,
+      fhirGetWithProvenance: vi.fn(async (t: string, id: string) => (fhir[`${t}/${id}`] ? stored(fhir[`${t}/${id}`], 'ingest') : null)),
+    });
+    const host = createPluginHost(deps);
+    const call = (caller: PluginCaller, input: unknown) =>
+      host.forCall(plugin([{ kind: 'host:ce-read' }]), caller).ce_read({ op: 'testCatalog.resultParams', input }) as Promise<any>;
+    const refs = pluginPatientRefs(KEY, 'lab');
+    return { deps, call, ruth: refs.encode('p-1'), john: refs.encode('p-2') };
+  }
+
+  it('answers each test with the band that fits a known patient, its name and fits, and the sex labels', async () => {
+    const { call, ruth } = await fixture();
+    const out = await call(SITE, { tests: [T('FBC')], patientRef: ruth });
+    expect(out.ok).toBe(true);
+    expect(out.result.sexes).toEqual(SEX_OPTIONS);
+    expect(out.result.sexes.find((s: any) => s.code === 'female').labels).toEqual({ en: 'Female', fr: 'Femme', pt: 'Feminino' });
+    const param = out.result.tests[0].params[0];
+    expect(out.result.tests[0].test).toEqual(T('FBC'));
+    expect(param.band.name).toBe('Adult women');
+    expect(param.fits).toEqual(['no', 'yes']);
+    // CE read sex and whole years from the stored Patient (born 1990-01-05).
+    const key = resultParamsFor.mock.calls[0][1];
+    expect(key.sex).toBe('female');
+    expect(key.ageYears).toBeGreaterThanOrEqual(36);
+  });
+
+  it('does not return the patient sex, age, birth date or id', async () => {
+    const { call, ruth } = await fixture();
+    const out = await call(SITE, { tests: [T('FBC')], patientRef: ruth });
+    const text = JSON.stringify(out.result);
+    expect(text).not.toMatch(/1990|p-1|Mwanza|ageYears|birthDate|"gender"/);
+    expect(Object.keys(out.result).sort()).toEqual(['sexes', 'tests']);
+  });
+
+  it('answers not found for a patient outside the caller limit, a ref of another plugin, or a bad ref', async () => {
+    const { call, deps, john } = await fixture();
+    const notFound = { ok: false, error: { code: 'NOT_FOUND', message: 'patient not found' } };
+    expect(await call(SITE, { tests: [T('FBC')], patientRef: john })).toEqual(notFound);
+    expect(await call(SITE, { tests: [T('FBC')], patientRef: pluginPatientRefs(KEY, 'other').encode('p-1') })).toEqual(notFound);
+    expect(await call(SITE, { tests: [T('FBC')], patientRef: 'p1.nope' })).toEqual(notFound);
+    expect(resultParamsFor).not.toHaveBeenCalled();
+    expect(deps.fhirGetWithProvenance).not.toHaveBeenCalled();
+    // The same patient opens for an unlimited caller.
+    expect((await call(EVERYONE, { tests: [T('FBC')], patientRef: john })).result.tests[0].params[0].band.name).toBe('Adult men');
+  });
+
+  it('needs patients.view or patients.find, and 1 to 20 tests', async () => {
+    const { call, ruth } = await fixture();
+    const none: PluginCaller = { ...SITE, capabilities: [] };
+    expect((await call(none, { tests: [T('FBC')], patientRef: ruth })).error.code).toBe('FORBIDDEN');
+    const finder: PluginCaller = { ...SITE, capabilities: ['patients.find'] };
+    expect((await call(finder, { tests: [T('FBC')], patientRef: ruth })).ok).toBe(true);
+    expect((await call(SITE, { tests: [], patientRef: ruth })).error.code).toBe('INVALID_REQUEST');
+    expect((await call(SITE, { tests: Array.from({ length: 21 }, (_, n) => T(`T${n}`)), patientRef: ruth })).error.code).toBe('INVALID_REQUEST');
+    expect((await call(SITE, { tests: [T('FBC')] })).error.code).toBe('INVALID_REQUEST');
+    expect((await call(SITE, { tests: [T('FBC')], patientRef: ruth, sex: 'male' })).error.code).toBe('INVALID_REQUEST');
+  });
+
+  it('answers catch-all fits when the stored Patient is missing', async () => {
+    const { call, deps, ruth } = await fixture();
+    vi.mocked(deps.fhirGetWithProvenance).mockResolvedValue(null);
+    const out = await call(SITE, { tests: [T('FBC')], patientRef: ruth });
+    expect(resultParamsFor.mock.calls[0][1]).toEqual({ sex: null, ageYears: null });
+    expect(out.result.tests[0].params[0]).toMatchObject({ band: null, fits: ['unknown', 'unknown'] });
+  });
+});
+
+describe('plugin host: fhir_emit with a patient pluginRef', () => {
+  const emit = plugin([{ kind: 'emit-fhir', resourceTypes: ['Observation', 'Specimen', 'Provenance', 'ServiceRequest'] }, { kind: 'host:db' }]);
+
+  async function fixture() {
+    const f = await buildPatientIndexFixture();
+    await seedPatient(f.externalDb, { id: 'p-1', surname: 'Mwanza', firstname: 'Ruth', dob: '1990-01-05', org: 'Organization/fac-1' });
+    const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, engine: 'postgres', refKey: randomBytes(32) });
+    const deps = fakeDeps({ patients: index });
+    const fns = createPluginHost(deps).forCall(emit, EVERYONE);
+    return { deps, fns, ruth: pluginPatientRefs(KEY, 'lab').encode('p-1') };
+  }
+
+  it('writes the real id into subject and nested references before it saves', async () => {
+    const { deps, fns, ruth } = await fixture();
+    const sent = [
+      { resourceType: 'ServiceRequest', id: 'sr-1', subject: { reference: `Patient/${ruth}` } },
+      { resourceType: 'Specimen', id: 'sp-1', subject: { reference: `Patient/${ruth}`, display: 'kept' } },
+      { resourceType: 'Observation', id: 'o-1', subject: { reference: `Patient/${ruth}` }, specimen: { reference: 'Specimen/sp-1' },
+        hasMember: [{ reference: 'Observation/o-2' }], extension: [{ url: 'x', valueReference: { reference: `Patient/${ruth}` } }] },
+      { resourceType: 'Provenance', id: 'pv-1', target: [{ reference: 'Observation/o-1' }, { reference: `Patient/${ruth}` }],
+        agent: [{ who: { reference: 'Practitioner/pr-1' }, onBehalfOf: { reference: `Patient/${ruth}` } }] },
+    ];
+    const before = JSON.stringify(sent);
+    expect(await fns.fhir_emit({ resources: sent })).toEqual({ ok: true, result: { saved: 4 } });
+    const saved = vi.mocked(deps.persist).mock.calls[0][0] as any[];
+    expect(saved[0].subject).toEqual({ reference: 'Patient/p-1' });
+    expect(saved[1].subject).toEqual({ reference: 'Patient/p-1', display: 'kept' });
+    expect(saved[2]).toMatchObject({
+      subject: { reference: 'Patient/p-1' }, specimen: { reference: 'Specimen/sp-1' },
+      hasMember: [{ reference: 'Observation/o-2' }], extension: [{ url: 'x', valueReference: { reference: 'Patient/p-1' } }],
+    });
+    expect(saved[3].target).toEqual([{ reference: 'Observation/o-1' }, { reference: 'Patient/p-1' }]);
+    expect(saved[3].agent[0]).toEqual({ who: { reference: 'Practitioner/pr-1' }, onBehalfOf: { reference: 'Patient/p-1' } });
+    expect(JSON.stringify(saved)).not.toContain('p1.');
+    // The plugin's own records are not changed in place.
+    expect(JSON.stringify(sent)).toBe(before);
+  });
+
+  it('refuses the whole send when a pluginRef does not resolve, and saves nothing', async () => {
+    const { deps, fns, ruth } = await fixture();
+    const missing = pluginPatientRefs(KEY, 'lab').encode('p-none');
+    const otherPlugin = pluginPatientRefs(KEY, 'other').encode('p-1');
+    for (const bad of [missing, otherPlugin, 'p1.nope']) {
+      const out = await fns.fhir_emit({ resources: [
+        { resourceType: 'Observation', id: 'o-1', subject: { reference: `Patient/${ruth}` } },
+        { resourceType: 'Specimen', id: 'sp-1', subject: { reference: `Patient/${bad}` } },
+      ] }) as any;
+      expect(out.ok, bad).toBe(false);
+      expect(out.error.code).toBe('NOT_FOUND');
+      expect(out.error.message).toMatch(/nothing was saved/);
+    }
+    expect(deps.persist).not.toHaveBeenCalled();
+    expect(deps.audit).not.toHaveBeenCalled();
+  });
+
+  it('leaves a plain Patient/<id> and other references as the plugin wrote them', async () => {
+    const { deps, fns } = await fixture();
+    const sent = [{ resourceType: 'Observation', id: 'o-1', subject: { reference: 'Patient/p-1' }, performer: [{ reference: 'Organization/fac-1' }], note: [{ text: 'Patient/p1.x in text' }] }];
+    expect((await fns.fhir_emit({ resources: sent }) as any).ok).toBe(true);
+    expect(vi.mocked(deps.persist).mock.calls[0][0]).toEqual(sent);
+  });
+
+  it('checks ownership against the rewritten records', async () => {
+    const { deps, fns, ruth } = await fixture();
+    vi.mocked(deps.fhirGetWithProvenance).mockResolvedValue(stored({ resourceType: 'Observation', id: 'o-1' }, 'disa-ingest') as any);
+    const out = await fns.fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o-1', subject: { reference: `Patient/${ruth}` } }] }) as any;
+    expect(out.error.code).toBe('FORBIDDEN');
+    expect(deps.persist).not.toHaveBeenCalled();
   });
 });

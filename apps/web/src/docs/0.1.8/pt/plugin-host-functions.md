@@ -117,6 +117,7 @@ Lê os registos do próprio CE através de uma operação. O pedido é `{ "op": 
 | `valueset.lookup` | `system`, `code` |
 | `testCatalog.list` | os filtros de lista do catálogo de testes |
 | `testCatalog.get` | `code` |
+| `testCatalog.resultParams` | `tests`, uma lista de 1 a 20 `{ system, code }`, e `patientRef`, um `pluginRef` |
 | `facilities.search` | `q`, `limit`, `offset` |
 | `facilities.get` | `id`. Dá uma unidade na forma de uma linha de `facilities.search` |
 | `caller.get` | nenhuma. Dá `userId`, `displayName` e `facilities` (`*` ou a lista de identificadores de unidade) de quem chama. `displayName` pode ser null |
@@ -137,6 +138,12 @@ A linha de um paciente fundido também tem `replacedByPluginRef`, o `pluginRef` 
 
 Um `pluginRef` pertence ao identificador do plugin, não a uma instalação. Se remover um plugin e mais tarde instalar outro com o mesmo identificador, este pode abrir as refs que o anterior guardou. Uma reposição de fábrica mantém as ligações a funcionar.
 
+### Parâmetros de resultado para um paciente
+
+`testCatalog.resultParams` dá os parâmetros de resultado de cada teste, com o intervalo de referência que serve a um paciente. Envie `{ "tests": [{ "system": "...", "code": "..." }], "patientRef": "p1...." }`. Precisa de `patients.view` ou `patients.find`, como as operações de paciente. Um paciente fora do limite de quem chama dá `NOT_FOUND`.
+
+A resposta é `{ "tests": [...], "sexes": [...] }`. Cada teste lista os seus `params`. Cada parâmetro tem a sua `unit`, o seu `display`, as suas `bands`, a `band` que serve ao paciente ou null, e `fits`, que vale `yes`, `no` ou `unknown` para cada intervalo, pela ordem. Um intervalo tem um `name` quando o laboratório lhe deu um. `sexes` dá cada código de sexo com o seu rótulo em en, fr e pt. O CE lê o sexo e a idade do paciente para escolher o intervalo. A resposta não os inclui.
+
 ## fhir_emit
 
 Envia registos FHIR prontos para o CE. O pedido é `{ "resources": [ ... ] }`.
@@ -144,6 +151,8 @@ Envia registos FHIR prontos para o CE. O pedido é `{ "resources": [ ... ] }`.
 O CE verifica cada registo antes de guardar algum. Se um registo tiver um tipo que não está na lista `emit-fhir` do plugin, nada é guardado. O CE aplica a sua própria validação, como numa importação. Um plugin só pode mudar um registo que ele próprio escreveu. Cada envio fica no registo de auditoria com o identificador e a versão do plugin, e o registo guarda `plugin:<id>` como origem.
 
 Quem está limitado a algumas unidades não pode enviar registos. Um Bundle, ou um registo com registos `contained`, é recusado.
+
+Uma referência escrita `Patient/` seguida de um `pluginRef` é trocada pelo identificador real do paciente antes de o CE verificar ou guardar alguma coisa. Isto vale para qualquer referência no registo, como `subject` ou o `target` de uma Provenance. Se um destes `pluginRef` não abrir para o seu plugin, nada é guardado e a resposta é `NOT_FOUND`. Uma referência a `Patient/<id>` fica como a escreveu.
 
 ## Respostas e erros
 

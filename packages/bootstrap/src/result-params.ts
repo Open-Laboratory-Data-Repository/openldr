@@ -138,6 +138,23 @@ const SEX_LABELS: Record<string, Record<string, string>> = {
 export const SEX_OPTIONS: SexOption[] = Patient.shape.gender.unwrap().options
   .map((code) => ({ code, labels: SEX_LABELS[code] ?? { en: code } }));
 
+/**
+ * A patient's sex and whole years of age, as the band rules read them, from a stored FHIR Patient.
+ * Bench result entry and a plugin's testCatalog.resultParams both call this, so both pick the same
+ * band. A missing Patient or birth date gives null, and the catalog then answers the catch-all band.
+ */
+export function patientBandKey(
+  patient: { gender?: unknown; birthDate?: unknown } | null,
+  now: number = Date.now(),
+): { sex: string | null; ageYears: number | null } {
+  if (!patient) return { sex: null, ageYears: null };
+  const born = typeof patient.birthDate === 'string' ? new Date(patient.birthDate) : null;
+  const ageYears = born && !Number.isNaN(born.getTime())
+    ? Math.floor((now - born.getTime()) / (365.2425 * 24 * 60 * 60 * 1000))
+    : null;
+  return { sex: typeof patient.gender === 'string' ? patient.gender : null, ageYears };
+}
+
 const NUMBER_FIELDS = ['low', 'high', 'ageLow', 'ageHigh', 'criticalLow', 'criticalHigh'] as const;
 const STRING_FIELDS = ['name', 'unit', 'sex'] as const;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, SEX_OPTIONS, type ResultBand } from './result-params';
+import { bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey, SEX_OPTIONS, type ResultBand } from './result-params';
 
 const band = (b: Partial<ResultBand>): ResultBand => ({ name: null, low: null, high: null, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null, ...b });
 
@@ -154,5 +154,18 @@ describe('result parameters: a submitted range against the catalog', () => {
     // Same for a string field sent as a number.
     const namedCatalog = [band({ name: null, low: 10, high: 15 })];
     expect(findCatalogBand({ name: 123, low: 10, high: 15, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null }, namedCatalog)).toBeNull();
+  });
+});
+
+describe('patientBandKey', () => {
+  const now = Date.parse('2026-11-23T12:00:00Z');
+  it('reads the FHIR gender and whole years from the birth date', () => {
+    expect(patientBandKey({ gender: 'female', birthDate: '1990-01-05' }, now)).toEqual({ sex: 'female', ageYears: 36 });
+    expect(patientBandKey({ gender: 'male', birthDate: '2025-12-01' }, now)).toEqual({ sex: 'male', ageYears: 0 });
+  });
+  it('answers nulls for a missing patient, birth date or gender', () => {
+    expect(patientBandKey(null, now)).toEqual({ sex: null, ageYears: null });
+    expect(patientBandKey({}, now)).toEqual({ sex: null, ageYears: null });
+    expect(patientBandKey({ gender: 'female', birthDate: 'not a date' }, now)).toEqual({ sex: 'female', ageYears: null });
   });
 });
