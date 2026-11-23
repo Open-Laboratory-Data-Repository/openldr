@@ -17,7 +17,7 @@ describe('seeded starter packs', () => {
       ['pack-specimen', 'Specimen', 'Specimen'],
       ['pack-observation', 'Observation', 'Test result'],
     ]);
-    expect(STARTER_PACK_VERSION).toBe('7');
+    expect(STARTER_PACK_VERSION).toBe('8');
     for (const p of packs) expect(p.version, p.id).toBe(STARTER_PACK_VERSION);
   });
 

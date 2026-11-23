@@ -26,6 +26,7 @@ import {
   LAB_ORDER_FORM_MIGRATION_REQUESTER,
   LAB_ORDER_FORM_MIGRATION_ORDERS_ONLY,
   LAB_ORDER_FORM_MIGRATION_NO_REJECTION,
+  LAB_ORDER_FORM_MIGRATION_RESULTS_BACK,
 } from '@openldr/db';
 import { toQuestionnaireResponse } from '../response';
 import { ServiceRequestExtractor } from '../extract/extract';
@@ -301,8 +302,8 @@ describe('every shipped sample passes the FHIR path rules', () => {
 describe('migrations 102 and 103 on the Lab order form', () => {
   const order = () => sampleForms.find((f) => f.name === 'Lab order')!;
 
-  it("matches migration 140's frozen snapshot exactly", () => {
-    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_NO_REJECTION);
+  it("matches migration 141's frozen snapshot exactly", () => {
+    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_RESULTS_BACK);
   });
 
   // The order asked for a specimen twice: once per test in the results sheet, once here. The
@@ -312,17 +313,17 @@ describe('migrations 102 and 103 on the Lab order form', () => {
     expect(order().sections.find((s) => s.id === 'specimen')).toBeUndefined();
   });
 
-  // Lab slice 1b: the Lab order orders tests. Results come from the lab's result entry, so
-  // migration 138 dropped the Results field. Slice 3: the lab rejects at Reception, so migration
-  // 140 dropped the order rejection field.
-  it('has no results field and no order rejection field', () => {
-    expect(order().fields.find((f) => f.id === 'fld-ord-results')).toBeUndefined();
-    expect(order().fields.some((f) => f.fieldType === 'testDetails')).toBe(false);
-    expect(order().fields.find((f) => f.id === 'fld-ord-rejection')).toBeUndefined();
+  // Lab plugin step 1: the lab module moves into a plugin, so migration 141 puts back the Results
+  // field 138 dropped and the order rejection field 140 dropped.
+  it('carries the results field, depending on the tests field, and the order rejection field', () => {
+    const results = order().fields.find((f) => f.id === 'fld-ord-results');
+    expect(results).toMatchObject({ fieldType: 'testDetails', referenceDependsOn: 'tests' });
+    expect(order().fields.find((f) => f.id === 'fld-ord-rejection')).toMatchObject({ fhirPath: 'ServiceRequest.extension' });
   });
 
-  it('tests trip no rule', () => {
-    expect(lintFormSchema(order()).filter((i) => i.fieldId === 'tests')).toEqual([]);
+  it('tests and results trip no rule', () => {
+    const ids = ['tests', 'fld-ord-results'];
+    expect(lintFormSchema(order()).filter((i) => ids.includes(i.fieldId ?? ''))).toEqual([]);
   });
 
   it('notes, ward and the requisition number trip no rule', () => {
@@ -336,6 +337,7 @@ describe('migrations 102 and 103 on the Lab order form', () => {
       LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS, LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS,
       LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS, LAB_ORDER_FORM_MIGRATION_ORDER_REJECTION,
       LAB_ORDER_FORM_MIGRATION_REQUESTER, LAB_ORDER_FORM_MIGRATION_ORDERS_ONLY,
+      LAB_ORDER_FORM_MIGRATION_NO_REJECTION,
     ]) {
       const normalized = normalizeFormSchema({ ...order(), fields: prior as never });
       expect(normalized.fields).toEqual(prior);
