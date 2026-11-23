@@ -2651,6 +2651,12 @@ export interface CatalogTest {
   loinc: string | null;
   /** false when the test is retired. */
   active: boolean;
+  /** Hours from receipt to release the lab aims for, or null. */
+  expectedTatHours: number | null;
+  /** Hours after which the test is overdue, or null. */
+  criticalTatHours: number | null;
+  /** Whether a result needs a second person to verify it. True when not set. */
+  requiresVerification: boolean;
   /** This install's own settings. specimenTypes null means "use the catalog's list". */
   lab: { enabled: boolean; specimenTypes: CatalogSpecimenCoding[] | null; localDisplay: string | null };
 }
@@ -2674,6 +2680,10 @@ export interface CatalogTestInput {
   resultParams?: CatalogTestResultParam[];
   loinc?: string | null;
   active?: boolean;
+  /** Left out keeps what is stored. null clears it. */
+  expectedTatHours?: number | null;
+  criticalTatHours?: number | null;
+  requiresVerification?: boolean;
 }
 export interface CatalogLabSettingsInput {
   enabled: boolean;
@@ -2716,7 +2726,9 @@ export const setCatalogTestActive = (code: string, active: boolean): Promise<Cat
 
 // ── Test catalog import and export (test catalog S3) ──────────────────────────
 // Mirrors of @openldr/bootstrap's test-catalog-import.ts and test-catalog.ts import types.
-export type CatalogImportField = 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes';
+export type CatalogImportField =
+  | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
+  | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification';
 /** Which file column feeds each field, by header text. A field left out is not changed on existing tests. */
 export type CatalogColumnMap = Partial<Record<CatalogImportField, string>>;
 export type CatalogCategoryAnswer =

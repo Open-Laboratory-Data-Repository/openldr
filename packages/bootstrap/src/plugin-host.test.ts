@@ -324,6 +324,15 @@ describe('plugin host: ce_read', () => {
     expect(await fns.ce_read({ op: 'testCatalog.get', input: { code: 'HB' } })).toEqual({ ok: true, result: { code: 'HB', lab: {} } });
     expect((await fns.ce_read({ op: 'testCatalog.get', input: { code: 'NOPE' } }) as any).error.code).toBe('NOT_FOUND');
   });
+
+  it('testCatalog.get and list answer the turnaround times and the verification switch as the catalog gives them', async () => {
+    const test = { code: 'HB', expectedTatHours: 0.5, criticalTatHours: null, requiresVerification: false, lab: {} };
+    const deps = fakeDeps({ testCatalog: { list: vi.fn(async () => ({ rows: [test], total: 1 })), get: vi.fn(async () => test) } as any });
+    const fns = createPluginHost(deps).forCall(plugin([{ kind: 'host:ce-read' }]), SITE);
+    const fields = { expectedTatHours: 0.5, criticalTatHours: null, requiresVerification: false };
+    expect(((await fns.ce_read({ op: 'testCatalog.get', input: { code: 'HB' } })) as any).result).toMatchObject(fields);
+    expect(((await fns.ce_read({ op: 'testCatalog.list', input: {} })) as any).result.rows[0]).toMatchObject(fields);
+  });
 });
 
 describe('plugin host: fhir_emit', () => {

@@ -31,7 +31,9 @@ const STEP_TITLE: Record<Step, string> = {
   values: 'testCatalog.import.stepValues',
   review: 'testCatalog.import.stepReview',
 };
-const FIELDS: CatalogImportField[] = ['code', 'name', 'shortName', 'loinc', 'category', 'specimenTypes'];
+const FIELDS: CatalogImportField[] = [
+  'code', 'name', 'shortName', 'loinc', 'category', 'specimenTypes', 'expectedTatHours', 'criticalTatHours', 'requiresVerification',
+];
 const NO_ANSWERS: CatalogValueMap = { categories: [], specimens: [] };
 /** Radix Select cannot hold an empty value, so these stand in for "no choice" in the pickers only. */
 const NOT_IN_FILE = '__not_in_file__';

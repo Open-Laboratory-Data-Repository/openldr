@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   runTestCatalogImport: vi.fn().mockResolvedValue(0),
   runTestCatalogExport: vi.fn().mockResolvedValue(0),
   runTestCatalogParams: vi.fn().mockResolvedValue(0),
+  runTestCatalogSet: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock('./test-catalog', () => ({
@@ -17,6 +18,7 @@ vi.mock('./test-catalog', () => ({
   runTestCatalogImport: mocks.runTestCatalogImport,
   runTestCatalogExport: mocks.runTestCatalogExport,
   runTestCatalogParams: mocks.runTestCatalogParams,
+  runTestCatalogSet: mocks.runTestCatalogSet,
 }));
 
 describe('test-catalog list: commander parsing', () => {
@@ -66,6 +68,13 @@ describe('test-catalog list: commander parsing', () => {
   it('hands params the code and the set file', async () => {
     await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', 'params', 'FBC', '--set', 'params.json', '--json']);
     expect(mocks.runTestCatalogParams).toHaveBeenCalledWith('FBC', { set: 'params.json', json: true });
+  });
+
+  it('hands set the code and its three flags', async () => {
+    await buildProgram().exitOverride().parseAsync([
+      'node', 'openldr', 'test-catalog', 'set', 'HIVVL', '--expected-tat', '48', '--critical-tat', '72', '--requires-verification', 'false',
+    ]);
+    expect(mocks.runTestCatalogSet).toHaveBeenCalledWith('HIVVL', { expectedTat: '48', criticalTat: '72', requiresVerification: 'false', json: false });
   });
 
   it('reads params with no flags', async () => {

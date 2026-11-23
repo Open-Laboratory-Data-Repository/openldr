@@ -14,7 +14,7 @@ import type { AuditDetails } from './record-audit';
 import {
   CATALOG_EXPORT_COLUMNS, catalogExportRow,
   CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS, checkColumnMap, matchCategory, matchSpecimen,
-  readCatalogRows, splitSpecimens, suggestCatalogColumns, valueKey,
+  readCatalogRows, readHoursCell, readYesNoCell, splitSpecimens, suggestCatalogColumns, valueKey,
   type CatalogColumnMap, type CatalogValueMap, type CategoryAnswer,
 } from './test-catalog-import';
 
@@ -69,6 +69,12 @@ export interface CatalogTest {
   loinc: string | null;
   /** false when the test is retired. */
   active: boolean;
+  /** Hours from receipt to release the lab aims for, or null when none is set. */
+  expectedTatHours: number | null;
+  /** Hours after which the test is overdue, or null when none is set. */
+  criticalTatHours: number | null;
+  /** Whether a result needs a second person to verify it before release. True when not set. */
+  requiresVerification: boolean;
   /** This install's own settings. specimenTypes null means "use the catalog's list". */
   lab: { enabled: boolean; specimenTypes: SpecimenCoding[] | null; localDisplay: string | null };
 }
@@ -103,6 +109,12 @@ export interface CatalogTestInput {
   loinc?: string | null;
   /** false retires the test. Retiring is reversible. Defaults to true. */
   active?: boolean;
+  /** A positive number of hours. Left out keeps what is stored. null clears it. */
+  expectedTatHours?: number | null;
+  /** A positive number of hours. Left out keeps what is stored. null clears it. */
+  criticalTatHours?: number | null;
+  /** Left out keeps what is stored. */
+  requiresVerification?: boolean;
 }
 
 export interface LabSettingsInput {
@@ -312,6 +324,11 @@ function toCodings(value: unknown): SpecimenCoding[] {
     .map((c: SpecimenCoding) => ({ system: c.system, code: c.code }));
 }
 
+/** A stored TAT, or null when it is missing or not a positive number. */
+function readHours(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
 function toTest(c: ConceptRow, loinc: string | null, lab: LabRow | undefined): CatalogTest {
   const p = (parseJson(c.properties) ?? {}) as Record<string, unknown>;
   return {
@@ -322,6 +339,10 @@ function toTest(c: ConceptRow, loinc: string | null, lab: LabRow | undefined): C
     specimenTypes: toCodings(p.specimenTypes),
     resultParams: parseResultParams(p.resultParams),
     loinc,
+    expectedTatHours: readHours(p.expectedTatHours),
+    criticalTatHours: readHours(p.criticalTatHours),
+    // Only false is stored, so a test written before these fields reads true.
+    requiresVerification: p.requiresVerification !== false,
     // NULL counts as ACTIVE, as it does everywhere else in terminology. DEPRECATED is how this
     // catalog stores a retired test; a DRAFT or DISABLED concept made on the Terminology page also
     // reads as not active.
@@ -343,6 +364,10 @@ type ValidTest = {
   resultParams: TestResultParam[] | undefined;
   loinc: string | null;
   active: boolean;
+  /** undefined means the input left it out, so the stored value is kept. */
+  expectedTatHours: number | null | undefined;
+  criticalTatHours: number | null | undefined;
+  requiresVerification: boolean | undefined;
 };
 
 /** What checkTest needs from the database. An import reads it once for every row. */
@@ -369,7 +394,10 @@ interface PlannedWrite {
 /** Status is not compared: an import never changes it. */
 function sameTest(a: CatalogTest, b: ValidTest): boolean {
   return a.display === b.display && a.shortName === b.shortName && a.category === b.category && a.loinc === b.loinc
-    && a.specimenTypes.map(codingKey).join('\n') === b.specimenTypes.map(codingKey).join('\n');
+    && a.specimenTypes.map(codingKey).join('\n') === b.specimenTypes.map(codingKey).join('\n')
+    && (b.expectedTatHours === undefined || a.expectedTatHours === b.expectedTatHours)
+    && (b.criticalTatHours === undefined || a.criticalTatHours === b.criticalTatHours)
+    && (b.requiresVerification === undefined || a.requiresVerification === b.requiresVerification);
 }
 
 function isLoincLink(m: TermMapping): boolean {
@@ -570,6 +598,15 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     }
   }
 
+  /** A TAT as sent: undefined and null pass through, anything else must be a positive number of hours. */
+  function checkHours(what: string, value: unknown): number | null | undefined {
+    if (value === undefined || value === null) return value;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      throw invalid(`${what} must be a positive number of hours, not ${JSON.stringify(value)}.`);
+    }
+    return value;
+  }
+
   /**
    * The rules every write shares: create, update and each import row. It reads nothing, so an import
    * checks thousands of rows against one read of the lists. `linked` is the LOINC code the test already
@@ -637,7 +674,16 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         throw invalid(`LOINC code ${loinc} is not in the LOINC loaded on this install.`);
       }
     }
-    return { display, shortName: clean(input.shortName), category, specimenTypes, resultParams, loinc, active: input.active ?? true };
+    const expectedTatHours = checkHours('The expected turnaround time', input.expectedTatHours);
+    const criticalTatHours = checkHours('The critical turnaround time', input.criticalTatHours);
+    const requiresVerification = input.requiresVerification;
+    if (requiresVerification !== undefined && typeof requiresVerification !== 'boolean') {
+      throw invalid('Requires verification must be true or false.');
+    }
+    return {
+      display, shortName: clean(input.shortName), category, specimenTypes, resultParams, loinc, active: input.active ?? true,
+      expectedTatHours, criticalTatHours, requiresVerification,
+    };
   }
 
   async function loadCheckContext(loincCodes: string[]): Promise<CheckContext> {
@@ -687,6 +733,19 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (t.resultParams !== undefined) {
       delete next.resultParams;
       if (t.resultParams.length) next.resultParams = t.resultParams;
+    }
+    if (t.expectedTatHours !== undefined) {
+      delete next.expectedTatHours;
+      if (t.expectedTatHours !== null) next.expectedTatHours = t.expectedTatHours;
+    }
+    if (t.criticalTatHours !== undefined) {
+      delete next.criticalTatHours;
+      if (t.criticalTatHours !== null) next.criticalTatHours = t.criticalTatHours;
+    }
+    // Only false is stored. A test with no key reads true, as one written before this field does.
+    if (t.requiresVerification !== undefined) {
+      delete next.requiresVerification;
+      if (!t.requiresVerification) next.requiresVerification = false;
     }
     const properties = Object.keys(next).length ? JSON.stringify(next) : null;
     await exec.insertInto('terminology_concepts').values({
@@ -945,6 +1004,22 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
           else problems.push(`Specimen "${text}" is not in the specimen type list. Choose a specimen for it.`);
         }
       }
+      // undefined means the column is not mapped, so the test keeps what it has.
+      const hours = (what: string, text: string | undefined): number | null | undefined => {
+        if (text === undefined) return undefined;
+        const read = readHoursCell(text);
+        if (read !== 'bad') return read;
+        problems.push(`${what} "${text}" is not a number of hours.`);
+        return undefined;
+      };
+      const expectedTatHours = hours('Expected TAT', v.expectedTatHours);
+      const criticalTatHours = hours('Critical TAT', v.criticalTatHours);
+      let requiresVerification: boolean | undefined;
+      if (v.requiresVerification !== undefined) {
+        const read = readYesNoCell(v.requiresVerification);
+        if (read === 'bad') problems.push(`Requires verification "${v.requiresVerification}" must be yes or no.`);
+        else requiresVerification = read;
+      }
       if (problems.length) {
         report.refused.push({ line, code, reason: problems.join(' ') });
         continue;
@@ -960,6 +1035,9 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         loinc: v.loinc !== undefined ? v.loinc : before?.loinc ?? null,
         // An import never retires or restores a test. Retiring is always explicit (spec 4.4).
         active: before?.active ?? true,
+        ...(expectedTatHours !== undefined ? { expectedTatHours } : {}),
+        ...(criticalTatHours !== undefined ? { criticalTatHours } : {}),
+        ...(requiresVerification !== undefined ? { requiresVerification } : {}),
       };
       let test: ValidTest;
       try {

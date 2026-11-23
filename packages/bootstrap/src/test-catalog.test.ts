@@ -148,7 +148,8 @@ describe('test catalog: reads', () => {
       rows: [{
         code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
         resultParams: [],
-        loinc: '25836-8', active: true, lab: { enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' },
+        loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+        lab: { enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' },
       }],
       total: 1,
       ownedHere: true,
@@ -231,7 +232,8 @@ describe('test catalog: writes', () => {
     expect(created).toEqual({
       code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
       resultParams: [],
-      loinc: '25836-8', active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null },
+      loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+      lab: { enabled: false, specimenTypes: null, localDisplay: null },
     });
     expect(await storedConcept(db, 'HIVVL')).toEqual({
       status: 'ACTIVE', properties: { shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR] },
@@ -745,9 +747,9 @@ describe('test catalog: import apply and export', () => {
 
     const csv = await catalog.exportCsv();
     expect(csv).toBe(
-      'code,name,short_name,loinc,category,specimen_types\n'
-      + 'CD4,"CD4 count, absolute",,,HAEM,\n'
-      + 'HIVVL,HIV viral load,VL,25836-8,MOL,BLD;UR\n',
+      'code,name,short_name,loinc,category,specimen_types,expected_tat_hours,critical_tat_hours,requires_verification\n'
+      + 'CD4,"CD4 count, absolute",,,HAEM,,,,yes\n'
+      + 'HIVVL,HIV viral load,VL,25836-8,MOL,BLD;UR,,,yes\n',
     );
     const file = readCatalogImportFile(new TextEncoder().encode(csv), 'csv');
     const report = await catalog.importPreview({ table: file, columnMap: file.suggested });
@@ -1102,5 +1104,109 @@ describe('test catalog: what a result sheet needs', () => {
     await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
     const answer = await catalog.resultParamsFor([test('FBC')], { sex: null, birthDate: null });
     expect(answer[0].params[0].fits).toEqual(['unknown', 'unknown']);
+  });
+});
+
+describe('test catalog: turnaround times and verification', () => {
+  it('reads null, null and true for a test stored before these fields', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedTest(db, 'OLD', 'Old test', { shortName: 'O' });
+    expect(await catalog.get('OLD')).toMatchObject({ expectedTatHours: null, criticalTatHours: null, requiresVerification: true });
+    expect((await catalog.list(q())).rows[0]).toMatchObject({ expectedTatHours: null, criticalTatHours: null, requiresVerification: true });
+  });
+
+  it('stores them as concept properties through create and update, and keeps them when an update leaves them out', async () => {
+    const { db, catalog } = await buildCatalog();
+    const created = await catalog.create({ code: 'HIVVL', display: 'HIV viral load', expectedTatHours: 0.5, criticalTatHours: 72, requiresVerification: false });
+    expect(created).toMatchObject({ expectedTatHours: 0.5, criticalTatHours: 72, requiresVerification: false });
+    expect((await storedConcept(db, 'HIVVL')).properties).toEqual({ expectedTatHours: 0.5, criticalTatHours: 72, requiresVerification: false });
+
+    // Left out keeps them, as the CLI's other edits send a test without them.
+    expect(await catalog.update('HIVVL', { display: 'HIV-1 viral load' }))
+      .toMatchObject({ expectedTatHours: 0.5, criticalTatHours: 72, requiresVerification: false });
+
+    // null clears a TAT, and true is the default, so neither leaves a key.
+    expect(await catalog.update('HIVVL', { display: 'HIV-1 viral load', expectedTatHours: 24, criticalTatHours: null, requiresVerification: true }))
+      .toMatchObject({ expectedTatHours: 24, criticalTatHours: null, requiresVerification: true });
+    expect((await storedConcept(db, 'HIVVL')).properties).toEqual({ expectedTatHours: 24 });
+  });
+
+  it('refuses a TAT that is zero, negative or not a number, and a switch that is not a boolean', async () => {
+    const { catalog } = await buildCatalog();
+    for (const bad of [{ expectedTatHours: 0 }, { expectedTatHours: -2 }, { criticalTatHours: Number.NaN }, { criticalTatHours: '48' }]) {
+      await expect(catalog.create({ code: 'X', display: 'X', ...(bad as object) }))
+        .rejects.toMatchObject({ kind: 'invalid', message: expect.stringContaining('must be a positive number of hours') });
+    }
+    await expect(catalog.create({ code: 'X', display: 'X', requiresVerification: 'yes' as never }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'Requires verification must be true or false.' });
+    expect(await catalog.get('X')).toBeNull();
+  });
+
+  it('keeps the values central sent, and refuses a lab edit of them', async () => {
+    const { db, catalog } = await buildCatalog();
+    const central = [{
+      code: 'HIVVL', display: 'HIV viral load', status: 'ACTIVE',
+      properties: { expectedTatHours: 48, criticalTatHours: 96, requiresVerification: false },
+    }];
+    const bulk = createTerminologyBulkSync({
+      labDb: db,
+      fetchConceptsPage: async () => ({ concepts: central, nextCode: null }),
+      fetchMapElementsPage: async () => ({ elements: [], nextKey: null }),
+      getToken: async () => 'token',
+      logger: { info() {}, warn() {}, error() {}, debug() {} },
+    });
+    await bulk.syncSystem(TEST_CATALOG_SYSTEM, { kind: 'CodeSystem', generation: 1 });
+    expect(await catalog.get('HIVVL')).toMatchObject({ expectedTatHours: 48, criticalTatHours: 96, requiresVerification: false });
+    await expect(catalog.update('HIVVL', { display: 'HIV viral load', expectedTatHours: 2 })).rejects.toMatchObject({ kind: 'central-managed' });
+    // The lab's own settings do not touch them.
+    await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: 'VL' });
+    expect(await catalog.get('HIVVL')).toMatchObject({ expectedTatHours: 48, criticalTatHours: 96, requiresVerification: false });
+  });
+
+  it('imports and exports the three columns, and the export imports back unchanged', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'CD4', display: 'CD4 count', expectedTatHours: 99 });
+    const headers = ['code', 'name', 'expected_tat_hours', 'critical_tat_hours', 'requires_verification'];
+    const file = readCatalogImportFile(new TextEncoder().encode(
+      headers.join(',') + '\nHIVVL,HIV viral load,48,0.5,No\nCD4,CD4 count,,,yes\n',
+    ), 'csv');
+    expect(file.suggested).toMatchObject({
+      expectedTatHours: 'expected_tat_hours', criticalTatHours: 'critical_tat_hours', requiresVerification: 'requires_verification',
+    });
+    const report = await catalog.importApply({ table: file, columnMap: file.suggested });
+    expect(report.counts).toEqual({ new: 1, changed: 1, unchanged: 0, refused: 0 });
+    expect(await catalog.get('HIVVL')).toMatchObject({ expectedTatHours: 48, criticalTatHours: 0.5, requiresVerification: false });
+    // A mapped empty cell clears, as for every other column.
+    expect(await catalog.get('CD4')).toMatchObject({ expectedTatHours: null, criticalTatHours: null, requiresVerification: true });
+
+    const csv = await catalog.exportCsv();
+    expect(csv).toContain('HIVVL,HIV viral load,,,,,48,0.5,no\n');
+    const back = readCatalogImportFile(new TextEncoder().encode(csv), 'csv');
+    expect((await catalog.importPreview({ table: back, columnMap: back.suggested })).counts)
+      .toEqual({ new: 0, changed: 0, unchanged: 2, refused: 0 });
+  });
+
+  it('leaves the three alone when their columns are not mapped', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', expectedTatHours: 48, requiresVerification: false });
+    const report = await catalog.importApply(importInput([['HIVVL', 'HIV-1 viral load', '', '', '', '']]));
+    expect(report.counts.changed).toBe(1);
+    expect(await catalog.get('HIVVL')).toMatchObject({ display: 'HIV-1 viral load', expectedTatHours: 48, requiresVerification: false });
+  });
+
+  it('refuses an import row whose TAT is not a positive number or whose verification is not yes or no', async () => {
+    const { catalog } = await buildCatalog();
+    const report = await catalog.importPreview({
+      table: { headers: ['code', 'name', 'tat', 'critical_tat_hours', 'verify'], rows: [
+        ['A', 'A', 'two', '', ''], ['B', 'B', '-1', '', ''], ['C', 'C', '', '', 'maybe'], ['D', 'D', '1.5', '3', 'true'],
+      ] },
+      columnMap: { code: 'code', name: 'name', expectedTatHours: 'tat', criticalTatHours: 'critical_tat_hours', requiresVerification: 'verify' },
+    });
+    expect(report.counts).toEqual({ new: 1, changed: 0, unchanged: 0, refused: 3 });
+    expect(report.refused.map((r) => [r.code, r.reason])).toEqual([
+      ['A', 'Expected TAT "two" is not a number of hours.'],
+      ['B', 'The expected turnaround time must be a positive number of hours, not -1.'],
+      ['C', 'Requires verification "maybe" must be yes or no.'],
+    ]);
   });
 });

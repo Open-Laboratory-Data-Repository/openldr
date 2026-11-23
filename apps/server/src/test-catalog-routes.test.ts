@@ -19,6 +19,7 @@ function memorySettings() {
 const TEST: CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
   specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD' }], resultParams: [], loinc: '25836-8', active: true,
+  expectedTatHours: 48, criticalTatHours: 72, requiresVerification: true,
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
@@ -430,6 +431,25 @@ describe('test catalog routes', () => {
       payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 1, ageUnit: 'w' }] }] },
     });
     expect(bad.statusCode).toBe(400);
+  });
+
+  it('carries the turnaround times and the verification switch through a create and an update', async () => {
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    const body = { code: 'HIVVL', display: 'HIV viral load', expectedTatHours: 0.5, criticalTatHours: null, requiresVerification: false };
+    expect((await app.inject({ method: 'POST', url: '/api/test-catalog', payload: body })).statusCode).toBe(201);
+    expect((await app.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL', payload: body })).statusCode).toBe(200);
+    expect(calls.filter((c) => c.method !== 'get').map((c) => c.args.at(-1))).toEqual([body, body]);
+  });
+
+  it('refuses a turnaround time that is not a number, and a verification switch that is not a boolean, before the store', async () => {
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    for (const bad of [{ expectedTatHours: '48' }, { criticalTatHours: 'soon' }, { requiresVerification: 'yes' }]) {
+      const res = await app.inject({ method: 'POST', url: '/api/test-catalog', payload: { display: 'X', ...bad } });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(calls).toEqual([]);
   });
 
   it('POST /result-params answers the sex choices with their labels, so the studio names no code', async () => {

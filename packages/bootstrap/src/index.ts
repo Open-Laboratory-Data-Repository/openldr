@@ -2407,7 +2407,7 @@ export {
 } from './result-params';
 export {
   CATALOG_IMPORT_FIELDS, CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS,
-  catalogColumnMapSchema, catalogValueMapSchema, catalogImportInputSchema,
+  catalogColumnMapSchema, catalogValueMapSchema, catalogImportInputSchema, readHoursCell,
   type CatalogImportField, type CatalogColumnMap, type CatalogValueMap, type CategoryAnswer, type SpecimenAnswer,
 } from './test-catalog-import';
 export type { TableFileFormat } from './table-file';

@@ -46,8 +46,8 @@ import {
   runFacilitiesDelete, runFacilitiesAddType, runFacilitiesLinkMatching,
 } from './facilities';
 import {
-  runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport, runTestCatalogParams,
-  type TestCatalogListOpts, type TestCatalogImportOpts,
+  runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport, runTestCatalogParams, runTestCatalogSet,
+  type TestCatalogListOpts, type TestCatalogImportOpts, type TestCatalogSetOpts,
 } from './test-catalog';
 import { runLabRequisitionsRebuild } from './requisitions';
 import {
@@ -689,6 +689,16 @@ export function buildProgram(): Command {
     .option('--json', 'emit JSON', false)
     .action(async (code: string, opts: { set?: string; json: boolean }) => {
       process.exitCode = await runTestCatalogParams(code, opts);
+    });
+  testCatalog
+    .command('set <code>')
+    .description("Set a test's turnaround times and whether its results need verification (only where this install owns the catalog)")
+    .option('--expected-tat <hours>', 'hours from receipt to release the lab aims for, or none to clear')
+    .option('--critical-tat <hours>', 'hours after which the test is overdue, or none to clear')
+    .option('--requires-verification <true|false>', 'whether a result needs a second person to verify it')
+    .option('--json', 'emit JSON', false)
+    .action(async (code: string, opts: TestCatalogSetOpts) => {
+      process.exitCode = await runTestCatalogSet(code, opts);
     });
 
   // The index that finds an order by its requisition number (migration 139). Repair only, so it

@@ -492,6 +492,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // Lists a test's result parameters (catalog :132, view); --set replaces them (catalog :155, manage).
   'test-catalog params': { kind: 'app', capability: 'terminology.manage', alsoRequires: ['terminology.view'], destructive: true, paths: [inFile('--set')] },
   'test-catalog restore': { kind: 'app', capability: 'terminology.manage' }, // catalog :202
+  // Overwrites a test's turnaround times and verification switch (PUT /api/test-catalog/:code, manage).
+  'test-catalog set': { kind: 'app', capability: 'terminology.manage', destructive: true },
   'test-catalog result-fields export': { kind: 'app', capability: 'terminology.view', paths: [outFile('--out')] }, // fields :53
   'test-catalog result-fields import': { kind: 'app', capability: 'terminology.manage', destructive: true, paths: [inFile('file')] }, // fields :61, :69
   // Replaces a field's LOINC link.

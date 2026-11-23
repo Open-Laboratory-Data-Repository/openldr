@@ -39,6 +39,9 @@ interface Draft {
   /** Bench result entry: the parameters this test yields, in the order the operator ticked them. */
   resultParams: CatalogTestResultParam[];
   active: boolean;
+  expectedTatHours: number | null;
+  criticalTatHours: number | null;
+  requiresVerification: boolean;
   labEnabled: boolean;
   /** null means every catalog specimen. */
   labSpecimens: CatalogSpecimenCoding[] | null;
@@ -85,6 +88,9 @@ function draftFrom(test: CatalogTest | null): Draft {
     specimens: test?.specimenTypes ?? [],
     resultParams: test?.resultParams ?? [],
     active: test?.active ?? true,
+    expectedTatHours: test?.expectedTatHours ?? null,
+    criticalTatHours: test?.criticalTatHours ?? null,
+    requiresVerification: test?.requiresVerification ?? true,
     labEnabled: test?.lab.enabled ?? false,
     labSpecimens: test?.lab.specimenTypes ?? null,
     localDisplay: test?.lab.localDisplay ?? '',
@@ -159,6 +165,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
   const specimenName = (s: CatalogSpecimenCoding) => options.specimenTypes.find((o) => sameCoding(o, s))?.display ?? s.code;
   const labTakes = (s: CatalogSpecimenCoding) => draft.labSpecimens === null || draft.labSpecimens.some((k) => sameCoding(k, s));
   const text = (value: string | null | undefined) => <div className="text-sm">{value || t('testCatalog.none')}</div>;
+  const hours = (value: number | null | undefined) => text(value == null ? null : t('testCatalog.sheet.hours', { count: value }));
 
   async function save() {
     if (busy) return;
@@ -174,6 +181,9 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
           resultParams: draft.resultParams,
           loinc: draft.loinc.trim() || null,
           active: draft.active,
+          expectedTatHours: draft.expectedTatHours,
+          criticalTatHours: draft.criticalTatHours,
+          requiresVerification: draft.requiresVerification,
         };
         test = test
           ? await updateCatalogTest(test.code, input)
@@ -512,6 +522,27 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                   })}
                 </div>
 
+                <Label htmlFor="test-expected-tat" className="whitespace-nowrap">{t('testCatalog.sheet.expectedTat')}</Label>
+                <DecimalInput
+                  id="test-expected-tat" inputMode="decimal" className="w-28"
+                  value={draft.expectedTatHours}
+                  onValueChange={(v) => set({ expectedTatHours: v })}
+                />
+
+                <Label htmlFor="test-critical-tat" className="whitespace-nowrap">{t('testCatalog.sheet.criticalTat')}</Label>
+                <DecimalInput
+                  id="test-critical-tat" inputMode="decimal" className="w-28"
+                  value={draft.criticalTatHours}
+                  onValueChange={(v) => set({ criticalTatHours: v })}
+                />
+
+                <Label className="whitespace-nowrap">{t('testCatalog.sheet.requiresVerification')}</Label>
+                <Switch
+                  aria-label={t('testCatalog.sheet.requiresVerification')}
+                  checked={draft.requiresVerification}
+                  onCheckedChange={(v) => set({ requiresVerification: v })}
+                />
+
                 {!isNew && (
                   <>
                     {/* The studio Switch takes no id, so it is named by aria-label, as in Connectors.tsx. */}
@@ -536,6 +567,12 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                 {text(saved?.loinc)}
                 <Label className="self-start whitespace-nowrap">{t('testCatalog.sheet.specimens')}</Label>
                 {text((saved?.specimenTypes ?? []).map(specimenName).join(', '))}
+                <Label className="whitespace-nowrap">{t('testCatalog.sheet.expectedTat')}</Label>
+                {hours(saved?.expectedTatHours)}
+                <Label className="whitespace-nowrap">{t('testCatalog.sheet.criticalTat')}</Label>
+                {hours(saved?.criticalTatHours)}
+                <Label className="whitespace-nowrap">{t('testCatalog.sheet.requiresVerification')}</Label>
+                {text(t((saved?.requiresVerification ?? true) ? 'testCatalog.sheet.yes' : 'testCatalog.sheet.no'))}
               </>
             )}
 

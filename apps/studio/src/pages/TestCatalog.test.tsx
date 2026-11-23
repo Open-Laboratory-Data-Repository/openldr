@@ -44,12 +44,12 @@ const OPTIONS: api.TestCatalogOptions = {
 const HIVVL: api.CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
   specimenTypes: [{ system: LOCAL, code: 'BLD' }, { system: LOCAL, code: 'UR' }], resultParams: [],
-  loinc: '25836-8', active: true,
+  loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
   lab: { enabled: true, specimenTypes: [{ system: LOCAL, code: 'UR' }], localDisplay: 'Viral load' },
 };
 const CD4: api.CatalogTest = {
   code: 'CD4', display: 'CD4 count', shortName: null, category: null, specimenTypes: [], resultParams: [],
-  loinc: null, active: true,
+  loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 

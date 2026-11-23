@@ -25,7 +25,8 @@ const OPTIONS: api.TestCatalogOptions = {
 };
 const HIVVL: api.CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR],
-  resultParams: [], loinc: '25836-8', active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null },
+  resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+  lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
 function renderSheet(props: { target?: TestSheetTarget; options?: api.TestCatalogOptions; ownedHere?: boolean } = {}) {
@@ -92,7 +93,7 @@ describe('TestSheet', () => {
     await save();
     expect(api.createCatalogTest).toHaveBeenCalledWith({
       code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD],
-      resultParams: [], loinc: '25836-8', active: true,
+      resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('HIVVL saved.');
@@ -144,7 +145,7 @@ describe('TestSheet', () => {
     await save();
     expect(api.updateCatalogTest).toHaveBeenCalledWith('HIVVL', {
       display: 'HIV-1 viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR], resultParams: [],
-      loinc: '25836-8', active: false,
+      loinc: '25836-8', active: false, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
   });
@@ -160,6 +161,28 @@ describe('TestSheet', () => {
     await save();
     expect(api.updateCatalogTest).not.toHaveBeenCalled();
     expect(api.setCatalogLabSettings).toHaveBeenCalledWith('HIVVL', { enabled: false, specimenTypes: [BLD], localDisplay: null });
+  });
+
+  it('saves the turnaround times and the verification switch the operator set', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(HIVVL);
+    renderSheet({ target: { kind: 'edit', test: { ...HIVVL, expectedTatHours: 48 } } });
+    expect(screen.getByRole('textbox', { name: 'Expected TAT (hours)' })).toHaveValue('48');
+    type('Expected TAT (hours)', '');
+    type('Critical TAT (hours)', '0.5');
+    fireEvent.click(screen.getByRole('switch', { name: 'Requires verification' }));
+    await save();
+    expect(api.updateCatalogTest).toHaveBeenCalledWith('HIVVL', expect.objectContaining({
+      expectedTatHours: null, criticalTatHours: 0.5, requiresVerification: false,
+    }));
+  });
+
+  it('shows central turnaround times and verification as text at a lab that receives central catalog', () => {
+    renderSheet({ target: { kind: 'edit', test: { ...HIVVL, expectedTatHours: 1, criticalTatHours: 72, requiresVerification: false } }, ownedHere: false });
+    expect(screen.queryByRole('textbox', { name: 'Expected TAT (hours)' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Requires verification' })).toBeNull();
+    expect(screen.getByText('1 hour')).toBeInTheDocument();
+    expect(screen.getByText('72 hours')).toBeInTheDocument();
+    expect(screen.getByText('No')).toBeInTheDocument();
   });
 
   it('lays the catalog and lab fields in one grid, so their labels share one column', () => {

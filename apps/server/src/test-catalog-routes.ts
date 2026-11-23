@@ -65,6 +65,11 @@ const testInput = z.object({
   resultParams: z.array(resultParam).optional(),
   loinc: z.string().nullish(),
   active: z.boolean().optional(),
+  // Hours. A number is required here; the service refuses one that is not positive, so the CLI and an
+  // import refuse the same values in the same words.
+  expectedTatHours: z.number().nullish(),
+  criticalTatHours: z.number().nullish(),
+  requiresVerification: z.boolean().optional(),
 });
 const labInput = z.object({
   enabled: z.boolean(),
