@@ -77,6 +77,14 @@ describe('RejectSampleSheet', () => {
     await waitFor(() => expect(api.rejectReceptionSample).toHaveBeenCalledWith(expect.objectContaining({ specimenTypeCode: 'S2', redraw: false })));
   });
 
+  it('shows a failed read of the sample types as an error, not as no sample type', async () => {
+    vi.mocked(api.receptionSampleChoices).mockRejectedValueOnce(new Error('read sample types failed: 500'));
+    render(<RejectSampleSheet order={ORDER} onClose={() => {}} onRejected={() => {}} />);
+    expect(await screen.findByTestId('reject-sample-types-failed')).toHaveTextContent('read sample types failed: 500');
+    expect(toast.error).toHaveBeenCalledWith('read sample types failed: 500');
+    expect(screen.queryByText(/name no sample type/)).toBeNull();
+  });
+
   it('refuses with no reason or no condition', async () => {
     render(<RejectSampleSheet order={ORDER} onClose={() => {}} onRejected={() => {}} />);
     await pick('Sample type', 'Sample one');

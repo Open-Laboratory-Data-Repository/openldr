@@ -54,6 +54,11 @@ export function OrderPanel({
   const key = orderKey(order);
   const tests = order.tests.slice(page * pageSize, (page + 1) * pageSize);
   const returned = order.returned !== null;
+  // An order saved before slice 1b holds several tests on one request. Rejecting one of them would
+  // revoke the whole request, so its rows offer no Reject test. Reject sample still covers them.
+  const liveRows = new Map<string, number>();
+  for (const x of order.tests.filter(isLive)) liveRows.set(x.serviceRequestId, (liveRows.get(x.serviceRequestId) ?? 0) + 1);
+  const mayRejectTest = (x: ReceptionOrder['tests'][number]): boolean => isLive(x) && liveRows.get(x.serviceRequestId) === 1;
   const hasLive = order.tests.some(isLive);
   // The server refuses a desk order and one already returned or on hold.
   const mayReturn = canReject && hasLive && order.origin !== 'lab-desk' && !returned
@@ -163,15 +168,15 @@ export function OrderPanel({
               </TableCell>
               {canReject && (
                 <TableCell className="w-10 px-2 py-1">
-                  {isLive(test) && (
+                  {mayRejectTest(test) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`test-actions-${test.serviceRequestId}`} aria-label={t('reception.panel.testActions')}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`test-actions-${test.serviceRequestId}-${test.code}`} aria-label={t('reception.panel.testActions')}>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem data-testid={`test-reject-${test.serviceRequestId}`} onSelect={() => onRejectTest(test)}>{t('reception.panel.rejectTest')}</DropdownMenuItem>
+                        <DropdownMenuItem data-testid={`test-reject-${test.serviceRequestId}-${test.code}`} onSelect={() => onRejectTest(test)}>{t('reception.panel.rejectTest')}</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}

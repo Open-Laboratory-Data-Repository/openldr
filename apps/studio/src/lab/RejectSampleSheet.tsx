@@ -37,6 +37,7 @@ export function RejectSampleSheet({ order, onClose, onRejected, onCloseAutoFocus
   const reasons = useValueSet(ORDER_REJECT_REASON_VALUE_SET, open);
   const [types, setTypes] = useState<ReceptionCoding[]>([]);
   const [typesLoading, setTypesLoading] = useState(false);
+  const [typesError, setTypesError] = useState<string | null>(null);
   const [type, setType] = useState('');
   const [condition, setCondition] = useState('');
   const [reason, setReason] = useState('');
@@ -46,11 +47,15 @@ export function RejectSampleSheet({ order, onClose, onRejected, onCloseAutoFocus
   useEffect(() => {
     if (!order) return undefined;
     let live = true;
-    setTypes([]); setType(''); setCondition(''); setReason(''); setRedraw(true);
+    setTypes([]); setType(''); setCondition(''); setReason(''); setRedraw(true); setTypesError(null);
     setTypesLoading(true);
     receptionSampleChoices(order.requisition, order.facility?.code ?? null)
       .then((rows) => { if (live) { setTypes(rows); setType(startType(order, rows)); } })
-      .catch((e: unknown) => { if (live) { setTypes([]); toast.error(e instanceof Error ? e.message : String(e)); } })
+      .catch((e: unknown) => {
+        if (!live) return;
+        const message = e instanceof Error ? e.message : String(e);
+        setTypes([]); setTypesError(message); toast.error(message);
+      })
       .finally(() => { if (live) setTypesLoading(false); });
     return () => { live = false; };
   }, [order]);
@@ -106,6 +111,9 @@ export function RejectSampleSheet({ order, onClose, onRejected, onCloseAutoFocus
           <div className="border-t border-border" />
           {typesLoading ? (
             <LoadingState className="min-h-[8rem]" label={t('common.loading')} />
+          ) : typesError !== null ? (
+            // A failed read is not "no sample type": say what failed, with no hatch.
+            <p className="px-6 py-4 text-sm text-muted-foreground" data-testid="reject-sample-types-failed">{typesError}</p>
           ) : types.length === 0 ? (
             <StripedEmpty className="min-h-[8rem]">{t('reception.rejectSample.noTypes')}</StripedEmpty>
           ) : (

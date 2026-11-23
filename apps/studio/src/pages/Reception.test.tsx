@@ -288,8 +288,8 @@ describe('Reception return, reject and redraw', () => {
     await screen.findByTestId('order-panel-F1|REQ-1');
     // A rejected test shows its reason as plain text, and has no menu.
     expect(screen.getByText('Rejected: Haemolysed')).toBeInTheDocument();
-    expect(screen.queryByTestId('test-actions-sr2')).toBeNull();
-    openMenu('test-actions-sr1');
+    expect(screen.queryByTestId('test-actions-sr2-T2')).toBeNull();
+    openMenu('test-actions-sr1-T1');
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Reject test' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Test one')).toBeInTheDocument();
@@ -300,7 +300,25 @@ describe('Reception return, reject and redraw', () => {
     renderPage();
     await search('REQ-1');
     await screen.findByTestId('order-panel-F1|REQ-1');
-    expect(screen.queryByTestId('test-actions-sr1')).toBeNull();
+    expect(screen.queryByTestId('test-actions-sr1-T1')).toBeNull();
+  });
+
+  it('offers no Reject test on an old order whose tests share one request', async () => {
+    caps.set = new Set(['lab.receive', 'lab.reject']);
+    const shared: api.ReceptionOrder = {
+      ...ORDER,
+      tests: [ORDER.tests[0]!, { serviceRequestId: 'sr1', system: 'urn:test:catalog', code: 'T2', display: 'Test two', status: 'active', rejection: null }],
+    };
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([shared]);
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-F1|REQ-1');
+    expect(screen.getByText('Test two')).toBeInTheDocument();
+    expect(screen.queryByTestId('test-actions-sr1-T1')).toBeNull();
+    expect(screen.queryByTestId('test-actions-sr1-T2')).toBeNull();
+    // Reject sample still covers them.
+    openMenu('order-actions-F1|REQ-1');
+    expect(await screen.findByRole('menuitem', { name: 'Reject sample' })).toBeInTheDocument();
   });
 
   it('shows the returned order from the server after Return to site, and refocuses the scan box', async () => {
