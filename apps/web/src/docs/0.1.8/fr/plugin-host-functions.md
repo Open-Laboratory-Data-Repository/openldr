@@ -2,7 +2,7 @@
 
 Le code serveur d'un plugin peut garder ses propres enregistrements, lire certains enregistrements de CE et envoyer des enregistrements FHIR dans CE. Il le fait par quatre fonctions hôtes : `db_select`, `db_write`, `ce_read` et `fhir_emit`. Un plugin n'envoie jamais de SQL. Il envoie une requête JSON, que CE vérifie avant de construire l'instruction.
 
-Cette page s'adresse à la personne qui écrit le plugin. L'administrateur voit les capacités sur l'écran d'installation et les approuve là.
+Cette page s'adresse à la personne qui écrit le plugin. L'administrateur voit les capacités sur l'écran d'installation et les approuve là. Les permissions qu'une personne doit avoir pour lancer chaque action sont sur [Permissions des plugins](/docs/plugin-permissions).
 
 ## Capacités
 
@@ -62,7 +62,7 @@ CE refuse une version qui supprime ou renomme une colonne, change un type, chang
 
 Une version qui ne déclare aucune table garde les tables et les lignes de la version précédente. Désactiver un plugin, revenir à une version antérieure ou retirer une ancienne version les garde aussi. Seul le retrait du plugin avec le choix de ne rien garder supprime le schéma et ses lignes.
 
-Après un retour à une version antérieure, cette version continue à lire et écrire ses tables. Elle ne lit et n'écrit que les colonnes qu'elle déclare. Une colonne ajoutée par une version plus récente reste dans la table, et les lignes ajoutées par l'ancienne version la laissent vide.
+Après un retour à une version antérieure, cette version continue à lire et écrire ses tables. Elle ne lit et n'écrit que les colonnes qu'elle déclare. Une colonne ajoutée par une version plus récente reste dans la table. Les lignes ajoutées par l'ancienne version la laissent vide, ou lui donnent sa valeur par défaut quand la colonne en a une.
 
 ## db_select
 
@@ -109,7 +109,7 @@ Lit les enregistrements de CE par une opération. La requête est `{ "op": "<op>
 
 | Opération | Entrée |
 |---|---|
-| `patients.search` | `search`, `status`, `limit`, `offset` |
+| `patients.search` | `search`, ou `identifier`, ou `given`, `family` et `birthDate` ; puis `status`, `limit`, `offset` |
 | `patients.get` | `ref` |
 | `patients.register` | `patient`, un Patient FHIR avec un `id` |
 | `valueset.expand` | `url`, `count`, `offset`, `filter` |
@@ -118,7 +118,7 @@ Lit les enregistrements de CE par une opération. La requête est `{ "op": "<op>
 | `testCatalog.get` | `code` |
 | `facilities.search` | `q`, `limit`, `offset` |
 
-Chaque opération suit les mêmes règles que la page du studio qui montre les mêmes enregistrements. Les opérations patient demandent que l'appelant ait `patients.view`. Les identifiants ne s'affichent que pour un appelant qui a `patients.view_identifiers`. Un appelant limité ne trouve que les patients et les établissements de sa limite. `patients.register` demande aussi `Patient` dans la liste `emit-fhir` du plugin.
+Chaque opération suit les mêmes règles que la page du studio qui montre les mêmes enregistrements. Les opérations patient demandent que l'appelant ait `patients.view` ou `patients.find`. Avec `patients.find` seul, une recherche doit donner un identifiant exact, ou un nom avec la date de naissance complète. Voir [Permissions des plugins](/docs/plugin-permissions). Les identifiants ne s'affichent que pour un appelant qui a `patients.view_identifiers`. Un appelant limité ne trouve que les patients et les établissements de sa limite. `patients.register` demande aussi `Patient` dans la liste `emit-fhir` du plugin.
 
 ## fhir_emit
 

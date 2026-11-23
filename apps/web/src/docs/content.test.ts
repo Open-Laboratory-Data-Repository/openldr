@@ -80,6 +80,25 @@ describe('website docs content', () => {
     expect(pageTitle('plugin-host-functions', '0.1.8', 'pt')).toBe('Tabelas e funções do anfitrião para plugins');
   });
 
+  it('documents plugin permissions, the gate per action and patients.find, in every language', () => {
+    for (const locale of ['en', 'fr', 'pt'] as const) {
+      const page = docPage('plugin-permissions', DEFAULT_DOC_VERSION, locale)!;
+      expect(page.localeUsed, locale).toBe(locale);
+      for (const term of ['"permissions"', '"actionPermissions"', '`forms.edit`', '`sinkhost`', '`openldr roles doctor`', '`patients.find`', '`requiredCapabilities`', '/x/<id>', 'NOT_FOUND']) {
+        expect(page.body, `${locale} ${term}`).toContain(term);
+      }
+      expect(page.body, locale).not.toContain('—');
+      // The host functions page links here, and no longer says a newer column is always left empty.
+      const host = docPage('plugin-host-functions', DEFAULT_DOC_VERSION, locale)!.body;
+      expect(host, locale).toContain('(/docs/plugin-permissions)');
+      expect(host, locale).toContain('`patients.find`');
+    }
+    expect(docPage('plugin-host-functions', '0.1.8', 'en')!.body).toContain('or give it its default when the column has one');
+    expect(pageTitle('plugin-permissions', '0.1.8', 'en')).toBe('Plugin permissions');
+    expect(pageTitle('plugin-permissions', '0.1.8', 'fr')).toBe('Permissions des plugins');
+    expect(pageTitle('plugin-permissions', '0.1.8', 'pt')).toBe('Permissões dos plugins');
+  });
+
   it('takes each page title from the file in the reader\'s language', () => {
     expect(pageTitle('upgrading', '0.1.8', 'en')).toBe('Planned upgrades');
     expect(pageTitle('upgrading', '0.1.8', 'fr')).toBe('Mises à niveau planifiées');

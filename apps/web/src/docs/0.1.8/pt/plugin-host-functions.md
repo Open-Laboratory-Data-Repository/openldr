@@ -2,7 +2,7 @@
 
 O código de servidor de um plugin pode guardar os seus próprios registos, ler alguns registos do CE e enviar registos FHIR para o CE. Faz isto através de quatro funções do anfitrião: `db_select`, `db_write`, `ce_read` e `fhir_emit`. Um plugin nunca envia SQL. Envia um pedido JSON, e o CE verifica-o antes de construir a instrução.
 
-Esta página é para quem escreve o plugin. O administrador vê as capacidades no ecrã de instalação e aprova-as aí.
+Esta página é para quem escreve o plugin. O administrador vê as capacidades no ecrã de instalação e aprova-as aí. As permissões de que uma pessoa precisa para executar cada ação estão em [Permissões dos plugins](/docs/plugin-permissions).
 
 ## Capacidades
 
@@ -62,7 +62,7 @@ O CE recusa uma versão que elimine ou mude o nome de uma coluna, mude um tipo, 
 
 Uma versão que não declara tabelas mantém as tabelas e as linhas da versão anterior. Desativar um plugin, voltar a uma versão anterior ou remover uma versão antiga também as mantém. Só remover o plugin e escolher não guardar nada elimina o esquema e as suas linhas.
 
-Depois de voltar a uma versão anterior, essa versão continua a ler e escrever as suas tabelas. Lê e escreve só as colunas que declara. Uma coluna acrescentada por uma versão mais recente fica na tabela, e as linhas que a versão anterior acrescenta deixam-na vazia.
+Depois de voltar a uma versão anterior, essa versão continua a ler e escrever as suas tabelas. Lê e escreve só as colunas que declara. Uma coluna acrescentada por uma versão mais recente fica na tabela. As linhas que a versão anterior acrescenta deixam-na vazia, ou dão-lhe o seu valor por omissão quando a coluna tem um.
 
 ## db_select
 
@@ -109,7 +109,7 @@ Lê os registos do próprio CE através de uma operação. O pedido é `{ "op": 
 
 | Operação | Entrada |
 |---|---|
-| `patients.search` | `search`, `status`, `limit`, `offset` |
+| `patients.search` | `search`, ou `identifier`, ou `given`, `family` e `birthDate`; depois `status`, `limit`, `offset` |
 | `patients.get` | `ref` |
 | `patients.register` | `patient`, um Patient FHIR com um `id` |
 | `valueset.expand` | `url`, `count`, `offset`, `filter` |
@@ -118,7 +118,7 @@ Lê os registos do próprio CE através de uma operação. O pedido é `{ "op": 
 | `testCatalog.get` | `code` |
 | `facilities.search` | `q`, `limit`, `offset` |
 
-Cada operação segue as mesmas regras da página do studio que mostra os mesmos registos. As operações de pacientes precisam que quem chama tenha `patients.view`. Os identificadores só aparecem a quem tem `patients.view_identifiers`. Quem tem um limite só encontra pacientes e unidades dentro do seu limite. `patients.register` também precisa de `Patient` na lista `emit-fhir` do plugin.
+Cada operação segue as mesmas regras da página do studio que mostra os mesmos registos. As operações de pacientes precisam que quem chama tenha `patients.view` ou `patients.find`. Só com `patients.find`, uma pesquisa tem de dar um identificador exato, ou um nome com a data de nascimento completa. Veja [Permissões dos plugins](/docs/plugin-permissions). Os identificadores só aparecem a quem tem `patients.view_identifiers`. Quem tem um limite só encontra pacientes e unidades dentro do seu limite. `patients.register` também precisa de `Patient` na lista `emit-fhir` do plugin.
 
 ## fhir_emit
 

@@ -136,6 +136,20 @@ Abra os pontos do painel e selecione **Save**.
 
 ![A descrição atualizada aparece na linha da função.](roles-guide-edited-result.png)
 
+## Dar a uma função as permissões de um plugin
+
+Faça isto depois de instalar um plugin que acrescenta as suas próprias permissões. Elas aparecem num grupo com o nome do plugin.
+
+1. Abra o menu de utilizador no canto inferior esquerdo, escolha **Settings** e selecione **Roles**.
+2. Encontre a função, abra os pontos da sua linha e selecione **Edit**.
+3. Desloque o painel até ao grupo com o nome do plugin.
+4. Ative cada permissão do plugin de que a função precisa. Leia a descrição junto de cada interruptor.
+5. Abra os pontos do painel e selecione **Save**.
+
+**Resultado esperado:** as pessoas com esta função podem executar as ações do plugin que pedem estas permissões. Se o plugin só mostra a sua página a algumas permissões, passam a vê-la no menu principal.
+
+Administrator recebe todas as permissões de um plugin quando o plugin é instalado. As outras funções não recebem nenhuma até as ativar.
+
 ## Eliminar uma função personalizada
 
 Use esta tarefa apenas quando as pessoas devem perder as permissões concedidas pela função. Não pode eliminar funções do sistema.
@@ -184,11 +198,21 @@ Administrator está bloqueado. As restantes funções do sistema podem ser edita
 
 Criar uma função não a atribui a ninguém. As atribuições são geridas em Users. Confira as pessoas afetadas antes de alterar ou eliminar uma função atribuída.
 
+## Permissões dos plugins e Encontrar um paciente
+
+As permissões de um plugin ficam nas funções que as têm quando o plugin é desativado ou removido. O seu grupo sai da página Roles, e as permissões deixam de abrir o que quer que seja. Guardar a função mantém-nas. Quando o plugin volta a ser instalado, o seu grupo regressa com os mesmos interruptores ativos. Para retirar uma permissão, desative-a enquanto o plugin está instalado. `openldr roles doctor` lista como mantidas as permissões que um plugin removido deixou.
+
+**Encontrar um paciente** (`patients.find`) está no grupo Pacientes. Permite a uma página de plugin encontrar um paciente nas unidades da própria pessoa, por um identificador exato, ou pelo nome com a data de nascimento completa. Não abre o índice de pacientes. Uma pessoa cujos dados estão limitados a alguns locais mantém-na, e perde **Ver o índice de pacientes**. Entre as funções do sistema, só Administrator a tem.
+
 ## Resolução de problemas
 
 **A função está apenas de leitura.** Confira se abriu a função bloqueada Administrator e se a sua conta tem Manage roles.
 
 **Uma nova função não altera o acesso de ninguém.** Criá-la apenas guarda as permissões. Use Users para atribuir a função à pessoa pretendida.
+
+**Falta o grupo de um plugin.** O plugin está desativado ou removido, ou não acrescenta permissões. Verifique Marketplace.
+
+**Uma pessoa não vê um plugin no menu principal.** As suas funções não têm a permissão que o plugin pede, ou o seu layout não lista a página do plugin. Verifique as suas funções e depois Layouts.
 
 ## Guias relacionados
 

@@ -274,7 +274,7 @@ Use this when a person should see dashboard numbers for their own facility, dist
 
 Places come from the facility register, so they are picked, never typed. A district is listed with its region, because two regions can have a district of the same name. One limit lists at most 300 places; for more, pick their district or region. **Limited** with no place listed shows the person no dashboard numbers.
 
-A limited user loses these permissions, whatever their role gives: reports, patients, queries, exports, workflows, connectors, audit, activity, held corrections, the facility register and sync. They cannot create or edit dashboards, and a widget written in SQL shows **Not available with your data limit**. They keep forms. On a form, the limit decides which facility they may enter and which entries they see. Read [Forms](/docs/forms). The limit does not cover patient search inside a form.
+A limited user loses these permissions, whatever their role gives: reports, patients, queries, exports, workflows, connectors, audit, activity, held corrections, the facility register and sync. They cannot create or edit dashboards, and a widget written in SQL shows **Not available with your data limit**. They keep forms. On a form, the limit decides which facility they may enter and which entries they see. Read [Forms](/docs/forms). The limit does not cover patient search inside a form. Patients here means **View patient index** (`patients.view`). They keep **Find a patient** (`patients.find`) when their role gives it. A plugin page, such as a lab page, can then find one patient at their own facilities, by an exact identifier, or by name with full birth date. They cannot browse the patient list. Read [Roles](/docs/roles).
 
 ## Use Users on a phone
 

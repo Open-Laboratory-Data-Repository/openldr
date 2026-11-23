@@ -86,7 +86,7 @@ export const NAV_SECTIONS: Array<{ id: string; label: Record<DocLocale, string>;
       { slug: 'standalone' },
       { slug: 'development' },
       { slug: 'profile-packs' },
-      { slug: 'plugin-host-functions' },
+      { slug: 'plugin-host-functions', children: ['plugin-permissions'] },
     ],
   },
 ];
