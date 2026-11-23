@@ -16,6 +16,8 @@ export const CE_MANAGED_COLUMNS = ['created_at', 'updated_at'] as const;
 
 export const MAX_PLUGIN_TABLES = 50;
 export const MAX_PLUGIN_COLUMNS = 100;
+export const MAX_PLUGIN_INDEXES = 20;
+export const MAX_INDEX_COLUMNS = 32;
 
 const identifier = z.string().regex(PLUGIN_IDENTIFIER, 'must match ^[a-z][a-z0-9_]{0,62}$');
 
@@ -26,14 +28,21 @@ export const columnShapeSchema = z.object({
   type: z.enum(COLUMN_TYPES),
   nullable: z.boolean().optional(),
   default: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
-}).strict();
+}).strict().superRefine((c, ctx) => {
+  if ((c.type === 'integer' || c.type === 'bigint') && typeof c.default === 'number' && !Number.isInteger(c.default)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['default'], message: `column ${c.name}: an ${c.type} default must be a whole number` });
+  }
+});
 export type ColumnShape = z.infer<typeof columnShapeSchema>;
 
 export const tableShapeSchema = z.object({
   name: identifier,
   columns: z.array(columnShapeSchema).min(1).max(MAX_PLUGIN_COLUMNS),
   primaryKey: z.array(z.string()).min(1),
-  indexes: z.array(z.object({ columns: z.array(z.string()).min(1), unique: z.boolean().optional() }).strict()).optional(),
+  indexes: z.array(z.object({
+    columns: z.array(z.string()).min(1).max(MAX_INDEX_COLUMNS),
+    unique: z.boolean().optional(),
+  }).strict()).max(MAX_PLUGIN_INDEXES).optional(),
   facilityColumn: z.string().optional(),
 }).strict().superRefine((t, ctx) => {
   const types = new Map<string, ColumnType>();
@@ -50,6 +59,9 @@ export const tableShapeSchema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['primaryKey'], message: `table ${t.name}: primary key names a column twice` });
   }
   for (const [i, idx] of (t.indexes ?? []).entries()) {
+    if (new Set(idx.columns).size !== idx.columns.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['indexes', i], message: `table ${t.name}: an index names a column twice` });
+    }
     for (const k of idx.columns) {
       if (!types.has(k)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['indexes', i], message: `table ${t.name}: index column '${k}' is not a declared column` });
     }
