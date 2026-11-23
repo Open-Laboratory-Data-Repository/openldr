@@ -7,7 +7,7 @@ import type { FacilityRegistryStore } from '@openldr/db';
 import { TerminologyError, type Operations } from '@openldr/terminology';
 import type { HostFn, HostPlugin, PluginHost } from '@openldr/plugins';
 import { checkResources } from './import-run';
-import { parsePatientListQuery, type PatientIndex } from './patient-index';
+import { parsePatientFindQuery, parsePatientListQuery, type PatientIndex } from './patient-index';
 import { PatientIndexError } from './patient-identifier-systems';
 import { parseCatalogListQuery, type TestCatalog } from './test-catalog';
 import type { AuditActor, AuditDetails } from './record-audit';
@@ -37,7 +37,7 @@ export const MAX_PATIENT_SCOPE_FACILITIES = 2000;
 export interface PluginHostDeps {
   /** Structured requests on a plugin's own tables (Task 3), on the internal database. */
   requests: Pick<PluginRequests, 'select' | 'write'>;
-  patients: Pick<PatientIndex, 'list' | 'get'>;
+  patients: Pick<PatientIndex, 'list' | 'find' | 'get'>;
   testCatalog: Pick<TestCatalog, 'list' | 'get'>;
   terminology: Pick<Operations, 'expand' | 'lookup'>;
   facilityRegistry: Pick<FacilityRegistryStore, 'list' | 'get' | 'idsMatching'>;
@@ -53,6 +53,12 @@ const FHIR_ID = /^[A-Za-z0-9\-.]{1,64}$/;
 
 const patientSearchInput = z.object({
   search: z.string().max(200).optional(),
+  // A strong-match lookup (ruling 5): one exact identifier, or given and family with a full birth
+  // date. A caller with patients.find and not patients.view may search only this way.
+  identifier: z.object({ system: z.string().max(2000).optional(), value: z.string().max(500) }).strict().optional(),
+  given: z.string().max(200).optional(),
+  family: z.string().max(200).optional(),
+  birthDate: z.string().max(40).optional(),
   status: z.enum(['active', 'merged', 'all']).optional(),
   limit: z.number().int().optional(),
   offset: z.number().int().optional(),
@@ -167,38 +173,59 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         return stored.resource;
       };
 
-      // As the studio's patient routes: the patient ops need patients.view.
-      const needPatientsView = (op: string) => {
-        if (!caller.capabilities.includes('patients.view')) {
-          throw new HostInputError('FORBIDDEN', `${op}: the caller does not hold patients.view`);
+      // As the studio's patient routes: the patient ops need patients.view. patients.find (ruling 5)
+      // also opens them, for a strong-match search only, and a limited user keeps it.
+      const canView = caller.capabilities.includes('patients.view');
+      const canFind = caller.capabilities.includes('patients.find');
+      const needPatientsAccess = (op: string) => {
+        if (!canView && !canFind) {
+          throw new HostInputError('FORBIDDEN', `${op}: the caller holds neither patients.view nor patients.find`);
         }
+      };
+      /** The caller's facilities for a patient search, or undefined for no limit. */
+      const searchFacilities = (): string[] | undefined => {
+        if (scope === '*') return undefined;
+        if (scope.size > MAX_PATIENT_SCOPE_FACILITIES) {
+          throw new HostInputError('TOO_MANY_FACILITIES', `patients.search: the caller's data limit covers over ${MAX_PATIENT_SCOPE_FACILITIES} facilities`);
+        }
+        return [...scope];
       };
 
       const readOps: Record<CeReadOp, (input: unknown) => Promise<unknown>> = {
         async 'patients.search'(raw) {
-          needPatientsView('patients.search');
+          needPatientsAccess('patients.search');
           const i = parse(patientSearchInput, raw, 'patients.search');
+          const strong = i.identifier !== undefined || i.given !== undefined || i.family !== undefined || i.birthDate !== undefined;
+          if (strong || !canView) {
+            // A caller with patients.find alone cannot browse: no free-text search, no empty search.
+            if (i.search !== undefined) {
+              throw new HostInputError(canView ? 'INVALID_REQUEST' : 'FORBIDDEN', canView
+                ? 'patients.search: give search, or an identifier or name with birth date, not both'
+                : 'patients.search: with patients.find, search needs an exact identifier, or given, family and birthDate');
+            }
+            const fq = parsePatientFindQuery({
+              identifier: i.identifier, given: i.given, family: i.family, birthDate: i.birthDate,
+              status: i.status, limit: i.limit, offset: i.offset,
+            });
+            if (!fq.ok) throw new HostInputError('INVALID_REQUEST', `patients.search: ${fq.error}`);
+            const out = await deps.patients.find(fq.query, { unmask, facilities: searchFacilities() });
+            if (unmask) await deps.audit(actor, { action: 'patients.list', entityType: 'patient', entityId: 'list', metadata: { ...auditMeta, count: out.total } });
+            return out;
+          }
           const q = parsePatientListQuery({
             search: i.search, status: i.status,
             limit: i.limit === undefined ? undefined : String(i.limit),
             offset: i.offset === undefined ? undefined : String(i.offset),
           });
           if (!q.ok) throw new HostInputError('INVALID_REQUEST', `patients.search: ${q.error}`);
-          let facilities: string[] | undefined;
-          if (scope !== '*') {
-            if (scope.size > MAX_PATIENT_SCOPE_FACILITIES) {
-              throw new HostInputError('TOO_MANY_FACILITIES', `patients.search: the caller's data limit covers over ${MAX_PATIENT_SCOPE_FACILITIES} facilities`);
-            }
-            facilities = [...scope];
-          }
-          const out = await deps.patients.list(q.query, { unmask, facilities });
+          const out = await deps.patients.list(q.query, { unmask, facilities: searchFacilities() });
           // As the studio route: an unmasked list is audited, with the count only.
           if (unmask) await deps.audit(actor, { action: 'patients.list', entityType: 'patient', entityId: 'list', metadata: { ...auditMeta, count: out.total } });
           return out;
         },
 
         async 'patients.get'(raw) {
-          needPatientsView('patients.get');
+          needPatientsAccess('patients.get');
           const { ref } = parse(patientGetInput, raw, 'patients.get');
           const detail = await deps.patients.get(ref, { unmask });
           // A patient outside the caller's data limit is answered as not found, so the answer says
@@ -209,7 +236,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         },
 
         async 'patients.register'(raw) {
-          needPatientsView('patients.register');
+          needPatientsAccess('patients.register');
           // Writing a Patient is consent given at install: the plugin's emit-fhir list must name it.
           if (!allowedTypes.has('Patient')) {
             throw new HostInputError('FORBIDDEN', 'patients.register: this plugin was not granted emit-fhir for Patient at install');

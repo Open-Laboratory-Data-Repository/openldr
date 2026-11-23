@@ -49,6 +49,7 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   // Patients
   { key: 'patients.view', group: 'patients', label: 'View patient index', description: 'Open the Patient Index. Names and identifiers are masked, and search matches an exact identifier only.' },
   { key: 'patients.view_identifiers', group: 'patients', label: 'View patient identifiers', description: 'See patient names, identifiers, date of birth, phone and email in full, and search by name. Every unmasked view is audited.' },
+  { key: 'patients.find', group: 'patients', label: 'Find a patient', description: 'Find a patient by an exact identifier, or by name with full birth date, at your own facilities.' },
   { key: 'patients.manage', group: 'patients', label: 'Manage patient index', description: 'Name identifier systems and choose which ones are listed and searched.' },
   // Roles
   { key: 'roles.view', group: 'roles', label: 'View roles', description: 'Open the Roles workspace and see roles and their capabilities.' },

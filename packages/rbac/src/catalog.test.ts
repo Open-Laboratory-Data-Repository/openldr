@@ -15,9 +15,10 @@ describe('capability catalog', () => {
   // 45 -> 46: imports.correct_held, for correcting held requests (design 2026-11-18-held-corrections).
   // 46 -> 47: query.manage, for changing saved queries (design 2026-11-19-manage-saved-queries).
   // 47 -> 48: forms.void_entries, for marking a form entry as entered in error (plan 2026-11-22-form-entries).
-  it('exposes 48 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(48);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(48);
+  // 48 -> 49: patients.find, a strong-match lookup a limited user keeps (plan 2026-11-23-plugin-host-2b, ruling 5).
+  it('exposes 49 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(49);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(49);
   });
 
   it('has forms.void_entries in the forms group', () => {
@@ -102,6 +103,18 @@ describe('patients capabilities', () => {
       expect(role(slug).capabilities).not.toContain('patients.manage');
     }
     expect(role('lab_technician').capabilities.some((c) => c.startsWith('patients.'))).toBe(false);
+  });
+
+  it('has patients.find in the patients group, held by the Administrator and no other preset', () => {
+    expect(CAPABILITIES.find((c) => c.key === 'patients.find')).toEqual({
+      key: 'patients.find',
+      group: 'patients',
+      label: 'Find a patient',
+      description: 'Find a patient by an exact identifier, or by name with full birth date, at your own facilities.',
+    });
+    for (const r of SYSTEM_ROLES) {
+      expect(r.capabilities.includes('patients.find'), r.slug).toBe(r.slug === 'lab_admin');
+    }
   });
 });
 

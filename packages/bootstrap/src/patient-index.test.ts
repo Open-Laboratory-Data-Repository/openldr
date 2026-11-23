@@ -4,7 +4,7 @@ import {
   DummyDriver, Kysely, MssqlAdapter, MssqlIntrospector, MssqlQueryCompiler, MysqlAdapter, MysqlIntrospector,
   MysqlQueryCompiler,
 } from 'kysely';
-import { createPatientIndex, neutralOrder, parsePageQuery, parsePatientListQuery } from './patient-index';
+import { createPatientIndex, isFullBirthDate, neutralOrder, parsePageQuery, parsePatientFindQuery, parsePatientListQuery } from './patient-index';
 import { buildPatientIndexFixture, seedIdentifier, seedPatient, seedRequest, seedResult } from './test-support/patient-index-fixture';
 
 const MPI = 'urn:zm:mpi';
@@ -222,5 +222,43 @@ describe('patient index parsers', () => {
       .toEqual({ ok: true, query: { q: 'x', status: 'merged', limit: 10, offset: 20 } });
     expect(parsePatientListQuery({ status: 'gone' })).toEqual({ ok: false, error: 'status must be active, merged or all' });
     expect(parsePageQuery({ limit: '500' })).toEqual({ ok: false, error: 'limit must be a whole number from 1 to 200' });
+  });
+});
+
+describe('patient index: strong-match find', () => {
+  const F = { status: 'active' as const, limit: 25, offset: 0 };
+  it('matches an exact identifier only, with its system when given, and skips an unsearchable system', async () => {
+    const { index, systems } = await build();
+    const id = (value: string, system: string | null = null) => index.find({ ...F, match: { kind: 'identifier', system, value } }, { unmask: false });
+    expect((await id('MPI-0001')).total).toBe(1);
+    expect((await id('MPI-0001', MPI)).total).toBe(1);
+    expect((await id('MPI-0001', NRC)).total).toBe(0);
+    expect((await id('MPI-000')).total).toBe(0);
+    expect((await id('G-111')).total).toBe(1);
+    expect((await id('G-111', MPI)).total).toBe(0);
+    await systems.set({ system: NRC, label: 'NRC', listColumn: false, searchable: false });
+    expect((await id('123456/10/1')).total).toBe(0);
+    expect((await id('123456/10/1', NRC)).total).toBe(0);
+  });
+
+  it('matches whole given and family names without case and the full birth date, inside the facilities', async () => {
+    const { index } = await build();
+    const name = (given: string, family: string, birthDate: string, facilities?: string[]) =>
+      index.find({ ...F, match: { kind: 'name', given, family, birthDate } }, { unmask: false, facilities });
+    expect((await name('JOHN', 'mwanza', '1990-01-05')).total).toBe(1);
+    expect((await name('Joh', 'Mwanza', '1990-01-05')).total).toBe(0);
+    expect((await name('John', 'Mwanza', '1990-01-05', ['fac-1'])).total).toBe(1);
+    expect((await name('John', 'Mwanza', '1990-01-05', ['fac-2'])).total).toBe(0);
+    expect((await name('John', 'Mwanza', '1990-01-05', [])).total).toBe(0);
+  });
+
+  it('parses a find query and refuses a partial date or a mixed one', () => {
+    expect(isFullBirthDate('1990-01-05')).toBe(true);
+    for (const d of ['1990', '1990-01', '1990-13-01', '1990-02-30', '90-01-05']) expect(isFullBirthDate(d), d).toBe(false);
+    expect(parsePatientFindQuery({ identifier: { value: ' X ' } })).toEqual({ ok: true, query: { match: { kind: 'identifier', system: null, value: 'X' }, ...F } });
+    expect(parsePatientFindQuery({}).ok).toBe(false);
+    expect(parsePatientFindQuery({ given: 'A', family: 'B', birthDate: '1990' }).ok).toBe(false);
+    expect(parsePatientFindQuery({ identifier: { value: 'X' }, given: 'A' }).ok).toBe(false);
+    expect(parsePatientFindQuery({ identifier: { value: 'X' }, status: 'gone' }).ok).toBe(false);
   });
 });

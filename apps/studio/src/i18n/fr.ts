@@ -496,6 +496,7 @@ export const fr: EnShape = {
       patients: {
         view: { label: 'Voir l’index des patients', description: 'Ouvrir l’index des patients. Les noms et les identifiants sont masqués, et la recherche ne trouve qu’un identifiant exact.' },
         view_identifiers: { label: 'Voir les identifiants des patients', description: 'Voir en entier les noms, identifiants, dates de naissance, téléphones et e-mails des patients, et chercher par nom. Chaque vue non masquée est auditée.' },
+        find: { label: 'Trouver un patient', description: 'Trouver un patient par un identifiant exact, ou par son nom avec la date de naissance complète, dans vos propres établissements.' },
         manage: { label: 'Gérer l’index des patients', description: 'Nommer les systèmes d’identifiants et choisir ceux qui sont listés et cherchés.' },
       },
       roles: {

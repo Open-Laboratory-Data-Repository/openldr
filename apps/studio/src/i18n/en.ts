@@ -500,6 +500,7 @@ export const en = {
       patients: {
         view: { label: 'View patient index', description: 'Open the Patient Index. Names and identifiers are masked, and search matches an exact identifier only.' },
         view_identifiers: { label: 'View patient identifiers', description: 'See patient names, identifiers, date of birth, phone and email in full, and search by name. Every unmasked view is audited.' },
+        find: { label: 'Find a patient', description: 'Find a patient by an exact identifier, or by name with full birth date, at your own facilities.' },
         manage: { label: 'Manage patient index', description: 'Name identifier systems and choose which ones are listed and searched.' },
       },
       roles: {
