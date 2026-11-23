@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "8995de4c6",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Plugins read several patients in one call"
+        },
+        {
+          "hash": "6ac7a396c",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A merged patient's survivor is named only inside the caller's data limit"
+        },
+        {
+          "hash": "9f5306aa1",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "Lasting patient links survive a reset and cannot be replaced from central"
+        },
+        {
+          "hash": "98dddfe8e",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "A lasting patient link and a facility lookup for plugins"
+        },
+        {
+          "hash": "2b6853359",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Plugin code can ask who is calling"
+        },
+        {
           "hash": "db8ef2911",
           "type": "fix",
           "scope": "studio",
