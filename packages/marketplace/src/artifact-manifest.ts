@@ -1,7 +1,7 @@
 import { z } from 'zod';
 // The subpath, not the package root: the root loads pg and kysely, which the manifest does not need.
 import { tableShapesSchema } from '@openldr/db/plugin-table-shape';
-import { CAPABILITY_KEYS } from '@openldr/rbac';
+import { CAPABILITY_KEYS, permissionGroup, reservedPermissionGroups } from '@openldr/rbac';
 import { capabilitySchema } from './capabilities';
 import { workflowNodeDeclSchema } from './workflow-node';
 
@@ -223,6 +223,7 @@ export function parseArtifactManifest(raw: unknown, opts: ParseArtifactOptions =
 }
 
 const CE_CAPABILITIES: ReadonlySet<string> = new Set(CAPABILITY_KEYS);
+const CE_GROUPS: ReadonlySet<string> = reservedPermissionGroups();
 
 /** Rulings 1 and 2 of plan 2026-11-23-plugin-host-2b. A declared key is unique and is not a CE
  *  capability, so a plugin cannot grant itself one. Each actionPermissions entry names a declared
@@ -235,6 +236,11 @@ function checkPluginPermissions(
   const own = new Set<string>();
   for (const p of permissions ?? []) {
     if (CE_CAPABILITIES.has(p.key) && !stored) throw new Error(`artifact ${id}: permission '${p.key}' is a CE capability; a plugin cannot declare it as its own`);
+    // The group rule (ruling 1 as amended): CE keeps its own groups, so a later CE permission cannot
+    // already belong to a plugin. Install only: a stored manifest is read again after CE changes.
+    if (CE_GROUPS.has(permissionGroup(p.key)) && !stored) {
+      throw new Error(`artifact ${id}: permission '${p.key}' is in the group '${permissionGroup(p.key)}', which CE keeps for its own permissions`);
+    }
     if (own.has(p.key)) throw new Error(`artifact ${id}: permission '${p.key}' is declared twice`);
     own.add(p.key);
   }

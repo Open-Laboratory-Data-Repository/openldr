@@ -480,6 +480,16 @@ describe('plugin permissions and actionPermissions (plan 2026-11-23 rulings 1 an
   it('refuses a key that is a CE capability', () => {
     expect(() => parseArtifactManifest(withPerms({ permissions: [perm('forms.edit')] }))).toThrow(/'forms.edit' is a CE capability/);
   });
+  it('refuses a key in a group CE keeps, and accepts one in lab, which CE no longer keeps', () => {
+    // forms.custom is not a CE capability, but forms is a CE group (ruling 1 as amended).
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('forms.custom')] })))
+      .toThrow(/'forms.custom' is in the group 'forms', which CE keeps for its own permissions/);
+    // data_exposure is a CE group name and a key prefix; settings is a group name too.
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('settings.lab')] }))).toThrow(/which CE keeps/);
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('lab.orders.receive')] }))).not.toThrow();
+    // A stored manifest is read again after CE changes, so the rule is not applied to it.
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('forms.custom')] }), { stored: true })).not.toThrow();
+  });
   it('refuses a key declared twice', () => {
     expect(() => parseArtifactManifest(withPerms({ permissions: [perm('whonet.review'), perm('whonet.review')] }))).toThrow(/declared twice/);
   });

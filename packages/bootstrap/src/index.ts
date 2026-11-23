@@ -121,7 +121,7 @@ import { createEmailListenerDriver } from './listener-email';
 import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry, CE_VERSION } from './plugin-registry';
-import { createCapabilityCatalog, createPluginPermissionSync, type CapabilityCatalog } from './capability-catalog';
+import { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog } from './capability-catalog';
 import { createProjectionWorker } from './projection-worker';
 import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importTerminologyResource, checkTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type ImportOrigin, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorkerIfEnabled } from './terminology-ingest-worker';
@@ -864,6 +864,9 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   // Reading the catalog here also logs, once, any plugin key a newer CE now owns.
   await permissionSync.grantAll('boot').catch((err) => {
     logger.warn({ err }, 'granting installed plugin permissions to the Administrator failed');
+  });
+  await warnPluginOwnedCeGroups({ db: internal.db, logger }).catch((err) => {
+    logger.warn({ err }, 'checking plugin permission groups against CE failed');
   });
   // Data Exposure Task 5: seed column_exposure_policy from HARDCODED_DENY_UNION on every boot —
   // UNCONDITIONAL and best-effort, mirroring the role seed immediately above (NOT routed through
@@ -2334,7 +2337,7 @@ const reporting: ReportingApi = {
 }
 
 export { createFeatureFlags } from './feature-flags';
-export { createCapabilityCatalog, createPluginPermissionSync, type CapabilityCatalog, type CatalogGroup, type PluginCapabilityMeta } from './capability-catalog';
+export { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog, type CatalogGroup, type PluginCapabilityMeta } from './capability-catalog';
 export { createConnectorDialectLookup, dialectFor } from './connector-sql-service';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
 export { createLabIdentity, type LabIdentityService } from './lab-identity';

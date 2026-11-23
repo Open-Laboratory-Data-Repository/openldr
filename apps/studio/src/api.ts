@@ -1978,8 +1978,11 @@ export interface RoleRecord {
   /** The content pack that made this role, or null for one an admin made. */
   ownerPack?: string | null;
 }
-export interface CapabilityMeta { key: string; group: string; label: string; description: string }
-export interface CapabilityGroup { key: string; label: string; capabilities: CapabilityMeta[] }
+/** A plugin permission may carry French and Portuguese text (plan 2026-11-23-plugin-host-2b). */
+export interface CapabilityText { label: string; description: string }
+export interface CapabilityMeta { key: string; group: string; label: string; description: string; labels?: { fr?: CapabilityText; pt?: CapabilityText } }
+/** `plugin` names the installed plugin a group comes from. */
+export interface CapabilityGroup { key: string; label: string; plugin?: string; capabilities: CapabilityMeta[] }
 
 export const getMyCapabilities = (): Promise<string[]> =>
   authFetch('/api/me/capabilities').then((r) => okJson<{ capabilities: string[] }>(r, 'get capabilities')).then((x) => x.capabilities);

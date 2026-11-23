@@ -1024,6 +1024,13 @@ export interface CapabilityIntroductionsTable {
   introduced_at: Generated<Date>;
 }
 
+/** Which plugin owns each permission group (migration 142). A row is never deleted. */
+export interface PluginPermissionGroupsTable {
+  group: string;
+  plugin_id: string;
+  claimed_at: Generated<Date>;
+}
+
 export interface ReportDesignsTable {
   id: string;
   name: string;
@@ -1281,5 +1288,6 @@ export interface InternalSchema {
   roles: RolesTable;
   role_capabilities: RoleCapabilitiesTable;
   capability_introductions: CapabilityIntroductionsTable;
+  plugin_permission_groups: PluginPermissionGroupsTable;
   user_roles: UserRolesTable;
 }

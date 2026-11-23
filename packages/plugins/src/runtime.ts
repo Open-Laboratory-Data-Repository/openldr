@@ -21,7 +21,7 @@ import type { PluginStore, PluginRow } from './store';
 import type { PluginRunner } from './runner';
 import { createWasmConverter } from './wasm-converter';
 import { createWasmSink, type WasmSink } from './wasm-sink';
-import { storedPermissions } from './stored-permissions';
+import { PermissionGroupTakenError, permissionGroups } from './stored-permissions';
 
 export interface MarketplaceInstallAudit {
   action: string;
@@ -288,17 +288,15 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
       const kept = active ? `${active.id}@${active.version} stays active` : 'nothing was installed';
       const notInstalled = `${artifact.id}@${artifact.version} was not installed, and ${kept}`;
 
-      // A permission key must not equal another installed plugin's key (ruling 1). The manifest
-      // parse already refused CE keys; this check needs the store, so it runs here, before
-      // anything is written.
-      const declared = new Set(storedPermissions(artifact as unknown as Record<string, unknown>).map((p) => p.key));
-      if (declared.size > 0) {
-        for (const other of await deps.store.list()) {
-          if (other.id === artifact.id || !other.active) continue;
-          const clash = storedPermissions(other.manifest).find((p) => declared.has(p.key));
-          if (clash) {
-            throw new Error(`${notInstalled}: the permission ${clash.key} is already declared by the installed plugin ${other.id}`);
-          }
+      // The group rule (ruling 1 as amended): each group the keys use must be unowned or owned by
+      // this plugin. Checked here, before anything is written, so a refusal leaves the old version
+      // active and its tables alone. The store claims the groups in the install transaction.
+      if (deps.store.groupOwners) {
+        const groups = permissionGroups(artifact as unknown as Record<string, unknown>);
+        const owners = await deps.store.groupOwners(groups);
+        for (const g of groups) {
+          const owner = owners.get(g);
+          if (owner !== undefined && owner !== artifact.id) throw new Error(`${notInstalled}: ${new PermissionGroupTakenError(g, owner, artifact.id).message}`);
         }
       }
       if (tables === undefined || tables.length === 0) {
@@ -341,7 +339,13 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
       if (uiMeta?.entry && opts.ui) {
         await deps.blob.put(uiKey(artifact.id, artifact.version), opts.ui, 'text/html');
       }
-      await deps.store.install({ id: artifact.id, version: artifact.version, sha256: payloadSha, manifest: fullManifest, approvedBy });
+      try {
+        await deps.store.install({ id: artifact.id, version: artifact.version, sha256: payloadSha, manifest: fullManifest, approvedBy });
+      } catch (err) {
+        // Another install claimed the group between the check above and this transaction.
+        if (err instanceof PermissionGroupTakenError) throw new Error(`${notInstalled}: ${err.message}`);
+        throw err;
+      }
       invalidateCache(artifact.id);
       deps.logger.info({ id: artifact.id, version: artifact.version }, 'plugin installed');
       await changed(artifact.id, 'install');
@@ -395,7 +399,12 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     },
 
     async rollback(id, version, o = {}) {
-      await deps.store.rollback(id, version);
+      try {
+        await deps.store.rollback(id, version);
+      } catch (err) {
+        if (err instanceof PermissionGroupTakenError) throw new Error(`cannot roll back ${id} to ${version}: ${err.message}`);
+        throw err;
+      }
       invalidateCache(id);
       await changed(id, 'rollback');
       await deps.recordInstall?.({
@@ -409,7 +418,12 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     },
 
     async setEnabled(id, enabled, o = {}) {
-      await deps.store.setEnabled(id, enabled);
+      try {
+        await deps.store.setEnabled(id, enabled);
+      } catch (err) {
+        if (err instanceof PermissionGroupTakenError) throw new Error(`cannot enable ${id}: ${err.message}`);
+        throw err;
+      }
       invalidateCache(id);
       await changed(id, enabled ? 'enable' : 'disable');
       await deps.recordInstall?.({

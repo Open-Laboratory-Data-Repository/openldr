@@ -2,7 +2,7 @@
 // unit-testable without jsdom or Radix — see CapabilityGrid.tsx, which is a thin shadcn shell
 // over these functions. Mirrors the pattern in dashboard/editor/builderForm.model.ts.
 
-import type { CapabilityGroup } from '@/api';
+import type { CapabilityGroup, CapabilityMeta, CapabilityText } from '@/api';
 
 /** Total number of capabilities across all groups. */
 export function totalCapabilityCount(groups: CapabilityGroup[]): number {
@@ -22,4 +22,13 @@ export function toggleCapability(selected: ReadonlySet<string>, key: string): Se
   if (next.has(key)) next.delete(key);
   else next.add(key);
   return next;
+}
+
+/** The label and description to show in `language` (an i18next code like `fr` or `pt-BR`). A plugin
+ *  permission may bring French and Portuguese text; anything else, and any missing text, falls back
+ *  to the English the catalog sends. */
+export function capabilityText(cap: CapabilityMeta, language: string | undefined): CapabilityText {
+  const lang = (language ?? '').slice(0, 2).toLowerCase();
+  const local = lang === 'fr' ? cap.labels?.fr : lang === 'pt' ? cap.labels?.pt : undefined;
+  return { label: local?.label || cap.label, description: local?.description || cap.description };
 }

@@ -45,3 +45,16 @@ export function storedNavLabel(manifest: Record<string, unknown> | null | undefi
   const label = payload?.ui?.nav?.label;
   return typeof label === 'string' && label ? label : undefined;
 }
+
+/** The permission groups a stored or parsed manifest's keys use: each key's first segment. */
+export function permissionGroups(manifest: Record<string, unknown> | null | undefined): string[] {
+  return [...new Set(storedPermissions(manifest).map((p) => p.key.slice(0, p.key.indexOf('.'))))].sort();
+}
+
+/** A plugin declares a key in a permission group another plugin owns (ruling 1 as amended). */
+export class PermissionGroupTakenError extends Error {
+  constructor(readonly group: string, readonly owner: string, readonly pluginId: string) {
+    super(`the permission group '${group}' belongs to the plugin ${owner}, so ${pluginId} cannot declare permissions in it`);
+    this.name = 'PermissionGroupTakenError';
+  }
+}

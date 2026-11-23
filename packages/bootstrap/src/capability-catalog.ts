@@ -1,4 +1,6 @@
-import { CAPABILITY_GROUPS, CAPABILITY_KEYS, type CapabilityGroup, type CapabilityMeta } from '@openldr/rbac';
+import type { Kysely } from 'kysely';
+import type { InternalSchema } from '@openldr/db';
+import { CAPABILITY_GROUPS, CAPABILITY_KEYS, reservedPermissionGroups, type CapabilityGroup, type CapabilityMeta } from '@openldr/rbac';
 import { storedNavLabel, storedPermissions, type PluginRow, type StoredPermission } from '@openldr/plugins';
 
 /** A plugin permission as the Roles page shows it. `labels` carries the French and Portuguese text
@@ -87,6 +89,8 @@ export function createCapabilityCatalog(deps: CapabilityCatalogDeps): Capability
         }
         const owner = claimed.get(p.key);
         if (owner) {
+          // The group rule makes this unreachable for installs since migration 142. Kept as a
+          // defensive path for rows written before it.
           warnOnce(`dup:${row.id}:${p.key}`, { plugin: row.id, key: p.key, owner },
             'two installed plugins declare the same permission; the first keeps it');
           continue;
@@ -151,4 +155,34 @@ export function createPluginPermissionSync(deps: PluginPermissionSyncDeps) {
       if (e.action === 'install' || e.action === 'enable' || e.action === 'rollback') await grantAll('plugin-install');
     },
   };
+}
+
+/** At boot: a permission group a plugin owns that CE now keeps for itself, because a CE release
+ *  added a capability in it. CE wins (the catalog ignores a plugin key equal to a CE key). Log a
+ *  warning naming the plugin and the roles holding the plugin's keys in that group, so an operator
+ *  can review them. Returns what it warned about. */
+export async function warnPluginOwnedCeGroups(deps: {
+  db: Kysely<InternalSchema>;
+  logger: { warn: (obj: Record<string, unknown>, msg: string) => void };
+  ceKeys?: readonly string[];
+  ceGroups?: readonly { key: string }[];
+}): Promise<Array<{ group: string; plugin: string; roles: string[] }>> {
+  const ceKeys = deps.ceKeys ?? CAPABILITY_KEYS;
+  const reserved = [...reservedPermissionGroups(ceKeys, deps.ceGroups ?? CAPABILITY_GROUPS)];
+  const owned = await deps.db.selectFrom('plugin_permission_groups').select(['group', 'plugin_id']).where('group', 'in', reserved).execute();
+  const ce = new Set(ceKeys);
+  const out: Array<{ group: string; plugin: string; roles: string[] }> = [];
+  for (const o of owned) {
+    const rows = await deps.db
+      .selectFrom('role_capabilities')
+      .innerJoin('roles', 'roles.id', 'role_capabilities.role_id')
+      .select(['roles.slug as slug', 'role_capabilities.capability as capability'])
+      .where('role_capabilities.capability', 'like', `${o.group}.%`)
+      .execute();
+    const roles = [...new Set(rows.filter((r) => !ce.has(r.capability)).map((r) => r.slug))].sort();
+    out.push({ group: o.group, plugin: o.plugin_id, roles });
+    deps.logger.warn({ group: o.group, plugin: o.plugin_id, roles },
+      `CE now has capabilities in the permission group '${o.group}', which the plugin ${o.plugin_id} owns; CE wins, review the roles holding the plugin's keys in it`);
+  }
+  return out;
 }

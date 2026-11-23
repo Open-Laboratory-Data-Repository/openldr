@@ -5,7 +5,7 @@ import { makeMigratedDb } from '@openldr/db/testing';
 import { createPluginRuntime, createPluginStore, sha256Hex, type PluginRuntime, type PluginStore } from '@openldr/plugins';
 import { CAPABILITY_GROUPS, CAPABILITY_KEYS } from '@openldr/rbac';
 import { parseArtifactManifest } from '@openldr/marketplace';
-import { createCapabilityCatalog, createPluginPermissionSync, type CapabilityCatalog } from './capability-catalog';
+import { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog } from './capability-catalog';
 
 // Plan 2026-11-23-plugin-host-2b, task 2: a plugin's permissions join the capability catalog while
 // the plugin is installed and enabled. Real role store, plugin store and runtime, on pg-mem.
@@ -15,6 +15,7 @@ const wasmSha = sha256Hex(wasm);
 
 const RECEIVE = { key: 'lab.orders.receive', label: 'Receive orders', description: 'Receive lab orders.', labels: { fr: { label: 'Recevoir', description: 'Recevoir.' } } };
 const REVIEW = { key: 'lab.orders.review', label: 'Review orders', description: 'Review lab orders.' };
+const MICRO = { key: 'micro.read', label: 'Read', description: 'Read micro results.' };
 
 function artifact(id: string, version: string, permissions: unknown[], nav?: string) {
   return {
@@ -117,16 +118,74 @@ describe('capability catalog with installed plugins', () => {
     expect(d.kept).toEqual([]);
   });
 
-  it('refuses an install whose permission key another installed plugin declares, and keeps the old version active', async () => {
+  it('refuses an install with a key in a group another plugin owns, and keeps the old version active', async () => {
     await runtime.install(wasm, artifact('lab', '0.1.0', [RECEIVE]));
-    await runtime.install(wasm, artifact('micro', '0.1.0', [REVIEW]));
-    await expect(runtime.install(wasm, artifact('micro', '0.2.0', [REVIEW, RECEIVE]))).rejects.toThrow(
-      'micro@0.2.0 was not installed, and micro@0.1.0 stays active: the permission lab.orders.receive is already declared by the installed plugin lab',
+    await runtime.install(wasm, artifact('micro', '0.1.0', [MICRO]));
+    await expect(runtime.install(wasm, artifact('micro', '0.2.0', [MICRO, { ...REVIEW, key: 'lab.micro.read' }]))).rejects.toThrow(
+      "micro@0.2.0 was not installed, and micro@0.1.0 stays active: the permission group 'lab' belongs to the plugin lab, so micro cannot declare permissions in it",
     );
     const micro = (await pluginStore.list()).filter((r) => r.id === 'micro');
     expect(micro.map((r) => [r.version, r.active])).toEqual([['0.1.0', true]]);
-    // The plugin's own next version may keep its keys.
+    // The owner's next version may add keys to its own group.
     await runtime.install(wasm, artifact('lab', '0.2.0', [RECEIVE, { ...RECEIVE, key: 'lab.orders.cancel' }]));
+    const owners = await db.selectFrom('plugin_permission_groups').select(['group', 'plugin_id']).orderBy('group').execute();
+    expect(owners).toEqual([{ group: 'lab', plugin_id: 'lab' }, { group: 'micro', plugin_id: 'micro' }]);
+  });
+
+  it('never releases a group, so after the owner is removed another plugin still cannot use it', async () => {
+    await runtime.install(wasm, artifact('lab', '0.1.0', [RECEIVE]));
+    await roles.create({ name: 'Bench', capabilities: [RECEIVE.key] });
+    await runtime.remove('lab');
+    await expect(runtime.install(wasm, artifact('thief', '0.1.0', [RECEIVE]))).rejects.toThrow(
+      "the permission group 'lab' belongs to the plugin lab, so thief cannot declare permissions in it",
+    );
+    expect(await catalog.isKnown(RECEIVE.key)).toBe(false);
+    // The owner may come back and finds its kept grants.
+    await runtime.install(wasm, artifact('lab', '0.1.1', [RECEIVE]));
+    expect((await roles.diagnoseCapabilities()).plugin).toEqual([RECEIVE.key]);
+  });
+
+  it('refuses a rollback or an enable to a version whose group another plugin owns', async () => {
+    // A row from before migration 142: micro 0.1.0 declares a key in `shared`, which lab owns.
+    await runtime.install(wasm, artifact('micro', '0.1.0', [{ ...MICRO, key: 'shared.read' }]));
+    await runtime.install(wasm, artifact('micro', '0.2.0', [MICRO]));
+    await db.updateTable('plugin_permission_groups').set({ plugin_id: 'lab' }).where('group', '=', 'shared').execute();
+
+    await expect(runtime.rollback('micro', '0.1.0')).rejects.toThrow(
+      "cannot roll back micro to 0.1.0: the permission group 'shared' belongs to the plugin lab, so micro cannot declare permissions in it",
+    );
+    expect((await pluginStore.list()).filter((r) => r.id === 'micro' && r.active).map((r) => r.version)).toEqual(['0.2.0']);
+
+    // Make 0.1.0 active by hand, as an old install would have left it, then disable and enable.
+    await db.updateTable('plugins').set({ active: false }).where('id', '=', 'micro').execute();
+    await db.updateTable('plugins').set({ active: true }).where('id', '=', 'micro').where('version', '=', '0.1.0').execute();
+    await runtime.setEnabled('micro', false);
+    await expect(runtime.setEnabled('micro', true)).rejects.toThrow("cannot enable micro: the permission group 'shared' belongs to the plugin lab");
+    expect((await pluginStore.list()).filter((r) => r.id === 'micro').every((r) => !r.enabled)).toBe(true);
+  });
+
+  it('lets only one of two installs at once claim a group', async () => {
+    const results = await Promise.allSettled([
+      pluginStore.install({ id: 'one', version: '0.1.0', sha256: 'x', manifest: artifact('one', '0.1.0', [{ ...MICRO, key: 'race.read' }]), approvedBy: null }),
+      pluginStore.install({ id: 'two', version: '0.1.0', sha256: 'x', manifest: artifact('two', '0.1.0', [{ ...MICRO, key: 'race.write' }]), approvedBy: null }),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const failed = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(String(failed.reason)).toMatch(/the permission group 'race' belongs to the plugin (one|two)/);
+    const owner = (await db.selectFrom('plugin_permission_groups').select('plugin_id').where('group', '=', 'race').execute()).map((r) => r.plugin_id);
+    expect(owner).toHaveLength(1);
+    expect((await pluginStore.list()).map((r) => r.id)).toEqual(owner);
+  });
+
+  it('warns at boot when a later CE release adds a capability in a group a plugin owns, naming the plugin and the roles', async () => {
+    await runtime.install(wasm, artifact('lab', '0.1.0', [RECEIVE]));
+    await roles.create({ name: 'Bench', capabilities: [RECEIVE.key] });
+    const none = await warnPluginOwnedCeGroups({ db, logger: log });
+    expect(none).toEqual([]);
+
+    const later = await warnPluginOwnedCeGroups({ db, logger: log, ceKeys: [...CAPABILITY_KEYS, 'lab.view'] });
+    expect(later).toEqual([{ group: 'lab', plugin: 'lab', roles: ['bench', 'lab_admin'] }]);
+    expect(log.warn).toHaveBeenCalledWith({ group: 'lab', plugin: 'lab', roles: ['bench', 'lab_admin'] }, expect.stringContaining('CE wins'));
   });
 
   it('grants the Administrator every plugin key at install and enable, and keeps the grants after removal', async () => {

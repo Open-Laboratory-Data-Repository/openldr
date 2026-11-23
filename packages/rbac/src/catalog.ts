@@ -121,3 +121,20 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = _order.map((g) => ({
 export function isCapabilityKey(k: string): boolean {
   return CAPABILITY_KEYS.includes(k);
 }
+
+/** The group of a permission key: its first segment (`forms` for `forms.view`). */
+export function permissionGroup(key: string): string {
+  const dot = key.indexOf('.');
+  return dot === -1 ? key : key.slice(0, dot);
+}
+
+/** Permission groups CE keeps for itself: the first segment of every CE capability, and every
+ *  capability group name. No plugin may declare a key in one, so no plugin can claim a permission a
+ *  later CE release adds (plan 2026-11-23-plugin-host-2b, ruling 1 as amended). Pass `keys` and
+ *  `groups` to ask about another catalog, as a test of a later release does. */
+export function reservedPermissionGroups(
+  keys: readonly string[] = CAPABILITY_KEYS,
+  groups: readonly { key: string }[] = CAPABILITY_GROUPS,
+): Set<string> {
+  return new Set([...keys.map(permissionGroup), ...groups.map((g) => g.key)]);
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CAPABILITIES, CAPABILITY_KEYS, CAPABILITY_GROUPS } from './catalog';
+import { CAPABILITIES, CAPABILITY_KEYS, CAPABILITY_GROUPS, permissionGroup, reservedPermissionGroups } from './catalog';
 import { SYSTEM_ROLES } from './presets';
 
 describe('capability catalog', () => {
@@ -102,5 +102,15 @@ describe('patients capabilities', () => {
       expect(role(slug).capabilities).not.toContain('patients.manage');
     }
     expect(role('lab_technician').capabilities.some((c) => c.startsWith('patients.'))).toBe(false);
+  });
+});
+
+describe('reserved permission groups', () => {
+  it('keeps the first segment of every CE capability and every group name, and not lab', () => {
+    const reserved = reservedPermissionGroups();
+    for (const k of CAPABILITY_KEYS) expect(reserved.has(permissionGroup(k)), k).toBe(true);
+    for (const g of CAPABILITY_GROUPS) expect(reserved.has(g.key), g.key).toBe(true);
+    expect(reserved.has('lab')).toBe(false);
+    expect(permissionGroup('lab.orders.receive')).toBe('lab');
   });
 });
