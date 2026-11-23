@@ -83,6 +83,19 @@ describe('Settings, Layouts', () => {
     await waitFor(() => expect(api.saveLayout).toHaveBeenCalledWith('l1', { name: 'Bench', startPage: '/forms', pages: ['/patients', '/forms'], roles: ['tech'] }));
   });
 
+  it('keeps plugin pages it has no checkbox for when a layout is renamed', async () => {
+    const lab = { id: 'l2', name: 'Lab', startPage: '/x/lab', pages: ['/', '/x/lab', '/x/other'], roles: [] };
+    vi.mocked(api.listLayouts).mockResolvedValue({ layouts: [lab], roleOrder: [] });
+    vi.mocked(api.saveLayout).mockResolvedValue(lab);
+    page();
+    await openMenu(await screen.findByLabelText('Actions for Lab'));
+    fireEvent.click(await screen.findByTestId('layout-edit'));
+    fireEvent.change(await screen.findByTestId('layout-name'), { target: { value: 'Lab bench' } });
+    await openMenu(screen.getByTestId('layout-sheet-menu'));
+    fireEvent.click(await screen.findByTestId('layout-save'));
+    await waitFor(() => expect(api.saveLayout).toHaveBeenCalledWith('l2', { name: 'Lab bench', startPage: '/x/lab', pages: ['/', '/x/lab', '/x/other'], roles: [] }));
+  });
+
   it('does not save a layout with no name or no pages', async () => {
     vi.mocked(api.listLayouts).mockResolvedValue({ layouts: [], roleOrder: [] });
     page();

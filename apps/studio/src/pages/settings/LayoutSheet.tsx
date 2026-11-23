@@ -45,8 +45,14 @@ export function LayoutSheet({ open, layout, roles, onOpenChange, onSave }: {
     if (busy) return;
     if (!draft.name.trim() || draft.pages.length === 0) { setError(t('layouts.errRequired')); return; }
     setBusy(true);
-    // Pages in sidebar order, whatever order they were ticked in.
-    const pages = PAGES.map((p) => p.to).filter((to) => draft.pages.includes(to));
+    // Pages in sidebar order, whatever order they were ticked in. Paths this sheet has no
+    // checkbox for, such as a plugin page (/x/<id>) a profile pack listed, are kept after them
+    // in their stored order, so a rename never drops them.
+    const managed = new Set(PAGES.map((p) => p.to));
+    const pages = [
+      ...PAGES.map((p) => p.to).filter((to) => draft.pages.includes(to)),
+      ...draft.pages.filter((to) => !managed.has(to)),
+    ];
     const failed = await onSave({ ...draft, name: draft.name.trim(), pages });
     setBusy(false);
     if (failed) setError(failed);
