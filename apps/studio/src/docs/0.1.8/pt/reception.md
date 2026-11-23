@@ -103,6 +103,8 @@ A associação fica guardada como uma correção, com o seu nome e o motivo `Pac
 
 Um pedido guarda uma amostra de cada tipo. Receber de novo o mesmo tipo atualiza essa amostra e mantém a hora da primeira receção.
 
+Uma amostra rejeitada não pode ser recebida de novo. Registe um pedido de nova colheita para a nova amostra, como em [Associar uma nova colheita ao pedido rejeitado](#associar-uma-nova-colheita-ao-pedido-rejeitado).
+
 A lista de condições vem do conjunto de valores de condições de amostra do seu laboratório. Se o painel disser `As análises deste pedido não indicam nenhum tipo de amostra. Associe estas análises a um tipo de amostra no catálogo de exames.`, acrescente os tipos de amostra a essas análises no catálogo de exames.
 
 ## Corrigir um erro de escrita num pedido
@@ -145,7 +147,7 @@ Faça isto quando uma requisição tem um erro que só o local pode corrigir, po
 
 **Resultado esperado:** uma mensagem diz, por exemplo, `Pedido CS-0001 devolvido ao seu local.` Cada análise mostra **Em espera**. O painel mostra **Devolvido ao local** com o motivo, quem o devolveu e quando.
 
-**Devolver ao local** não aparece para um pedido **Registado na receção**. Corrija um pedido da receção você mesmo. Também não aparece para um pedido já devolvido.
+**Devolver ao local** não aparece para um pedido **Registado na receção**. Corrija um pedido da receção você mesmo. Também não aparece para um pedido já devolvido. Fica também oculto quando uma análise já está em espera, e quando o pedido não tem unidade sanitária.
 
 Enquanto um pedido está devolvido, **Corrigir pedido** não está no menu. O local faz as correções.
 
@@ -153,7 +155,7 @@ Um local ainda não consegue ver um pedido devolvido no seu próprio ecrã. Avis
 
 ## Marcar um pedido devolvido como corrigido
 
-Faça isto quando o local envia as suas correções. **Corrigido pelo local** só aparece num pedido devolvido.
+Faça isto quando o local envia as suas correções. Precisa de **Return and reject**. **Corrigido pelo local** só aparece num pedido devolvido.
 
 1. Abra o menu de pontos do painel do pedido e selecione **Corrigido pelo local**.
 2. Altere **Prioridade**, **Clínico** ou **Nota** conforme o que o local enviou. Deixe-os se o local corrigiu outra coisa.
@@ -176,6 +178,10 @@ Faça isto quando uma amostra não pode ser analisada, por exemplo porque não t
 **Resultado esperado:** uma mensagem diz, por exemplo, `Amostra rejeitada para o pedido CS-0001.` Cada análise desta amostra mostra **Revogado**, com `Rejeitada:` e o motivo por baixo.
 
 Rejeitar uma amostra rejeita todas as análises dessa amostra. Para rejeitar só uma análise, siga a tarefa seguinte.
+
+A amostra mostra **Rejeitada** em **Amostras**.
+
+**Rejeitar amostra** fica oculto quando todas as análises do pedido estão canceladas ou rejeitadas.
 
 ## Rejeitar só uma análise
 
@@ -203,6 +209,8 @@ Faça isto quando chega a nova amostra de um pedido rejeitado. A nova colheita v
 **Resultado esperado:** uma mensagem diz, por exemplo, `Pedido CS-0002 associado como nova colheita de CS-0001.`
 
 Os dois pedidos têm de ser da mesma unidade sanitária. A nova colheita tem de ter pelo menos uma análise que o pedido antigo rejeitou. Esta tarefa precisa de **Receive samples**.
+
+**Substitui um pedido rejeitado** fica oculto quando todas as análises do pedido estão canceladas ou rejeitadas.
 
 Um local ainda não consegue ver um pedido de nova colheita no seu próprio ecrã. Diga ao local que o laboratório precisa de uma nova amostra.
 

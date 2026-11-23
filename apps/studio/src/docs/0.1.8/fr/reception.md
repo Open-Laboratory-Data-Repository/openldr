@@ -103,6 +103,8 @@ Le lien est gardé comme une correction, avec votre nom et le motif `Patient li�
 
 Une demande garde un échantillon de chaque type. Recevoir de nouveau le même type met cet échantillon à jour et garde l'heure de la première réception.
 
+Un échantillon rejeté ne peut pas être reçu de nouveau. Enregistrez une demande de nouveau prélèvement pour le nouvel échantillon, comme dans [Lier un nouveau prélèvement à la demande rejetée](#lier-un-nouveau-prelevement-a-la-demande-rejetee).
+
 La liste des états vient du jeu de valeurs des états d'échantillon de votre laboratoire. Si le panneau indique `Les analyses de cette demande ne nomment aucun type d'échantillon. Associez ces analyses à un type d'échantillon dans le catalogue des examens.`, ajoutez les types d'échantillon à ces analyses dans le catalogue des examens.
 
 ## Corriger une faute de frappe dans une demande
@@ -145,7 +147,7 @@ Faites-le quand un bon de demande a une erreur que seul le site peut corriger, p
 
 **Résultat attendu :** un message indique, par exemple, `Demande CS-0001 renvoyée à son site.` Chaque analyse affiche **En attente**. Le panneau montre **Renvoyée au site** avec le motif, qui l'a renvoyée et quand.
 
-**Renvoyer au site** n'apparaît pas pour une demande **Enregistrée à la réception**. Corrigez vous-même une demande de la réception. Il n'apparaît pas non plus pour une demande déjà renvoyée.
+**Renvoyer au site** n'apparaît pas pour une demande **Enregistrée à la réception**. Corrigez vous-même une demande de la réception. Il n'apparaît pas non plus pour une demande déjà renvoyée. Il est aussi masqué quand une analyse est déjà en attente, et quand la demande n'a pas d'établissement.
 
 Tant qu'une demande est renvoyée, **Corriger la demande** n'est pas dans le menu. Le site fait les corrections.
 
@@ -153,7 +155,7 @@ Un site ne peut pas encore voir une demande renvoyée sur son propre écran. Pr�
 
 ## Marquer une demande renvoyée comme corrigée
 
-Faites-le quand le site renvoie ses corrections. **Corrigée par le site** n'apparaît que sur une demande renvoyée.
+Faites-le quand le site renvoie ses corrections. Il faut **Return and reject**. **Corrigée par le site** n'apparaît que sur une demande renvoyée.
 
 1. Ouvrez le menu à points du panneau de la demande et sélectionnez **Corrigée par le site**.
 2. Modifiez **Priorité**, **Clinicien** ou **Note** selon ce que le site a envoyé. Laissez-les si le site a corrigé autre chose.
@@ -176,6 +178,10 @@ Faites-le quand un échantillon ne peut pas être analysé, par exemple parce qu
 **Résultat attendu :** un message indique, par exemple, `Échantillon rejeté pour la demande CS-0001.` Chaque analyse de cet échantillon affiche **Révoquée**, avec `Rejetée :` et le motif en dessous.
 
 Rejeter un échantillon rejette toutes les analyses de cet échantillon. Pour rejeter une seule analyse, suivez la tâche suivante.
+
+L'échantillon affiche **Rejeté** sous **Échantillons**.
+
+**Rejeter l'échantillon** est masqué quand toutes les analyses de la demande sont annulées ou rejetées.
 
 ## Rejeter une seule analyse
 
@@ -203,6 +209,8 @@ Faites-le quand le nouvel échantillon d'une demande rejetée arrive. Le nouveau
 **Résultat attendu :** un message indique, par exemple, `Demande CS-0002 liée comme nouveau prélèvement de CS-0001.`
 
 Les deux demandes doivent venir du même établissement. Le nouveau prélèvement doit contenir au moins une analyse que l'ancienne demande a rejetée. Cette tâche demande **Receive samples**.
+
+**Remplace une demande rejetée** est masqué quand toutes les analyses de la demande sont annulées ou rejetées.
 
 Un site ne peut pas encore voir une demande de nouveau prélèvement sur son propre écran. Dites au site que le laboratoire a besoin d'un nouvel échantillon.
 

@@ -101,6 +101,8 @@ The link is kept as a correction, with your name and the reason `Patient linked 
 
 An order keeps one sample of each type. Receiving the same type again updates that sample and keeps the time it was first received.
 
+A rejected sample cannot be received again. Register a redraw order for the new sample, as in [Link a redraw to the rejected order](#link-a-redraw-to-the-rejected-order).
+
 The condition list comes from your lab's sample condition value set. If the sheet says `The tests on this order name no sample type. Map these tests to a sample type in the test catalog.`, add the sample types to those tests in the test catalog.
 
 ## Correct a typo in an order
@@ -143,7 +145,7 @@ Do this when a request form has a mistake only the site can fix, such as an inco
 
 **Expected result:** a message says, for example, `Order CS-0001 returned to its site.` Each test shows **On hold**. The panel shows **Returned to site** with the reason, who returned it and when.
 
-**Return to site** does not show for an order **Registered at the desk**. Correct a desk order yourself instead. It does not show for an order already returned either.
+**Return to site** does not show for an order **Registered at the desk**. Correct a desk order yourself instead. It does not show for an order already returned either. It is also hidden when a test is already on hold, and when the order has no facility.
 
 While an order is returned, **Correct order** is not in the menu. The site makes the corrections.
 
@@ -151,7 +153,7 @@ A site cannot yet see a returned request on its own screen. Tell the site by pho
 
 ## Mark a returned order corrected
 
-Do this when the site sends back its corrections. **Corrected by site** shows only on a returned order.
+Do this when the site sends back its corrections. You need **Return and reject**. **Corrected by site** shows only on a returned order.
 
 1. Open the order panel's dots menu and select **Corrected by site**.
 2. Change **Priority**, **Clinician** or **Note** to what the site sent. Leave them if the site fixed something else.
@@ -174,6 +176,10 @@ Do this when a sample cannot be tested, for example because it is unlabelled or 
 **Expected result:** a message says, for example, `Sample rejected for order CS-0001.` Each test this sample is for shows **Revoked**, with `Rejected:` and the reason under it.
 
 Rejecting a sample rejects every test it is for. To reject one test only, use the next task.
+
+The sample shows **Rejected** under **Samples**.
+
+**Reject sample** is hidden when every test on the order is cancelled or rejected.
 
 ## Reject one test
 
@@ -201,6 +207,8 @@ Do this when the new sample arrives for a rejected order. The redraw comes on it
 **Expected result:** a message says, for example, `Order CS-0002 linked as the redraw of CS-0001.`
 
 Both orders must be from the same facility. The redraw must hold at least one test the old order rejected. You need **Receive samples** for this task.
+
+**Replaces a rejected order** is hidden when every test on the order is cancelled or rejected.
 
 A site cannot yet see a redraw request on its own screen. Tell the site that the lab needs a new sample.
 
