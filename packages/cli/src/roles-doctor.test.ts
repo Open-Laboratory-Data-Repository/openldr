@@ -13,11 +13,15 @@ vi.mock('@openldr/config', () => ({
   loadConfig: vi.fn(() => ({ config: true })),
 }));
 
-vi.mock('@openldr/bootstrap', () => ({
-  createDbContext: mocks.createDbContext,
-  createAppContext: mocks.createAppContext,
-  recordAuditEvent: vi.fn(),
-}));
+vi.mock('@openldr/bootstrap', async () => {
+  const actual = await vi.importActual<typeof import('@openldr/bootstrap')>('@openldr/bootstrap');
+  return {
+    createDbContext: mocks.createDbContext,
+    createAppContext: mocks.createAppContext,
+    createCapabilityCatalog: actual.createCapabilityCatalog,
+    recordAuditEvent: vi.fn(),
+  };
+});
 
 vi.mock('@openldr/db', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@openldr/db');
@@ -30,6 +34,7 @@ const clean: CapabilityDiagnosis = {
   roles: [{ slug: 'lab_admin', present: true, ok: ['roles.manage'], revoked: [], pending: [] }],
   orphaned: [],
   kept: [],
+  plugin: [],
   ledgerAvailable: true,
 };
 
@@ -46,6 +51,7 @@ describe('summarizeDiagnosis', () => {
       roles: [{ slug: 'lab_technician', present: true, ok: ['forms.view'], revoked: ['forms.submit'], pending: [] }],
       orphaned: [],
       kept: [],
+      plugin: [],
       ledgerAvailable: true,
     });
     expect(exitCode).toBe(0);
@@ -58,6 +64,7 @@ describe('summarizeDiagnosis', () => {
       roles: [{ slug: 'lab_admin', present: true, ok: [], revoked: [], pending: ['data_exposure.manage'] }],
       orphaned: [],
       kept: [],
+      plugin: [],
       ledgerAvailable: true,
     });
     expect(exitCode).toBe(1);
@@ -66,6 +73,15 @@ describe('summarizeDiagnosis', () => {
 
   // A stored key the catalog no longer lists is kept on purpose (a plugin picks it up later), so it
   // is reported but does not fail the command.
+  it('prints a stored key of an installed plugin under a plugin heading, not as kept, and exits 0', () => {
+    const { exitCode, lines } = summarizeDiagnosis({ ...clean, plugin: ['lab.orders.receive'] });
+    const text = lines.join('\n');
+    expect(exitCode).toBe(0);
+    expect(text).toContain('plugin (stored, declared by an installed plugin, known):');
+    expect(text).not.toContain('kept (');
+    expect(text.indexOf('plugin (')).toBeLessThan(text.indexOf('lab.orders.receive'));
+  });
+
   it('prints a kept key under a kept heading and exits 0', () => {
     const { exitCode, lines } = summarizeDiagnosis({ ...clean, kept: ['lab.receive'] });
     expect(exitCode).toBe(0);
@@ -85,6 +101,7 @@ describe('summarizeDiagnosis', () => {
       roles: [{ slug: 'lab_admin', present: false, ok: [], revoked: [], pending: [] }],
       orphaned: [],
       kept: [],
+      plugin: [],
       ledgerAvailable: true,
     });
     expect(exitCode).toBe(1);
@@ -132,7 +149,8 @@ describe('runRolesDoctor', () => {
 
     expect(mocks.createDbContext).toHaveBeenCalledOnce();
     expect(mocks.createAppContext).not.toHaveBeenCalled();
-    expect(mocks.createRoleStore).toHaveBeenCalledWith(mocks.dbCtx.internalDb);
+    // The store reads the catalog, so installed plugin keys count as known, not kept.
+    expect(mocks.createRoleStore).toHaveBeenCalledWith(mocks.dbCtx.internalDb, { catalogKeys: expect.any(Function) });
     expect(mocks.diagnoseCapabilities).toHaveBeenCalledOnce();
     expect(code).toBe(0);
     expect(mocks.dbCtx.close).toHaveBeenCalled();
@@ -143,6 +161,7 @@ describe('runRolesDoctor', () => {
       roles: [{ slug: 'lab_admin', present: true, ok: [], revoked: [], pending: ['data_exposure.manage'] }],
       orphaned: [],
       kept: [],
+      plugin: [],
       ledgerAvailable: true,
     });
 

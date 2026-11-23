@@ -1,5 +1,6 @@
 import type { AppContext } from '@openldr/bootstrap';
 import { HealthRegistry, createLogger } from '@openldr/core';
+import { CAPABILITY_GROUPS, CAPABILITY_KEYS } from '@openldr/rbac';
 
 /**
  * Shared hand-built AppContext fixture for server route tests.
@@ -513,6 +514,14 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
       resolveCapabilities: async () => [],
       backfillUserFromRoleNames: async () => {},
     } as never,
+    // CE's catalog with no plugin installed.
+    capabilityCatalog: {
+      keys: async () => [...CAPABILITY_KEYS],
+      groups: async () => CAPABILITY_GROUPS,
+      isKnown: async (k: string) => CAPABILITY_KEYS.includes(k),
+      pluginKeys: async () => [],
+      invalidate: () => {},
+    },
     userProfiles: {
       get: async () => undefined,
       list: async () => new Map(),

@@ -7,7 +7,7 @@ import type { BlobStoragePort } from '@openldr/ports';
 import { createPluginSchemas, type InternalSchema } from '@openldr/db';
 import type { AuditStore } from '@openldr/audit';
 import { safeRecord } from '@openldr/audit';
-import { createPluginStore, createPluginRuntime, createExtismRunner, type PluginRuntime } from '@openldr/plugins';
+import { createPluginStore, createPluginRuntime, createExtismRunner, type PluginRuntime, type PluginRuntimeDeps } from '@openldr/plugins';
 import { createTrustStore } from '@openldr/marketplace';
 
 /**
@@ -46,6 +46,7 @@ export function createPluginRegistry(deps: {
   logger: Logger;
   audit: AuditStore;
   devAllowUnsigned: boolean;
+  onChange?: PluginRuntimeDeps['onChange'];
 }): PluginRuntime {
   return createPluginRuntime({
     blob: deps.blob,
@@ -57,5 +58,6 @@ export function createPluginRegistry(deps: {
     verifyConfig: { devAllowUnsigned: deps.devAllowUnsigned },
     recordInstall: (e) => safeRecord(deps.audit, deps.logger, e),
     schemas: createPluginSchemas(deps.internalDb as unknown as Kysely<any>),
+    ...(deps.onChange ? { onChange: deps.onChange } : {}),
   });
 }

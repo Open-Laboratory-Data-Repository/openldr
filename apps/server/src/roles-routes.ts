@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { DataScopeError, dataScopeChoices, readScopeRegistryRows, setUserDataScope, type AppContext } from '@openldr/bootstrap';
 import { redact, OpenLdrError } from '@openldr/core';
-import { CAPABILITY_GROUPS } from '@openldr/rbac';
 import { z } from 'zod';
 import { requireAnyCapability, requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
@@ -46,7 +45,8 @@ export function registerRolesRoutes(app: FastifyInstance<any, any, any, any>, ct
     return (await ctx.roles.list()).map((r) => ({ ...r, ownerPack: owners.get(r.id) ?? null }));
   });
 
-  app.get('/api/roles/catalog', VIEW, async () => ({ groups: CAPABILITY_GROUPS }));
+  // CE's groups plus one per active, enabled plugin (plan 2026-11-23-plugin-host-2b, ruling 3).
+  app.get('/api/roles/catalog', VIEW, async () => ({ groups: await ctx.capabilityCatalog.groups() }));
 
   app.get('/api/roles/:id', VIEW, async (req, reply) => {
     const r = await ctx.roles.get((req.params as { id: string }).id);

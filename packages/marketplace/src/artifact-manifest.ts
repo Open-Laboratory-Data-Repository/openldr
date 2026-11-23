@@ -191,7 +191,14 @@ export const artifactManifestSchema = z.object({
 
 export type ArtifactManifest = z.infer<typeof artifactManifestSchema>;
 
-export function parseArtifactManifest(raw: unknown): ArtifactManifest {
+export interface ParseArtifactOptions {
+  /** True when reading a manifest CE already accepted and stored. A later CE release may add a
+   *  capability equal to a key the plugin declares, so that key is not refused here: the catalog
+   *  treats it as CE's and logs a warning. Install never sets this. */
+  stored?: boolean;
+}
+
+export function parseArtifactManifest(raw: unknown, opts: ParseArtifactOptions = {}): ArtifactManifest {
   const manifest = artifactManifestSchema.parse(raw);
   // Cross-field rules for an importing plugin. Checked here, not as a schema refinement, so the
   // payload stays a plain object schema for the discriminated union.
@@ -211,7 +218,7 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest {
     && !manifest.capabilities.some((c) => c.kind === 'host:db')) {
     throw new Error(`artifact ${manifest.id}: payload.tables requires the host:db capability`);
   }
-  if (manifest.payload.kind === 'plugin') checkPluginPermissions(manifest.id, manifest.payload.permissions, manifest.payload.actionPermissions, manifest.payload.entrypoints);
+  if (manifest.payload.kind === 'plugin') checkPluginPermissions(manifest.id, manifest.payload.permissions, manifest.payload.actionPermissions, manifest.payload.entrypoints, opts.stored === true);
   return manifest;
 }
 
@@ -223,10 +230,11 @@ const CE_CAPABILITIES: ReadonlySet<string> = new Set(CAPABILITY_KEYS);
  *  installed plugins' keys needs the store, so the install does it. */
 function checkPluginPermissions(
   id: string, permissions: PluginPermission[] | undefined, actionPermissions: Record<string, string[]> | undefined, entrypoints: string[],
+  stored: boolean,
 ): void {
   const own = new Set<string>();
   for (const p of permissions ?? []) {
-    if (CE_CAPABILITIES.has(p.key)) throw new Error(`artifact ${id}: permission '${p.key}' is a CE capability; a plugin cannot declare it as its own`);
+    if (CE_CAPABILITIES.has(p.key) && !stored) throw new Error(`artifact ${id}: permission '${p.key}' is a CE capability; a plugin cannot declare it as its own`);
     if (own.has(p.key)) throw new Error(`artifact ${id}: permission '${p.key}' is declared twice`);
     own.add(p.key);
   }

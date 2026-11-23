@@ -11,7 +11,7 @@ vi.mock('@openldr/rbac', async () => {
 });
 
 const mocks = vi.hoisted(() => ({
-  appCtx: { roles: null as unknown, close: vi.fn() },
+  appCtx: { roles: null as unknown, capabilityCatalog: null as unknown, close: vi.fn() },
   createAppContext: vi.fn(),
 }));
 
@@ -23,6 +23,7 @@ vi.mock('@openldr/bootstrap', () => ({
 }));
 
 import { createRoleStore, type RoleStore } from '@openldr/db';
+import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { runRolesGrant, runRolesRevoke } from './roles';
 
@@ -40,7 +41,10 @@ describe('roles grant / revoke keep stored keys the catalog no longer lists', ()
     });
     const migrated = await makeMigratedDb();
     db = migrated as unknown as Kysely<never>;
-    store = createRoleStore(migrated);
+    // An installed plugin declares lab.orders.receive. lab.receive is kept (no plugin declares it).
+    const catalog = { keys: async () => [...CAPABILITY_KEYS, 'lab.orders.receive'] };
+    mocks.appCtx.capabilityCatalog = catalog;
+    store = createRoleStore(migrated, { catalogKeys: catalog.keys });
     const role = await store.create({ name: 'Bench', capabilities: ['forms.view'] });
     await migrated.insertInto('role_capabilities').values({ role_id: role.id, capability: 'lab.receive' }).execute();
     mocks.appCtx.roles = store;
@@ -74,6 +78,14 @@ describe('roles grant / revoke keep stored keys the catalog no longer lists', ()
     expect(err).toContain('lab.receive is kept for a plugin');
     expect(err).toContain('cannot be granted or revoked here');
     expect(err).not.toContain('unknown capability');
+    expect([...(await store.getBySlug('bench'))!.capabilities].sort()).toEqual(['forms.view', 'lab.receive']);
+  });
+
+  it('grant and revoke of an installed plugin\'s permission work like a CE capability', async () => {
+    expect(await runRolesGrant('bench', 'lab.orders.receive', { json: false })).toBe(0);
+    expect([...(await store.getBySlug('bench'))!.capabilities].sort()).toEqual(['forms.view', 'lab.orders.receive', 'lab.receive']);
+
+    expect(await runRolesRevoke('bench', 'lab.orders.receive', { json: false })).toBe(0);
     expect([...(await store.getBySlug('bench'))!.capabilities].sort()).toEqual(['forms.view', 'lab.receive']);
   });
 

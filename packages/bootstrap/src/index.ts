@@ -48,7 +48,6 @@ import { createTrustStore } from '@openldr/marketplace';
 import { createContentPackInstaller, type ContentPackInstaller, type PackQueryChange } from './content-pack-install';
 import { installedBundleVersion, packFormDeps, roleMemberNames } from './content-pack-profile-deps';
 import { listLayouts, saveLayout, deleteLayout } from './layout-presets';
-import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { withRegisteredResourceId } from './content-pack-terminology';
 import { checkCustomQueryFile, importCustomQueries } from './custom-query-transfer';
 import { importFacilityRegisterCsv } from './facility-register-file';
@@ -122,6 +121,7 @@ import { createEmailListenerDriver } from './listener-email';
 import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry, CE_VERSION } from './plugin-registry';
+import { createCapabilityCatalog, createPluginPermissionSync, type CapabilityCatalog } from './capability-catalog';
 import { createProjectionWorker } from './projection-worker';
 import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importTerminologyResource, checkTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type ImportOrigin, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorkerIfEnabled } from './terminology-ingest-worker';
@@ -514,6 +514,8 @@ export interface AppContext {
    *  user↔role assignment. Seeded with the system roles on every `createAppContext` boot —
    *  see the `seedSystemRoles()` call beside its construction below. */
   roles: RoleStore;
+  /** CE's capabilities plus those of active, enabled plugins. The Roles page and CLI read it. */
+  capabilityCatalog: CapabilityCatalog;
   userProfiles: UserProfileStore;
   forms: FormStore;
   /** Which roles may open and submit each form (design 2026-11-18-roles-scope, part 1). */
@@ -775,7 +777,10 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   };
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL, { onConnectionError: onDbConnectionLost('internal database') });
   const users = createUserStore(internal.db, { withSubjectLock: internal.withAccountStatusLock });
-  const roles = createRoleStore(internal.db);
+  // The capability catalog: CE's capabilities plus the permissions of active, enabled plugins
+  // (plan 2026-11-23-plugin-host-2b, ruling 3). Role saves validate against it. The ledger does not.
+  const capabilityCatalog = createCapabilityCatalog({ plugins: createPluginStore(internal.db), logger });
+  const roles = createRoleStore(internal.db, { catalogKeys: () => capabilityCatalog.keys() });
   const accessKeys = createAccessKeyStore(internal.db);
   let auth: AuthPort;
   let localSignIn: LocalSignIn | undefined;
@@ -820,7 +825,22 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const audit = createAuditStore(internal.db);
   const reportRuns = createReportRunStore(internal.db);
   const reportSchedules = createReportScheduleStore(internal.db);
-  const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
+  // The Administrator holds every permission of an installed plugin, as it holds every CE
+  // capability (ruling 4). Granted at install, enable and rollback, and at boot for a plugin
+  // installed before this. Removal and disable keep the grants (kept).
+  const permissionSync = createPluginPermissionSync({
+    catalog: capabilityCatalog,
+    roles,
+    record: async (actorName, granted) => {
+      for (const details of capabilityBackfillEvents(granted)) {
+        await recordAuditEvent({ audit, logger }, { actorType: 'system', actorId: null, actorName }, details);
+      }
+    },
+  });
+  const plugins = createPluginRegistry({
+    blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED,
+    onChange: permissionSync.onChange,
+  });
   // RBAC Task 4: seed the system roles (lab_admin/lab_manager/data_analyst/system_auditor/
   // lab_technician) on every boot. This is deliberately unconditional. It is NOT routed through
   // seedDatabase()/SEED_ON_START (apps/server/src/index.ts), because that flag defaults to false and only guards
@@ -841,6 +861,10 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   for (const details of capabilityBackfillEvents(reconciliation.granted)) {
     await recordAuditEvent({ audit, logger }, { actorType: 'system', actorId: null, actorName: 'boot' }, details);
   }
+  // Reading the catalog here also logs, once, any plugin key a newer CE now owns.
+  await permissionSync.grantAll('boot').catch((err) => {
+    logger.warn({ err }, 'granting installed plugin permissions to the Administrator failed');
+  });
   // Data Exposure Task 5: seed column_exposure_policy from HARDCODED_DENY_UNION on every boot —
   // UNCONDITIONAL and best-effort, mirroring the role seed immediately above (NOT routed through
   // seedEssentials()/seedDatabase(), which take a forms/workflows surface with no db handle and are
@@ -1426,7 +1450,7 @@ const reporting: ReportingApi = {
         save: (id, input, actor) => saveLayout(internal.db, id, input, actor),
         remove: (id) => deleteLayout(internal.db, id),
       },
-      capabilityKeys: CAPABILITY_KEYS,
+      capabilityKeys: () => capabilityCatalog.keys(),
       roleMembers: (roleId) => roleMemberNames(internal.db, roleId),
       forms: packFormDeps({ forms, access: formAccessStore, roles }),
       installedVersion: (bundleId) => installedBundleVersion({ plugins: pluginRows, installs: marketplaceInstalls }, bundleId),
@@ -2223,6 +2247,7 @@ const reporting: ReportingApi = {
     pluginScheduleRunner,
     users,
     roles,
+    capabilityCatalog,
     userProfiles,
     forms,
     formAccessStore,
@@ -2309,6 +2334,7 @@ const reporting: ReportingApi = {
 }
 
 export { createFeatureFlags } from './feature-flags';
+export { createCapabilityCatalog, createPluginPermissionSync, type CapabilityCatalog, type CatalogGroup, type PluginCapabilityMeta } from './capability-catalog';
 export { createConnectorDialectLookup, dialectFor } from './connector-sql-service';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
 export { createLabIdentity, type LabIdentityService } from './lab-identity';
