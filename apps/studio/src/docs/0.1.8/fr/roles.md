@@ -140,7 +140,7 @@ Ouvrez les points du panneau et sélectionnez **Save**.
 
 Utilisez cette tâche seulement pour retirer les permissions accordées par ce rôle. Les rôles système ne peuvent pas être supprimés.
 
-Une installation qui a exécuté une version antérieure peut afficher un rôle **Reception**. C'est maintenant un rôle ordinaire. Vous pouvez donc le supprimer ici quand personne n'en a plus besoin.
+Une installation qui a exécuté une version de développement peut afficher un rôle **Reception**. C'est maintenant un rôle ordinaire. Vous pouvez donc le supprimer ici quand personne n'en a plus besoin.
 
 ### 1. Choisir Delete
 

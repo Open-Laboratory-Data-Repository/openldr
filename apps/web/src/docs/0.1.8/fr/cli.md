@@ -134,7 +134,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `ingest` | Ingère un fichier par le pipeline (en option via un plugin). |
 | `facilities` | Importe un registre national d'établissements : `suggest-map`, `suggest-values`, `import` (correspondance des colonnes et des valeurs, voir **Établissements** dans la documentation du studio). |
 | `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue. |
-| `lab` | `requisitions rebuild --force` reconstruit l'index qui trouve une demande par son numéro de demande. Exige **Danger zone**. |
+| `lab` | `requisitions rebuild --force` reconstruit l'index qui trouve une demande par son numéro de demande. Exige **Zone de danger**. |
 | `query` | Requêtes personnalisées : `export` les exporte dans un fichier JSON, `import` les importe depuis un fichier (`--force` remplace les noms existants et exige **Gérer les requêtes enregistrées** ; sans cette permission, un import ajoute les nouvelles requêtes sans groupe). |
 | `pipeline` | Examine les lots d'ingestion : `status`, `retry`, `logs`. |
 | `queue` | Examine la file d'événements. |
@@ -563,4 +563,4 @@ OpenLDR garde un index qui trouve une demande par son numéro de demande. Il le 
 openldr lab requisitions rebuild --force
 ```
 
-La commande vide l'index et indexe de nouveau chaque demande actuelle. Elle affiche `Indexed <n> orders by requisition number.`, et `--json` affiche `{"indexed":<n>}`. Elle refuse sans `--force`, avec `Refusing to rebuild the requisition index without --force.`, car elle réécrit tout l'index. Connecté, le compte doit avoir **Danger zone**. Chaque reconstruction est inscrite dans l'audit sous `lab.requisitions.rebuild`.
+La commande vide l'index et indexe de nouveau chaque demande actuelle. Elle affiche `Indexed <n> orders by requisition number.`, et `--json` affiche `{"indexed":<n>}`. Elle refuse sans `--force`, avec `Refusing to rebuild the requisition index without --force.`, car elle réécrit tout l'index. Connecté, le compte doit avoir **Zone de danger**. Chaque reconstruction est inscrite dans l'audit sous `lab.requisitions.rebuild`.

@@ -20,11 +20,11 @@ openldr lab requisitions rebuild --force
 
 Reconstruisez-le seulement si une erreur a laissé une demande hors de l'index, ou après la suppression de demandes du stockage. La commande affiche `Indexed <n> orders by requisition number.` Elle refuse sans `--force`, car elle réécrit tout l'index. Chaque reconstruction est inscrite dans le journal d'audit sous votre compte. Dans une copie des sources, ajoutez `pnpm` devant : `pnpm openldr lab requisitions rebuild --force`.
 
-## Après une mise à niveau depuis une version de laboratoire antérieure
+## Après une mise à niveau depuis une version de développement
 
-Une version antérieure avait une page Réception, des sections de laboratoire, un interrupteur d'auto-validation et sept permissions de laboratoire. Cette version ne les a pas.
+Une version de développement avait une page Réception, des sections de laboratoire, un interrupteur d'auto-validation et sept permissions de laboratoire. Cette version ne les a pas.
 
-- Un rôle **Reception** créé par cette version reste. C'est maintenant un rôle ordinaire. Un administrateur peut le supprimer sur la page **Rôles** quand personne n'en a plus besoin.
+- Un rôle **Reception** créé par cette version de développement reste. C'est maintenant un rôle ordinaire. Un administrateur peut le supprimer sur la page **Rôles** quand personne n'en a plus besoin.
 - Un rôle garde toute ancienne permission de laboratoire qu'il détient. CE ne la liste pas et ne peut ni l'accorder ni la retirer. `openldr roles doctor` liste ces permissions sous `kept` et se termine avec le code 0.
 - Un formulaire **Lab order** que personne n'a modifié retrouve ses champs **Results** et **Order rejection** au premier démarrage. Un formulaire modifié par votre laboratoire reste tel quel.
 

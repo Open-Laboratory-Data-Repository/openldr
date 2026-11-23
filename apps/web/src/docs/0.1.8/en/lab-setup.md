@@ -20,11 +20,11 @@ openldr lab requisitions rebuild --force
 
 Rebuild it only if an error kept an order out of the index, or after orders were deleted from the store. It prints `Indexed <n> orders by requisition number.` It refuses without `--force`, because it rewrites the whole index. Each rebuild is recorded in the audit log under your account. In a source checkout, put `pnpm` in front: `pnpm openldr lab requisitions rebuild --force`.
 
-## After an upgrade from an earlier lab release
+## After an upgrade from a development build
 
-An earlier release had a Reception page, lab sections, a self-authorisation switch and seven lab permissions. This release does not.
+A development build had a Reception page, lab sections, a self-authorisation switch and seven lab permissions. This release does not.
 
-- A **Reception** role made by that release stays. It is now an ordinary role. An administrator can delete it on the **Roles** page once nobody needs it.
+- A **Reception** role made by that build stays. It is now an ordinary role. An administrator can delete it on the **Roles** page once nobody needs it.
 - A role keeps any old lab permission it holds. CE does not list it and cannot grant or revoke it. `openldr roles doctor` lists such permissions under `kept` and exits 0.
 - A **Lab order** form nobody edited gets its **Results** and **Order rejection** fields back at the first start. A form your lab edited stays as it is.
 

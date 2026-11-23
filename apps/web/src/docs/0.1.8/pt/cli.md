@@ -134,7 +134,7 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 | `ingest` | Carrega um ficheiro através do pipeline (opcionalmente com um plugin). |
 | `facilities` | Importa um registo nacional de unidades: `suggest-map`, `suggest-values`, `import` (mapeamento de colunas e valores; consulte **Unidades** na Documentação do estúdio). |
 | `test-catalog` | O catálogo nacional de exames: `list` dos testes, `import` de uma lista a partir de CSV ou Excel, `export` em CSV, `enable` ou `disable` de um teste neste laboratório, e `retire` ou `restore` de um teste quando esta instalação é dona do catálogo. |
-| `lab` | `requisitions rebuild --force` reconstrói o índice que encontra um pedido pelo seu número de requisição. Exige **Danger zone**. |
+| `lab` | `requisitions rebuild --force` reconstrói o índice que encontra um pedido pelo seu número de requisição. Exige **Zona de perigo**. |
 | `query` | Consultas personalizadas: `export` para um ficheiro JSON, `import` a partir de um (`--force` substitui os nomes existentes e exige **Gerir consultas guardadas**; sem essa permissão, uma importação acrescenta as novas consultas sem grupo). |
 | `pipeline` | Inspeciona lotes de ingestão: `status`, `retry`, `logs`. |
 | `queue` | Inspeciona a fila de eventos. |
@@ -588,4 +588,4 @@ O OpenLDR mantém um índice que encontra um pedido pelo seu número de requisi�
 openldr lab requisitions rebuild --force
 ```
 
-O comando esvazia o índice e indexa de novo cada pedido atual. Mostra `Indexed <n> orders by requisition number.`, e `--json` mostra `{"indexed":<n>}`. Recusa sem `--force`, com `Refusing to rebuild the requisition index without --force.`, porque reescreve o índice inteiro. Com sessão iniciada, a conta precisa de **Danger zone**. Cada reconstrução fica registada na auditoria como `lab.requisitions.rebuild`.
+O comando esvazia o índice e indexa de novo cada pedido atual. Mostra `Indexed <n> orders by requisition number.`, e `--json` mostra `{"indexed":<n>}`. Recusa sem `--force`, com `Refusing to rebuild the requisition index without --force.`, porque reescreve o índice inteiro. Com sessão iniciada, a conta precisa de **Zona de perigo**. Cada reconstrução fica registada na auditoria como `lab.requisitions.rebuild`.

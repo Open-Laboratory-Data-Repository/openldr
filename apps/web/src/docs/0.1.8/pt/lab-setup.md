@@ -20,11 +20,11 @@ openldr lab requisitions rebuild --force
 
 Reconstrua-o só se um erro deixou um pedido fora do índice, ou depois de pedidos serem apagados do armazenamento. Mostra `Indexed <n> orders by requisition number.` Recusa sem `--force`, porque reescreve o índice inteiro. Cada reconstrução fica registada no registo de auditoria com a sua conta. Numa cópia do código-fonte, ponha `pnpm` à frente: `pnpm openldr lab requisitions rebuild --force`.
 
-## Depois de atualizar a partir de uma versão de laboratório anterior
+## Depois de atualizar a partir de uma versão de desenvolvimento
 
-Uma versão anterior tinha uma página Receção, secções de laboratório, um interruptor de autovalidação e sete permissões de laboratório. Esta versão não os tem.
+Uma versão de desenvolvimento tinha uma página Receção, secções de laboratório, um interruptor de autovalidação e sete permissões de laboratório. Esta versão não os tem.
 
-- Uma função **Reception** criada por essa versão fica. Agora é uma função comum. Um administrador pode eliminá-la na página **Funções** quando ninguém precisar dela.
+- Uma função **Reception** criada por essa versão de desenvolvimento fica. Agora é uma função comum. Um administrador pode eliminá-la na página **Funções** quando ninguém precisar dela.
 - Uma função mantém qualquer permissão de laboratório antiga que tenha. O CE não a lista e não a pode conceder nem retirar. `openldr roles doctor` lista essas permissões em `kept` e termina com o código 0.
 - Um formulário **Lab order** que ninguém editou recebe de volta os campos **Results** e **Order rejection** no primeiro arranque. Um formulário que o seu laboratório editou fica como está.
 

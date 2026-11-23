@@ -140,7 +140,7 @@ Abra os pontos do painel e selecione **Save**.
 
 Use esta tarefa apenas quando as pessoas devem perder as permissões concedidas pela função. Não pode eliminar funções do sistema.
 
-Uma instalação que executou uma versão anterior pode mostrar uma função **Reception**. Agora é uma função comum, por isso pode eliminá-la aqui quando ninguém precisar dela.
+Uma instalação que executou uma versão de desenvolvimento pode mostrar uma função **Reception**. Agora é uma função comum, por isso pode eliminá-la aqui quando ninguém precisar dela.
 
 ### 1. Escolher Delete
 

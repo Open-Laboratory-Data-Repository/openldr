@@ -140,7 +140,7 @@ Open the sheet dots and select **Save**.
 
 Use this only when people should lose the permissions this role grants. System roles cannot be deleted.
 
-An install that ran an earlier version may list a **Reception** role. It is now an ordinary role, so you can delete it here once nobody needs it.
+An install that ran a development build may list a **Reception** role. It is now an ordinary role, so you can delete it here once nobody needs it.
 
 ### 1. Choose Delete
 
