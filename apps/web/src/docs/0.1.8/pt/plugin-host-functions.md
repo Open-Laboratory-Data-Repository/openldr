@@ -130,6 +130,10 @@ Guarde antes o `pluginRef`. Cada linha de `patients.search`, a resposta de `pati
 
 Para abrir o paciente mais tarde, chame `patients.get` com `{ "pluginRef": "..." }`. Aplicam-se as mesmas regras que com `ref`. Um paciente fora do limite de quem chama, ou um `pluginRef` feito para outro plugin, dá `NOT_FOUND`.
 
+A linha de um paciente fundido também tem `replacedByPluginRef`, o `pluginRef` do registo que o substituiu. É null para um paciente que não foi fundido. Siga-o para que a ligação guardada aponte para o registo que ficou.
+
+Um `pluginRef` pertence ao identificador do plugin, não a uma instalação. Se remover um plugin e mais tarde instalar outro com o mesmo identificador, este pode abrir as refs que o anterior guardou. Uma reposição de fábrica mantém as ligações a funcionar.
+
 ## fhir_emit
 
 Envia registos FHIR prontos para o CE. O pedido é `{ "resources": [ ... ] }`.

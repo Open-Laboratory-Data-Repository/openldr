@@ -38,12 +38,13 @@ export function pluginPatientRefs(master: Buffer, pluginId: string): PluginPatie
     const c = createCipheriv('aes-256-ctr', encKey, iv);
     return Buffer.concat([c.update(data), c.final()]);
   };
+  const encode = (patientId: string): string => {
+    const plain = Buffer.from(patientId, 'utf8');
+    const iv = ivFor(plain);
+    return PREFIX + Buffer.concat([iv, ctr(iv, plain)]).toString('base64url');
+  };
   return {
-    encode(patientId) {
-      const plain = Buffer.from(patientId, 'utf8');
-      const iv = ivFor(plain);
-      return PREFIX + Buffer.concat([iv, ctr(iv, plain)]).toString('base64url');
-    },
+    encode,
     decode(ref) {
       if (typeof ref !== 'string' || !ref.startsWith(PREFIX)) return null;
       const body = ref.slice(PREFIX.length);
@@ -53,7 +54,10 @@ export function pluginPatientRefs(master: Buffer, pluginId: string): PluginPatie
       const iv = raw.subarray(0, 16);
       const plain = ctr(iv, raw.subarray(16));
       if (!timingSafeEqual(iv, ivFor(plain))) return null;
-      return plain.toString('utf8');
+      const id = plain.toString('utf8');
+      // One spelling per ref: base64url has spare bits in its last character, and a ref that is
+      // not exactly what encode gives is refused.
+      return encode(id) === ref ? id : null;
     },
   };
 }

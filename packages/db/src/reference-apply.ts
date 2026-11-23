@@ -1,5 +1,6 @@
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
+import { CENTER_OWNED_SETTING_KEYS } from './reference-capture';
 import { SUSPENDED_REFERENCE_ENTITY_TYPES, type ReferenceEntityType, type ReferenceOp } from './reference-change-log';
 
 // Distributed sync S2: capture-free reference-data applier. A LAB uses this to apply reference
@@ -304,6 +305,11 @@ async function upsertOrDelete(
 // Settings have no managed_origin column — the pull allowlist governs which keys sync, so a delete is
 // an unguarded delete-by-key. updated_by is stamped 'central' to mark the origin.
 async function applySetting(db: Kysely<InternalSchema>, rec: ReferenceRecord): Promise<ApplyRefResult> {
+  // Only a center-owned key may come from central. Any other key is this lab's own (for example the
+  // plugin patient ref key), so central can neither replace nor delete it.
+  if (!CENTER_OWNED_SETTING_KEYS.has(rec.entityId)) {
+    throw new Error(`applyReferenceChange: setting ${rec.entityId} is not center-owned, so a lab does not take it from central`);
+  }
   if (rec.op === 'delete') {
     await db.deleteFrom('app_settings').where('key', '=', rec.entityId).execute();
     return 'applied';

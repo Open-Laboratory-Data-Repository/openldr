@@ -212,13 +212,16 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
       };
 
       const refsFor = async () => pluginPatientRefs(await loadRefKey(), plugin.id);
-      /** Each row with its pluginRef. The row's id is hidden when masked, so it comes from its ref. */
-      const withPluginRefs = async <R extends { ref: string }>(rows: R[]): Promise<Array<R & { pluginRef: string | null }>> => {
+      /** A boot-time ref as this plugin's lasting ref, or null. */
+      const lasting = (refs: { encode(id: string): string }, ref: string | null): string | null => {
+        const id = ref === null ? null : deps.patients.idForRef(ref);
+        return id === null ? null : refs.encode(id);
+      };
+      /** Each row with its pluginRef, and replacedByPluginRef for a merged patient's survivor. The
+       *  row's id is hidden when masked, so it comes from its ref. */
+      const withPluginRefs = async <R extends { ref: string; replacedByRef: string | null }>(rows: R[]) => {
         const refs = await refsFor();
-        return rows.map((r) => {
-          const id = deps.patients.idForRef(r.ref);
-          return { ...r, pluginRef: id === null ? null : refs.encode(id) };
-        });
+        return rows.map((r) => ({ ...r, pluginRef: lasting(refs, r.ref), replacedByPluginRef: lasting(refs, r.replacedByRef) }));
       };
 
       const readOps: Record<CeReadOp, (input: unknown) => Promise<unknown>> = {
@@ -271,7 +274,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           // nothing about whether it exists.
           if (!inScope(scope, detail.managingFacility?.reference)) throw new PatientIndexError('patient not found', 'not-found');
           if (unmask) await deps.audit(actor, { action: 'patients.view', entityType: 'patient', entityId: detail.id ?? 'unknown', metadata: auditMeta });
-          return { ...detail, pluginRef: refs.encode(id) };
+          return { ...detail, pluginRef: refs.encode(id), replacedByPluginRef: lasting(refs, detail.replacedByRef) };
         },
 
         async 'patients.register'(raw) {
@@ -359,8 +362,9 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         // One facility by its register id. Outside the caller's data limit it is answered as not
         // found, as a missing one is, so the answer says nothing about whether it exists.
         async 'facilities.get'(raw) {
-          const { id } = parse(facilityGetInput, raw, 'facilities.get');
-          if (scope !== '*' && !scope.has(id.toLowerCase())) throw new HostInputError('NOT_FOUND', 'facilities.get: facility not found');
+          // Ids are compared without case, as facilities.search and the data limit compare them.
+          const id = parse(facilityGetInput, raw, 'facilities.get').id.toLowerCase();
+          if (scope !== '*' && !scope.has(id)) throw new HostInputError('NOT_FOUND', 'facilities.get: facility not found');
           const r = await deps.facilityRegistry.get(id);
           if (!r) throw new HostInputError('NOT_FOUND', 'facilities.get: facility not found');
           return facilityView(r);

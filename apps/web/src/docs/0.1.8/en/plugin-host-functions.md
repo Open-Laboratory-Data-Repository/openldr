@@ -130,6 +130,10 @@ Store `pluginRef` instead. Each `patients.search` row, the `patients.get` answer
 
 To open the patient later, call `patients.get` with `{ "pluginRef": "..." }`. The same rules apply as with `ref`. A patient outside the caller's limit, or a `pluginRef` made for another plugin, gives `NOT_FOUND`.
 
+A merged patient's row also has `replacedByPluginRef`, the `pluginRef` of the record that replaced it. It is null for a patient that was not merged. Follow it to keep a stored link pointing at the surviving record.
+
+A `pluginRef` belongs to the plugin id, not to one install. If you remove a plugin and later install one under the same id, it can open the refs the earlier one stored. A factory reset keeps the links working.
+
 ## fhir_emit
 
 Sends finished FHIR records into CE. The request is `{ "resources": [ ... ] }`.

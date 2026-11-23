@@ -130,6 +130,10 @@ Gardez plutôt `pluginRef`. Chaque ligne de `patients.search`, la réponse de `p
 
 Pour rouvrir le patient plus tard, appelez `patients.get` avec `{ "pluginRef": "..." }`. Les mêmes règles s'appliquent qu'avec `ref`. Un patient hors de la limite de l'appelant, ou un `pluginRef` fait pour un autre plugin, donne `NOT_FOUND`.
 
+La ligne d'un patient fusionné a aussi `replacedByPluginRef`, le `pluginRef` de l'enregistrement qui l'a remplacé. Il est null pour un patient non fusionné. Suivez-le pour que le lien gardé pointe vers l'enregistrement restant.
+
+Un `pluginRef` appartient à l'identifiant du plugin, pas à une installation. Si vous retirez un plugin puis en installez un sous le même identifiant, il peut ouvrir les refs que le premier a gardées. Une réinitialisation d'usine garde les liens en état de marche.
+
 ## fhir_emit
 
 Envoie des enregistrements FHIR terminés dans CE. La requête est `{ "resources": [ ... ] }`.

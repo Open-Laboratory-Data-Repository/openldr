@@ -601,6 +601,21 @@ describe('plugin host: pluginRef, a lasting patient link', () => {
     expect((await call(EVERYONE, 'patients.get', { ref: 'a', pluginRef: 'b' })).error.code).toBe('INVALID_REQUEST');
   });
 
+  it('a merged patient carries replacedByPluginRef, which opens the surviving record', async () => {
+    const f = await seeded();
+    await seedPatient(f.externalDb, { id: 'p-old', surname: 'Mwanza', firstname: 'Jon', org: 'Organization/fac-1', active: false, replacedBy: 'p-1' });
+    const call = await boot(f);
+    const rows = (await call(EVERYONE, 'patients.search', { search: 'Mwanza', status: 'all' })).result.rows;
+    const old = rows.find((r: any) => r.id === 'p-old');
+    const live = rows.find((r: any) => r.id === 'p-1');
+    expect(live.replacedByPluginRef).toBeNull();
+    expect(old.replacedByPluginRef).toBe(live.pluginRef);
+    const oldDetail = await call(EVERYONE, 'patients.get', { pluginRef: old.pluginRef });
+    expect(oldDetail.result.replacedByPluginRef).toBe(live.pluginRef);
+    // After a restart the survivor still opens from it.
+    expect((await (await boot(f))(EVERYONE, 'patients.get', { pluginRef: oldDetail.result.replacedByPluginRef })).result.id).toBe('p-1');
+  });
+
   it('patients.register answers the pluginRef patients.get opens', async () => {
     const f = await seeded();
     const call = await boot(f);
@@ -628,6 +643,9 @@ describe('plugin host: facilities.get', () => {
     expect(await fns.ce_read({ op: 'facilities.get', input: { id: 'fac-2' } })).toEqual(notFound);
     expect(reg.get).not.toHaveBeenCalled();
     expect((await fns.ce_read({ op: 'facilities.get', input: { id: 'fac-1' } }) as any).result.id).toBe('fac-1');
+    // Compared without case, for the limit and for the lookup alike.
+    expect((await fns.ce_read({ op: 'facilities.get', input: { id: 'FAC-1' } }) as any).result.id).toBe('fac-1');
+    expect(reg.get).toHaveBeenLastCalledWith('fac-1');
     const admin = createPluginHost(fakeDeps({ facilityRegistry: reg as any })).forCall(plugin([{ kind: 'host:ce-read' }]), EVERYONE);
     expect(await admin.ce_read({ op: 'facilities.get', input: { id: 'fac-9' } })).toEqual(notFound);
     expect((await admin.ce_read({ op: 'facilities.get', input: {} }) as any).error.code).toBe('INVALID_REQUEST');
