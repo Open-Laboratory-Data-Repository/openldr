@@ -21,7 +21,7 @@ import { dashboardAccess, type DashboardAccessCheck } from './dashboard-access';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
 import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, validateSelectSql, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, NO_SCOPE_LINK, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type SqlDialect, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
-import { readScopeRegistryRows, resolveDataScope } from './data-scope';
+import { facilityIdsInScope, readScopeRegistryRows, resolveDataScope } from './data-scope';
 import { runReportStoredQuery } from './report-query';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
@@ -2115,6 +2115,9 @@ const reporting: ReportingApi = {
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
+    host: pluginHost,
+    // Once per plugin call with host functions (ruling 5).
+    resolveFacilities: async (scope) => facilityIdsInScope(await scopeRegistryRows(), scope),
     imports,
     copies: importCopies,
     checks: importChecks,

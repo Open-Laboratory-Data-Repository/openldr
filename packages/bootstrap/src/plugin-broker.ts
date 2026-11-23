@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { beginOp } from '@openldr/core';
 import { readGrant, type Capability } from '@openldr/marketplace';
-import type { DataScope, JobInterruption, JobInterruptionStore, PluginDataStore } from '@openldr/db';
+import type { DataScope, JobInterruption, JobInterruptionStore, PluginCaller, PluginDataStore } from '@openldr/db';
+import { hasHostFnCapability, type PluginHost } from '@openldr/plugins';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
 import { checkReadOp } from './check-read-audit';
@@ -16,6 +17,8 @@ export interface BrokerPrincipal {
   roles: string[];
   /** Display name for the audit trail; falls back to id when absent. */
   username?: string;
+  /** The person's display name from the CE session. Plugin host functions audit under it. */
+  displayName?: string | null;
   /** The caller's capabilities. A holder of `imports.correct_held` may use the Feedback tab of an
    *  import plugin without the plugin's role (design 2026-11-18-held-corrections). */
   capabilities?: string[];
@@ -368,6 +371,13 @@ export interface PluginBrokerDeps {
   /** Step-by-step check of a host connector (connector-diagnose.ts), by connector id. */
   diagnoseConnector?: (id: string) => Promise<unknown>;
   policy: () => PluginPolicy;
+  /** Builds the CE host functions (plugin-host.ts). Passed to the wasm only for a plugin whose
+   *  grant gives it host functions (host:db, host:ce-read). */
+  host?: PluginHost;
+  /** A caller's data limit as facility ids (ruling 5): '*' for Everything, else the listed
+   *  facilities plus every facility in the listed districts and regions. Absent, a limited caller
+   *  gets no facility. */
+  resolveFacilities?: (scope: DataScope) => Promise<string[] | '*'>;
   /** Max serialized byte size of a persisted/forwarded plugin doc. Defaults to DEFAULT_MAX_DOC_BYTES. */
   maxDocBytes?: number;
   /** Optional: server-side sink for redacted host-op error detail (never sent to the plugin). */
@@ -389,6 +399,23 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
   }
 
   const brokerOpSchema = buildBrokerOpSchema(deps.maxDocBytes ?? DEFAULT_MAX_DOC_BYTES);
+
+  /** The person a plugin call is made for, from the CE session (the principal), never from the op.
+   *  The data limit is resolved to facility ids once per call. A limited caller never gets '*'. */
+  async function callerOf(principal: BrokerPrincipal): Promise<PluginCaller> {
+    const scope = principal.dataScope;
+    let facilities: string[] | '*' = '*';
+    if (scope?.limited) {
+      const resolved = deps.resolveFacilities ? await deps.resolveFacilities(scope) : [];
+      facilities = resolved === '*' ? [] : resolved.map((f) => f.toLowerCase());
+    }
+    return {
+      userId: principal.id,
+      displayName: principal.displayName ?? principal.username ?? null,
+      capabilities: [...(principal.capabilities ?? [])],
+      facilities,
+    };
+  }
 
   // Best-effort audit — never throws into the broker (audit must not break or block-fail an op).
   async function emit(pluginId: string, principal: BrokerPrincipal, op: string, outcome: 'denied' | 'ok', reason?: string): Promise<void> {
@@ -487,7 +514,12 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           case 'invoke': {
             const sink = await deps.plugins.loadSink(pluginId, row.version);
             if (!sink) return { ok: false, error: `plugin ${pluginId} exposes no invokable wasm` };
-            const data = await sink.invoke(op.entrypoint, op.input);
+            // A plugin with host functions gets the caller, built from CE's session only. Every
+            // other plugin is invoked exactly as before.
+            const grant = readGrant(row.manifest);
+            const data = deps.host && !grant.legacy && hasHostFnCapability(grant.capabilities)
+              ? await sink.invoke(op.entrypoint, op.input, { caller: await callerOf(principal), host: deps.host })
+              : await sink.invoke(op.entrypoint, op.input);
             await emit(pluginId, principal, `invoke:${op.entrypoint}`, 'ok'); // wasm execution
             return { ok: true, data };
           }

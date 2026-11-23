@@ -2,7 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { currentInFlight } from '@openldr/core';
 import { createImportCheckHeldStore, createImportCopyStore, createPluginDataStore } from '@openldr/db';
 import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
-import { checkForPage, createPluginBroker, buildBrokerOpSchema } from './plugin-broker';
+import { newDb } from 'pg-mem';
+import type { Kysely } from 'kysely';
+import { createPluginRequests, createPluginSchemas, type TableShape } from '@openldr/db';
+import { createWasmSink, parseManifest } from '@openldr/plugins';
+import { PG_MEM_WITHOUT_RLS } from '../../db/src/plugin-schema';
+import { checkForPage, createPluginBroker, buildBrokerOpSchema, type PluginBrokerDeps } from './plugin-broker';
+import { createPluginHost } from './plugin-host';
+import { facilityIdsInScope, type ScopeRegistryRow } from './data-scope';
 import { CopySetChangedError, copySetHashes, copySpecSchema, createImportCopyService } from './import-copy';
 import { checkIdOf, createImportCheckService } from './import-check';
 
@@ -1325,5 +1332,152 @@ describe('plugin broker under a data limit', () => {
     const { b } = broker({ caps, reporting: { list: () => [{ id: 'r1' }] } });
     expect((await b.handle('p1', limited, { kind: 'storage.put', collection: 'c', key: 'k', doc: { n: 1 } })).ok).toBe(true);
     expect(await b.handle('p1', { ...limited, dataScope: { limited: false } }, { kind: 'reports.list' })).toEqual({ ok: true, data: [{ id: 'r1' }] });
+  });
+});
+
+describe('plugin broker: the caller passed to plugin code (plugin host 2a task 6)', () => {
+  const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as any;
+  const registry: ScopeRegistryRow[] = [
+    { id: 'FAC-1', name: 'One', facility_code: null, region: 'Dodoma', district: 'Kondoa' },
+    { id: 'fac-2', name: 'Two', facility_code: null, region: 'Dodoma', district: 'Chamwino' },
+    { id: 'fac-3', name: 'Three', facility_code: null, region: 'Arusha', district: 'Kondoa' },
+  ];
+  const fakeHost = { forCall: vi.fn(() => ({})) };
+
+  function hostBroker(caps: unknown[], sink: unknown, over: Partial<PluginBrokerDeps> = {}) {
+    const row = { id: 'p1', version: '1.0.0', enabled: true, manifest: { capabilities: caps } };
+    const resolveFacilities = vi.fn(async (scope: any) => facilityIdsInScope(registry, scope));
+    const b = createPluginBroker({
+      plugins: { list: async () => [row], loadSink: async () => sink } as any,
+      pluginData: memData().store as any,
+      reporting: defaultReporting(),
+      connectors: { list: async () => [], get: async () => null },
+      policy: () => ({ uiEnabled: true, egressEnabled: true }),
+      host: fakeHost,
+      resolveFacilities,
+      ...over,
+    });
+    return { b, resolveFacilities };
+  }
+  const person = { id: 'u7', roles: ['lab_admin'], username: 'jdoe', displayName: 'Jane Doe', capabilities: ['patients.view'] };
+  const limitedTo = (over: Record<string, unknown>) => ({ ...person, dataScope: { limited: true as const, facilities: [], districts: [], regions: [], ...over } });
+
+  it('passes the caller from the session and the host to a plugin with host functions', async () => {
+    const invoke = vi.fn(async () => ({ done: true }));
+    const { b, resolveFacilities } = hostBroker([{ kind: 'host:db' }], { invoke });
+    // A caller or facility list in the op input is the plugin's request, never the caller.
+    const input = { caller: { userId: 'admin', facilities: '*' }, facilities: '*' };
+    const r = await b.handle('p1', { ...person, dataScope: { limited: false } }, { kind: 'invoke', entrypoint: 'run', input });
+    expect(r).toEqual({ ok: true, data: { done: true } });
+    expect(invoke).toHaveBeenCalledWith('run', input, {
+      caller: { userId: 'u7', displayName: 'Jane Doe', capabilities: ['patients.view'], facilities: '*' },
+      host: fakeHost,
+    });
+    // Everything needs no register read.
+    expect(resolveFacilities).not.toHaveBeenCalled();
+  });
+
+  it('gives an unlimited caller *, and a caller with no data limit at all *', async () => {
+    const invoke = vi.fn(async () => ({}));
+    const { b } = hostBroker([{ kind: 'host:ce-read' }], { invoke });
+    await b.handle('p1', person, { kind: 'invoke', entrypoint: 'run', input: {} });
+    expect((invoke.mock.calls[0] as any)[2].caller.facilities).toBe('*');
+  });
+
+  it.each([
+    ['a listed facility', { facilities: ['FAC-1'] }, ['fac-1']],
+    ['a listed district', { districts: [{ region: 'Dodoma', district: 'Kondoa' }] }, ['fac-1']],
+    ['a listed region', { regions: ['Dodoma'] }, ['fac-1', 'fac-2']],
+    ['nothing in the register', { regions: ['Nowhere'] }, []],
+  ])('resolves a limited caller\'s %s to facility ids, once per call', async (_what, scope, want) => {
+    const invoke = vi.fn(async () => ({}));
+    const { b, resolveFacilities } = hostBroker([{ kind: 'host:db' }], { invoke });
+    const r = await b.handle('p1', limitedTo(scope), { kind: 'invoke', entrypoint: 'run', input: {} });
+    expect(r.ok).toBe(true);
+    expect((invoke.mock.calls[0] as any)[2].caller.facilities).toEqual(want);
+    expect(resolveFacilities).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives a limited caller no facility when nothing resolves the limit, never *', async () => {
+    const invoke = vi.fn(async () => ({}));
+    const { b } = hostBroker([{ kind: 'host:db' }], { invoke }, { resolveFacilities: undefined });
+    await b.handle('p1', limitedTo({ facilities: ['fac-1'] }), { kind: 'invoke', entrypoint: 'run', input: {} });
+    expect((invoke.mock.calls[0] as any)[2].caller.facilities).toEqual([]);
+  });
+
+  it('invokes a plugin without host capabilities exactly as before', async () => {
+    for (const caps of [[], [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }], [{ kind: 'net-egress', allowedHosts: [] }]]) {
+      const invoke = vi.fn(async () => ({}));
+      const { b, resolveFacilities } = hostBroker(caps, { invoke });
+      await b.handle('p1', limitedTo({ facilities: ['fac-1'] }), { kind: 'invoke', entrypoint: 'run', input: { a: 1 } });
+      expect(invoke.mock.calls[0]).toEqual(['run', { a: 1 }]);
+      expect(resolveFacilities).not.toHaveBeenCalled();
+    }
+  });
+
+  it('invokes a legacy plugin (no capabilities field) exactly as before', async () => {
+    const invoke = vi.fn(async () => ({}));
+    const row = { id: 'p1', version: '1.0.0', enabled: true, manifest: {} };
+    const b = createPluginBroker({
+      plugins: { list: async () => [row], loadSink: async () => ({ invoke }) } as any,
+      pluginData: memData().store as any, reporting: defaultReporting(),
+      connectors: { list: async () => [], get: async () => null },
+      policy: () => ({ uiEnabled: true, egressEnabled: true }), host: fakeHost,
+    });
+    await b.handle('p1', person, { kind: 'invoke', entrypoint: 'run', input: {} });
+    expect(invoke.mock.calls[0]).toEqual(['run', {}]);
+  });
+
+  it('a limited caller reaches invoke, and its db_select sees only its own facility', async () => {
+    // pg-mem: the facility filter CE builds itself (row-level security is proved live in @openldr/db).
+    const shapes: TableShape[] = [{
+      name: 'orders',
+      columns: [{ name: 'id', type: 'integer' }, { name: 'facility', type: 'text' }],
+      primaryKey: ['id'],
+      facilityColumn: 'facility',
+    }];
+    const mem = newDb();
+    mem.public.interceptQueries((q) => (/^set local statement_timeout/i.test(q.trim()) ? [] : null));
+    const db = mem.adapters.createKysely() as Kysely<any>;
+    await createPluginSchemas(db, PG_MEM_WITHOUT_RLS).apply('p1', shapes);
+    const requests = createPluginRequests(db);
+    const everyone = { userId: 'seed', displayName: null, capabilities: [], facilities: '*' as const };
+    await requests.write('p1', shapes, everyone, { steps: [
+      { op: 'insert', table: 'orders', values: { id: 1, facility: 'fac-1' } },
+      { op: 'insert', table: 'orders', values: { id: 2, facility: 'fac-2' } },
+      { op: 'insert', table: 'orders', values: { id: 3, facility: 'fac-3' } },
+    ] });
+
+    const host = createPluginHost({
+      requests,
+      patients: {} as any, testCatalog: {} as any, terminology: {} as any, facilityRegistry: {} as any,
+      fhirGetWithProvenance: async () => null, persist: async () => [], audit: async () => {}, logger,
+    });
+    const caps = [{ kind: 'host:db' }];
+    // The real sink, with a runner that does what the plugin's code would: call db_select.
+    const runner = {
+      async run(_wasm: Uint8Array, input: Uint8Array, opts: any) {
+        const req = JSON.parse(new TextDecoder().decode(input));
+        const out = await opts.hostFns.db_select(req);
+        return new TextEncoder().encode(JSON.stringify(out));
+      },
+    };
+    const manifest = parseManifest({ id: 'p1', version: '1.0.0', kind: 'sink', entrypoints: ['list'], wasmSha256: 'a'.repeat(64) });
+    const sink = createWasmSink(manifest, new Uint8Array([0]), runner as never, logger, caps as never, shapes);
+    const { b } = hostBroker(caps, sink, { host });
+    const op = { kind: 'invoke', entrypoint: 'list', input: { table: 'orders', columns: ['id'], orderBy: [{ column: 'id' }] } };
+
+    const limited = await b.handle('p1', limitedTo({ facilities: ['FAC-1'] }), op) as any;
+    expect(limited.ok).toBe(true);
+    expect(limited.data).toEqual({ ok: true, result: { rows: [{ id: 1 }] } });
+
+    const district = await b.handle('p1', limitedTo({ regions: ['Dodoma'] }), op) as any;
+    expect(district.data.result.rows).toEqual([{ id: 1 }, { id: 2 }]);
+
+    const none = await b.handle('p1', limitedTo({ regions: ['Nowhere'] }), op) as any;
+    expect(none.data.result.rows).toEqual([]);
+
+    const all = await b.handle('p1', { ...person, dataScope: { limited: false } }, op) as any;
+    expect(all.data.result.rows).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
   });
 });
