@@ -30,9 +30,9 @@ Le plugin ajoute quatre permissions. Le rôle Administrateur reçoit les quatre 
 
 `lab.reject` n'ouvre aucun onglet à lui seul. Donnez-le avec `lab.receive` ou `lab.worklist.view`.
 
-La réception et les sites ont aussi besoin de `patients.find` (**Trouver un patient**) pour trouver et enregistrer des patients.
+La réception et les sites ont aussi besoin de `patients.find` (**Find a patient**, trouver un patient ; la page Rôles la montre en anglais) pour trouver et enregistrer des patients.
 
-Une demande ne garde qu'un lien vers son patient, jamais le nom. Le nom est lu dans CE chaque fois qu'une demande s'affiche, avec les droits de la personne qui regarde. Un rôle qui a `patients.find` ou `patients.view`, et aussi `patients.view_identifiers` (**Voir les identifiants des patients**), voit le nom complet. Sans `patients.view_identifiers`, le nom est masqué, comme sur les pages de CE. Un rôle sans aucune permission patient, par exemple avec `lab.worklist.view` seul, voit **non disponible** à la place du nom. Un utilisateur de site limité à un établissement voit toujours les noms masqués, car la limite retire `patients.view_identifiers`.
+Une demande ne garde qu'un lien vers son patient, jamais le nom. Le nom est lu dans CE chaque fois qu'une demande s'affiche, avec les droits de la personne qui regarde. Un rôle qui a `patients.find` ou `patients.view`, et aussi `patients.view_identifiers` (**View patient identifiers**, voir les identifiants des patients), voit le nom complet. Sans `patients.view_identifiers`, le nom est masqué, comme sur les pages de CE. Un rôle sans aucune permission patient, par exemple avec `lab.worklist.view` seul, voit **non disponible** à la place du nom. Un utilisateur de site limité à un établissement voit toujours les noms masqués, car la limite retire `patients.view_identifiers`.
 
 Limitez chaque utilisateur de site à son établissement avec `openldr users scope <user> --facility <facility-id> --force`. Cet utilisateur ne voit alors que les demandes de cet établissement. Une demande d'un autre établissement est traitée comme introuvable.
 
