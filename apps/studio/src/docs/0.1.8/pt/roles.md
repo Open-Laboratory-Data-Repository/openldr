@@ -179,10 +179,10 @@ O grupo **Lab** tem sete capacidades para o módulo de laboratório: **Receive s
 Três funções do sistema usam-nas.
 
 - **Reception** tem **Receive samples**, **Return and reject**, **View worklists** e **View patient index**.
-- **Lab Technician** tem **Use forms**, **Submit forms**, **Enter results** e **View worklists**.
+- **Lab Technician** tem **Use forms**, **Submit forms**, **Return and reject**, **Enter results** e **View worklists**.
 - **Lab Manager** tem as sete capacidades do laboratório, além do que já tinha.
 
-Hoje duas capacidades do laboratório abrem alguma coisa. **Receive samples** abre **Receção**. Leia [Receção](/docs/reception). **Lab settings** abre o interruptor de autovalidação e as secções em Laboratório, e a secção e a revisão de um exame. As outras cinco passam a ter efeito em versões posteriores, com as listas de trabalho, a revisão de resultados, a devolução de um pedido e a rejeição de uma amostra.
+Hoje três capacidades do laboratório fazem alguma coisa. **Receive samples** abre **Receção**. Leia [Receção](/docs/reception). **Return and reject** permite, na receção, devolver um pedido ao seu local, rejeitar uma amostra ou uma análise, e marcar como corrigido um pedido devolvido. Só funciona com **Receive samples**, porque a receção precisa dela para abrir. **Lab settings** abre o interruptor de autovalidação e as secções em Laboratório, e a secção e a revisão de um exame. As outras quatro passam a ter efeito em versões posteriores, com as listas de trabalho e a revisão de resultados.
 
 Numa instalação que usava uma versão anterior, Reception aparece no primeiro arranque do servidor nesta versão. Lab Technician e Lab Manager recebem as novas capacidades nesse arranque, uma só vez. Se depois tirar uma delas, ela continua tirada. Reception pode ser editada, mas não eliminada.
 

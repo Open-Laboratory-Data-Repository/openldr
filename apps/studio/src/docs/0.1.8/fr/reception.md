@@ -1,12 +1,14 @@
 # Réception
 
-La réception est le guichet du laboratoire. Quand un échantillon arrive, vous trouvez sa demande par le numéro de demande, vous enregistrez la demande si le laboratoire n'en a aucune trace, vous liez le patient et vous enregistrez l'échantillon avec son état. Le personnel d'accueil et les responsables de laboratoire l'utilisent.
+La réception est le guichet du laboratoire. Quand un échantillon arrive, vous trouvez sa demande par le numéro de demande, vous enregistrez la demande si le laboratoire n'en a aucune trace, vous liez le patient et vous enregistrez l'échantillon avec son état. Vous pouvez aussi renvoyer une demande à son site, rejeter un échantillon ou une analyse, et lier le nouveau prélèvement. Le personnel d'accueil et les responsables de laboratoire l'utilisent.
 
 Il faut **Receive samples** pour ouvrir **Réception**. Les rôles intégrés **Reception** et **Lab Manager** l'ont. Un utilisateur avec une limite de données ne peut pas ouvrir la réception, quel que soit son rôle.
 
 Les noms des rôles et des capacités apparaissent en anglais à l'écran. Ce guide les écrit donc en anglais.
 
-**Le renvoi d'une demande à son site, le rejet d'un échantillon, les listes de travail et la vérification des résultats ne font pas partie de cette version.** Ils arrivent dans des versions ultérieures.
+Le renvoi, le rejet et **Corrigée par le site** demandent aussi **Return and reject**. Les rôles **Reception** et **Lab Manager** ont les deux. **Lab Technician** a **Return and reject** mais pas **Receive samples**, il ne peut donc pas ouvrir la réception.
+
+**Les listes de travail et la vérification des résultats ne font pas partie de cette version.** Elles arrivent dans des versions ultérieures.
 
 ## Trouver une demande
 
@@ -132,9 +134,83 @@ Chaque analyse annulée est gardée avec votre nom et le motif, et l'annulation 
 
 Pour enregistrer de nouveau la demande avec les bons détails, recherchez le numéro et suivez [Enregistrer une demande introuvable](#enregistrer-une-demande-introuvable). Les nouvelles analyses s'affichent dans le même panneau. Les analyses annulées restent listées comme **Saisie par erreur**.
 
+## Renvoyer une demande à son site
+
+Faites-le quand un bon de demande a une erreur que seul le site peut corriger, par exemple un formulaire incomplet. Il faut **Return and reject**.
+
+1. Ouvrez le menu à points du panneau de la demande et sélectionnez **Renvoyer au site**.
+2. Choisissez la raison dans **Motif**.
+3. Saisissez une **Note** pour le site si elle aide.
+4. Ouvrez le menu à points du panneau et sélectionnez **Renvoyer au site**.
+
+**Résultat attendu :** un message indique, par exemple, `Demande CS-0001 renvoyée à son site.` Chaque analyse affiche **En attente**. Le panneau montre **Renvoyée au site** avec le motif, qui l'a renvoyée et quand.
+
+**Renvoyer au site** n'apparaît pas pour une demande **Enregistrée à la réception**. Corrigez vous-même une demande de la réception. Il n'apparaît pas non plus pour une demande déjà renvoyée.
+
+Tant qu'une demande est renvoyée, **Corriger la demande** n'est pas dans le menu. Le site fait les corrections.
+
+Un site ne peut pas encore voir une demande renvoyée sur son propre écran. Prévenez le site par téléphone ou par message, avec le motif.
+
+## Marquer une demande renvoyée comme corrigée
+
+Faites-le quand le site renvoie ses corrections. **Corrigée par le site** n'apparaît que sur une demande renvoyée.
+
+1. Ouvrez le menu à points du panneau de la demande et sélectionnez **Corrigée par le site**.
+2. Modifiez **Priorité**, **Clinicien** ou **Note** selon ce que le site a envoyé. Laissez-les si le site a corrigé autre chose.
+3. Saisissez la raison dans **Motif**, par exemple `Le site a envoyé le formulaire complet`.
+4. Ouvrez le menu à points du panneau et sélectionnez **Marquer comme corrigée**.
+
+**Résultat attendu :** un message indique, par exemple, `Demande CS-0001 marquée comme corrigée.` Les analyses ne sont plus en attente et affichent **Active**. **Corriger la demande** revient dans le menu.
+
+## Rejeter un échantillon
+
+Faites-le quand un échantillon ne peut pas être analysé, par exemple parce qu'il n'est pas étiqueté ou qu'il a coagulé. Il faut **Return and reject**.
+
+1. Ouvrez le menu à points du panneau de la demande et sélectionnez **Rejeter l'échantillon**.
+2. Choisissez **Type d'échantillon**. La liste contient les types d'échantillon que prennent les analyses de la demande.
+3. Choisissez **État**.
+4. Choisissez la raison dans **Motif**.
+5. Laissez **Demander un nouveau prélèvement** activé pour demander un nouvel échantillon au site. Désactivez-le si aucun nouvel échantillon n'est nécessaire.
+6. Ouvrez le menu à points du panneau et sélectionnez **Rejeter l'échantillon**.
+
+**Résultat attendu :** un message indique, par exemple, `Échantillon rejeté pour la demande CS-0001.` Chaque analyse de cet échantillon affiche **Révoquée**, avec `Rejetée :` et le motif en dessous.
+
+Rejeter un échantillon rejette toutes les analyses de cet échantillon. Pour rejeter une seule analyse, suivez la tâche suivante.
+
+## Rejeter une seule analyse
+
+Faites-le quand une analyse ne peut pas être faite, mais que les autres analyses de la demande peuvent continuer. Il faut **Return and reject**.
+
+1. Ouvrez le menu à points à droite de la ligne de l'analyse et sélectionnez **Rejeter l'analyse**.
+2. Vérifiez le nom de l'analyse à côté de **Analyse**.
+3. Choisissez la raison dans **Motif**.
+4. Laissez **Demander un nouveau prélèvement** activé, ou désactivez-le si aucun nouvel échantillon n'est nécessaire.
+5. Ouvrez le menu à points du panneau et sélectionnez **Rejeter l'analyse**.
+
+**Résultat attendu :** un message indique que l'analyse est rejetée. L'analyse affiche **Révoquée**, avec `Rejetée :` et le motif en dessous. Les autres analyses de la demande ne changent pas.
+
+Sur une demande enregistrée avant cette version, plusieurs analyses peuvent partager une seule demande d'examen. Ces lignes n'ont pas de menu à points. Rejetez-les avec **Rejeter l'échantillon**.
+
+## Lier un nouveau prélèvement à la demande rejetée
+
+Faites-le quand le nouvel échantillon d'une demande rejetée arrive. Le nouveau prélèvement arrive sur son propre bon de demande, avec un nouveau numéro de demande. L'ancien numéro désigne toujours la demande rejetée.
+
+1. Trouvez la demande du nouveau prélèvement par son nouveau numéro, ou enregistrez-la.
+2. Ouvrez le menu à points du panneau de cette demande et sélectionnez **Remplace une demande rejetée**.
+3. Saisissez l'ancien numéro dans **Numéro de la demande rejetée**.
+4. Ouvrez le menu à points du panneau et sélectionnez **Lier le nouveau prélèvement**.
+
+**Résultat attendu :** un message indique, par exemple, `Demande CS-0002 liée comme nouveau prélèvement de CS-0001.`
+
+Les deux demandes doivent venir du même établissement. Le nouveau prélèvement doit contenir au moins une analyse que l'ancienne demande a rejetée. Cette tâche demande **Receive samples**.
+
+Un site ne peut pas encore voir une demande de nouveau prélèvement sur son propre écran. Dites au site que le laboratoire a besoin d'un nouvel échantillon.
+
 ## Limites
 
-- Le renvoi d'une demande à son site, le rejet d'un échantillon, les listes de travail et la vérification des résultats arrivent dans des versions ultérieures.
+- Les listes de travail et la vérification des résultats arrivent dans des versions ultérieures.
+- Un site ne peut pas encore voir une demande renvoyée ou une demande de nouveau prélèvement sur son propre écran. Le laboratoire prévient le site.
+- Le renvoi, le rejet et le lien d'un nouveau prélèvement ne sont pas encore des commandes `openldr`.
 - Chaque analyse d'une nouvelle demande est sa propre demande d'examen. Une demande enregistrée avant cette version garde toutes ses analyses dans une seule demande d'examen, et la réception les liste toutes.
 - Un utilisateur avec une limite de données perd **Receive samples** et **Return and reject**. La réception n'est donc pas dans son menu.
 
@@ -144,10 +220,14 @@ Pour enregistrer de nouveau la demande avec les bons détails, recherchez le num
 - **Une recherche ne trouve pas la demande attendue.** Vérifiez le numéro sur le bon. Une demande créée par un autre système apparaît une fois que les données de ce système sont arrivées dans OpenLDR. Si une demande que vous savez enregistrée n'apparaît toujours pas, un administrateur peut reconstruire la recherche avec `openldr lab requisitions rebuild --force`.
 - **La recherche ne trouve aucun patient.** Vérifiez l'identifiant, ou saisissez le nom complet avec la date de naissance. Si le patient reste introuvable, enregistrez-le.
 - **Enregistrer la correction indique `Rien n'a changé.`** Changez d'abord au moins un de **Priorité**, **Clinicien** ou **Note**.
+- **Renvoyer au site, Rejeter l'échantillon ou Rejeter l'analyse manque.** Votre compte n'a pas **Return and reject**. Renvoyer au site manque aussi pour une demande de la réception et pour une demande déjà renvoyée.
+- **Lier le nouveau prélèvement est refusé.** Vérifiez que vous avez saisi le numéro de la demande rejetée, pas celui du nouveau prélèvement. Vérifiez que les deux demandes viennent du même établissement, et que le nouveau prélèvement contient une analyse que l'ancienne demande a rejetée.
+- **Un motif dont vous avez besoin n'est pas dans la liste.** Ajoutez-le dans **Terminologie**, à `urn:openldr:valueset:order-return-reason` pour les renvois, `urn:openldr:valueset:order-reject-reason` pour les échantillons, `urn:openldr:valueset:test-reject-reason` pour les analyses, ou `urn:openldr:valueset:sample-condition` pour les états. Lisez [Terminologie](/docs/terminology).
 
 ## Guides associés
 
 - [Configuration du laboratoire](/docs/lab-setup)
+- [Terminologie](/docs/terminology)
 - [Formulaires](/docs/forms)
 - [Rôles](/docs/roles)
 - [Utilisateurs](/docs/users)

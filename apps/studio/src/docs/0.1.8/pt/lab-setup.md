@@ -88,8 +88,8 @@ Uma regra só é verificada quando o intervalo tem os dois valores. Uma recusa i
 
 Três funções incluídas cobrem o trabalho do laboratório.
 
-- **Reception** pode receber amostras, ver as listas de trabalho e abrir o índice de pacientes mascarado. A função também tem devolver um pedido ao seu local e rejeitar uma amostra, que chegam numa versão posterior.
-- **Lab Technician** pode preencher e submeter formulários, introduzir resultados e ver as listas de trabalho.
+- **Reception** pode receber amostras, ver as listas de trabalho e abrir o índice de pacientes mascarado. A função também pode devolver um pedido ao seu local e rejeitar uma amostra ou uma análise.
+- **Lab Technician** pode preencher e submeter formulários, devolver e rejeitar, introduzir resultados e ver as listas de trabalho. Não tem **Receive samples**, por isso não pode abrir **Receção**.
 - **Lab Manager** tem todas as capacidades do laboratório, incluindo **Lab settings**.
 
 A página **Funções** lista as sete capacidades do laboratório no grupo **Lab**: **Receive samples**, **Return and reject**, **Enter results**, **Authorise results**, **Amend results**, **View worklists** e **Lab settings**.
@@ -105,7 +105,7 @@ Precisa de **Manage roles** para dar uma função a uma pessoa.
 
 Numa instalação que usava uma versão anterior, **Reception** aparece no primeiro arranque do servidor nesta versão. **Lab Technician** e **Lab Manager** recebem as novas capacidades no mesmo arranque, uma só vez. Se depois tirar uma capacidade a uma delas, ela continua tirada.
 
-Hoje **Receive samples** abre **Receção**, e **Lab settings** muda a configuração do laboratório. As outras capacidades do laboratório abrem ecrãs que chegam em versões posteriores. Devolver um pedido ao seu local e rejeitar uma amostra também chegam mais tarde.
+Hoje **Receive samples** abre **Receção**, **Return and reject** acrescenta aí a devolução e a rejeição, e **Lab settings** muda a configuração do laboratório. As outras capacidades do laboratório abrem ecrãs que chegam em versões posteriores. Leia [Receção](/docs/reception).
 
 Um utilizador com um limite de dados perde **Receive samples** e **Return and reject**, seja qual for a sua função. Leia [Utilizadores](/docs/users).
 

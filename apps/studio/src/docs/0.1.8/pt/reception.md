@@ -1,12 +1,14 @@
 # Receção
 
-A receção é o balcão do laboratório. Quando chega uma amostra, encontra o pedido pelo número de requisição, regista o pedido se o laboratório não tiver registo dele, associa o paciente e regista a amostra com a sua condição. O pessoal da receção e os gestores de laboratório usam-na.
+A receção é o balcão do laboratório. Quando chega uma amostra, encontra o pedido pelo número de requisição, regista o pedido se o laboratório não tiver registo dele, associa o paciente e regista a amostra com a sua condição. Também pode devolver um pedido ao seu local, rejeitar uma amostra ou uma análise, e associar a nova colheita. O pessoal da receção e os gestores de laboratório usam-na.
 
 Precisa de **Receive samples** para abrir **Receção**. As funções incluídas **Reception** e **Lab Manager** têm-na. Um utilizador com um limite de dados não pode abrir a receção, seja qual for a sua função.
 
 Os nomes das funções e das capacidades aparecem em inglês no ecrã. Por isso este guia escreve-os em inglês.
 
-**Devolver um pedido ao seu local, rejeitar uma amostra, as listas de trabalho e a revisão de resultados não fazem parte desta versão.** Chegam em versões posteriores.
+Devolver, rejeitar e **Corrigido pelo local** precisam também de **Return and reject**. As funções **Reception** e **Lab Manager** têm as duas. **Lab Technician** tem **Return and reject** mas não **Receive samples**, por isso não pode abrir a receção.
+
+**As listas de trabalho e a revisão de resultados não fazem parte desta versão.** Chegam em versões posteriores.
 
 ## Encontrar um pedido
 
@@ -132,9 +134,83 @@ Cada análise cancelada fica guardada com o seu nome e o motivo, e o cancelament
 
 Para registar o pedido de novo com os dados certos, pesquise o número e siga [Registar um pedido que não foi encontrado](#registar-um-pedido-que-nao-foi-encontrado). As análises novas aparecem no mesmo painel. As canceladas continuam listadas como **Introduzido por erro**.
 
+## Devolver um pedido ao seu local
+
+Faça isto quando uma requisição tem um erro que só o local pode corrigir, por exemplo um formulário incompleto. Precisa de **Return and reject**.
+
+1. Abra o menu de pontos do painel do pedido e selecione **Devolver ao local**.
+2. Escolha a razão em **Motivo**.
+3. Escreva uma **Nota** para o local, se ajudar.
+4. Abra o menu de pontos do painel e selecione **Devolver ao local**.
+
+**Resultado esperado:** uma mensagem diz, por exemplo, `Pedido CS-0001 devolvido ao seu local.` Cada análise mostra **Em espera**. O painel mostra **Devolvido ao local** com o motivo, quem o devolveu e quando.
+
+**Devolver ao local** não aparece para um pedido **Registado na receção**. Corrija um pedido da receção você mesmo. Também não aparece para um pedido já devolvido.
+
+Enquanto um pedido está devolvido, **Corrigir pedido** não está no menu. O local faz as correções.
+
+Um local ainda não consegue ver um pedido devolvido no seu próprio ecrã. Avise o local por telefone ou mensagem, com o motivo.
+
+## Marcar um pedido devolvido como corrigido
+
+Faça isto quando o local envia as suas correções. **Corrigido pelo local** só aparece num pedido devolvido.
+
+1. Abra o menu de pontos do painel do pedido e selecione **Corrigido pelo local**.
+2. Altere **Prioridade**, **Clínico** ou **Nota** conforme o que o local enviou. Deixe-os se o local corrigiu outra coisa.
+3. Escreva a razão em **Motivo**, por exemplo `O local enviou o formulário completo`.
+4. Abra o menu de pontos do painel e selecione **Marcar como corrigido**.
+
+**Resultado esperado:** uma mensagem diz, por exemplo, `Pedido CS-0001 marcado como corrigido.` As análises deixam de estar em espera e mostram **Ativo**. **Corrigir pedido** volta ao menu.
+
+## Rejeitar uma amostra
+
+Faça isto quando uma amostra não pode ser analisada, por exemplo porque não tem etiqueta ou coagulou. Precisa de **Return and reject**.
+
+1. Abra o menu de pontos do painel do pedido e selecione **Rejeitar amostra**.
+2. Escolha **Tipo de amostra**. A lista tem os tipos de amostra que as análises do pedido aceitam.
+3. Escolha **Condição**.
+4. Escolha a razão em **Motivo**.
+5. Deixe **Pedir nova colheita** ligado para pedir uma nova amostra ao local. Desligue-o se não for precisa nenhuma nova amostra.
+6. Abra o menu de pontos do painel e selecione **Rejeitar amostra**.
+
+**Resultado esperado:** uma mensagem diz, por exemplo, `Amostra rejeitada para o pedido CS-0001.` Cada análise desta amostra mostra **Revogado**, com `Rejeitada:` e o motivo por baixo.
+
+Rejeitar uma amostra rejeita todas as análises dessa amostra. Para rejeitar só uma análise, siga a tarefa seguinte.
+
+## Rejeitar só uma análise
+
+Faça isto quando uma análise não pode ser feita, mas as outras análises do pedido podem continuar. Precisa de **Return and reject**.
+
+1. Abra o menu de pontos à direita da linha da análise e selecione **Rejeitar análise**.
+2. Confira o nome da análise ao lado de **Análise**.
+3. Escolha a razão em **Motivo**.
+4. Deixe **Pedir nova colheita** ligado, ou desligue-o se não for precisa nenhuma nova amostra.
+5. Abra o menu de pontos do painel e selecione **Rejeitar análise**.
+
+**Resultado esperado:** uma mensagem diz que a análise foi rejeitada. A análise mostra **Revogado**, com `Rejeitada:` e o motivo por baixo. As outras análises do pedido não mudam.
+
+Num pedido guardado antes desta versão, várias análises podem partilhar um só pedido de análise. Essas linhas não têm menu de pontos. Rejeite-as com **Rejeitar amostra**.
+
+## Associar uma nova colheita ao pedido rejeitado
+
+Faça isto quando chega a nova amostra de um pedido rejeitado. A nova colheita vem na sua própria requisição, com um novo número de requisição. O número antigo continua a identificar o pedido rejeitado.
+
+1. Encontre o pedido da nova colheita pelo seu novo número, ou registe-o.
+2. Abra o menu de pontos do painel desse pedido e selecione **Substitui um pedido rejeitado**.
+3. Escreva o número antigo em **Número do pedido rejeitado**.
+4. Abra o menu de pontos do painel e selecione **Associar nova colheita**.
+
+**Resultado esperado:** uma mensagem diz, por exemplo, `Pedido CS-0002 associado como nova colheita de CS-0001.`
+
+Os dois pedidos têm de ser da mesma unidade sanitária. A nova colheita tem de ter pelo menos uma análise que o pedido antigo rejeitou. Esta tarefa precisa de **Receive samples**.
+
+Um local ainda não consegue ver um pedido de nova colheita no seu próprio ecrã. Diga ao local que o laboratório precisa de uma nova amostra.
+
 ## Limites
 
-- Devolver um pedido ao seu local, rejeitar uma amostra, as listas de trabalho e a revisão de resultados chegam em versões posteriores.
+- As listas de trabalho e a revisão de resultados chegam em versões posteriores.
+- Um local ainda não consegue ver um pedido devolvido ou um pedido de nova colheita no seu próprio ecrã. O laboratório avisa o local.
+- Devolver, rejeitar e associar uma nova colheita ainda não são comandos `openldr`.
 - Cada análise de um pedido novo é o seu próprio pedido de análise. Um pedido guardado antes desta versão mantém todas as análises num só pedido de análise, e a receção lista-as todas.
 - Um utilizador com um limite de dados perde **Receive samples** e **Return and reject**, por isso a receção não aparece no seu menu.
 
@@ -144,10 +220,14 @@ Para registar o pedido de novo com os dados certos, pesquise o número e siga [R
 - **Uma pesquisa não encontra o pedido esperado.** Confira o número na requisição. Um pedido criado por outro sistema aparece quando os dados desse sistema chegam ao OpenLDR. Se um pedido que sabe estar guardado continuar a não aparecer, um administrador pode reconstruir a pesquisa com `openldr lab requisitions rebuild --force`.
 - **A pesquisa não encontra nenhum paciente.** Confira o identificador, ou escreva o nome completo com a data de nascimento. Se o paciente continuar sem aparecer, registe-o.
 - **Guardar correção diz `Nada foi alterado.`** Altere primeiro pelo menos um de **Prioridade**, **Clínico** ou **Nota**.
+- **Devolver ao local, Rejeitar amostra ou Rejeitar análise não aparece.** A sua conta não tem **Return and reject**. Devolver ao local também não aparece para um pedido da receção nem para um pedido já devolvido.
+- **Associar nova colheita é recusado.** Confira que escreveu o número do pedido rejeitado, e não o da nova colheita. Confira que os dois pedidos são da mesma unidade sanitária, e que a nova colheita tem uma análise que o pedido antigo rejeitou.
+- **Um motivo de que precisa não está na lista.** Acrescente-o em **Terminologia**, a `urn:openldr:valueset:order-return-reason` para devoluções, `urn:openldr:valueset:order-reject-reason` para amostras, `urn:openldr:valueset:test-reject-reason` para análises, ou `urn:openldr:valueset:sample-condition` para condições. Leia [Terminologia](/docs/terminology).
 
 ## Guias relacionados
 
 - [Configuração do laboratório](/docs/lab-setup)
+- [Terminologia](/docs/terminology)
 - [Formulários](/docs/forms)
 - [Funções](/docs/roles)
 - [Utilizadores](/docs/users)

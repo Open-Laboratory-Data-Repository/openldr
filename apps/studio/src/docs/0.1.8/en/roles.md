@@ -179,10 +179,10 @@ The **Lab** group holds seven capabilities for the lab module: **Receive samples
 Three system roles use them.
 
 - **Reception** has **Receive samples**, **Return and reject**, **View worklists** and **View patient index**.
-- **Lab Technician** has **Use forms**, **Submit forms**, **Enter results** and **View worklists**.
+- **Lab Technician** has **Use forms**, **Submit forms**, **Return and reject**, **Enter results** and **View worklists**.
 - **Lab Manager** has all seven lab capabilities, as well as what it had before.
 
-Today two lab capabilities open something. **Receive samples** opens **Reception**. Read [Reception](/docs/reception). **Lab settings** opens the self-authorisation switch and the sections on Laboratory, and a test's section and review setting. The other five take effect in later releases, with worklists, result review, returning a request and rejecting a sample.
+Today three lab capabilities do something. **Receive samples** opens **Reception**. Read [Reception](/docs/reception). **Return and reject** lets a person on Reception return a request to its site, reject a sample or a test, and mark a returned request corrected. It works only with **Receive samples**, because Reception needs that to open. **Lab settings** opens the self-authorisation switch and the sections on Laboratory, and a test's section and review setting. The other four take effect in later releases, with worklists and result review.
 
 On an install that ran an older version, Reception appears the first time the server starts on this version. Lab Technician and Lab Manager gain their new capabilities at that start, once. If you remove one of them later, it stays removed. Reception can be edited, but not deleted.
 

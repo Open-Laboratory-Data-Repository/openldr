@@ -56,7 +56,7 @@ Sélectionnez le test demandé. Répétez seulement si la demande nécessite un 
 
 Le formulaire Lab order demande des tests. Il n'a pas de champ **Results**. L'échantillon est enregistré à son arrivée au laboratoire, dans [Réception](/docs/reception). Les résultats seront saisis et validés au laboratoire dans une version ultérieure. Chaque test choisi est enregistré comme sa propre demande d'examen.
 
-Le champ **Order rejection** reste sur le formulaire Lab order jusqu'à une version ultérieure. Si votre laboratoire a modifié son propre formulaire Lab order, OpenLDR laisse ce formulaire tel quel.
+Le formulaire Lab order n'a pas de champ **Order rejection**. Le laboratoire rejette un échantillon ou une analyse dans [Réception](/docs/reception). Sur une installation mise à jour, OpenLDR retire le champ d'un formulaire Lab order que personne n'a modifié. Si votre laboratoire a modifié son propre formulaire Lab order, OpenLDR laisse ce formulaire tel quel, et le champ reste.
 
 ## Vérifier et envoyer la demande de laboratoire
 
@@ -652,7 +652,7 @@ Lisez l'aperçu et faites défiler ses champs. Preview actions reste dans les po
 
 ## Limites
 
-Ce parcours saisit une demande. Le formulaire Lab order n'enregistre pas l'échantillon et ne saisit pas de résultats. La réception enregistre l'échantillon, et la saisie des résultats arrive dans une version ultérieure. Ce parcours ne montre pas le rejet d'une demande.
+Ce parcours saisit une demande. Le formulaire Lab order n'enregistre pas l'échantillon et ne saisit pas de résultats. La réception enregistre l'échantillon, et la saisie des résultats arrive dans une version ultérieure. Le laboratoire rejette un échantillon ou une analyse dans la réception, pas sur le formulaire.
 
 Les listes d’accès nomment des rôles. Une personne passe quand l’un de ses rôles est listé. Pour soumettre, il faut aussi pouvoir ouvrir le formulaire. Un gestionnaire des rôles ouvre toujours tous les formulaires, et seuls les éditeurs de formulaires voient **Accès**.
 

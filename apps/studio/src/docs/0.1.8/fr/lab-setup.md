@@ -88,8 +88,8 @@ Une règle n'est vérifiée que si l'intervalle a ses deux valeurs. Un refus nom
 
 Trois rôles intégrés couvrent le travail du laboratoire.
 
-- **Reception** peut réceptionner les échantillons, voir les listes de travail et ouvrir l'index des patients masqué. Le rôle porte aussi le renvoi d'une demande à son site et le rejet d'un échantillon, qui arrivent dans une version ultérieure.
-- **Lab Technician** peut remplir et soumettre des formulaires, saisir des résultats et voir les listes de travail.
+- **Reception** peut réceptionner les échantillons, voir les listes de travail et ouvrir l'index des patients masqué. Le rôle peut aussi renvoyer une demande à son site et rejeter un échantillon ou une analyse.
+- **Lab Technician** peut remplir et soumettre des formulaires, renvoyer et rejeter, saisir des résultats et voir les listes de travail. Il n'a pas **Receive samples**, il ne peut donc pas ouvrir **Réception**.
 - **Lab Manager** détient toutes les capacités du laboratoire, **Lab settings** compris.
 
 La page **Rôles** liste les sept capacités du laboratoire dans le groupe **Lab** : **Receive samples**, **Return and reject**, **Enter results**, **Authorise results**, **Amend results**, **View worklists** et **Lab settings**.
@@ -105,7 +105,7 @@ Il faut **Manage roles** pour donner un rôle à une personne.
 
 Sur une installation qui utilisait une version antérieure, **Reception** apparaît au premier démarrage du serveur sur cette version. **Lab Technician** et **Lab Manager** reçoivent leurs nouvelles capacités au même démarrage, une seule fois. Si vous retirez ensuite une capacité à l'un d'eux, elle reste retirée.
 
-Aujourd'hui, **Receive samples** ouvre **Réception**, et **Lab settings** change la configuration du laboratoire. Les autres capacités du laboratoire ouvrent des écrans qui arrivent dans des versions ultérieures. Le renvoi d'une demande à son site et le rejet d'un échantillon arrivent plus tard aussi.
+Aujourd'hui, **Receive samples** ouvre **Réception**, **Return and reject** y ajoute le renvoi et le rejet, et **Lab settings** change la configuration du laboratoire. Les autres capacités du laboratoire ouvrent des écrans qui arrivent dans des versions ultérieures. Lisez [Réception](/docs/reception).
 
 Un utilisateur avec une limite de données perd **Receive samples** et **Return and reject**, quel que soit son rôle. Lisez [Utilisateurs](/docs/users).
 

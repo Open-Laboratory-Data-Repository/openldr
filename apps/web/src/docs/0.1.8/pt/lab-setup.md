@@ -2,7 +2,7 @@
 
 O módulo de laboratório permite que um laboratório receba amostras, trabalhe com listas de trabalho e reveja resultados dentro do OpenLDR. Esta versão traz a primeira parte, a receção. Também prepara o resto. Define as secções do laboratório, que exames precisam de revisão, se uma pessoa pode validar os resultados que introduziu, e limites críticos nos intervalos de referência. Também dá às pessoas as novas funções do laboratório.
 
-**As listas de trabalho, a revisão de resultados, devolver um pedido ao seu local e rejeitar uma amostra não fazem parte desta versão.** Chegam em versões posteriores. As definições abaixo ficam guardadas já agora. Guardá-las não muda nada no trabalho atual do laboratório.
+**As listas de trabalho e a revisão de resultados não fazem parte desta versão.** Chegam em versões posteriores. As definições de revisão e de autovalidação abaixo ficam guardadas já agora. Guardá-las não muda nada no trabalho atual do laboratório.
 
 O guia da aplicação **Configuração do laboratório** mostra cada passo no ecrã. Esta página dá a ordem e os comandos, para uma instalação gerida na linha de comandos.
 
@@ -48,20 +48,38 @@ Numa cópia do código-fonte, ponha `pnpm` à frente, por exemplo `pnpm openldr 
 
 ## As funções
 
-- **Reception** pode receber amostras, ver as listas de trabalho e abrir o índice de pacientes mascarado. A função também tem devolver um pedido ao seu local e rejeitar uma amostra, que chegam numa versão posterior.
-- **Lab Technician** pode preencher e submeter formulários, introduzir resultados e ver as listas de trabalho.
+- **Reception** pode receber amostras, devolver um pedido ao seu local, rejeitar uma amostra ou uma análise, ver as listas de trabalho e abrir o índice de pacientes mascarado.
+- **Lab Technician** pode preencher e submeter formulários, devolver e rejeitar, introduzir resultados e ver as listas de trabalho. Não tem **Receive samples**, por isso não pode abrir a receção.
 - **Lab Manager** tem as sete capacidades do laboratório.
 
 Numa instalação que usava uma versão anterior, Reception aparece no primeiro arranque do servidor nesta versão. Lab Technician e Lab Manager recebem as novas capacidades nesse arranque, uma só vez. Uma capacidade tirada depois continua tirada.
 
 ## A receção
 
-A receção é o balcão do laboratório no studio. Encontra um pedido por um número de requisição lido ou escrito, regista um pedido de que o laboratório não tem registo, encontra ou regista o paciente, recebe a amostra com a sua condição e corrige um erro de escrita num pedido, e cancela um pedido registado na receção para o registar de novo. O guia da aplicação **Receção** mostra cada passo.
+A receção é o balcão do laboratório no studio. Encontra um pedido por um número de requisição lido ou escrito, regista um pedido de que o laboratório não tem registo, encontra ou regista o paciente, recebe a amostra com a sua condição e corrige um erro de escrita num pedido, e cancela um pedido registado na receção para o registar de novo. Também devolve um pedido ao seu local, rejeita uma amostra ou uma análise, e associa uma nova colheita ao pedido que ela substitui. O guia da aplicação **Receção** mostra cada passo.
 
 - A receção precisa de **Receive samples**. As funções Reception e Lab Manager têm-na.
+- Devolver e rejeitar precisam também de **Return and reject**. Reception, Lab Technician e Lab Manager têm-na. Associar uma nova colheita precisa só de **Receive samples**.
 - Um utilizador com um limite de dados perde **Receive samples** e **Return and reject**, por isso não tem a receção.
-- O formulário Lab order agora só pede testes. Já não tem o campo **Results**. Os resultados vão ser introduzidos e validados no laboratório numa versão posterior. O campo **Order rejection** fica até lá.
+- O formulário Lab order agora só pede testes. Já não tem o campo **Results**. Os resultados vão ser introduzidos e validados no laboratório numa versão posterior. Também já não tem o campo **Order rejection**. Numa instalação atualizada, o OpenLDR retira esse campo de um formulário Lab order que ninguém alterou. Um formulário alterado pelo seu laboratório mantém-no.
 - Cada teste de um pedido novo é guardado como o seu próprio pedido de análise. Os pedidos guardados antes desta versão ficam como foram guardados, e a receção lista todos os seus testes.
+- Um local ainda não consegue ver um pedido devolvido ou um pedido de nova colheita no seu próprio ecrã. O laboratório avisa o local.
+- Uma nova colheita precisa de um novo número de requisição. O número antigo continua a identificar o pedido rejeitado.
+- Numa instalação atualizada, Lab Technician recebe **Return and reject** no primeiro arranque nesta versão, uma só vez. Se depois a tirar, ela continua tirada.
+- Devolver, rejeitar e associar uma nova colheita ainda não são comandos `openldr`.
+
+## Motivos de devolução e de rejeição
+
+As listas que a receção oferece são conjuntos de valores. Um laboratório pode acrescentar os seus próprios códigos a cada uma em **Terminologia**, no studio.
+
+| Lista | Conjunto de valores |
+|------|-----------|
+| Porque um pedido volta ao seu local | `urn:openldr:valueset:order-return-reason` |
+| Porque uma amostra é rejeitada | `urn:openldr:valueset:order-reject-reason` |
+| Porque uma análise é rejeitada | `urn:openldr:valueset:test-reject-reason` |
+| A condição da amostra | `urn:openldr:valueset:sample-condition` |
+
+O OpenLDR traz alguns códigos em cada uma, como `Form incomplete` para uma devolução e `Clotted` para uma amostra. Estes códigos aparecem em inglês.
 
 ## Resolução de problemas
 

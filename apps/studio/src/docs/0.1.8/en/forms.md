@@ -56,7 +56,7 @@ Select the requested test. Repeat this choice only when the order needs another 
 
 The Lab order form orders tests. It has no **Results** field. The sample is recorded when it reaches the lab, on [Reception](/docs/reception). Results will be entered and authorised in the lab in a later release. Each chosen test is saved as its own request.
 
-The **Order rejection** field stays on the Lab order form until a later release. If your lab changed its own Lab order form, OpenLDR leaves that form as it is.
+The Lab order form has no **Order rejection** field. The lab rejects a sample or a test on [Reception](/docs/reception). On an upgraded install, OpenLDR removes the field from a Lab order form nobody edited. If your lab changed its own Lab order form, OpenLDR leaves that form as it is, and the field stays.
 
 ## Review and submit the lab order
 
@@ -652,7 +652,7 @@ Read the preview and scroll its fields. Preview actions remains in its header do
 
 ## Limits
 
-This walkthrough captures an order. The Lab order form does not record the sample or enter results. Reception records the sample, and result entry comes in a later release. This walkthrough does not demonstrate rejecting an order.
+This walkthrough captures an order. The Lab order form does not record the sample or enter results. Reception records the sample, and result entry comes in a later release. The lab rejects a sample or a test on Reception, not on the form.
 
 Access lists name roles. A person passes when one of their roles is listed. To submit, a person must also be able to open the form. A role manager always opens every form, and only form editors see **Access**.
 
