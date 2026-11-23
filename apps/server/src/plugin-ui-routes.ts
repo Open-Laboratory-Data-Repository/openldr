@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { declaredSites, getSitesOff, uiAllows, visibleSites, type AppContext } from '@openldr/bootstrap';
-import { EVERYTHING } from '@openldr/rbac';
+import type { DataScope } from '@openldr/rbac';
+
+// A missing data limit fails closed: no facilities, never everything (operator, 2026-11-23).
+// Every sign-in path sets one today, so this only guards a future path that forgets to.
+const NO_FACILITIES: DataScope = { limited: true, facilities: [], districts: [], regions: [] };
 
 interface UiPluginRow {
   id: string;
@@ -104,7 +108,7 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
     // The broker parses + validates the op itself (zod schema + size bounds), returning a
     // structured invalid-operation error for anything malformed.
     // The data limit goes too: a limited caller may make no report or data call (roles part 3).
-    const principal = { id: req.user.id, roles: req.user.roles, username: req.user.username, displayName: req.user.displayName, capabilities: req.user.capabilities ?? [], dataScope: req.user.dataScope ?? EVERYTHING };
+    const principal = { id: req.user.id, roles: req.user.roles, username: req.user.username, displayName: req.user.displayName, capabilities: req.user.capabilities ?? [], dataScope: req.user.dataScope ?? NO_FACILITIES };
     return ctx.pluginBroker.handle(req.params.id, principal, op);
   });
 }

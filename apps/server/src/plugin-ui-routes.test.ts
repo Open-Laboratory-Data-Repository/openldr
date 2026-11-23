@@ -128,7 +128,7 @@ describe('plugin-ui routes', () => {
     expect((await neither.inject({ method: 'GET', url: '/api/plugins/dhis2-sink/ui/asset' })).statusCode).toBe(404);
   });
 
-  it('passes the caller\'s data limit to the broker, and Everything when there is none (roles part 3)', async () => {
+  it('passes the caller\'s data limit to the broker, and no facilities when there is none (fails closed)', async () => {
     const ctx = fakeCtx();
     let seen: any = null;
     ctx.pluginBroker = { handle: async (_id: string, p: unknown) => { seen = p; return { ok: true, data: null }; } };
@@ -136,7 +136,7 @@ describe('plugin-ui routes', () => {
     await build(ctx, ['lab_admin'], [], limit).inject({ method: 'POST', url: '/api/plugins/dhis2-sink/broker', payload: { op: { kind: 'reports.list' } } });
     expect(seen.dataScope).toEqual(limit);
     await build(ctx).inject({ method: 'POST', url: '/api/plugins/dhis2-sink/broker', payload: { op: { kind: 'reports.list' } } });
-    expect(seen.dataScope).toEqual({ limited: false });
+    expect(seen.dataScope).toEqual({ limited: true, facilities: [], districts: [], regions: [] });
   });
 
   it('GET asset serves the html for an admin on a requiredRoles plugin', async () => {
