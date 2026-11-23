@@ -11,11 +11,12 @@ vi.mock('@openldr/config', async () => {
   const actual = await vi.importActual<typeof import('@openldr/config')>('@openldr/config');
   return { ...actual, loadConfig: vi.fn(() => ({ config: true })) };
 });
-vi.mock('./cli-actor', () => ({ cliActor: () => ({ actorType: 'cli', actorId: null, actorName: 'tester' }), callerName: () => 'tester' }));
+vi.mock('./cli-actor', () => ({ cliActor: () => ({ actorType: 'cli', actorId: null, actorName: 'tester' }) }));
 vi.mock('@openldr/bootstrap', () => ({ createAppContext: mocks.createAppContext, recordAuditEvent: mocks.recordAuditEvent }));
 vi.mock('@openldr/db', () => ({ rebuildRequisitions: mocks.rebuildRequisitions }));
 
-import { runLabRequisitionsRebuild } from './lab';
+import { runLabRequisitionsRebuild } from './requisitions';
+import { COMMAND_META } from './command-meta';
 
 const ACTOR = { actorType: 'cli', actorId: null, actorName: 'tester' };
 
@@ -68,5 +69,12 @@ describe('openldr lab requisitions rebuild', () => {
     expect(err.join('')).toContain('lab requisitions rebuild failed:');
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
     expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
+  // Served mode: the server refuses an app command when the account lacks this key. It is the only
+  // lab command left in CE, and it takes the key of the other whole-table repairs.
+  it('is the only lab command, needs settings.danger_zone in served mode, and is destructive', () => {
+    expect(Object.keys(COMMAND_META).filter((p) => p.startsWith('lab '))).toEqual(['lab requisitions rebuild']);
+    expect(COMMAND_META['lab requisitions rebuild']).toEqual({ kind: 'app', capability: 'settings.danger_zone', destructive: true });
   });
 });

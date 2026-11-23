@@ -31,7 +31,7 @@ import { ResultFieldsTab } from '@/test-catalog/ResultFieldsTab';
 // EmptyState.
 
 const SEARCH_DEBOUNCE_MS = 250;
-const NO_OPTIONS: TestCatalogOptions = { categories: [], specimenTypes: [], resultParams: [], loinc: null, sexes: [], sections: [] };
+const NO_OPTIONS: TestCatalogOptions = { categories: [], specimenTypes: [], resultParams: [], loinc: null, sexes: [] };
 
 function codingKey(c: { system: string; code: string }): string {
   return `${c.system}|${c.code}`;

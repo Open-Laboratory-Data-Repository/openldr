@@ -140,6 +140,8 @@ Abra os pontos do painel e selecione **Save**.
 
 Use esta tarefa apenas quando as pessoas devem perder as permissões concedidas pela função. Não pode eliminar funções do sistema.
 
+Uma instalação que executou uma versão de desenvolvimento pode mostrar uma função **Reception**. Agora é uma função comum, por isso pode eliminá-la aqui quando ninguém precisar dela.
+
 ### 1. Escolher Delete
 
 Encontre a função, abra os pontos da linha e selecione **Delete**.
@@ -172,20 +174,6 @@ Selecione a linha da função. Desloque o painel para ler a descrição e as cap
 
 ![O painel da função usa a largura do telemóvel. Desloque-o para consultar as capacidades.](roles-guide-phone-sheet.png)
 
-## As funções e capacidades do laboratório
-
-O grupo **Lab** tem sete capacidades para o módulo de laboratório: **Receive samples**, **Return and reject**, **Enter results**, **Authorise results**, **Amend results**, **View worklists** e **Lab settings**. Leia a descrição ao lado de cada interruptor. Estes nomes aparecem em inglês.
-
-Três funções do sistema usam-nas.
-
-- **Reception** tem **Receive samples**, **Return and reject**, **View worklists** e **View patient index**.
-- **Lab Technician** tem **Use forms**, **Submit forms**, **Return and reject**, **Enter results** e **View worklists**.
-- **Lab Manager** tem as sete capacidades do laboratório, além do que já tinha.
-
-Hoje três capacidades do laboratório fazem alguma coisa. **Receive samples** abre **Receção**. Leia [Receção](/docs/reception). **Return and reject** permite, na receção, devolver um pedido ao seu local, rejeitar uma amostra ou uma análise, e marcar como corrigido um pedido devolvido. Só funciona com **Receive samples**, porque a receção precisa dela para abrir. **Lab settings** abre o interruptor de autovalidação e as secções em Laboratório, e a secção e a revisão de um exame. As outras quatro passam a ter efeito em versões posteriores, com as listas de trabalho e a revisão de resultados.
-
-Numa instalação que usava uma versão anterior, Reception aparece no primeiro arranque do servidor nesta versão. Lab Technician e Lab Manager recebem as novas capacidades nesse arranque, uma só vez. Se depois tirar uma delas, ela continua tirada. Reception pode ser editada, mas não eliminada.
-
 ## Prática opcional
 
 Numa instalação de teste, crie a função `Documentation reader`. Selecione apenas View dashboards. Acrescente View reports na tarefa de edição e elimine a função de prática quando terminar. Não a atribua a pessoal real.
@@ -204,4 +192,4 @@ Criar uma função não a atribui a ninguém. As atribuições são geridas em U
 
 ## Guias relacionados
 
-[Começar aqui](/docs/start-here) explica a CLI instalada e de desenvolvimento. Users explica a atribuição de funções às pessoas. [Configuração do laboratório](/docs/lab-setup) indica que função do laboratório dar a cada pessoa.
+[Começar aqui](/docs/start-here) explica a CLI instalada e de desenvolvimento. Users explica a atribuição de funções às pessoas.

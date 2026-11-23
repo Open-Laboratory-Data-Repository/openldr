@@ -10,7 +10,7 @@ Les formulaires Draft et Archived s'ouvrent encore avec View/Run. Submit reste d
 
 Les numéros de version des images sont des exemples. Chaque publication enregistre un instantané et prend le numéro suivant. Vos numéros dépendent de votre historique. Lisez [Commencer ici](/docs/start-here) pour l'installation et la CLI.
 
-## Choisir le patient et les tests d'une demande
+## Choisir le patient, le test et le prélèvement d'une demande
 
 Utilisez cette tâche pour enregistrer une demande voulue dans votre formulaire publié Lab order. Choisissez le patient et les tests adaptés à cette demande.
 
@@ -52,29 +52,43 @@ Sélectionnez le test demandé. Répétez seulement si la demande nécessite un 
 
 ![Choisissez le test du catalogue demandé pour ce patient.](forms-guide-order-test-choice.png)
 
-**Résultat attendu :** la demande contient le patient et les tests choisis. La demande n'est pas encore envoyée.
+### 7. Ouvrir ses détails
 
-Le formulaire Lab order demande des tests. Il n'a pas de champ **Results**. L'échantillon est enregistré à son arrivée au laboratoire, dans [Réception](/docs/reception). Les résultats seront saisis et validés au laboratoire dans une version ultérieure. Chaque test choisi est enregistré comme sa propre demande d'examen.
+Dans **Results**, sélectionnez la ligne du test choisi pour ouvrir ses détails.
 
-Le formulaire Lab order n'a pas de champ **Order rejection**. Le laboratoire rejette un échantillon ou une analyse dans [Réception](/docs/reception). Sur une installation mise à jour, OpenLDR retire le champ d'un formulaire Lab order que personne n'a modifié. Si votre laboratoire a modifié son propre formulaire Lab order, OpenLDR laisse ce formulaire tel quel, et le champ reste.
+![Ouvrez la ligne du test dans Results pour compléter le prélèvement et les détails du résultat.](forms-guide-order-test-details.png)
+
+### 8. Choisir le prélèvement
+
+Sélectionnez le type de prélèvement enregistré pour ce test dans votre liste configurée.
+
+![Sélectionnez le type de prélèvement utilisé pour ce test.](forms-guide-order-specimen.png)
+
+**Résultat attendu :** les détails du test contiennent le prélèvement choisi. La demande n'est pas encore envoyée.
 
 ## Vérifier et envoyer la demande de laboratoire
 
-Continuez après avoir choisi le patient et les tests demandés. Complétez les autres champs obligatoires avant l'envoi.
+Continuez après avoir choisi le patient, les tests et les détails de prélèvement. Complétez les autres champs obligatoires avant l'envoi.
 
-### 1. Choisir la priorité
+### 1. Fermer les détails du test
+
+Sélectionnez **Close** en haut à droite du panneau des détails.
+
+![Close revient à la demande avec le prélèvement choisi.](forms-guide-order-details-close.png)
+
+### 2. Choisir la priorité
 
 Choisissez la **Priority** enregistrée. L'image utilise **Routine**.
 
 ![Choisissez la priorité de cette demande. L'exemple utilise Routine.](forms-guide-order-priority.png)
 
-### 2. Vérifier la demande et ouvrir ses actions
+### 3. Vérifier la demande et ouvrir ses actions
 
-Vérifiez le patient et les tests, puis ouvrez les points en haut à droite.
+Vérifiez le patient, les tests et les prélèvements, puis ouvrez les points en haut à droite.
 
 ![Vérifiez la demande, puis ouvrez son menu de points.](forms-guide-order-submit-actions.png)
 
-### 3. Envoyer la demande voulue
+### 4. Envoyer la demande voulue
 
 Sélectionnez **Submit** une seule fois. Attendez le résultat. Ne renvoyez pas simplement pour confirmer la réussite.
 
@@ -198,7 +212,7 @@ Ouvrez **Resource Type**, trouvez **ServiceRequest** et sélectionnez-le pour ce
 
 ## Choisir les champs du pack et enregistrer un brouillon
 
-Conservez les champs nécessaires dans le pack de départ. Cet exemple garde Patient, Tests, Priority et Reference Number. Votre workflow peut en nécessiter davantage.
+Conservez les champs nécessaires dans le pack de départ. Cet exemple garde Patient, Tests, Results, Priority et Reference Number. Votre workflow peut en nécessiter davantage.
 
 ### 1. Décocher Requesting Clinician pour cet exemple
 
@@ -214,7 +228,7 @@ Décochez **Clinical Notes**. Conservez-le dans votre formulaire si votre workfl
 
 ### 3. Décocher Referring Facility pour cet exemple
 
-Décochez **Referring Facility** pour l'exemple à quatre champs.
+Décochez **Referring Facility** pour l'exemple à cinq champs.
 
 ![Décochez Referring Facility si le formulaire d'exemple n'en a pas besoin.](forms-guide-pack-facility.png)
 
@@ -226,13 +240,19 @@ Décochez **Order rejection** pour cet exemple.
 
 ### 5. Vérifier la sélection restante
 
-Vérifiez que **Patient**, **Tests**, **Priority** et **Reference Number** restent cochés. Le pack indique **4 of 8 selected**.
+Vérifiez que **Patient**, **Tests**, **Results**, **Priority** et **Reference Number** restent cochés. Le pack illustré indique **5 of 9 selected**.
+
+![Gardez les champs nécessaires. Cet exemple conserve Patient, Tests, Results, Priority et Reference Number.](forms-guide-pack-choices.png)
+
+![Cinq champs restent sélectionnés pour cet exemple.](forms-guide-pack-selected-count.png)
 
 ### 6. Ajouter les champs
 
-Ouvrez les points du pack et sélectionnez **Add 4 fields**.
+Ouvrez les points du pack et sélectionnez **Add 5 fields**.
 
 ![Le pack de départ possède son propre menu de points.](forms-guide-pack-actions.png)
+
+![Ajoutez les cinq champs choisis à ce nouveau formulaire.](forms-guide-pack-add.png)
 
 ### 7. Enregistrer le brouillon
 
@@ -652,7 +672,7 @@ Lisez l'aperçu et faites défiler ses champs. Preview actions reste dans les po
 
 ## Limites
 
-Ce parcours saisit une demande. Le formulaire Lab order n'enregistre pas l'échantillon et ne saisit pas de résultats. La réception enregistre l'échantillon, et la saisie des résultats arrive dans une version ultérieure. Le laboratoire rejette un échantillon ou une analyse dans la réception, pas sur le formulaire.
+Ce parcours saisit une demande et un choix de prélèvement. Il ne montre ni la saisie de résultats de laboratoire ni le rejet d'une demande.
 
 Les listes d’accès nomment des rôles. Une personne passe quand l’un de ses rôles est listé. Pour soumettre, il faut aussi pouvoir ouvrir le formulaire. Un gestionnaire des rôles ouvre toujours tous les formulaires, et seuls les éditeurs de formulaires voient **Accès**.
 
@@ -698,6 +718,6 @@ Lisez [Patients](/docs/patients) pour les dossiers reçus et [Catalogue des test
 
 Utilisez une installation de test avec des patients fictifs et des tests activés au laboratoire. Les tâches de saisie utilisent vos dossiers reçus. Aucun fichier d'exemple n'est requis.
 
-Pour concevoir, utilisez un nom distinct et l'exemple ServiceRequest à quatre champs. Essayez Preview, Save draft, Publish, Compare et Versions. Dupliquez cette définition avant de vous exercer à Archive ou Delete.
+Pour concevoir, utilisez un nom distinct et l'exemple ServiceRequest à cinq champs. Essayez Preview, Save draft, Publish, Compare et Versions. Dupliquez cette définition avant de vous exercer à Archive ou Delete.
 
 Envoyez un Lab order de test seulement pour une écriture voulue. L'exemple documenté a envoyé une réponse. Les captures suivantes n'ont envoyé aucune autre réponse.

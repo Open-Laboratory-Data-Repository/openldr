@@ -44,17 +44,21 @@ describe('website docs content', () => {
     expect(pageTitle('profile-packs', '0.1.8', 'pt')).toBe('Pacotes de perfil');
   });
 
-  it('documents the lab setup order, its commands and what is not in this release, in every language', () => {
+  it('documents what a lab has, the rebuild command, the planned plugin and the upgrade notes, in every language', () => {
     for (const locale of ['en', 'fr', 'pt'] as const) {
       const body = docPage('lab-setup', DEFAULT_DOC_VERSION, locale)!.body;
-      expect(body, locale).toContain('openldr lab sections add haem');
-      expect(body, locale).toContain('openldr lab tests set HGB --section haem --needs-review true');
-      expect(body, locale).toContain('openldr lab settings set allow-self-authorise false');
-      expect(body, locale).toContain('openldr lab sections remove haem --force');
-      expect(body, locale).toContain('section <code> is used by <n> tests');
-      expect(body, locale).toContain('OPENLDR_KEY');
       expect(body, locale).toContain('openldr lab requisitions rebuild --force');
-      expect(docPage('cli', DEFAULT_DOC_VERSION, locale)!.body, locale).toContain('openldr lab requisitions rebuild --force');
+      expect(body, locale).toContain({ en: '**Danger zone**', fr: '**Zone de danger**', pt: '**Zona de perigo**' }[locale]);
+      expect(body, locale).toContain('**Lab order**');
+      expect(body, locale).toContain('openldr roles doctor');
+      expect(body, locale).toContain('OPENLDR_KEY');
+      expect(body, locale).not.toContain('openldr lab sections');
+      expect(body, locale).not.toContain('allow-self-authorise');
+      expect(body, locale).not.toContain('Lab settings');
+      const cli = docPage('cli', DEFAULT_DOC_VERSION, locale)!.body;
+      expect(cli, locale).toContain('openldr lab requisitions rebuild --force');
+      expect(cli, locale).not.toContain('allow-self-authorise');
+      expect(cli, locale).not.toContain('lab.receive');
     }
     expect(pageTitle('lab-setup', '0.1.8', 'en')).toBe('Set up a lab');
     expect(pageTitle('lab-setup', '0.1.8', 'fr')).toBe('Configurer un laboratoire');

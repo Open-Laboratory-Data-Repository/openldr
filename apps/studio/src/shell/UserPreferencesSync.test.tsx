@@ -52,8 +52,6 @@ function app(initial = '/') {
           <Route path="/" element={<StartPageGate><div data-testid="dashboard">dashboard</div></StartPageGate>} />
           <Route path="/reports" element={<div data-testid="reports">reports <Link to="/">home</Link></div>} />
           <Route path="/query" element={<div data-testid="query">query <Link to="/">home</Link></div>} />
-          <Route path="/reception" element={<div data-testid="reception">reception</div>} />
-          <Route path="/terminology" element={<div data-testid="terminology">terminology</div>} />
         </Routes>
       </MemoryRouter>
     </ThemeProvider>,
@@ -111,28 +109,6 @@ describe('first page', () => {
     expect(screen.queryByTestId('dashboard')).toBeNull();
   });
 
-  it('sends a user whose only gated page is Reception to Reception, not Terminology', async () => {
-    caps = ['lab.receive'];
-    (api.getMyPreferences as any).mockResolvedValue({});
-    app('/');
-    expect(await screen.findByTestId('reception')).toBeTruthy();
-    expect(screen.queryByTestId('terminology')).toBeNull();
-  });
-
-  it('sends a user who holds lab.receive and other pages to Reception', async () => {
-    caps = ['lab.receive', 'query.run'];
-    (api.getMyPreferences as any).mockResolvedValue({});
-    app('/');
-    expect(await screen.findByTestId('reception')).toBeTruthy();
-  });
-
-  it('keeps Terminology first for a user with no gated page', async () => {
-    caps = [];
-    (api.getMyPreferences as any).mockResolvedValue({});
-    app('/');
-    expect(await screen.findByTestId('terminology')).toBeTruthy();
-  });
-
   it("uses that user's saved first page when they can open it", async () => {
     caps = ['query.run', 'reports.view'];
     (api.getMyPreferences as any).mockResolvedValue({ startPage: '/query' });
@@ -178,9 +154,11 @@ async function landedPage(): Promise<string | null> {
   return el.getAttribute('data-testid')!.slice('page-'.length);
 }
 
+// The grants the Reception role held before it left CE. The role store keeps them stored.
+const FORMER_RECEPTION = ['lab.receive', 'lab.reject', 'lab.worklist.view', 'patients.view'];
+
 describe('first page for each preset role, with the real sidebar', () => {
   it.each([
-    ['reception', '/reception'],
     ['lab_manager', '/'],
     ['lab_admin', '/'],
     ['lab_technician', '/terminology'],
@@ -191,11 +169,32 @@ describe('first page for each preset role, with the real sidebar', () => {
     expect(await landedPage()).toBe(page);
   });
 
-  it("keeps a reception user's saved first page", async () => {
-    caps = presetCaps('reception');
-    (api.getMyPreferences as any).mockResolvedValue({ startPage: '/patients' });
+  // Review focus 4: Reception left CE. A user whose saved first page is /reception, or who kept the
+  // old Reception grants, must land on a page that exists, never on a blank route.
+  it('ignores a saved /reception and shows the Dashboard to a user who can open it', async () => {
+    caps = presetCaps('lab_manager');
+    (api.getMyPreferences as any).mockResolvedValue({ startPage: '/reception' });
     appWithEveryPage();
-    expect(await landedPage()).toBe('/patients');
+    expect(await landedPage()).toBe('/');
+  });
+
+  it('sends a former Reception user with a saved /reception to their first sidebar page', async () => {
+    caps = FORMER_RECEPTION;
+    (api.getMyPreferences as any).mockResolvedValue({ startPage: '/reception' });
+    appWithEveryPage();
+    const page = await landedPage();
+    expect(page).not.toBe('/reception');
+    expect(page).not.toBe('/');
+    expect(NAV.some((n) => n.to === page)).toBe(true);
+  });
+
+  it('sends a former Reception user with nothing saved to their first sidebar page', async () => {
+    caps = FORMER_RECEPTION;
+    (api.getMyPreferences as any).mockResolvedValue({});
+    appWithEveryPage();
+    const page = await landedPage();
+    expect(page).not.toBe('/reception');
+    expect(NAV.some((n) => n.to === page)).toBe(true);
   });
 });
 

@@ -139,6 +139,7 @@ import * as m137 from './137_lab_groundwork';
 import * as m138 from './138_lab_order_form_orders_only';
 import * as m139 from './139_lab_requisitions';
 import * as m140 from './140_lab_rejection';
+import * as m141 from './141_lab_order_form_results_back';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -282,4 +283,5 @@ export const internalMigrations: Record<string, Migration> = {
   '138_lab_order_form_orders_only': { up: m138.up, down: m138.down },
   '139_lab_requisitions': { up: m139.up, down: m139.down },
   '140_lab_rejection': { up: m140.up, down: m140.down },
+  '141_lab_order_form_results_back': { up: m141.up, down: m141.down },
 };

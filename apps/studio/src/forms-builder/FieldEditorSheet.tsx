@@ -3,13 +3,12 @@ import { useState, useEffect, useRef } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
-import { childrenOf, eligibleParents, groupRepeats, isSurveyForm } from '@openldr/forms/pure';
+import { FieldType, childrenOf, eligibleParents, groupRepeats, isSurveyForm } from '@openldr/forms/pure';
 import { ReferenceEditor } from './field-editor/ReferenceEditor';
 import { OptionsBlock } from './field-editor/OptionsBlock';
 import { lookupBinding } from '@openldr/fhir/paths';
 import { findValueSetByUrl, storedValueSetCodes } from '../api';
 import { autoBindApplies, bindingUpdates, codesToOptions } from './valueSetBinding';
-import { offeredFieldTypes } from './newFormFields';
 import { CodesEditor } from './field-editor/CodesEditor';
 import { TranslationsEditor } from './field-editor/TranslationsEditor';
 import { MappingEditor } from './field-editor/MappingEditor';
@@ -33,6 +32,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+
+// Derived from the FieldType zod enum (not hand-copied) so the picklist can
+// never drift from the schema: `.options` is a readonly tuple of the literal
+// strings in declaration order, which is exactly the order the UI wants.
+// Each shows its name from formBuilder.fieldType.
+const FIELD_TYPES: readonly string[] = FieldType.options;
 
 export interface FieldEditorSheetProps {
   field: FormField | null;
@@ -183,8 +188,7 @@ export function FieldEditorSheet({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {/* The saved type, so a field that already has test details can switch back to it. */}
-                {offeredFieldTypes(field?.fieldType ?? activeDraft.fieldType).map((ft) => (
+                {FIELD_TYPES.map((ft) => (
                   <SelectItem key={ft} value={ft}>
                     {typeName(ft)}
                   </SelectItem>

@@ -268,8 +268,7 @@ describe('roles CLI', () => {
       const code = await runRolesGrant('lab_manager', 'bogus.cap', { json: false });
 
       expect(code).toBe(1);
-      expect(err).toContain('bogus.cap');
-      expect(mocks.createAppContext).not.toHaveBeenCalled();
+      expect(err).toContain('unknown capability: bogus.cap');
       expect(mocks.appCtx.roles.update).not.toHaveBeenCalled();
     });
 

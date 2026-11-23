@@ -297,8 +297,7 @@ function requesterRole(clinician: string | undefined, facility: Reference | unde
 
 /**
  * An order's requester: the contained PractitionerRole and the reference to it, or undefined when
- * there is neither a clinician nor a facility. The form extractor and the lab desk (reception, in
- * @openldr/bootstrap) both write it, so a desk order's facility and clinician read back the same way.
+ * there is neither a clinician nor a facility. The form extractor writes it.
  */
 export function orderRequester(
   clinician: string | undefined, facility: Reference | undefined,

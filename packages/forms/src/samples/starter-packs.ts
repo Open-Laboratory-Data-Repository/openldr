@@ -15,7 +15,7 @@ import { sampleForms } from './forms';
  */
 
 /** Bump when a pack's content changes. Boot rewrites the seeded packs either way. */
-export const STARTER_PACK_VERSION = '7';
+export const STARTER_PACK_VERSION = '8';
 
 interface PackSource {
   id: string;
@@ -60,12 +60,14 @@ const RATIONALE: Record<string, string> = {
   'fld-pat-phone': 'Optional. Lets the lab reach the patient about a result.',
   patient: 'Every order is for one patient. It links the order to the Patient record.',
   tests: "What the lab is asked to run, from this lab's test list. An order can hold several.",
+  'fld-ord-results': 'What came off the bench for each chosen test, with the reference range that fits the patient.',
   'fld-ord-priority': "How fast the lab should work the order. The options come from FHIR's own list.",
   'fld-ord-clinician': 'Who to call about the result.',
   'fld-ord-ref-number': 'The requisition number on the paper form, so the two can be matched.',
   'fld-ord-notes': 'Clinical context the lab may need to choose or read a test.',
   'fld-ord-ref-facility': 'Where the order came from, so results go back there.',
   'fld-ord-specimen-type': 'What was collected, from the seeded specimen type list.',
+  'fld-ord-rejection': 'Why the lab refused the whole order, from the seeded order rejection reasons. Set from the page menu.',
 };
 
 function toEntry(field: FormField, ord: number, form: FormSchema, page: string | undefined): StarterPackEntry {

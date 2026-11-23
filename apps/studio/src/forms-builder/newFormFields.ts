@@ -1,5 +1,5 @@
 import { lookupFhirPath, type FhirPathInfo } from '@openldr/fhir/paths';
-import { FieldType, normalizeDiscriminator, resolveFhirPath, toStoredDiscriminator, type FormField, type StarterPackEntry } from '@openldr/forms/pure';
+import { normalizeDiscriminator, resolveFhirPath, toStoredDiscriminator, type FormField, type StarterPackEntry } from '@openldr/forms/pure';
 import type { RepeatNode } from './fieldTree';
 import { codeOptionsFromLabel, elementDisplayName, fieldTypeForLeaf } from './fhirTypeMap';
 
@@ -169,13 +169,4 @@ export function linkTestDetails(fields: FormField[], resourceType: string | null
       ? { ...f, referenceDependsOn: testsField.id }
       : f,
   );
-}
-
-/**
- * The field types the builder offers, in the schema's order. Test details is left out: since lab
- * slice 1b no new form may enter final results round authorisation. A field that already has it
- * keeps it on the list, so a form that has one still opens and saves as it is.
- */
-export function offeredFieldTypes(current: FormField['fieldType']): FormField['fieldType'][] {
-  return FieldType.options.filter((t) => t !== 'testDetails' || current === 'testDetails');
 }

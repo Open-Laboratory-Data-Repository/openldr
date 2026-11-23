@@ -8,16 +8,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Divider } from '@/components/ui/bleed';
 import { LoadingState } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  fetchLabIdentity, saveLabIdentity, listFacilityImportSources, setAllowSelfAuthorise, fetchAllowSelfAuthorise,
+  fetchLabIdentity, saveLabIdentity, listFacilityImportSources,
   type LabIdentity, type LabIdentityResponse, type FacilityRegisterSource,
 } from '@/api';
-import { useAuth } from '@/auth/AuthProvider';
-import { LabSections } from './LabSections';
 
 const LOGO_KEY = 'lab.logo';
 const TIMEZONE_KEY = 'lab.timezone';
@@ -34,23 +30,9 @@ const TIMEZONE_KEY = 'lab.timezone';
  */
 export function Laboratory(): JSX.Element {
   const { t } = useTranslation();
-  // The switch and the section list are lab settings and need lab.settings; the letterhead keeps
-  // its own gate on the server (settings-routes.ts).
-  const { hasCapability } = useAuth();
-  const canLabSettings = hasCapability('lab.settings');
-  // GET /api/settings/lab needs reports.view (settings-routes.ts). Decided from the capability, never
-  // from a failed load: an account without it does not fetch the letterhead at all, and one with it
-  // sees the load error when the fetch fails, admins included.
-  const canReadLetterhead = hasCapability('reports.view');
-  const [allowSelf, setAllowSelf] = useState(false);
-  const [savingSelf, setSavingSelf] = useState(false);
-  // Only an account with lab.settings reads the switch from its own route, so it does not depend on
-  // the letterhead read (reports.view). Anyone else sees the value the letterhead GET carries.
-  const [selfLoaded, setSelfLoaded] = useState(!canLabSettings);
-  const [addingSection, setAddingSection] = useState(false);
   const [meta, setMeta] = useState<LabIdentityResponse | null>(null);
   const [values, setValues] = useState<LabIdentity>({});
-  const [loading, setLoading] = useState(canReadLetterhead);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   /** ⛔ The LOAD failure only, because that one is not transient: it replaces the whole page below.
    *  Everything else this page reports (a save, a rejected logo) is a toast, matching Connectors and
@@ -64,31 +46,15 @@ export function Laboratory(): JSX.Element {
   const [registers, setRegisters] = useState<FacilityRegisterSource[]>([]);
 
   useEffect(() => {
-    if (!canReadLetterhead) return undefined;
     let cancelled = false;
     void fetchLabIdentity()
-      .then((r) => {
-        if (cancelled) return;
-        setMeta(r); setValues(r.values);
-        if (!canLabSettings) setAllowSelf(r.allowSelfAuthorise === true);
-      })
+      .then((r) => { if (!cancelled) { setMeta(r); setValues(r.values); } })
       .catch(() => { if (!cancelled) setError(t('settings.laboratory.loadError')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [t, canLabSettings, canReadLetterhead]);
+  }, [t]);
 
   useEffect(() => {
-    if (!canLabSettings) return undefined;
-    let cancelled = false;
-    void fetchAllowSelfAuthorise()
-      .then((r) => { if (!cancelled) setAllowSelf(r.value); })
-      .catch((e) => { if (!cancelled) toast.error(t('settings.laboratory.allowSelfAuthoriseLoadError', { error: e instanceof Error ? e.message : String(e) })); })
-      .finally(() => { if (!cancelled) setSelfLoaded(true); });
-    return () => { cancelled = true; };
-  }, [t, canLabSettings]);
-
-  useEffect(() => {
-    if (!canReadLetterhead) return undefined;
     let cancelled = false;
     // A failure here degrades the picker to an empty list, never the whole page: the letterhead
     // fields have nothing to do with facility registers.
@@ -96,7 +62,7 @@ export function Laboratory(): JSX.Element {
       .then((rows) => { if (!cancelled) setRegisters(rows); })
       .catch(() => { if (!cancelled) setRegisters([]); });
     return () => { cancelled = true; };
-  }, [canReadLetterhead]);
+  }, []);
 
   const set = (key: string, value: string) => {
     setValues((v) => ({ ...v, [key]: value }));
@@ -138,26 +104,8 @@ export function Laboratory(): JSX.Element {
     }
   };
 
-  // Saved on its own, the moment it changes, as the feature-flag switches are (General.tsx): it has
-  // its own capability, so it cannot ride on the letterhead's Save.
-  const toggleAllowSelf = async (value: boolean) => {
-    setSavingSelf(true);
-    setAllowSelf(value);
-    try {
-      setAllowSelf((await setAllowSelfAuthorise(value)).value);
-      toast.success(t('settings.laboratory.saved'));
-    } catch (e) {
-      setAllowSelf(!value);
-      toast.error(t('settings.laboratory.allowSelfAuthoriseError', { error: e instanceof Error ? e.message : String(e) }));
-    } finally {
-      setSavingSelf(false);
-    }
-  };
-
-  if (loading || !selfLoaded) return <LoadingState />;
-  // Without reports.view the letterhead block is left out and an account with lab.settings sees the
-  // switch and the sections. With reports.view a missing letterhead means the load failed.
-  if (!meta && (canReadLetterhead || !canLabSettings)) return <p className="p-4 text-xs text-destructive">{error ?? t('settings.laboratory.loadError')}</p>;
+  if (loading) return <LoadingState />;
+  if (!meta) return <p className="p-4 text-xs text-destructive">{error ?? t('settings.laboratory.loadError')}</p>;
 
   const logo = values[LOGO_KEY] ?? '';
 
@@ -172,7 +120,6 @@ export function Laboratory(): JSX.Element {
           sheet and per-row actions all go in a MoreHorizontal DropdownMenu. Ref:
           pages/settings/Connectors.tsx, the header menu this copies. */}
       <div className="flex items-start justify-between gap-4">
-      {meta ? (
       <div>
         <h2 className="text-sm font-semibold">{t('settings.laboratory.title')}</h2>
         <p className="text-xs text-muted-foreground">{t('settings.laboratory.description')}</p>
@@ -184,9 +131,6 @@ export function Laboratory(): JSX.Element {
           <code className="text-[11px]">{'{{lab.name}} {{lab.address}} {{lab.contact}} {{lab.logo}}'}</code>
         </p>
       </div>
-      ) : (
-        <h2 className="text-sm font-semibold">{t('settings.laboratory.labSettingsTitle')}</h2>
-      )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('common.actions')}>
@@ -194,16 +138,9 @@ export function Laboratory(): JSX.Element {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {meta && (
-              <DropdownMenuItem disabled={saving} onSelect={() => { void save(); }}>
-                {t('settings.laboratory.save')}
-              </DropdownMenuItem>
-            )}
-            {canLabSettings && (
-              <DropdownMenuItem onSelect={() => setAddingSection(true)}>
-                {t('settings.laboratory.addSection')}
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem disabled={saving} onSelect={() => { void save(); }}>
+              {t('settings.laboratory.save')}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -214,7 +151,6 @@ export function Laboratory(): JSX.Element {
           that the inputs ran off the right edge with no horizontal scroller to reach them. `auto` on the
           label column is the AGENTS.md section 5 shape (ref Connectors.tsx); the `minmax(0,...)` is what
           actually lets the controls shrink. */}
-      {meta && (
       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3">
         {meta.fields.filter((f) => f.id !== LOGO_KEY).map((f) => (
           /* ⛔ A PICKER, never a text box. `idFor` hashes this register's URI into every facility's
@@ -279,27 +215,8 @@ export function Laboratory(): JSX.Element {
           )}
         </div>
       </div>
-      )}
 
-      {/* Outside the grid on purpose: the grid's label column is `auto`, so this long label would
-          widen it for every row above and, on a phone, push the switch past the edge. Label left,
-          switch right, and the label wraps. No htmlFor: Switch renders a <button role="switch">,
-          which takes its name from aria-label. */}
-      <div className="flex items-center gap-4">
-        <span className="min-w-0 text-xs text-muted-foreground">{t('settings.laboratory.allowSelfAuthorise')}</span>
-        <span className="shrink-0">
-          <Switch checked={allowSelf} disabled={!canLabSettings || savingSelf}
-            onCheckedChange={(v) => { void toggleAllowSelf(v); }}
-            aria-label={t('settings.laboratory.allowSelfAuthorise')} />
-        </span>
-      </div>
 
-      {canLabSettings && (
-        <>
-          <Divider />
-          <LabSections adding={addingSection} onAddingChange={setAddingSection} />
-        </>
-      )}
     </div>
   );
 }

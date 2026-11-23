@@ -40,9 +40,6 @@ const RESULT_PARAM_SYSTEM_URL = 'urn:openldr:default_result';
 /** The lab's test list, which the Lab order's Tests field binds. Must equal LAB_TESTS_VALUE_SET in
  *  migration 105, which seeds its row. */
 export const LAB_TESTS_VALUE_SET = 'urn:openldr:valueset:lab-tests';
-/** The lab's own sections. Must equal LAB_SECTION_SYSTEM and LAB_SECTION_VALUE_SET in migration 137. */
-export const LAB_SECTION_SYSTEM = 'urn:openldr:cs:lab-section';
-export const LAB_SECTION_VALUE_SET = 'urn:openldr:valueset:lab-section';
 
 /** The map type of a test's LOINC link. concept_map_elements stores it as the equivalence. */
 const LOINC_MAP_TYPE = 'SAME-AS' as const;
@@ -73,15 +70,7 @@ export interface CatalogTest {
   /** false when the test is retired. */
   active: boolean;
   /** This install's own settings. specimenTypes null means "use the catalog's list". */
-  lab: {
-    enabled: boolean;
-    specimenTypes: SpecimenCoding[] | null;
-    localDisplay: string | null;
-    /** A code from the lab's section list, or null. */
-    section: string | null;
-    /** true unless the lab says this test's results need no review. */
-    needsReview: boolean;
-  };
+  lab: { enabled: boolean; specimenTypes: SpecimenCoding[] | null; localDisplay: string | null };
 }
 
 export interface CatalogListQuery {
@@ -116,17 +105,11 @@ export interface CatalogTestInput {
   active?: boolean;
 }
 
-/** Every field left out keeps what is stored. A test the lab never set starts off, with the catalog's
- *  specimens, no local name, no section, and needing review. */
 export interface LabSettingsInput {
-  enabled?: boolean;
+  enabled: boolean;
   /** null means "use the catalog's list". A list may only narrow it. */
-  specimenTypes?: SpecimenCoding[] | null;
-  localDisplay?: string | null;
-  /** A code from the lab's section list (urn:openldr:cs:lab-section). null clears it. Left out keeps what is stored. */
-  section?: string | null;
-  /** Left out keeps what is stored. A test the lab never set needs review. */
-  needsReview?: boolean;
+  specimenTypes: SpecimenCoding[] | null;
+  localDisplay: string | null;
 }
 
 /** A category the sheet can offer. */
@@ -152,8 +135,6 @@ export interface CatalogOptions {
   loinc: { systemId: string; system: string } | null;
   /** The sexes a range may name, with labels, so the studio names no code (named reference ranges). */
   sexes: SexOption[];
-  /** The lab's own sections. Empty until the lab adds one, and the sheet hides the section field while it is. */
-  sections: CatalogCategoryOption[];
 }
 
 /** A file read for import: its table, and CE's guess at which column feeds which field. */
@@ -307,10 +288,7 @@ export function parseCatalogListQuery(raw: Record<string, unknown>): { ok: true;
 }
 
 type ConceptRow = { code: string; display: string | null; status: string | null; properties: unknown };
-type LabRow = {
-  code: string; enabled: boolean; specimen_types: unknown; local_display: string | null;
-  section: string | null; needs_review: boolean;
-};
+type LabRow = { code: string; enabled: boolean; specimen_types: unknown; local_display: string | null };
 
 function parseJson(value: unknown): unknown {
   return typeof value === 'string' ? JSON.parse(value) : value;
@@ -342,9 +320,6 @@ function toTest(c: ConceptRow, loinc: string | null, lab: LabRow | undefined): C
       enabled: lab?.enabled ?? false,
       specimenTypes: lab && lab.specimen_types !== null ? toCodings(lab.specimen_types) : null,
       localDisplay: lab?.local_display ?? null,
-      section: lab?.section ?? null,
-      // A test with no settings row reads as the column's default.
-      needsReview: lab?.needs_review ?? true,
     },
   };
 }
@@ -501,7 +476,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       .where('to_system', '=', LOINC_SYSTEM)
       .where('map_type', '=', LOINC_MAP_TYPE)
       .where('is_active', '=', true);
-    let labs = db.selectFrom('test_catalog_lab_settings').select(['code', 'enabled', 'specimen_types', 'local_display', 'section', 'needs_review']);
+    let labs = db.selectFrom('test_catalog_lab_settings').select(['code', 'enabled', 'specimen_types', 'local_display']);
     if (code !== undefined) {
       concepts = concepts.where('code', '=', code);
       links = links.where('from_code', '=', code);
@@ -750,25 +725,17 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     // sync: the table is this install's own.
     const test = await get(code);
     if (!test) throw notFound(code);
-    // undefined leaves the stored value; on a first save the column default applies.
-    let specimenTypes: SpecimenCoding[] | null | undefined = input.specimenTypes === undefined ? undefined : null;
-    if (input.specimenTypes != null) {
+    let specimenTypes: SpecimenCoding[] | null = null;
+    if (input.specimenTypes !== null) {
       specimenTypes = uniqueCodings(input.specimenTypes);
       const offered = new Set(test.specimenTypes.map(codingKey));
       const extra = specimenTypes.find((s) => !offered.has(codingKey(s)));
       if (extra) throw invalid(`Specimen ${extra.code} is not on this test's catalog list. A lab can narrow the list but not add to it.`);
     }
-    const section = input.section === undefined ? undefined : clean(input.section);
-    if (section) {
-      const offered = (await expandEntries(LAB_SECTION_VALUE_SET)).filter((e) => e.system === LAB_SECTION_SYSTEM);
-      if (!offered.some((e) => e.code === section)) throw invalid(`no section ${section}`);
-    }
     const values = {
-      ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-      ...(specimenTypes !== undefined ? { specimen_types: specimenTypes === null ? null : JSON.stringify(specimenTypes) } : {}),
-      ...(input.localDisplay !== undefined ? { local_display: clean(input.localDisplay) } : {}),
-      ...(section !== undefined ? { section } : {}),
-      ...(input.needsReview !== undefined ? { needs_review: input.needsReview } : {}),
+      enabled: input.enabled,
+      specimen_types: specimenTypes === null ? null : JSON.stringify(specimenTypes),
+      local_display: clean(input.localDisplay),
       updated_at: sql<Date>`now()`,
     };
     await db.insertInto('test_catalog_lab_settings').values({ code, ...values })
@@ -778,11 +745,10 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   }
 
   async function options(): Promise<CatalogOptions> {
-    const [categories, specimenTypes, resultParams, sections] = await Promise.all([
+    const [categories, specimenTypes, resultParams] = await Promise.all([
       expandEntries(TEST_CATEGORY_VALUE_SET),
       expandEntries(SPECIMEN_TYPE_VALUE_SET),
       expandEntries(RESULT_PARAM_VALUE_SET),
-      expandEntries(LAB_SECTION_VALUE_SET),
     ]);
     let loinc: CatalogOptions['loinc'] = null;
     if (await loincLoaded()) {
@@ -795,7 +761,6 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       resultParams: resultParams.sort(byLabel),
       loinc,
       sexes: SEX_OPTIONS,
-      sections: sections.map(({ code, display }) => ({ code, display })).sort(byLabel),
     };
   }
 

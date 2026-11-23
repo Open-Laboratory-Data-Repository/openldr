@@ -17,8 +17,6 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { formAccess, type FormAccessCheck } from './form-access';
 import { createFormEntriesService, type FormEntriesService } from './form-entries';
-import { createLabReception, type LabReception } from './lab-reception';
-import { createLabRejection, type LabRejection } from './lab-rejection';
 import { dashboardAccess, type DashboardAccessCheck } from './dashboard-access';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
@@ -89,7 +87,6 @@ import { createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
 import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-catalog';
-import { createLabSections, type LabSections } from './lab-sections';
 import { catalogStoredExpansion } from './register-fhir-catalog';
 import { createTestMapping, isTestMapRelevantRecord, type TestMapping } from './test-mapping';
 import { createResultFields, type ResultFields } from './result-fields';
@@ -609,15 +606,6 @@ export interface AppContext {
   /** The national test catalog (test catalog S1): the catalog code system, its LOINC links and this
    *  install's own settings for each test. The test catalog routes and CLI share it. */
   testCatalog: TestCatalog;
-  /** The lab's own section list (concepts of urn:openldr:cs:lab-section). The settings routes and
-   *  `openldr lab sections` share it. */
-  labSections: LabSections;
-  /** The lab desk's orders: find one by its requisition number, register one, correct a typo
-   *  (lab slices 1b and 2). The reception routes call it. */
-  labReception: LabReception;
-  /** Return a request to its site, reject a sample or a test, and link a redraw (lab slice 3).
-   *  The rejection routes call it. */
-  labRejection: LabRejection;
   /** Lab test codes mapped to catalog tests, and the warehouse copy test_map. */
   testMapping: TestMapping;
   /** The result dictionary and its LOINC links (result field mapping spec 4.5). */
@@ -830,8 +818,8 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const reportSchedules = createReportScheduleStore(internal.db);
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
   // RBAC Task 4: seed the system roles (lab_admin/lab_manager/data_analyst/system_auditor/
-  // lab_technician/reception) on every boot. Deliberately UNCONDITIONAL — NOT routed through seedDatabase()/
-  // SEED_ON_START (apps/server/src/index.ts), because that flag defaults to false and only guards
+  // lab_technician) on every boot. This is deliberately unconditional. It is NOT routed through
+  // seedDatabase()/SEED_ON_START (apps/server/src/index.ts), because that flag defaults to false and only guards
   // optional demo/sample data (see seed.ts); a real production install would never seed roles if
   // this depended on it. seedSystemRoles() is idempotent (safe to call on every boot) so this
   // covers a fresh install AND an existing-DB upgrade to this feature identically. Mirrors the
@@ -1251,22 +1239,10 @@ const reporting: ReportingApi = {
     db: termDb, admin: termAdmin, ops: terminology.ops,
     onChanged: () => { void testMapping.requestRebuild(); },
   });
-  const labSections = createLabSections({ db: termDb, admin: termAdmin });
   // A changed LOINC link changes the loinc column of test_map's result rows.
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
   const patientIdentifierSystems = createPatientIdentifierSystems({ internalDb: termDb, externalDb, admin: termAdmin });
   const patientIndex = createPatientIndex({ externalDb, systems: patientIdentifierSystems, engine });
-  const labReception = createLabReception({
-    db: termDb, externalDb, fhirStore: canonicalFhirStore, catalog: testCatalog, ops: terminology.ops, patientIndex, logger,
-    // LAZY: labIdentity is built further down this function. The arrow runs only on a registration.
-    labTimeZone: async () => (await labIdentity.all())['lab.timezone'],
-  });
-  const labRejection = createLabRejection({
-    db: termDb, externalDb, fhirStore: canonicalFhirStore, catalog: testCatalog, ops: terminology.ops, patientIndex, logger,
-    labTimeZone: async () => (await labIdentity.all())['lab.timezone'],
-    // LAZY, as above. The lab's name from Settings, Laboratory; the Tasks name it as their requester.
-    labName: async () => (await labIdentity.all())['lab.name'],
-  });
   const patientDuplicates = createPatientDuplicates({ internalDb: termDb, externalDb, index: patientIndex, systems: patientIdentifierSystems });
 
   // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
@@ -2261,9 +2237,6 @@ const reporting: ReportingApi = {
     updateCheck,
     facilityRegistry,
     testCatalog,
-    labSections,
-    labReception,
-    labRejection,
     testMapping,
     resultFields,
     patientIdentifierSystems,
@@ -2348,7 +2321,6 @@ export { duplicateWorkflow, newWorkflowId } from './workflow-duplicate';
 export { setWorkflowEnabled } from './workflow-enabled';
 export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
-export { createLabSections, LabSectionError, LAB_SECTION_CODE, type LabSection, type LabSections } from './lab-sections';
 export { importFacilities, resolveKnownNationalSystem } from './facility-import';
 export {
   createTestCatalog, parseCatalogListQuery, catalogChangeAction, catalogImportAudit, readCatalogImportFile, TestCatalogError,
@@ -2365,8 +2337,6 @@ export * from './result-fields';
 export * from './job-continue';
 export * from './form-access';
 export * from './form-entries';
-export * from './lab-reception';
-export * from './lab-rejection';
 export * from './dashboard-access';
 export * from './data-scope';
 export { MAX_SELF_RESUMES } from './job-interruptions';

@@ -79,7 +79,7 @@ describe('capability labels', () => {
   });
 });
 
-// A system role slug such as 'reception' is read as users.roleNames.reception.
+// A system role slug such as 'lab_manager' is read as users.roleNames.lab_manager.
 describe('system role names', () => {
   it('every system role has a name in en, fr and pt', () => {
     const missing: string[] = [];

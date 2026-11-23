@@ -18,8 +18,6 @@ const MANAGER = [
   'facilities.view', 'facilities.manage',
   'patients.view', 'patients.view_identifiers', 'patients.manage',
   'activity.view', 'notifications.view',
-  'lab.receive', 'lab.reject', 'lab.results.enter', 'lab.results.authorise', 'lab.results.amend',
-  'lab.worklist.view', 'lab.settings',
 ];
 
 // `forms.submit` is deliberately ABSENT from ANALYST and AUDITOR. It used to be folded into
@@ -38,10 +36,6 @@ const ANALYST = [
   'activity.view', 'notifications.view',
 ];
 
-// Reception registers and receives samples, so it finds the patient in the masked Patient Index.
-// It does not enter or authorise results.
-const RECEPTION = ['lab.receive', 'lab.reject', 'lab.worklist.view', 'patients.view'];
-
 const AUDITOR = [
   'dashboards.view',
   'reports.view',
@@ -55,9 +49,8 @@ const AUDITOR = [
 
 export const SYSTEM_ROLES: SystemRoleDef[] = [
   { slug: 'lab_admin', name: 'Administrator', description: 'Full access to every capability.', locked: true, capabilities: [...CAPABILITY_KEYS] },
-  { slug: 'lab_manager', name: 'Lab Manager', description: 'Manage content, analytics and all lab work, lab settings included; no admin, users or other settings.', locked: false, capabilities: MANAGER },
+  { slug: 'lab_manager', name: 'Lab Manager', description: 'Manage content and analytics; no admin, users, or settings.', locked: false, capabilities: MANAGER },
   { slug: 'data_analyst', name: 'Data Analyst', description: 'View dashboards, run and export reports, use the query workbench.', locked: false, capabilities: ANALYST },
   { slug: 'system_auditor', name: 'System Auditor', description: 'Read-only oversight plus the audit log.', locked: false, capabilities: AUDITOR },
-  { slug: 'lab_technician', name: 'Lab Technician', description: 'Bench work: fill and submit forms, enter results, reject a sample or test, and view worklists.', locked: false, capabilities: ['forms.view', 'forms.submit', 'lab.reject', 'lab.results.enter', 'lab.worklist.view'] },
-  { slug: 'reception', name: 'Reception', description: 'Register and receive samples, return or reject them, and see worklists.', locked: false, capabilities: RECEPTION },
+  { slug: 'lab_technician', name: 'Lab Technician', description: 'Bench data entry — fill and submit forms only.', locked: false, capabilities: ['forms.view', 'forms.submit'] },
 ];

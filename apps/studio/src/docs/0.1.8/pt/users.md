@@ -274,7 +274,7 @@ Faça isto quando uma pessoa só deve ver números dos painéis da sua unidade, 
 
 Os locais vêm do registo de unidades, por isso são escolhidos, nunca escritos. Um distrito aparece com a sua região, porque duas regiões podem ter um distrito com o mesmo nome. Um limite lista no máximo 300 locais; para mais, escolha o distrito ou a região. **Limitado** sem nenhum local não mostra números nos painéis.
 
-Um utilizador limitado perde estas permissões, seja qual for a sua função: relatórios, pacientes, consultas, exportações, fluxos de trabalho, conectores, auditoria, atividade, correções retidas, o registo de unidades, a sincronização e a receção (**Receive samples** e **Return and reject**). Não pode criar nem editar painéis, e um widget escrito em SQL mostra **Não disponível com o seu limite de dados**. Mantém os formulários. Num formulário, o limite decide a unidade que pode indicar e os registos que vê. Leia [Formulários](/docs/forms). O limite não cobre a pesquisa de pacientes dentro de um formulário.
+Um utilizador limitado perde estas permissões, seja qual for a sua função: relatórios, pacientes, consultas, exportações, fluxos de trabalho, conectores, auditoria, atividade, correções retidas, o registo de unidades e a sincronização. Não pode criar nem editar painéis, e um widget escrito em SQL mostra **Não disponível com o seu limite de dados**. Mantém os formulários. Num formulário, o limite decide a unidade que pode indicar e os registos que vê. Leia [Formulários](/docs/forms). O limite não cobre a pesquisa de pacientes dentro de um formulário.
 
 ## Usar Users num telemóvel
 

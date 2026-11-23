@@ -6,7 +6,7 @@ Mantenha uma lista partilhada de testes, escolha os oferecidos neste laboratóri
 
 Use os seus códigos de testes, nomes, amostras e ficheiros. As capturas usam exemplos fictícios. Não precisa de dados de exemplo da documentação. Os [ficheiros opcionais de prática](#pratica-opcional-com-dados-ficticios) estão no fim.
 
-A leitura exige **Browse terminology**. As alterações exigem **Manage terminology**. A secção de um exame e o seu interruptor **Requer revisão** exigem antes **Lab settings**. Se o catálogo vier do central, este laboratório pode alterar a disponibilidade, as amostras e os nomes locais. Não pode alterar as definições partilhadas.
+A leitura exige **Browse terminology**. As alterações exigem **Manage terminology**. Se o catálogo vier do central, este laboratório pode alterar a disponibilidade, as amostras e os nomes locais. Não pode alterar as definições partilhadas.
 
 As capturas usam uma instalação que detém o catálogo. Os exemplos de campos também usam um pequeno dicionário fictício de resultados. Os números dos intervalos de referência servem apenas para documentação. Use intervalos e significados de códigos aprovados para os testes reais.
 
@@ -143,28 +143,6 @@ Abra os pontos do painel e selecione **Save**.
 ![Save guarda as definições locais com o teste existente.](test-catalog-guide-local-save.png)
 
 **Resultado esperado:** as definições do laboratório ficam guardadas sem alterar o código do teste.
-
-## Definir a secção e a revisão do exame
-
-Cada exame tem uma secção e uma definição de revisão neste laboratório. As duas ficam guardadas já agora para as listas de trabalho e a revisão de resultados, que chegam em versões posteriores. Ainda não mudam nada. Precisa de **Lab settings**. Sem essa capacidade pode ler os dois campos, mas não os pode alterar.
-
-### 1. Abrir o exame
-
-Abra os pontos da linha e selecione **Editar**.
-
-### 2. Escolher a secção
-
-Em **Este laboratório**, escolha a secção em **Secção**, ou escolha **Sem secção**. O campo fica oculto enquanto o laboratório não tiver secções. Adicione-as em Definições, Laboratório.
-
-### 3. Definir Requer revisão
-
-Ligue **Requer revisão** quando uma pessoa tem de validar os resultados deste exame antes de serem libertados. Quando a revisão de resultados chegar, desligar vai libertar sem revisão um resultado sem valor crítico. Um exame novo começa com esta definição ligada.
-
-### 4. Guardar o exame
-
-Abra os pontos do painel e selecione **Guardar**.
-
-**Resultado esperado:** a secção e o interruptor mantêm a sua escolha quando volta a abrir o exame.
 
 ## Encontrar e exportar testes
 
@@ -550,10 +528,8 @@ Retirar um teste oculta-o da lista ativa predefinida. Pode ser restaurado. Os te
 
 **Guardar recusa um limite crítico.** A mensagem, em inglês, indica o campo e o intervalo, por exemplo `HGB range 1: the critical low limit must be at or below the low limit.` Corrija o limite e guarde de novo.
 
-**Secção não aparece.** O laboratório ainda não tem secções. Adicione uma em Definições, Laboratório.
-
 **A página indica uma cópia do armazém desatualizada.** Abra as ações de Observed e escolha Rebuild warehouse copy. A página indica falha se não conseguir reconstruir.
 
 ## Guias relacionados
 
-[Terminologia](/docs/terminology) explica as listas de códigos configuradas. [Unidades](/docs/facilities) explica códigos de unidades. [Começar aqui](/docs/start-here) explica a CLI instalada e de desenvolvimento. [Configuração do laboratório](/docs/lab-setup) explica as secções, a revisão e os limites críticos do módulo de laboratório.
+[Terminologia](/docs/terminology) explica as listas de códigos configuradas. [Unidades](/docs/facilities) explica códigos de unidades. [Começar aqui](/docs/start-here) explica a CLI instalada e de desenvolvimento. [Configuração do laboratório](/docs/lab-setup) explica os limites críticos e o módulo de laboratório.

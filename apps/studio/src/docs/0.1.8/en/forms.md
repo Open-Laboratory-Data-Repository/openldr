@@ -10,7 +10,7 @@ Draft and Archived forms can still open through View/Run. Submit is disabled unt
 
 The version numbers in these pictures are examples. Each publication saves a snapshot of the design and takes the next number. Your numbers depend on your own publication history. Read [Start here](/docs/start-here) for installation and command-line setup.
 
-## Choose the patient and tests for a lab order
+## Choose the patient, test and specimen for a lab order
 
 Use this when recording an intended order through your published Lab order form. Use the patient and tests appropriate to that order.
 
@@ -52,29 +52,43 @@ Select the requested test. Repeat this choice only when the order needs another 
 
 ![Choose the catalog test requested for this patient.](forms-guide-order-test-choice.png)
 
-**Expected result:** The order holds the patient and the chosen tests. You have not submitted the order yet.
+### 7. Open its details
 
-The Lab order form orders tests. It has no **Results** field. The sample is recorded when it reaches the lab, on [Reception](/docs/reception). Results will be entered and authorised in the lab in a later release. Each chosen test is saved as its own request.
+Under **Results**, select the chosen test row to open its details.
 
-The Lab order form has no **Order rejection** field. The lab rejects a sample or a test on [Reception](/docs/reception). On an upgraded install, OpenLDR removes the field from a Lab order form nobody edited. If your lab changed its own Lab order form, OpenLDR leaves that form as it is, and the field stays.
+![Open the selected test row under Results to complete specimen and result details.](forms-guide-order-test-details.png)
+
+### 8. Choose the specimen
+
+Select the specimen type recorded for this test. Use an option from your configured list.
+
+![Select the specimen type used for this test.](forms-guide-order-specimen.png)
+
+**Expected result:** The test details hold the chosen specimen. You have not submitted the order yet.
 
 ## Review and submit the lab order
 
-Use this after selecting the patient and the requested tests. Complete any other required fields in your form before submitting.
+Use this after selecting the patient, requested tests and specimen details. Complete any other required fields in your form before submitting.
 
-### 1. Choose the priority
+### 1. Close the test details
+
+Select **Close** at the top right of the test-details sheet.
+
+![Close returns to the order with the chosen specimen.](forms-guide-order-details-close.png)
+
+### 2. Choose the priority
 
 Choose the recorded **Priority**. The picture uses **Routine**.
 
 ![Choose the priority for this order. The example uses Routine.](forms-guide-order-priority.png)
 
-### 2. Review the order and open its actions
+### 3. Review the order and open its actions
 
-Check the patient and tests, then open the page dots at the top right.
+Check the patient, tests and specimen details, then open the page dots at the top right.
 
 ![Review the order, then open its page dots menu.](forms-guide-order-submit-actions.png)
 
-### 3. Submit the intended order
+### 4. Submit the intended order
 
 Select **Submit** once. Wait for the result. Do not submit again merely to confirm success.
 
@@ -198,7 +212,7 @@ Open **Resource Type**, find **ServiceRequest** and select it for this request-f
 
 ## Choose starter-pack fields and save a draft
 
-Use the starter pack to keep the fields your form needs. This example keeps Patient, Tests, Priority and Reference Number. Your own workflow may need more fields.
+Use the starter pack to keep the fields your form needs. This example keeps Patient, Tests, Results, Priority and Reference Number. Your own workflow may need more fields.
 
 ### 1. Clear Requesting Clinician for this example
 
@@ -214,7 +228,7 @@ Clear **Clinical Notes**. Keep it selected in your own form if that workflow nee
 
 ### 3. Clear Referring Facility for this example
 
-Clear **Referring Facility** for the four-field example.
+Clear **Referring Facility** for the five-field example.
 
 ![Clear Referring Facility when this example form does not need it.](forms-guide-pack-facility.png)
 
@@ -226,13 +240,19 @@ Clear **Order rejection** for this example.
 
 ### 5. Check the remaining selection
 
-Check that **Patient**, **Tests**, **Priority** and **Reference Number** remain selected. The pack shows **4 of 8 selected**.
+Check that **Patient**, **Tests**, **Results**, **Priority** and **Reference Number** remain selected. The pictured pack shows **5 of 9 selected**.
+
+![Keep the fields needed for the form. This example keeps Patient, Tests, Results, Priority and Reference Number.](forms-guide-pack-choices.png)
+
+![Five fields remain selected for this example form.](forms-guide-pack-selected-count.png)
 
 ### 6. Add the fields
 
-Open the starter-pack dots and select **Add 4 fields**.
+Open the starter-pack dots and select **Add 5 fields**.
 
 ![The starter pack has its own dots menu.](forms-guide-pack-actions.png)
+
+![Add the five selected fields to this new form.](forms-guide-pack-add.png)
 
 ### 7. Save the draft
 
@@ -652,7 +672,7 @@ Read the preview and scroll its fields. Preview actions remains in its header do
 
 ## Limits
 
-This walkthrough captures an order. The Lab order form does not record the sample or enter results. Reception records the sample, and result entry comes in a later release. The lab rejects a sample or a test on Reception, not on the form.
+This walkthrough captures an order and specimen choice. It does not demonstrate entering laboratory result values or rejecting an order.
 
 Access lists name roles. A person passes when one of their roles is listed. To submit, a person must also be able to open the form. A role manager always opens every form, and only form editors see **Access**.
 
@@ -698,6 +718,6 @@ Read [Patients](/docs/patients) for received patient records and [Test catalog](
 
 Use a test installation with fictional patients and lab-enabled test definitions. The capture tasks work with your own received records; no documentation sample file is required.
 
-For design practice, use a separate form name and the four-field ServiceRequest example. Try Preview, Save draft, Publish, Compare and Versions. Duplicate that definition before practising Archive or Delete.
+For design practice, use a separate form name and the five-field ServiceRequest example. Try Preview, Save draft, Publish, Compare and Versions. Duplicate that definition before practising Archive or Delete.
 
 Submit a test Lab order only when you intend to write that order. The documented example submitted one response. Its later screenshots did not submit another response.

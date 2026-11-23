@@ -11,7 +11,6 @@ import { Users } from './pages/Users';
 import { Facilities } from './pages/Facilities';
 import { TestCatalog } from './pages/TestCatalog';
 import { Patients } from '@/pages/Patients';
-import { Reception } from '@/pages/Reception';
 import { Sites } from './pages/settings/Sites';
 import { SettingsShell, SettingsIndexRedirect } from '@/pages/settings/SettingsShell';
 import { General } from '@/pages/settings/General';
@@ -59,7 +58,6 @@ export function App() {
       <Route path="/facilities" element={<RequireCapability cap="facilities.view"><Facilities /></RequireCapability>} />
       <Route path="/test-catalog" element={<RequireCapability cap="terminology.view"><TestCatalog /></RequireCapability>} />
       <Route path="/patients" element={<RequireCapability cap="patients.view"><Patients /></RequireCapability>} />
-      <Route path="/reception" element={<RequireCapability cap="lab.receive"><Reception /></RequireCapability>} />
       {/* Children are reached through this parent, so its gate must be an OR of every
           child sub-page's cap (SETTINGS_CAPS, derived from SUB_NAV) — not just
           settings.view — or a non-admin who can reach one sub-page (e.g. notifications.view)
@@ -85,7 +83,7 @@ export function App() {
         <Route path="roles" element={<RequireCapability cap="roles.view"><Roles /></RequireCapability>} />
         <Route path="setup" element={<RequireCapability cap="settings.view"><SetupChecks /></RequireCapability>} />
         <Route path="layouts" element={<RequireCapability cap="settings.edit_general"><Layouts /></RequireCapability>} />
-        <Route path="laboratory" element={<RequireCapability caps={['settings.view', 'lab.settings']}><Laboratory /></RequireCapability>} />
+        <Route path="laboratory" element={<RequireCapability cap="settings.view"><Laboratory /></RequireCapability>} />
         <Route path="data-exposure" element={<RequireCapability cap="data_exposure.manage"><DataExposure /></RequireCapability>} />
       </Route>
       <Route path="/audit" element={<RequireCapability cap="audit.view"><Audit /></RequireCapability>} />

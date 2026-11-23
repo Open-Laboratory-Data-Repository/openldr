@@ -29,6 +29,7 @@ import { runRolesDoctor, summarizeDiagnosis } from './roles';
 const clean: CapabilityDiagnosis = {
   roles: [{ slug: 'lab_admin', present: true, ok: ['roles.manage'], revoked: [], pending: [] }],
   orphaned: [],
+  kept: [],
   ledgerAvailable: true,
 };
 
@@ -44,6 +45,7 @@ describe('summarizeDiagnosis', () => {
     const { exitCode, lines } = summarizeDiagnosis({
       roles: [{ slug: 'lab_technician', present: true, ok: ['forms.view'], revoked: ['forms.submit'], pending: [] }],
       orphaned: [],
+      kept: [],
       ledgerAvailable: true,
     });
     expect(exitCode).toBe(0);
@@ -55,10 +57,22 @@ describe('summarizeDiagnosis', () => {
     const { exitCode, lines } = summarizeDiagnosis({
       roles: [{ slug: 'lab_admin', present: true, ok: [], revoked: [], pending: ['data_exposure.manage'] }],
       orphaned: [],
+      kept: [],
       ledgerAvailable: true,
     });
     expect(exitCode).toBe(1);
     expect(lines.join('\n')).toContain('pending=[data_exposure.manage]');
+  });
+
+  // A stored key the catalog no longer lists is kept on purpose (a plugin picks it up later), so it
+  // is reported but does not fail the command.
+  it('prints a kept key under a kept heading and exits 0', () => {
+    const { exitCode, lines } = summarizeDiagnosis({ ...clean, kept: ['lab.receive'] });
+    expect(exitCode).toBe(0);
+    const text = lines.join('\n');
+    expect(text).toContain('kept');
+    expect(text).toContain('lab.receive');
+    expect(text.indexOf('kept')).toBeLessThan(text.indexOf('lab.receive'));
   });
 
   it('exits 1 when a capability key is orphaned', () => {
@@ -70,6 +84,7 @@ describe('summarizeDiagnosis', () => {
     const { exitCode, lines } = summarizeDiagnosis({
       roles: [{ slug: 'lab_admin', present: false, ok: [], revoked: [], pending: [] }],
       orphaned: [],
+      kept: [],
       ledgerAvailable: true,
     });
     expect(exitCode).toBe(1);
@@ -127,6 +142,7 @@ describe('runRolesDoctor', () => {
     mocks.diagnoseCapabilities.mockResolvedValue({
       roles: [{ slug: 'lab_admin', present: true, ok: [], revoked: [], pending: ['data_exposure.manage'] }],
       orphaned: [],
+      kept: [],
       ledgerAvailable: true,
     });
 

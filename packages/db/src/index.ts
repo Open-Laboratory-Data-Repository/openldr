@@ -133,6 +133,7 @@ export { LAB_ORDER_REJECTION_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_ORDER_R
 export { LAB_ORDER_REQUESTER_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_REQUESTER } from './migrations/internal/115_lab_order_requester';
 export { LAB_ORDER_ORDERS_ONLY_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_ORDERS_ONLY } from './migrations/internal/138_lab_order_form_orders_only';
 export { LAB_ORDER_NO_REJECTION_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_NO_REJECTION } from './migrations/internal/140_lab_rejection';
+export { LAB_ORDER_RESULTS_BACK_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_RESULTS_BACK } from './migrations/internal/141_lab_order_form_results_back';
 export { PREV_BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_BOUND_FIELDS } from './migrations/internal/089_facility_form_canonical_paths';
 export { PREV_CANONICALISED_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_CANONICALISED } from './migrations/internal/089_facility_form_canonical_paths';
 // Same reasoning as the two re-exports above: `export * from './migrations/internal/index'` only
