@@ -179,14 +179,21 @@ describe('pluginFrameContext', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, text: async () => '<div>hi</div>' })));
   });
   afterEach(() => { vi.unstubAllGlobals(); });
-  it("carries the user's capabilities, the plugin's own keys included, as a copy", () => {
+  it("carries the user's CE capabilities and the plugin's own keys, as a copy", () => {
     const caps = ['lab.receive', 'patients.find', 'reports.view'];
-    const ctx = pluginFrameContext('lab', 'page', caps);
+    const ctx = pluginFrameContext('lab', 'page', caps, ['lab.receive', 'lab.worklist.view']);
     expect(ctx).toMatchObject({ pluginId: 'lab', site: 'page', capabilities: caps });
     expect(ctx.capabilities).not.toBe(caps);
   });
+  it("leaves out another plugin's keys the user holds", () => {
+    const caps = ['lab.receive', 'whonet.review', 'patients.find'];
+    expect(pluginFrameContext('lab', 'page', caps, ['lab.receive']).capabilities).toEqual(['lab.receive', 'patients.find']);
+    expect(pluginFrameContext('whonet', 'page', caps, ['whonet.review']).capabilities).toEqual(['whonet.review', 'patients.find']);
+    // A plugin that declares no keys sees only CE capabilities.
+    expect(pluginFrameContext('demo', 'page', caps).capabilities).toEqual(['patients.find']);
+  });
   it('sends those capabilities to the page in the init message', async () => {
-    const context = pluginFrameContext('ui-demo', 'page', ['lab.receive']);
+    const context = pluginFrameContext('ui-demo', 'page', ['lab.receive'], ['lab.receive']);
     const { container } = render(<PluginFrame pluginId="ui-demo" context={context} />);
     const iframe = await waitFor(() => {
       const f = container.querySelector('iframe');

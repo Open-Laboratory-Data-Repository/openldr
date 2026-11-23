@@ -43,7 +43,7 @@ describe('AppShell side panel menu', () => {
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
     expect(await screen.findByText('Lab notes')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Bench chat'));
-    expect(getPluginPanel()).toEqual({ id: 'chat', title: 'Bench chat' });
+    expect(getPluginPanel()).toEqual({ id: 'chat', title: 'Bench chat', permissionKeys: [] });
   });
 
   it('closes an open panel whose plugin no longer offers one when the page loads', async () => {

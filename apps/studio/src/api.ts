@@ -3698,6 +3698,8 @@ export interface PluginUiEntry {
    *  Older servers omit them. */
   requiredRoles?: string[];
   requiredCapabilities?: string[];
+  /** The permission keys this plugin declares. Older servers omit it. */
+  permissionKeys?: string[];
 }
 
 /** Places outside its own page where a plugin draws its ui.html. Mirrors UiSites in @openldr/marketplace. */

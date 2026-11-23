@@ -23,6 +23,7 @@ interface UiPluginRow {
         requiredRoles?: string[];
         requiredCapabilities?: string[];
       };
+      permissions?: Array<{ key: string }>;
     };
   };
 }
@@ -60,6 +61,9 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
           // the page; this route and the asset route below stay the real gate.
           requiredRoles: ui.requiredRoles ?? [],
           requiredCapabilities: ui.requiredCapabilities ?? [],
+          // The plugin's own permission keys. The studio passes the page only these and CE's own
+          // capabilities, never another plugin's keys.
+          permissionKeys: (r.manifest.payload!.permissions ?? []).map((p) => p.key),
         };
       });
   });
@@ -78,10 +82,10 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
     // required roles. 404 (not 403) so the asset's existence isn't disclosed.
     // Check the active version's manifest: that is the version loadUi serves. The store lists
     // every installed version, and an older one may not name the capabilities the new one does.
-    // No such row means no page to serve.
+    // No such row, or a disabled one, means no page to serve.
     const rows = (await ctx.plugins.list()) as unknown as UiPluginRow[];
     const row = rows.find((r) => r.id === req.params.id && r.active !== false);
-    if (!row || !uiAllows(row.manifest.payload?.ui, { roles: req.user.roles, capabilities: req.user.capabilities ?? [] }).allowed) {
+    if (!row || !row.enabled || !uiAllows(row.manifest.payload?.ui, { roles: req.user.roles, capabilities: req.user.capabilities ?? [] }).allowed) {
       reply.code(404);
       return reply.send({ error: 'no ui asset' });
     }

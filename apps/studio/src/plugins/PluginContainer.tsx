@@ -48,7 +48,7 @@ export function PluginContainer(): JSX.Element {
     <AppShell title={entry.nav.label} fullBleed>
       {entry.hasWebview ? (
         <div className="min-h-0 flex-1">
-          <PluginFrame pluginId={entry.id} context={pluginFrameContext(entry.id, 'page', capabilities ?? [])} />
+          <PluginFrame pluginId={entry.id} context={pluginFrameContext(entry.id, 'page', capabilities ?? [], entry.permissionKeys ?? [])} />
         </div>
       ) : entry.hasDeclarative ? (
         <div className="min-h-0 flex-1 overflow-y-auto p-6">

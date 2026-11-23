@@ -8,6 +8,9 @@ import { authFetch, pluginUiAssetUrl, pluginBrokerCall } from '@/api';
 import { createDownloadGate, wireHostPort, type DownloadGate, type HostPortLike } from './host-bridge';
 import { hostThemeTokens, themeStyleTag } from './plugin-theme';
 import { randomId } from '@/lib/random-id';
+import { CAPABILITY_KEYS } from '@openldr/rbac';
+
+const CE_KEYS: ReadonlySet<string> = new Set(CAPABILITY_KEYS);
 
 const CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'";
@@ -18,11 +21,16 @@ function hostTheme(): 'light' | 'dark' {
 }
 
 /** The init context for one drawing of a plugin's page. `site` tells the page where it is:
- *  its own page, a dashboard card, or the side panel. `capabilities` are the signed-in user's,
- *  the plugin's own permission keys included. The page uses them only to show or hide its own
- *  tabs; the broker on the server is the real gate. */
-export function pluginFrameContext(pluginId: string, site: PluginSiteName, capabilities: readonly string[]): PluginInitContext {
-  return { pluginId, capabilities: [...capabilities], theme: hostTheme(), locale: i18n.language, sessionId: randomId(), site };
+ *  its own page, a dashboard card, or the side panel. `capabilities` are the signed-in user's CE
+ *  capabilities plus those of `ownKeys` (the plugin's declared permission keys) the user holds.
+ *  Another plugin's keys are left out. The page uses them only to show or hide its own tabs; the
+ *  broker on the server is the real gate. */
+export function pluginFrameContext(
+  pluginId: string, site: PluginSiteName, capabilities: readonly string[], ownKeys: readonly string[] = [],
+): PluginInitContext {
+  const own = new Set(ownKeys);
+  const passed = capabilities.filter((k) => CE_KEYS.has(k) || own.has(k));
+  return { pluginId, capabilities: passed, theme: hostTheme(), locale: i18n.language, sessionId: randomId(), site };
 }
 
 /** Wrap the plugin's body HTML in a host-controlled document: strict CSP + the injected SDK

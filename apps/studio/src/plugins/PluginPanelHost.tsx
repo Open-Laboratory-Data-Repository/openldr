@@ -37,7 +37,7 @@ export function PluginPanelHost() {
           <SheetTitle className="truncate pr-6 text-sm">{open.title}</SheetTitle>
         </SheetHeader>
         <div className="min-h-0 flex-1">
-          <PluginFrame key={open.id} pluginId={open.id} context={pluginFrameContext(open.id, 'panel', capabilities ?? [])} />
+          <PluginFrame key={open.id} pluginId={open.id} context={pluginFrameContext(open.id, 'panel', capabilities ?? [], open.permissionKeys ?? [])} />
         </div>
       </SheetContent>
     </Sheet>

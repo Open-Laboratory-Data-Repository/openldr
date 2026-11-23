@@ -172,6 +172,28 @@ describe('plugin-ui routes', () => {
     expect((await build(ctx, ['lab_technician'], ['lab.receive']).inject({ method: 'GET', url: '/api/plugins/lab/ui/asset' })).statusCode).toBe(200);
   });
 
+  it('GET asset 404s for a disabled plugin', async () => {
+    const ctx = fakeCtx();
+    ctx.plugins.list = async () => [
+      { id: 'ui-demo', version: '1.0.0', enabled: false, manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'x', nav: { label: 'Demo', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1' } } } },
+    ];
+    expect((await build(ctx).inject({ method: 'GET', url: '/api/plugins/ui-demo/ui/asset' })).statusCode).toBe(404);
+    // The same row enabled is served, so the 404 above is the enabled check.
+    const on = fakeCtx();
+    expect((await build(on).inject({ method: 'GET', url: '/api/plugins/ui-demo/ui/asset' })).statusCode).toBe(200);
+  });
+
+  it("lists each plugin's own permission keys, and none for a plugin that declares none", async () => {
+    const ctx = fakeCtx();
+    ctx.plugins.list = async () => [
+      { id: 'lab', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', permissions: [{ key: 'lab.receive' }, { key: 'lab.worklist.view' }], ui: { entry: 'ui.html', sha256: 'z', nav: { label: 'Lab', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1' } } } },
+      { id: 'ui-demo', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'x', nav: { label: 'Demo', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1' } } } },
+    ];
+    const body = (await build(ctx).inject({ method: 'GET', url: '/api/plugins/ui' })).json();
+    expect(body.find((p: any) => p.id === 'lab').permissionKeys).toEqual(['lab.receive', 'lab.worklist.view']);
+    expect(body.find((p: any) => p.id === 'ui-demo').permissionKeys).toEqual([]);
+  });
+
   it('GET asset 404s for an id that is not installed', async () => {
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ghost/ui/asset' })).statusCode).toBe(404);
   });
