@@ -10,8 +10,8 @@ import { buildPatientIndexFixture, seedPatient } from './test-support/patient-in
 
 const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as any;
 
-const EVERYONE: PluginCaller = { userId: 'u-admin', displayName: 'Admin', capabilities: ['patients.view_identifiers'], facilities: '*' };
-const SITE: PluginCaller = { userId: 'u-site', displayName: 'Site User', capabilities: [], facilities: ['fac-1'] };
+const EVERYONE: PluginCaller = { userId: 'u-admin', displayName: 'Admin', capabilities: ['patients.view', 'patients.view_identifiers'], facilities: '*' };
+const SITE: PluginCaller = { userId: 'u-site', displayName: 'Site User', capabilities: ['patients.view'], facilities: ['fac-1'] };
 
 function plugin(capabilities: Capability[], tables: HostPlugin['tables'] = []): HostPlugin {
   return { id: 'lab', version: '0.2.0', capabilities, tables };
@@ -38,7 +38,10 @@ describe('plugin host: which functions a plugin gets', () => {
     expect(Object.keys(host.forCall(plugin([]), EVERYONE))).toEqual([]);
     expect(Object.keys(host.forCall(plugin([{ kind: 'host:db' }]), EVERYONE)).sort()).toEqual(['db_select', 'db_write']);
     expect(Object.keys(host.forCall(plugin([{ kind: 'host:ce-read' }]), EVERYONE))).toEqual(['ce_read']);
-    expect(Object.keys(host.forCall(plugin([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]), EVERYONE))).toEqual(['fhir_emit']);
+    // emit-fhir alone gives nothing (cdr-source keeps today's behaviour); with host:db it gives fhir_emit.
+    expect(Object.keys(host.forCall(plugin([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]), EVERYONE))).toEqual([]);
+    expect(Object.keys(host.forCall(plugin([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }, { kind: 'host:db' }]), EVERYONE)).sort())
+      .toEqual(['db_select', 'db_write', 'fhir_emit']);
     expect(Object.keys(host.forCall(plugin([{ kind: 'net-egress', allowedHosts: [] }, { kind: 'host:fhir' }]), EVERYONE))).toEqual([]);
   });
 });
@@ -140,6 +143,37 @@ describe('plugin host: ce_read', () => {
     );
   });
 
+  it('patients ops need patients.view; other ops do not', async () => {
+    const deps = fakeDeps();
+    const fns = createPluginHost(deps).forCall(plugin([{ kind: 'host:ce-read' }]), { ...EVERYONE, capabilities: [] });
+    for (const [op, input] of [
+      ['patients.search', {}], ['patients.get', { ref: 'r' }],
+      ['patients.register', { patient: { resourceType: 'Patient', id: 'x' } }],
+    ] as const) {
+      expect(await fns.ce_read({ op, input })).toEqual({ ok: false, error: { code: 'FORBIDDEN', message: `${op}: the caller does not hold patients.view` } });
+    }
+    expect(deps.patients.list).not.toHaveBeenCalled();
+    expect(deps.persist).not.toHaveBeenCalled();
+    expect((await fns.ce_read({ op: 'valueset.lookup', input: { system: 'urn:cs', code: 'A' } }) as any).ok).toBe(true);
+  });
+
+  it('a limited caller never sees a patient whose Organization id is not one of its register ids', async () => {
+    const f = await buildPatientIndexFixture();
+    const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, engine: 'postgres', refKey: randomBytes(32) });
+    // The same clinic, but under a warehouse Organization id that is not the register id fac-1.
+    await seedPatient(f.externalDb, { id: 'p-w', surname: 'Zulu', firstname: 'Ann', org: 'Organization/hl7-site-FAC1' });
+    await seedPatient(f.externalDb, { id: 'p-x', surname: 'Zulu', firstname: 'Bo', org: 'Organization/fac-10' });
+    const host = createPluginHost(fakeDeps({ patients: index }));
+    const site = await host.forCall(plugin([{ kind: 'host:ce-read' }]), SITE).ce_read({ op: 'patients.search', input: {} }) as any;
+    expect(site.result).toMatchObject({ rows: [], total: 0 });
+    const admin = await host.forCall(plugin([{ kind: 'host:ce-read' }]), EVERYONE).ce_read({ op: 'patients.search', input: { search: 'zulu' } }) as any;
+    for (const row of admin.result.rows) {
+      const got = await host.forCall(plugin([{ kind: 'host:ce-read' }]), SITE).ce_read({ op: 'patients.get', input: { ref: row.ref } }) as any;
+      expect(got.error.code).toBe('NOT_FOUND');
+    }
+    expect(admin.result.rows).toHaveLength(2);
+  });
+
   it('patients.get answers a patient outside the data limit as not found', async () => {
     const index = await patientsFixture();
     const host = createPluginHost(fakeDeps({ patients: index }));
@@ -216,11 +250,20 @@ describe('plugin host: ce_read', () => {
 });
 
 describe('plugin host: fhir_emit', () => {
-  const emit = (types: string[]) => plugin([{ kind: 'emit-fhir', resourceTypes: types }]);
+  const emit = (types: string[]) => plugin([{ kind: 'emit-fhir', resourceTypes: types }, { kind: 'host:db' }]);
+
+  it('is refused for a caller with a data limit, and saves nothing', async () => {
+    const deps = fakeDeps();
+    const out = await createPluginHost(deps).forCall(emit(['Observation']), SITE).fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o1' }] }) as any;
+    expect(out.ok).toBe(false);
+    expect(out.error.code).toBe('OUTSIDE_DATA_LIMIT');
+    expect(out.error.message).toMatch(/nothing was saved/);
+    expect(deps.persist).not.toHaveBeenCalled();
+  });
 
   it('refuses a resource type the plugin did not declare, and saves nothing', async () => {
     const deps = fakeDeps();
-    const fns = createPluginHost(deps).forCall(emit(['Observation', 'ServiceRequest']), SITE);
+    const fns = createPluginHost(deps).forCall(emit(['Observation', 'ServiceRequest']), EVERYONE);
     const out = await fns.fhir_emit({
       resources: [{ resourceType: 'Observation', id: 'o1' }, { resourceType: 'Patient', id: 'p1' }],
     }) as any;
@@ -232,7 +275,7 @@ describe('plugin host: fhir_emit', () => {
 
   it('refuses a record with no resourceType and an empty list', async () => {
     const deps = fakeDeps();
-    const fns = createPluginHost(deps).forCall(emit(['Observation']), SITE);
+    const fns = createPluginHost(deps).forCall(emit(['Observation']), EVERYONE);
     expect((await fns.fhir_emit({ resources: [{ id: 'x' }] }) as any).error.code).toBe('INVALID_RESOURCE');
     expect((await fns.fhir_emit({ resources: [] }) as any).error.code).toBe('NO_RESOURCES');
     expect(deps.persist).not.toHaveBeenCalled();
@@ -240,7 +283,7 @@ describe('plugin host: fhir_emit', () => {
 
   it('saves declared types with the plugin provenance, which the input cannot change', async () => {
     const deps = fakeDeps();
-    const fns = createPluginHost(deps).forCall(emit(['Observation']), SITE);
+    const fns = createPluginHost(deps).forCall(emit(['Observation']), EVERYONE);
     const resources = [{ resourceType: 'Observation', id: 'o1' }];
     expect(await fns.fhir_emit({ resources })).toEqual({ ok: true, result: { saved: 1 } });
     expect(deps.persist).toHaveBeenCalledWith(resources, { pluginId: 'lab', pluginVersion: '0.2.0', sourceSystem: 'plugin:lab' });
@@ -251,7 +294,7 @@ describe('plugin host: fhir_emit', () => {
 
   it('answers an unexpected save failure plainly, without its text', async () => {
     const deps = fakeDeps({ persist: vi.fn(async () => { throw new Error('duplicate key value violates unique constraint "fhir_resources_pkey" at /srv/app'); }) });
-    const out = await createPluginHost(deps).forCall(emit(['Observation']), SITE).fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o1' }] });
+    const out = await createPluginHost(deps).forCall(emit(['Observation']), EVERYONE).fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o1' }] });
     expect(out).toEqual({ ok: false, error: { code: 'HOST_ERROR', message: 'fhir_emit failed inside CE' } });
   });
 });

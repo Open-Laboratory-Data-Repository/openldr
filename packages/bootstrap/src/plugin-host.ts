@@ -151,8 +151,16 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           }
         };
 
+      // As the studio's patient routes: the patient ops need patients.view.
+      const needPatientsView = (op: string) => {
+        if (!caller.capabilities.includes('patients.view')) {
+          throw new HostInputError('FORBIDDEN', `${op}: the caller does not hold patients.view`);
+        }
+      };
+
       const readOps: Record<CeReadOp, (input: unknown) => Promise<unknown>> = {
         async 'patients.search'(raw) {
+          needPatientsView('patients.search');
           const i = parse(patientSearchInput, raw, 'patients.search');
           const q = parsePatientListQuery({
             search: i.search, status: i.status,
@@ -174,6 +182,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         },
 
         async 'patients.get'(raw) {
+          needPatientsView('patients.get');
           const { ref } = parse(patientGetInput, raw, 'patients.get');
           const detail = await deps.patients.get(ref, { unmask });
           // A patient outside the caller's data limit is answered as not found, so the answer says
@@ -184,6 +193,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         },
 
         async 'patients.register'(raw) {
+          needPatientsView('patients.register');
           const { patient } = parse(patientRegisterInput, raw, 'patients.register');
           if (patient.resourceType !== 'Patient') throw new HostInputError('INVALID_REQUEST', 'patients.register: the record must be a Patient');
           if (typeof patient.id !== 'string' || !FHIR_ID.test(patient.id)) {
@@ -272,9 +282,15 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         });
       }
 
-      if (kinds.has('emit-fhir')) {
+      // fhir_emit needs host:db as well as emit-fhir. A plugin with emit-fhir alone (cdr-source)
+      // returns its records as output and gets no host functions.
+      if (kinds.has('emit-fhir') && kinds.has('host:db')) {
         const allowed = new Set(allowedResourceTypes(plugin.capabilities));
         fns.fhir_emit = guard('fhir_emit', async (raw) => {
+          // A limited caller may not send records into CE: nothing checks a record's facility here.
+          if (scope !== '*') {
+            throw new HostInputError('OUTSIDE_DATA_LIMIT', 'fhir_emit: a caller with a data limit cannot send records to CE; nothing was saved');
+          }
           const { resources } = parse(fhirEmitInput, raw, 'fhir_emit');
           // Every record is checked before any is saved, so a refused type saves nothing.
           const refused = checkResources(resources, allowed);

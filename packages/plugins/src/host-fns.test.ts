@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { bridgeHostFn, createExtismRunner, hostFnsNeedAWorkerMessage, type HostFnMemory } from './extism-runner';
+import { bridgeHostFn, createExtismRunner, hostFnsNeedAWorkerMessage, usesWorker, type HostFnMemory } from './extism-runner';
 import { HOST_FN_MAX_BYTES } from './runner';
 import { createWasmSink } from './wasm-sink';
 import { parseManifest } from './manifest';
-import type { PluginHost } from './plugin-host';
+import { hasHostFnCapability, type PluginHost } from './plugin-host';
 import type { PluginRunner } from './runner';
 
 /** Plugin memory with one input block at offset 1; the stored answer is kept. */
@@ -113,10 +113,18 @@ describe('sink: host functions for a call', () => {
     }
   });
 
-  it('runs an emit-fhir plugin with no host as before, without host functions', async () => {
-    const r = runner();
-    const sink = createWasmSink(manifest, new Uint8Array(), r, logger, [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]);
-    await sink.invoke('orders_list', {});
-    expect((r.run as any).mock.calls[0][2].hostFns).toBeUndefined();
+  it('an emit-fhir-only plugin gets no host functions and no worker, even with a caller and host', async () => {
+    for (const opts of [{}, { caller, host: fakeHost() }] as Array<{ caller?: typeof caller; host?: PluginHost }>) {
+      const r = runner();
+      const sink = createWasmSink(manifest, new Uint8Array(), r, logger, [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]);
+      await sink.invoke('orders_list', {}, opts);
+      const runOpts = (r.run as any).mock.calls[0][2];
+      expect(runOpts.hostFns).toBeUndefined();
+      expect(usesWorker(runOpts, ['--import', 'tsx'])).toBe(false);
+      if (opts.host) expect(opts.host.forCall).not.toHaveBeenCalled();
+    }
+    expect(hasHostFnCapability([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }])).toBe(false);
+    expect(hasHostFnCapability([{ kind: 'host:db' }])).toBe(true);
+    expect(hasHostFnCapability([{ kind: 'host:ce-read' }])).toBe(true);
   });
 });

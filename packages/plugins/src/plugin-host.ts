@@ -17,8 +17,10 @@ export interface PluginHost {
   forCall(plugin: HostPlugin, caller: PluginCaller): Record<string, HostFn>;
 }
 
-/** The capabilities that give a plugin CE host functions. */
-export const HOST_FN_CAPABILITY_KINDS = ['host:db', 'host:ce-read', 'emit-fhir'] as const;
+/** The capabilities that give a plugin CE host functions, and so force the worker path. emit-fhir
+ *  alone gives none: fhir_emit comes only with host:db as well, so a plugin such as cdr-source
+ *  that declares only emit-fhir runs exactly as before. */
+export const HOST_FN_CAPABILITY_KINDS = ['host:db', 'host:ce-read'] as const;
 
 /** Whether a plugin's grant gives it any CE host function. */
 export function hasHostFnCapability(capabilities: readonly Capability[] | undefined): boolean {
