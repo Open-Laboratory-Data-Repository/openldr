@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "b764c9894",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A broker caller with no data limit gets no facilities"
+        },
+        {
           "hash": "5c670b291",
           "type": "fix",
           "scope": "plugins",
