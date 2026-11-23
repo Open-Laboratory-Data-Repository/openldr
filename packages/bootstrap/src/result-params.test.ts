@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ageIn, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey, SEX_OPTIONS, type ResultBand } from './result-params';
 
 // Ages are taken at one fixed moment. aged(n) is a patient born on 1 January n years before it, so
-// whole years come out as n (the birth date is between n and n+1 average years back).
+// whole years come out as n.
 const AT = Date.parse('2026-11-23T12:00:00Z');
 const aged = (years: number) => ({ birthDate: `${2026 - years}-01-01`, at: AT });
 
@@ -196,13 +196,22 @@ describe('ageIn: a patient age in days, months or years', () => {
     expect(ageIn('mo', '2026-01-31', at('2026-03-30T12:00:00Z'))).toBe(1);
     expect(ageIn('mo', '2026-01-31', at('2026-03-31T00:00:00Z'))).toBe(2);
   });
-  it('keeps the years rule CE used before units: whole average years of 365.2425 days', () => {
+  it('counts whole calendar years, a year completing on the birthday itself', () => {
     expect(ageIn('y', '1990-01-05', at('2026-11-23T12:00:00Z'))).toBe(36);
     expect(ageIn('y', '2025-12-01', at('2026-11-23T12:00:00Z'))).toBe(0);
-    // The average year can land a day after the calendar birthday: on the 18th birthday, 6574 days
-    // is 17.999 average years, so the patient is 18 from the next day.
-    expect(ageIn('y', '2008-11-23', at('2026-11-23T12:00:00Z'))).toBe(17);
-    expect(ageIn('y', '2008-11-23', at('2026-11-24T12:00:00Z'))).toBe(18);
+    // The day before the 18th birthday is 17; the birthday is 18.
+    expect(ageIn('y', '2008-11-23', at('2026-11-22T23:59:00Z'))).toBe(17);
+    expect(ageIn('y', '2008-11-23', at('2026-11-23T00:00:00Z'))).toBe(18);
+    expect(bandFit(band({ ageLow: 18 }), { birthDate: '2008-11-23', at: at('2026-11-22T12:00:00Z') })).toBe('no');
+    expect(bandFit(band({ ageLow: 18 }), { birthDate: '2008-11-23', at: at('2026-11-23T12:00:00Z') })).toBe('yes');
+    // A first birthday is 1, with no day of delay.
+    expect(ageIn('y', '2025-11-23', at('2026-11-23T00:00:00Z'))).toBe(1);
+  });
+  it('turns a 29 February birth a year older on 28 February in a year with no 29 February', () => {
+    expect(ageIn('y', '2024-02-29', at('2025-02-27T12:00:00Z'))).toBe(0);
+    expect(ageIn('y', '2024-02-29', at('2025-02-28T00:00:00Z'))).toBe(1);
+    expect(ageIn('y', '2024-02-29', at('2028-02-28T12:00:00Z'))).toBe(3);
+    expect(ageIn('y', '2024-02-29', at('2028-02-29T00:00:00Z'))).toBe(4);
   });
   it('answers null for a missing or unreadable birth date', () => {
     expect(ageIn('d', '2026-02-30', at('2026-11-23T12:00:00Z'))).toBeNull();
@@ -308,10 +317,12 @@ describe('ageIn: today is the lab date, in the lab time zone', () => {
     expect(ageIn('mo', '2026-10-24', nairobiEarly)).toBe(0);
     expect(ageIn('mo', '2026-10-23', bogotaLate, BOGOTA)).toBe(1);
     expect(ageIn('mo', '2026-10-24', bogotaLate, BOGOTA)).toBe(0);
-    // Four years from 24 November 2022 is 1461 days, 4.0002 average years.
+    // The fourth birthday is the 24th in Nairobi, still the 23rd in UTC and in Bogota.
     expect(ageIn('y', '2022-11-24', nairobiEarly, NAIROBI)).toBe(4);
     expect(ageIn('y', '2022-11-24', nairobiEarly)).toBe(3);
     expect(ageIn('y', '2022-11-24', bogotaLate, BOGOTA)).toBe(3);
+    expect(ageIn('y', '2025-11-24', nairobiEarly, NAIROBI)).toBe(1);
+    expect(ageIn('y', '2025-11-24', nairobiEarly)).toBe(0);
   });
 
   it('moves a birth dateTime with a zone to the lab date first', () => {

@@ -109,8 +109,6 @@ export interface BandPatient {
   timeZone?: string | null;
 }
 
-const DAYS_PER_YEAR = 365.2425;
-
 /** A civil date as a day count, so two of them subtract to whole days. */
 type CivilDate = { y: number; m: number; d: number };
 const dayNumber = (c: CivilDate) => Math.round(Date.UTC(c.y, c.m - 1, c.d) / 86_400_000);
@@ -158,9 +156,9 @@ function birthCivil(birthDate: string | null | undefined, timeZone: string | nul
  * - d: whole days since the birth date. Born today is 0 days.
  * - mo: whole calendar months completed. A birth on the 31st completes a month on the last day of a
  *   shorter month (born 31 January: 1 month on 28 February, or the 29th in a leap year).
- * - y: whole years by the average year (365.2425 days), the rule CE used before units existed. It
- *   can land a day after the calendar birthday: 365 days is 0.9993 years, so a baby turns 1 the day
- *   after its first birthday in a year with no 29 February.
+ * - y: whole calendar years completed, counted the same way as months: a year completes on the
+ *   birthday itself. A baby born 29 February turns a year older on 28 February in a year with no
+ *   29 February, by the same last-day-of-the-month rule the months use.
  */
 export function ageIn(
   unit: AgeUnit, birthDate: string | null | undefined, at: number = Date.now(), timeZone?: string | null,
@@ -168,13 +166,11 @@ export function ageIn(
   const born = birthCivil(birthDate, timeZone);
   if (!born) return null;
   const today = civilDateIn(at, timeZone);
-  const days = dayNumber(today) - dayNumber(born);
-  if (unit === 'd') return days;
-  if (unit === 'y') return Math.floor(days / DAYS_PER_YEAR);
+  if (unit === 'd') return dayNumber(today) - dayNumber(born);
   let months = (today.y - born.y) * 12 + (today.m - born.m);
   const lastDay = new Date(Date.UTC(today.y, today.m, 0)).getUTCDate();
   if (today.d < Math.min(born.d, lastDay)) months -= 1;
-  return months;
+  return unit === 'y' ? Math.floor(months / 12) : months;
 }
 
 /** Whether a range fits one patient. Unknown means the range names a sex or an age the record lacks. */
@@ -183,8 +179,7 @@ export type BandFit = 'yes' | 'no' | 'unknown';
 /**
  * Whether one band fits one patient. The sex must match when the band names one. The age, in the
  * band's unit, must fall inside its window, both edges counted as inside: a band "0 to 28 days" fits
- * through day 28, and "18+ years" from the 18th birthday by the average-year rule (which can land a
- * day after the calendar birthday, see ageIn). A band naming a sex or an age the record
+ * through day 28, and "18+ years" from the 18th birthday. A band naming a sex or an age the record
  * lacks is unknown, unless the other half already rules it out.
  */
 export function bandFit(band: ResultBand, patient: BandPatient): BandFit {
