@@ -7,12 +7,12 @@ Está previsto um plugin de laboratório para a receção e a revisão de result
 ## O que um laboratório tem nesta versão
 
 - O formulário **Lab order** pede exames e introduz os seus resultados. Pode também registar uma **Order rejection**. O guia na aplicação **Formulários** mostra cada passo.
-- Os intervalos de referência de um exame podem ter limites críticos, em **Limite crítico inferior** e **Limite crítico superior**. O OpenLDR guarda-os. Nada nesta versão assinala ainda um resultado em relação a eles. Defini-los precisa de **Manage terminology**.
+- Os intervalos de referência de um exame podem ter limites críticos, em **Limite crítico inferior** e **Limite crítico superior**. O OpenLDR guarda-os. Nada nesta versão assinala ainda um resultado em relação a eles. Defini-los precisa de **Gerir a terminologia**.
 - Um índice encontra um pedido pelo seu número de requisição. O OpenLDR mantém-no atualizado sozinho. O comando `openldr lab requisitions rebuild` repara-o.
 
 ## Reconstruir o índice das requisições
 
-O comando passa pelo servidor OpenLDR em execução, como uma pessoa que tem **Danger zone**. Em Linux e macOS, inicie sessão primeiro com `./openldr login`, ou defina uma chave de acesso em `OPENLDR_KEY`. Em Windows, `.\openldr.ps1` inicia sessão apenas com uma chave de acesso, por isso defina primeiro `OPENLDR_KEY`. O comando não foi corrido em Windows. [Início de sessão do CLI e chaves de acesso](/docs/cli-access) explica o início de sessão.
+O comando passa pelo servidor OpenLDR em execução, como uma pessoa que tem **Zona de perigo**. Em Linux e macOS, inicie sessão primeiro com `./openldr login`, ou defina uma chave de acesso em `OPENLDR_KEY`. Em Windows, `.\openldr.ps1` inicia sessão apenas com uma chave de acesso, por isso defina primeiro `OPENLDR_KEY`. O comando não foi corrido em Windows. [Início de sessão do CLI e chaves de acesso](/docs/cli-access) explica o início de sessão.
 
 ```sh
 openldr lab requisitions rebuild --force
@@ -30,5 +30,5 @@ Uma versão anterior tinha uma página Receção, secções de laboratório, um 
 
 ## Resolução de problemas
 
-- **A reconstrução diz que a conta não tem a capacidade.** A conta não tem **Danger zone**. Use uma conta cuja função a tenha.
+- **A reconstrução diz que a conta não tem a capacidade.** A conta não tem **Zona de perigo**. Use uma conta cuja função a tenha.
 - **O formulário Lab order não tem o campo Results.** O seu laboratório editou o formulário, por isso a atualização deixou-o como estava. Adicione o campo de novo no construtor de formulários.

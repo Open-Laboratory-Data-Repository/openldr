@@ -6,9 +6,7 @@ Le formulaire **Lab order** commande des examens et saisit leurs résultats. Il 
 
 Un plugin de laboratoire est prévu pour la réception et la vérification des résultats. Il ne fait pas partie de cette version.
 
-Les seuils critiques font partie des intervalles de référence d'un examen. Ils exigent donc **Manage terminology**, comme le reste de la définition de l'examen. Ouvrir **Catalogue des examens** exige **Browse terminology**. Reconstruire l'index exige **Danger zone**.
-
-Les noms des rôles et des capacités apparaissent en anglais à l'écran. Ce guide les écrit donc en anglais.
+Les seuils critiques font partie des intervalles de référence d'un examen. Ils exigent donc **Gérer la terminologie**, comme le reste de la définition de l'examen. Ouvrir **Catalogue des examens** exige **Parcourir la terminologie**. Reconstruire l'index exige **Zone de danger**.
 
 ## Ajouter des seuils critiques à un intervalle de référence
 
@@ -36,7 +34,7 @@ OpenLDR enregistre les seuils. Rien dans cette version ne signale encore un rés
 
 OpenLDR garde un index qui trouve une demande par son numéro de demande. Il le tient à jour tout seul à l'arrivée des demandes. Reconstruisez-le seulement si une erreur a laissé une demande hors de l'index, ou après la suppression de demandes du stockage.
 
-Lancez la commande à travers le serveur OpenLDR en marche, en tant que personne qui détient **Danger zone**. Sous Linux et macOS, connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`. Sous Windows, définissez d'abord une clé d'accès dans `OPENLDR_KEY`. Le CLI s'y connecte uniquement avec une clé d'accès. Lisez [Utilisateurs](/docs/users) pour créer une clé d'accès. Lisez [Commencer ici](/docs/start-here) pour la CLI installée et celle de développement.
+Lancez la commande à travers le serveur OpenLDR en marche, en tant que personne qui détient **Zone de danger**. Sous Linux et macOS, connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`. Sous Windows, définissez d'abord une clé d'accès dans `OPENLDR_KEY`. Le CLI s'y connecte uniquement avec une clé d'accès. Lisez [Utilisateurs](/docs/users) pour créer une clé d'accès. Lisez [Commencer ici](/docs/start-here) pour la CLI installée et celle de développement.
 
 Exemple dans une copie de développement :
 
@@ -59,7 +57,7 @@ Elle refuse sans `--force`, car elle réécrit tout l'index. Chaque reconstructi
 ## Résolution des problèmes
 
 - **L'enregistrement refuse un seuil critique.** Lisez le message. Il nomme l'intervalle et la règle non respectée.
-- **La reconstruction dit que le compte n'a pas la capacité.** Le compte ne détient pas **Danger zone**. Utilisez un compte dont le rôle l'a.
+- **La reconstruction dit que le compte n'a pas la capacité.** Le compte ne détient pas **Zone de danger**. Utilisez un compte dont le rôle l'a.
 
 ## Guides associés
 

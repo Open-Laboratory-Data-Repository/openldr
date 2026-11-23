@@ -6,9 +6,7 @@ O formulário **Lab order** pede exames e introduz os seus resultados. Pode tamb
 
 Está previsto um plugin de laboratório para a receção e a revisão de resultados. Não faz parte desta versão.
 
-Os limites críticos fazem parte dos intervalos de referência de um exame. Por isso precisam de **Manage terminology**, como o resto da definição do exame. Abrir **Catálogo de exames** precisa de **Browse terminology**. Reconstruir o índice precisa de **Danger zone**.
-
-Os nomes das funções e das capacidades aparecem em inglês no ecrã. Por isso este guia escreve-os em inglês.
+Os limites críticos fazem parte dos intervalos de referência de um exame. Por isso precisam de **Gerir a terminologia**, como o resto da definição do exame. Abrir **Catálogo de exames** precisa de **Consultar a terminologia**. Reconstruir o índice precisa de **Zona de perigo**.
 
 ## Adicionar limites críticos a um intervalo de referência
 
@@ -36,7 +34,7 @@ O OpenLDR guarda os limites. Nada nesta versão assinala ainda um resultado em r
 
 O OpenLDR mantém um índice que encontra um pedido pelo seu número de requisição. Mantém o índice atualizado sozinho à medida que os pedidos chegam. Reconstrua-o apenas se um erro deixou um pedido fora do índice, ou depois de pedidos serem eliminados do armazenamento.
 
-Corra o comando através do servidor OpenLDR em execução, como uma pessoa que tem **Danger zone**. Em Linux e macOS, inicie sessão primeiro com `./openldr login`, ou defina uma chave de acesso em `OPENLDR_KEY`. Em Windows, defina primeiro uma chave de acesso em `OPENLDR_KEY`. Aí o CLI inicia sessão apenas com uma chave de acesso. Leia [Utilizadores](/docs/users) para criar uma chave de acesso. Leia [Comece aqui](/docs/start-here) para a CLI instalada e a de desenvolvimento.
+Corra o comando através do servidor OpenLDR em execução, como uma pessoa que tem **Zona de perigo**. Em Linux e macOS, inicie sessão primeiro com `./openldr login`, ou defina uma chave de acesso em `OPENLDR_KEY`. Em Windows, defina primeiro uma chave de acesso em `OPENLDR_KEY`. Aí o CLI inicia sessão apenas com uma chave de acesso. Leia [Utilizadores](/docs/users) para criar uma chave de acesso. Leia [Comece aqui](/docs/start-here) para a CLI instalada e a de desenvolvimento.
 
 Exemplo numa cópia de desenvolvimento:
 
@@ -59,7 +57,7 @@ Recusa sem `--force`, porque reescreve o índice inteiro. Cada reconstrução fi
 ## Resolução de problemas
 
 - **Guardar recusa um limite crítico.** Leia a mensagem. Indica o intervalo e a regra que falhou.
-- **A reconstrução diz que a conta não tem a capacidade.** A conta não tem **Danger zone**. Use uma conta cuja função a tenha.
+- **A reconstrução diz que a conta não tem a capacidade.** A conta não tem **Zona de perigo**. Use uma conta cuja função a tenha.
 
 ## Guias relacionados
 

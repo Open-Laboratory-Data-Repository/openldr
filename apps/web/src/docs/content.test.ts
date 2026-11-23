@@ -48,7 +48,7 @@ describe('website docs content', () => {
     for (const locale of ['en', 'fr', 'pt'] as const) {
       const body = docPage('lab-setup', DEFAULT_DOC_VERSION, locale)!.body;
       expect(body, locale).toContain('openldr lab requisitions rebuild --force');
-      expect(body, locale).toContain('**Danger zone**');
+      expect(body, locale).toContain({ en: '**Danger zone**', fr: '**Zone de danger**', pt: '**Zona de perigo**' }[locale]);
       expect(body, locale).toContain('**Lab order**');
       expect(body, locale).toContain('openldr roles doctor');
       expect(body, locale).toContain('OPENLDR_KEY');

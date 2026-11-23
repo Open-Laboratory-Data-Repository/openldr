@@ -7,12 +7,12 @@ Un plugin de laboratoire est prévu pour la réception et la vérification des r
 ## Ce qu'un laboratoire a dans cette version
 
 - Le formulaire **Lab order** commande des examens et saisit leurs résultats. Il peut aussi enregistrer un **Order rejection**. Le guide intégré **Formulaires** montre chaque étape.
-- Les intervalles de référence d'un examen peuvent porter des seuils critiques, dans **Seuil critique bas** et **Seuil critique haut**. OpenLDR les enregistre. Rien dans cette version ne signale encore un résultat par rapport à eux. Les fixer exige **Manage terminology**.
+- Les intervalles de référence d'un examen peuvent porter des seuils critiques, dans **Seuil critique bas** et **Seuil critique haut**. OpenLDR les enregistre. Rien dans cette version ne signale encore un résultat par rapport à eux. Les fixer exige **Gérer la terminologie**.
 - Un index trouve une demande par son numéro de demande. OpenLDR le tient à jour tout seul. La commande `openldr lab requisitions rebuild` le répare.
 
 ## Reconstruire l'index des numéros de demande
 
-La commande passe par le serveur OpenLDR en marche, en tant que personne qui détient **Danger zone**. Sous Linux et macOS, connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`. Sous Windows, `.\openldr.ps1` se connecte uniquement avec une clé d'accès, donc définissez d'abord `OPENLDR_KEY`. La commande n'a pas été lancée sous Windows. [Connexion du CLI et clés d'accès](/docs/cli-access) explique la connexion.
+La commande passe par le serveur OpenLDR en marche, en tant que personne qui détient **Zone de danger**. Sous Linux et macOS, connectez-vous d'abord avec `./openldr login`, ou définissez une clé d'accès dans `OPENLDR_KEY`. Sous Windows, `.\openldr.ps1` se connecte uniquement avec une clé d'accès, donc définissez d'abord `OPENLDR_KEY`. La commande n'a pas été lancée sous Windows. [Connexion du CLI et clés d'accès](/docs/cli-access) explique la connexion.
 
 ```sh
 openldr lab requisitions rebuild --force
@@ -30,5 +30,5 @@ Une version antérieure avait une page Réception, des sections de laboratoire, 
 
 ## Résolution des problèmes
 
-- **La reconstruction dit que le compte n'a pas la capacité.** Le compte ne détient pas **Danger zone**. Utilisez un compte dont le rôle l'a.
+- **La reconstruction dit que le compte n'a pas la capacité.** Le compte ne détient pas **Zone de danger**. Utilisez un compte dont le rôle l'a.
 - **Le formulaire Lab order n'a pas de champ Results.** Votre laboratoire a modifié le formulaire, donc la mise à niveau l'a laissé tel quel. Ajoutez de nouveau le champ dans le constructeur de formulaires.
