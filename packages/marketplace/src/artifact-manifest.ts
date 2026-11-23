@@ -218,7 +218,10 @@ export function parseArtifactManifest(raw: unknown, opts: ParseArtifactOptions =
     && !manifest.capabilities.some((c) => c.kind === 'host:db')) {
     throw new Error(`artifact ${manifest.id}: payload.tables requires the host:db capability`);
   }
-  if (manifest.payload.kind === 'plugin') checkPluginPermissions(manifest.id, manifest.payload.permissions, manifest.payload.actionPermissions, manifest.payload.entrypoints, opts.stored === true);
+  if (manifest.payload.kind === 'plugin') {
+    checkPluginPermissions(manifest.id, manifest.payload.permissions, manifest.payload.actionPermissions, manifest.payload.entrypoints, opts.stored === true);
+    checkUiCapabilities(manifest.id, manifest.payload.permissions, manifest.payload.ui?.requiredCapabilities, opts.stored === true);
+  }
   return manifest;
 }
 
@@ -252,6 +255,21 @@ function checkPluginPermissions(
       if (!own.has(key) && !CE_CAPABILITIES.has(key)) {
         throw new Error(`artifact ${id}: action '${entrypoint}' needs '${key}', which is neither a declared permission nor a CE capability`);
       }
+    }
+  }
+}
+
+/** A plugin that declares `permissions` may gate its page only on its own keys or CE capabilities,
+ *  the same rule as actionPermissions. A plugin without `permissions` keeps today's free list, so
+ *  old bundles still install. Install only: a stored manifest is read again after CE changes. */
+function checkUiCapabilities(
+  id: string, permissions: PluginPermission[] | undefined, required: string[] | undefined, stored: boolean,
+): void {
+  if (permissions === undefined || required === undefined || stored) return;
+  const own = new Set(permissions.map((p) => p.key));
+  for (const key of required) {
+    if (!own.has(key) && !CE_CAPABILITIES.has(key)) {
+      throw new Error(`artifact ${id}: ui.requiredCapabilities lists '${key}', which is neither a declared permission nor a CE capability`);
     }
   }
 }

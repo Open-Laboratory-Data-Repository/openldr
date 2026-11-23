@@ -526,6 +526,18 @@ describe('plugin permissions and actionPermissions (plan 2026-11-23 rulings 1 an
     expect(() => parseArtifactManifest(withPerms({ permissions: many.slice(0, 11), actionPermissions: { review: keys } }))).toThrow();
     expect(() => parseArtifactManifest(withPerms({ permissions: many.slice(0, 11), actionPermissions: { review: keys.slice(0, 10) } }))).not.toThrow();
   });
+  it('with permissions declared, ui.requiredCapabilities may list only own keys or CE capabilities', () => {
+    const ui = (requiredCapabilities: string[]) => ({ nav: { label: 'WHONET' }, requiredCapabilities });
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('whonet.review')], ui: ui(['whonet.review', 'forms.edit']) }))).not.toThrow();
+    // Another plugin's key, or a made-up one, is refused at install.
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('whonet.review')], ui: ui(['lab.orders.receive']) })))
+      .toThrow(/ui.requiredCapabilities lists 'lab.orders.receive', which is neither a declared permission nor a CE capability/);
+    // A stored read does not apply the rule.
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('whonet.review')], ui: ui(['lab.orders.receive']) }), { stored: true })).not.toThrow();
+    // Without permissions, the list stays free, as for bundles published before step 2b.
+    const old = parseArtifactManifest(withPerms({ ui: ui(['corrections.review_held', 'anything.else']) }));
+    expect(JSON.stringify(parseArtifactManifest(JSON.parse(JSON.stringify(old))))).toBe(JSON.stringify(old));
+  });
   it('a manifest without the fields parses to the same object and the same signing bytes', () => {
     const raw = withPerms({});
     const m = parseArtifactManifest(raw);
