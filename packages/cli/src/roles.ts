@@ -167,13 +167,21 @@ async function grantOrRevoke(
   mutate: (caps: string[]) => string[],
 ): Promise<number> {
   const capErr = validateCaps([capability]);
-  if (capErr) {
-    process.stderr.write(`${capErr}\n`);
-    return 1;
-  }
   const ctx = await createAppContext(loadConfig());
   try {
     const before = await ctx.roles.getBySlug(slug);
+    // A key the catalog does not list, but the role already holds, is kept on purpose for a plugin.
+    // Say that, rather than calling a key the role holds unknown.
+    if (capErr && before?.capabilities.includes(capability)) {
+      process.stderr.write(
+        `${capability} is kept for a plugin: ${slug} holds it, but CE does not list it, so it cannot be granted or revoked here\n`,
+      );
+      return 1;
+    }
+    if (capErr) {
+      process.stderr.write(`${capErr}\n`);
+      return 1;
+    }
     if (!before) {
       emit(opts.json, { error: 'role not found' }, `role ${slug} not found`);
       return 1;

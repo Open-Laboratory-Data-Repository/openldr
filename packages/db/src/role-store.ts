@@ -92,8 +92,8 @@ function unlisted(caps: string[]): string[] {
 }
 
 export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
-  async function capsFor(roleId: string): Promise<string[]> {
-    const rows = await db.selectFrom('role_capabilities').select('capability').where('role_id', '=', roleId).execute();
+  async function capsFor(roleId: string, exec: Kysely<InternalSchema> = db): Promise<string[]> {
+    const rows = await exec.selectFrom('role_capabilities').select('capability').where('role_id', '=', roleId).execute();
     return rows.map((r) => r.capability);
   }
   async function memberCount(roleId: string): Promise<number> {
@@ -168,12 +168,14 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
   // Writes the requested set plus any stored key the catalog does not list. Those keys are kept on
   // purpose: the lab keys leave the catalog for a plugin, and a role must not lose its lab grants
   // just because someone saved it. No save can remove such a key; only deleting the role does.
-  async function writeCaps(roleId: string, caps: string[]): Promise<void> {
-    const keep = unlisted(await capsFor(roleId));
+  // Pass the transaction as `exec` when the caller has already read the stored set, so the read
+  // here, the delete and the insert see the same rows.
+  async function writeCaps(roleId: string, caps: string[], exec: Kysely<InternalSchema> = db): Promise<void> {
+    const keep = unlisted(await capsFor(roleId, exec));
     const next = [...new Set([...caps, ...keep])];
-    await db.deleteFrom('role_capabilities').where('role_id', '=', roleId).execute();
+    await exec.deleteFrom('role_capabilities').where('role_id', '=', roleId).execute();
     if (next.length) {
-      await db.insertInto('role_capabilities').values(next.map((c) => ({ role_id: roleId, capability: c }))).execute();
+      await exec.insertInto('role_capabilities').values(next.map((c) => ({ role_id: roleId, capability: c }))).execute();
     }
   }
 
@@ -239,15 +241,20 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       if (row.slug === LOCKED_SLUG) throw new OpenLdrError('the Administrator role cannot be modified');
       // Validate only the keys this save adds. A stored key the catalog no longer lists comes back
       // in the list the Roles page and `roles grant` send, and must not block the save.
-      if (patch.capabilities) {
-        const stored = new Set(await capsFor(id));
-        validateCaps(patch.capabilities.filter((c) => !stored.has(c)));
-      }
-      const set: Record<string, unknown> = { updated_at: sql`now()` };
-      if (patch.name !== undefined) set.name = patch.name;
-      if (patch.description !== undefined) set.description = patch.description;
-      await db.updateTable('roles').set(set).where('id', '=', id).execute();
-      if (patch.capabilities) await writeCaps(id, patch.capabilities);
+      // The stored-set read, the check and the write run in one transaction, so the check and the
+      // write see the same stored keys and a key inserted meanwhile is not lost.
+      const caps = patch.capabilities;
+      await db.transaction().execute(async (trx) => {
+        if (caps) {
+          const stored = new Set(await capsFor(id, trx));
+          validateCaps(caps.filter((c) => !stored.has(c)));
+        }
+        const set: Record<string, unknown> = { updated_at: sql`now()` };
+        if (patch.name !== undefined) set.name = patch.name;
+        if (patch.description !== undefined) set.description = patch.description;
+        await trx.updateTable('roles').set(set).where('id', '=', id).execute();
+        if (caps) await writeCaps(id, caps, trx);
+      });
       return (await store.get(id))!;
     },
     async remove(id) {

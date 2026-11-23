@@ -29,10 +29,15 @@ import { runRolesGrant, runRolesRevoke } from './roles';
 describe('roles grant / revoke keep stored keys the catalog no longer lists', () => {
   let db: Kysely<never>;
   let store: RoleStore;
+  let err: string;
 
   beforeEach(async () => {
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    err = '';
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      err += String(chunk);
+      return true;
+    });
     const migrated = await makeMigratedDb();
     db = migrated as unknown as Kysely<never>;
     store = createRoleStore(migrated);
@@ -60,5 +65,22 @@ describe('roles grant / revoke keep stored keys the catalog no longer lists', ()
 
     expect(code).toBe(0);
     expect((await store.getBySlug('bench'))!.capabilities).toEqual(['lab.receive']);
+  });
+
+  it('revoke of the kept key says it is kept for a plugin and changes nothing', async () => {
+    const code = await runRolesRevoke('bench', 'lab.receive', { json: false });
+
+    expect(code).toBe(1);
+    expect(err).toContain('lab.receive is kept for a plugin');
+    expect(err).toContain('cannot be granted or revoked here');
+    expect(err).not.toContain('unknown capability');
+    expect([...(await store.getBySlug('bench'))!.capabilities].sort()).toEqual(['forms.view', 'lab.receive']);
+  });
+
+  it('revoke of a key the role does not hold and the catalog does not list is still unknown', async () => {
+    const code = await runRolesRevoke('bench', 'bogus.key', { json: false });
+
+    expect(code).toBe(1);
+    expect(err).toContain('unknown capability: bogus.key');
   });
 });
