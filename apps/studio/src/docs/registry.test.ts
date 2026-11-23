@@ -50,6 +50,15 @@ describe('docs registry', () => {
     expect(guide?.content).toContain('OPENLDR_KEY');
     expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('lab-setup');
   });
+  it.each(LOCALES)('authors and indexes the reception guide in %s', (locale) => {
+    const guide = resolve(locale, 'reception');
+    expect(guide?.localeUsed).toBe(locale);
+    expect(guide?.requiredCapabilities).toEqual(['lab.receive']);
+    expect(guide?.content).toContain('/docs/lab-setup');
+    expect(guide?.content).toContain('openldr lab requisitions rebuild --force');
+    expect(guide?.content).toContain('CS-0001');
+    expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('reception');
+  });
   it.each(LOCALES)('authors and indexes the data exposure guide in %s', (locale) => {
     const guide = resolve(locale, 'data-exposure');
     expect(guide?.localeUsed).toBe(locale);
@@ -75,6 +84,7 @@ describe('docs registry', () => {
       'facilities',
       'test-catalog',
       'lab-setup',
+      'reception',
       'patients',
       'forms',
       'workflows',
@@ -130,6 +140,7 @@ describe('docs registry', () => {
       facilities: ['terminology', 'start-here', 'dashboard', 'user-preferences'],
       'test-catalog': ['terminology', 'facilities'],
       'lab-setup': ['laboratory', 'test-catalog', 'roles', 'users'],
+      reception: ['lab-setup', 'forms', 'roles', 'users'],
       patients: ['facilities', 'test-catalog', 'data-exposure'],
       users: ['roles', 'audit', 'settings'],
       roles: ['users', 'audit', 'settings'],

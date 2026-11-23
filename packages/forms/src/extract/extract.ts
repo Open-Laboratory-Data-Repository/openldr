@@ -19,7 +19,7 @@ import { discriminatorEquals, extrasDiscriminator } from '../discriminator'
 import { parseTestDetails } from '../test-details'
 import { ORDER_REJECTION_EXTENSION, isOrderRejectionBinding } from '../order-rejection-path'
 import { orderRejectionOf } from './order-rejection'
-import { isRequesterFacilityBinding, isRequisitionNumberBinding, pickedFacilityOf } from './order-fields'
+import { isRequesterFacilityBinding, isRequisitionNumberBinding, pickedFacilityOf, type PickedFacility } from './order-fields'
 import { readTestDetails } from './test-results'
 import { EXT_CORLIX_FHIR_PATH, EXT_CORLIX_FIELD_EXTRAS, EXT_QUESTIONNAIRE_UNIT, EXT_SDC_OBSERVATION_EXTRACT } from '../extensions'
 
@@ -41,6 +41,13 @@ export interface ExtractionContext {
    * referenceRange.
    */
   testBands?: ReadonlyMap<string, { name?: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }>
+  /**
+   * The fixed id of the order for one test (lab slices 1b and 2, ruling 1). The forms route builds it
+   * from the facility and the requisition number (`order-ids.ts`). With it, each test's
+   * ServiceRequest gets that id and each test's results point at it. Other callers leave it out:
+   * their requests get minted ids, and their results point at every order (`linkToOrder`).
+   */
+  orderIdFor?: (test: { system: string; code: string }) => string
 }
 
 /** Pluggable extraction of discrete FHIR resources from a filled form (PRD §3.2). */
@@ -128,6 +135,36 @@ export function requesterFacilityAnswers(
     if (path !== 'ServiceRequest.requester' || !isRequesterFacilityBinding(path, meta?.discriminator)) return
     const value = item.answer?.[0] ? fromAnswer(item.answer[0]) : undefined
     if (value !== undefined) out.push({ linkId: item.linkId, value })
+  })
+  return out
+}
+
+/** One test an order names: the system an answer carries (LOINC when it names none) and its name. */
+export interface OrderedTestAnswer { system: string; code: string; display?: string }
+
+/**
+ * The tests an order names, in answer order, once each. An answer carries its own system: a catalog
+ * test since the Lab order moved to the lab's test list (test catalog S4), LOINC before that. An
+ * answer naming no system predates both and was always LOINC. Display comes from the answer itself
+ * (a picked test carries its name), else from the Questionnaire answerOption. A test picked twice is
+ * one order, since its fixed id comes from the test and two requests for it would share an id.
+ */
+export function orderedTests(response: QuestionnaireResponse, questionnaire: Questionnaire): OrderedTestAnswer[] {
+  const index = indexItems(questionnaire)
+  const out: OrderedTestAnswer[] = []
+  const seen = new Set<string>()
+  walkResponse(response.item, (item) => {
+    const meta = index.get(item.linkId)
+    if (meta?.fhirPath !== 'ServiceRequest.code') return
+    for (const answer of item.answer ?? []) {
+      const code = answer.valueCoding?.code ?? answer.valueString
+      if (!code) continue
+      const system = answer.valueCoding?.system || LOINC
+      if (seen.has(`${system}|${code}`)) continue
+      seen.add(`${system}|${code}`)
+      const display = answer.valueCoding?.display || meta?.answerOptions?.find((o) => o.code === code)?.display
+      out.push({ system, code, ...(display ? { display } : {}) })
+    }
   })
   return out
 }
@@ -232,11 +269,15 @@ function nameOf(value: unknown): string | undefined {
  */
 function facilityOf(value: unknown): Reference | undefined {
   const c = pickedFacilityOf(value)
-  if (c) {
-    return { identifier: { ...(c.system ? { system: c.system } : {}), value: c.code }, ...(c.display ? { display: c.display } : {}) }
-  }
+  if (c) return facilityReference(c)
   const name = nameOf(value)
   return name ? { display: name } : undefined
+}
+
+/** A facility from the facility register as the Organization reference an order's requester holds.
+ *  Its code becomes the identifier the warehouse keys on. */
+export function facilityReference(c: PickedFacility): Reference {
+  return { identifier: { ...(c.system ? { system: c.system } : {}), value: c.code }, ...(c.display ? { display: c.display } : {}) }
 }
 
 /**
@@ -255,8 +296,25 @@ function requesterRole(clinician: string | undefined, facility: Reference | unde
 }
 
 /**
- * Emit a single ServiceRequest for a requisition form, mapping answers whose
- * field is bound to `ServiceRequest.*` (via the Corlix fhir-path) onto it.
+ * An order's requester: the contained PractitionerRole and the reference to it, or undefined when
+ * there is neither a clinician nor a facility. The form extractor and the lab desk (reception, in
+ * @openldr/bootstrap) both write it, so a desk order's facility and clinician read back the same way.
+ */
+export function orderRequester(
+  clinician: string | undefined, facility: Reference | undefined,
+): { contained: PractitionerRole; requester: Reference } | undefined {
+  const role = requesterRole(clinician, facility)
+  if (!role) return undefined
+  const display = clinician ?? facility?.display
+  return { contained: role, requester: { reference: `#${REQUESTER_ID}`, type: 'PractitionerRole', ...(display ? { display } : {}) } }
+}
+
+/**
+ * Emit one ServiceRequest per test for a requisition form, mapping answers whose field is bound to
+ * `ServiceRequest.*` (via the Corlix fhir-path) onto each. Every request carries the same requisition
+ * number, subject, requester and priority; only `code` differs. With no test chosen it emits one
+ * request with no code. The extractor sets no ids: the form route gives each request a fixed id from
+ * the facility, the requisition number and the test (`order-ids.ts`).
  */
 export const ServiceRequestExtractor: ResourceExtractor = {
   canExtract() { return true },
@@ -270,8 +328,6 @@ export const ServiceRequestExtractor: ResourceExtractor = {
     }
     if (ctx.authored) request.authoredOn = ctx.authored
 
-    const codings: Coding[] = []
-    let orderText: string | undefined
     let clinician: string | undefined
     let facility: Reference | undefined
     walkResponse(response.item, (item) => {
@@ -282,23 +338,8 @@ export const ServiceRequestExtractor: ResourceExtractor = {
       // field bound to some other ServiceRequest.extension is not swallowed.
       if (isOrderRejectionBinding(path, meta?.discriminator)) return
 
-      // The ordered test(s) → ServiceRequest.code. An answer carries its own system: a catalog test
-      // since the Lab order moved to the lab's test list (test catalog S4), LOINC before that. An answer
-      // naming no system predates both and was always LOINC. Display comes from the answer itself
-      // (a picked test carries its name), else from the Questionnaire answerOption.
-      if (path === 'ServiceRequest.code') {
-        for (const answer of item.answer ?? []) {
-          const code = answer.valueCoding?.code ?? answer.valueString
-          if (!code) continue
-          const system = answer.valueCoding?.system || LOINC
-          const display = answer.valueCoding?.display || meta?.answerOptions?.find((o) => o.code === code)?.display
-          if (display && orderText === undefined) orderText = display
-          const before = ctx.codingBefore?.get(`${system}|${code}`)
-          if (before) codings.push(before)
-          codings.push({ system, code, ...(display ? { display } : {}) })
-        }
-        return
-      }
+      // The ordered tests are read by orderedTests below.
+      if (path === 'ServiceRequest.code') return
 
       const value = item.answer?.[0] ? fromAnswer(item.answer[0]) : undefined
       if (value === undefined) return
@@ -307,7 +348,9 @@ export const ServiceRequestExtractor: ResourceExtractor = {
       // reader of an order identifier reads its value only, so the system adds, not moves.
       if (isRequisitionNumberBinding(path)) {
         const system = discriminatorEquals(meta?.discriminator, 'system')
-        request.identifier = [{ ...(system ? { system } : {}), value: String(value) }]
+        const requisition = { ...(system ? { system } : {}), value: String(value) }
+        request.identifier = [requisition]
+        request.requisition = { ...requisition }
       }
       if (path === 'ServiceRequest.priority') request.priority = String(value) as ServiceRequest['priority']
       // The clinician and the referring facility both fill the requester (migration 115). See
@@ -317,29 +360,45 @@ export const ServiceRequestExtractor: ResourceExtractor = {
         else clinician = nameOf(value)
       }
     })
-    const requester = requesterRole(clinician, facility)
+    const requester = orderRequester(clinician, facility)
     if (requester) {
-      const display = clinician ?? facility?.display
-      request.contained = [requester]
-      request.requester = { reference: `#${REQUESTER_ID}`, type: 'PractitionerRole', ...(display ? { display } : {}) }
+      request.contained = [requester.contained]
+      request.requester = requester.requester
     }
-    // code.text names the order after its first test. The warehouse reads text before the first
-    // coding's display, and that first coding is often a LOINC link with no name of its own.
-    if (codings.length) request.code = { coding: codings, ...(orderText ? { text: orderText } : {}) }
+    // One request per test, with the test's fixed id when the caller gives one. code.text names each
+    // after its own test: the warehouse reads text before the first coding's display, and that first
+    // coding is often a LOINC link with no name of its own.
+    const tests = orderedTests(response, questionnaire)
+    const requests: ServiceRequest[] = tests.length === 0
+      ? [request]
+      : tests.map(({ system, code, display }) => {
+          const before = ctx.codingBefore?.get(`${system}|${code}`)
+          return {
+            ...structuredClone(request),
+            ...(ctx.orderIdFor ? { id: ctx.orderIdFor({ system, code }) } : {}),
+            code: {
+              coding: [...(before ? [{ ...before }] : []), { system, code, ...(display ? { display } : {}) }],
+              ...(display ? { text: display } : {}),
+            },
+          }
+        })
 
     const rejection = orderRejectionOf(response, questionnaire)
-    if (!rejection) return [request]
+    if (!rejection) return requests
 
     // Order-level rejection (2026-10-11 spec, part 2). The extension is the shape the warehouse reads
-    // into lab_requests.rejection_code and rejection_reason; the Specimen is for FHIR readers.
-    request.status = 'revoked'
-    request.extension = [...(request.extension ?? []), {
-      url: ORDER_REJECTION_EXTENSION,
-      extension: [
-        { url: 'code', valueCode: rejection.code },
-        { url: 'reason', valueString: rejection.display || rejection.code },
-      ],
-    }]
+    // into lab_requests.rejection_code and rejection_reason; the Specimen is for FHIR readers. Every
+    // test's request is revoked. The one Specimen's `request` is filled by linkToOrder once ids exist.
+    for (const r of requests) {
+      r.status = 'revoked'
+      r.extension = [...(r.extension ?? []), {
+        url: ORDER_REJECTION_EXTENSION,
+        extension: [
+          { url: 'code', valueCode: rejection.code },
+          { url: 'reason', valueString: rejection.display || rejection.code },
+        ],
+      }]
+    }
     const specimen: Specimen = {
       resourceType: 'Specimen',
       status: 'unsatisfactory',
@@ -348,6 +407,6 @@ export const ServiceRequestExtractor: ResourceExtractor = {
     }
     const type = sharedSpecimenType(response)
     if (type) specimen.type = { coding: [type] }
-    return [request, specimen]
+    return [...requests, specimen]
   },
 }

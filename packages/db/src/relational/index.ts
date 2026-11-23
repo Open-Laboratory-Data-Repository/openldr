@@ -2,7 +2,7 @@ import type { Provenance } from '../provenance';
 import type { ExternalSchema } from '../schema/external';
 import { projectPatient, projectPatientIdentifiers } from './patient';
 import { projectServiceRequest, projectServiceRequestAttributes } from './service-request';
-import { projectObservation } from './observation';
+import { projectObservation, isUnauthorisedResult } from './observation';
 import { projectFacility } from './facility';
 import { projectSpecimen } from './specimen';
 import { projectDiagnosticReport } from './diagnostic-report';
@@ -28,13 +28,21 @@ export interface RelationalResult {
   scope?: { column: string; value: unknown };
 }
 
-export function projectResource(resource: unknown, prov: Provenance = {}): RelationalResult | null {
+/** A resource whose row must not be in the warehouse: the writer deletes `table` row `id`, as it does
+ *  for a deleted resource. Today only an Observation that is not yet authorised. */
+export interface RelationalDelete {
+  delete: { table: keyof ExternalSchema; id: string };
+}
+
+export function projectResource(resource: unknown, prov: Provenance = {}): RelationalResult | RelationalDelete | null {
   if (typeof resource !== 'object' || resource === null) return null;
   const r = resource as Record<string, unknown>;
   switch (r['resourceType']) {
     case 'Patient': return { table: 'patients', rows: [projectPatient(r, prov)] };
     case 'ServiceRequest': return { table: 'lab_requests', rows: [projectServiceRequest(r, prov)] };
-    case 'Observation': return { table: 'lab_results', rows: [projectObservation(r, prov)] };
+    case 'Observation':
+      if (isUnauthorisedResult(r)) return { delete: { table: 'lab_results', id: String(r['id']) } };
+      return { table: 'lab_results', rows: [projectObservation(r, prov)] };
     case 'Organization':
     case 'Location': return { table: 'facilities', rows: [projectFacility(r, prov)] };
     case 'Specimen': return { table: 'specimens', rows: [projectSpecimen(r, prov)] };

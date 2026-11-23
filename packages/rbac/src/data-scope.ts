@@ -14,7 +14,9 @@ export const EVERYTHING: DataScope = { limited: false };
 /** What a limited user loses, wherever capabilities are resolved, so every route refuses alike.
  *  Each reads data the limit does not cover (reports, patients, SQL, exports, workflows, sync
  *  bodies, audit), or would let the user write SQL (dashboards.create and edit). The Users sheet
- *  shows this list. Forms, dashboards.view and admin settings stay. */
+ *  shows this list. Forms, dashboards.view and admin settings stay. A limited user is a site
+ *  clerk, and reception (lab.receive, lab.reject) is the lab's own desk, which finds patients and
+ *  orders from every facility, so those two go as well. The other lab keys stay. */
 export const LIMITED_SCOPE_DROPS: readonly string[] = [
   'reports.view', 'reports.run', 'reports.export', 'reports.edit_templates',
   'patients.view', 'patients.manage', 'patients.view_identifiers',
@@ -23,6 +25,7 @@ export const LIMITED_SCOPE_DROPS: readonly string[] = [
   'workflows.view', 'workflows.edit', 'workflows.run',
   'connectors.manage', 'audit.view', 'activity.view', 'imports.correct_held',
   'facilities.view', 'sync.view', 'sync.manage',
+  'lab.receive', 'lab.reject',
 ];
 
 /** The capabilities a person keeps under their data limit. */

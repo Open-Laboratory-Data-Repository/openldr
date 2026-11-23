@@ -17,6 +17,7 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { formAccess, type FormAccessCheck } from './form-access';
 import { createFormEntriesService, type FormEntriesService } from './form-entries';
+import { createLabReception, type LabReception } from './lab-reception';
 import { dashboardAccess, type DashboardAccessCheck } from './dashboard-access';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
@@ -81,6 +82,7 @@ export * from './update-check';
 export { createMapToFhirApi, MAP_TEST_MAX_ITEMS, MapConfigError, type MapToFhirApi, type MapTestResult } from './map-to-fhir-api';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, captureObservedFacilitiesFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
+import { withRequisitionIndex } from './lab-requisition-hooks';
 import { createWorkflowSql } from './workflow-sql';
 import { createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
@@ -609,6 +611,9 @@ export interface AppContext {
   /** The lab's own section list (concepts of urn:openldr:cs:lab-section). The settings routes and
    *  `openldr lab sections` share it. */
   labSections: LabSections;
+  /** The lab desk's orders: find one by its requisition number, register one, correct a typo
+   *  (lab slices 1b and 2). The reception routes call it. */
+  labReception: LabReception;
   /** Lab test codes mapped to catalog tests, and the warehouse copy test_map. */
   testMapping: TestMapping;
   /** The result dictionary and its LOINC links (result field mapping spec 4.5). */
@@ -1247,6 +1252,11 @@ const reporting: ReportingApi = {
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
   const patientIdentifierSystems = createPatientIdentifierSystems({ internalDb: termDb, externalDb, admin: termAdmin });
   const patientIndex = createPatientIndex({ externalDb, systems: patientIdentifierSystems, engine });
+  const labReception = createLabReception({
+    db: termDb, externalDb, fhirStore: canonicalFhirStore, catalog: testCatalog, ops: terminology.ops, patientIndex, logger,
+    // LAZY: labIdentity is built further down this function. The arrow runs only on a registration.
+    labTimeZone: async () => (await labIdentity.all())['lab.timezone'],
+  });
   const patientDuplicates = createPatientDuplicates({ internalDb: termDb, externalDb, index: patientIndex, systems: patientIdentifierSystems });
 
   // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
@@ -1633,11 +1643,17 @@ const reporting: ReportingApi = {
     // `applyProjection` just handed to `relationalWriter.write()` for this resource — i.e. the exact
     // value about to land in `diagnostic_reports.source_system` — passed through so the capture
     // lands in THAT feed's coding system rather than always the default one.
-    onProjected: (resourceType, resource, provenance) =>
-      captureObservedFacilityFromProjection({ admin: termAdmin, internalDb: internal.db }, resourceType, resource, provenance.sourceSystem ?? null, new Date().toISOString()),
-    // A batch that projected in bulk asks once for its distinct facilities (item 16).
-    onProjectedMany: (items) =>
-      captureObservedFacilitiesFromProjection({ admin: termAdmin, internalDb: internal.db }, items.map((it) => ({ resourceType: it.resourceType, resource: it.resource, sourceSystem: it.provenance.sourceSystem ?? null })), new Date().toISOString()),
+    //
+    // Lab slices 1b and 2: `withRequisitionIndex` also keeps `lab_requisitions` current for every
+    // projected ServiceRequest, from any source, before the facility capture runs. It catches and
+    // logs its own failure (lab-requisition-hooks.ts).
+    ...withRequisitionIndex({ internalDb: internal.db, logger }, {
+      onProjected: (resourceType, resource, provenance) =>
+        captureObservedFacilityFromProjection({ admin: termAdmin, internalDb: internal.db }, resourceType, resource, provenance.sourceSystem ?? null, new Date().toISOString()),
+      // A batch that projected in bulk asks once for its distinct facilities (item 16).
+      onProjectedMany: (items) =>
+        captureObservedFacilitiesFromProjection({ admin: termAdmin, internalDb: internal.db }, items.map((it) => ({ resourceType: it.resourceType, resource: it.resource, sourceSystem: it.provenance.sourceSystem ?? null })), new Date().toISOString()),
+    }),
   });
   const projectionWorker = createProjectionWorker({
     runCycle: () => projectionRunner.runCycle(),
@@ -2236,6 +2252,7 @@ const reporting: ReportingApi = {
     facilityRegistry,
     testCatalog,
     labSections,
+    labReception,
     testMapping,
     resultFields,
     patientIdentifierSystems,
@@ -2337,6 +2354,7 @@ export * from './result-fields';
 export * from './job-continue';
 export * from './form-access';
 export * from './form-entries';
+export * from './lab-reception';
 export * from './dashboard-access';
 export * from './data-scope';
 export { MAX_SELF_RESUMES } from './job-interruptions';

@@ -1159,6 +1159,15 @@ export interface FormEntriesTable {
   saved: JSONColumnType<{ responseId: string | null; resources: { resourceType: string; id: string }[] }> | null;
 }
 
+/** One row per ServiceRequest that has a requisition number (migration 139). `requisition` is the
+ *  trimmed number, `facility` the requesting facility's code, or null. */
+export interface LabRequisitionsTable {
+  service_request_id: string;
+  requisition: string;
+  facility: string | null;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   auth_issuer_binding: { id: number; issuer: string };
   'fhir.projection_retries': ProjectionRetriesTable;
@@ -1249,6 +1258,8 @@ export interface InternalSchema {
   content_pack_items: { pack_id: string; kind: string; key: string; item_id: string };
   /** One row per saved form submission (migration 136). */
   form_entries: FormEntriesTable;
+  /** Finds a ServiceRequest by its requisition number (migration 139). */
+  lab_requisitions: LabRequisitionsTable;
   connectors: ConnectorsTable;
   registries: RegistriesTable;
   plugin_data: PluginDataTable;

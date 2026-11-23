@@ -1,8 +1,8 @@
 # Configurer un laboratoire
 
-Le module laboratoire permettra à un laboratoire de réceptionner les échantillons, de suivre des listes de travail et de vérifier les résultats dans OpenLDR. Cette version le prépare. Vous définissez les sections du laboratoire, les examens à vérifier, si une personne peut valider ses propres résultats, et des seuils critiques sur les intervalles de référence. Vous donnez aussi les nouveaux rôles du laboratoire.
+Le module laboratoire permet à un laboratoire de réceptionner les échantillons, de suivre des listes de travail et de vérifier les résultats dans OpenLDR. Cette version en apporte la première partie, la réception. Elle prépare aussi le reste. Vous définissez les sections du laboratoire, les examens à vérifier, si une personne peut valider ses propres résultats, et des seuils critiques sur les intervalles de référence. Vous donnez aussi les nouveaux rôles du laboratoire.
 
-**La réception, les listes de travail et la vérification des résultats ne font pas partie de cette version.** Elles arrivent dans des versions ultérieures. Les réglages ci-dessous sont enregistrés dès maintenant. Les enregistrer ne change rien au travail actuel du laboratoire.
+**Les listes de travail, la vérification des résultats, le renvoi d'une demande à son site et le rejet d'un échantillon ne font pas partie de cette version.** Ils arrivent dans des versions ultérieures. Les réglages ci-dessous sont enregistrés dès maintenant. Les enregistrer ne change rien au travail actuel du laboratoire.
 
 Le guide intégré **Configuration du laboratoire** montre chaque étape à l'écran. Cette page donne l'ordre et les commandes, pour une installation gérée en ligne de commande.
 
@@ -34,6 +34,7 @@ openldr lab tests set HGB --section haem --needs-review true
 openldr lab tests set HGB --no-section
 openldr lab settings set allow-self-authorise false
 openldr lab sections remove haem --force
+openldr lab requisitions rebuild --force
 ```
 
 - `lab sections add <code> <name>` ajoute une section. Le code utilise des lettres minuscules, des chiffres et des tirets, en commençant par une lettre. Il ne peut plus changer ensuite.
@@ -41,16 +42,26 @@ openldr lab sections remove haem --force
 - `lab tests set <code>` classe un examen dans une section avec `--section <code>`, l'en retire avec `--no-section`, et règle la vérification avec `--needs-review true` ou `false`. Un champ omis garde sa valeur enregistrée.
 - `lab settings set allow-self-authorise true|false` active ou désactive l'auto-validation.
 - `lab sections remove <code> --force` supprime une section. La commande refuse sans `--force`, car une suppression est définitive. Elle refuse aussi tant qu'un examen utilise la section, avec `section <code> is used by <n> tests`.
+- `lab requisitions rebuild --force` reconstruit l'index que la réception utilise pour trouver une demande par son numéro. OpenLDR tient cet index à jour tout seul. Lancez-la donc seulement quand une demande que vous savez enregistrée n'apparaît pas dans la réception. Elle affiche `Indexed <n> orders by requisition number.` Elle refuse sans `--force`, car elle réécrit tout l'index.
 
 Dans une copie des sources, ajoutez `pnpm` devant, par exemple `pnpm openldr lab sections list`.
 
 ## Les rôles
 
-- **Reception** peut réceptionner les échantillons, renvoyer une demande à son site, rejeter un échantillon, voir les listes de travail et ouvrir l'index des patients masqué.
+- **Reception** peut réceptionner les échantillons, voir les listes de travail et ouvrir l'index des patients masqué. Le rôle porte aussi le renvoi d'une demande à son site et le rejet d'un échantillon, qui arrivent dans une version ultérieure.
 - **Lab Technician** peut remplir et soumettre des formulaires, saisir des résultats et voir les listes de travail.
 - **Lab Manager** a les sept capacités du laboratoire.
 
 Sur une installation qui utilisait une version antérieure, Reception apparaît au premier démarrage du serveur sur cette version. Lab Technician et Lab Manager reçoivent leurs nouvelles capacités à ce démarrage, une seule fois. Une capacité retirée ensuite reste retirée.
+
+## La réception
+
+La réception est le guichet du laboratoire dans le studio. Elle trouve une demande par un numéro de demande scanné ou saisi, enregistre une demande dont le laboratoire n'a aucune trace, trouve ou enregistre le patient, reçoit l'échantillon avec son état et corrige une faute de frappe dans une demande, et annule une demande enregistrée à la réception pour l'enregistrer de nouveau. Le guide intégré **Réception** montre chaque étape.
+
+- La réception exige **Receive samples**. Les rôles Reception et Lab Manager l'ont.
+- Un utilisateur avec une limite de données perd **Receive samples** et **Return and reject**. Il n'a donc pas la réception.
+- Le formulaire Lab order demande désormais seulement des tests. Il n'a plus de champ **Results**. Les résultats seront saisis et validés au laboratoire dans une version ultérieure. Son champ **Order rejection** reste jusque-là.
+- Chaque test d'une nouvelle demande est enregistré comme sa propre demande d'examen. Les demandes enregistrées avant cette version restent telles quelles, et la réception liste tous leurs tests.
 
 ## Résolution des problèmes
 

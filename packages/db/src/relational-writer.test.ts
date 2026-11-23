@@ -294,3 +294,48 @@ describe('relational writer: patient identifiers', () => {
     await db.destroy();
   });
 });
+
+describe('relational-writer and unauthorised results', () => {
+  const result = (status: string) => ({
+    resourceType: 'Observation', id: 'o1', status, code: { coding: [{ code: 'x' }] }, valueQuantity: { value: 5 },
+  });
+  const ids = (db: any) => db.selectFrom('lab_results').select('id').orderBy('id').execute()
+    .then((rows: Array<{ id: string }>) => rows.map((r) => r.id));
+
+  it('write deletes the row of a final result that becomes preliminary', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    expect(await w.write(result('final'), {})).toBe('written');
+    expect(await ids(db)).toEqual(['o1']);
+    expect(await w.write(result('preliminary'), {})).toBe('deleted');
+    expect(await ids(db)).toEqual([]);
+    await db.destroy();
+  });
+
+  it('write never adds a registered result', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    expect(await w.write(result('registered'), {})).toBe('deleted');
+    expect(await ids(db)).toEqual([]);
+    await db.destroy();
+  });
+
+  it('writeMany deletes preliminary and registered rows and keeps the rest', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    await w.writeMany([
+      { resource: { ...result('final'), id: 'o1' }, provenance: {} },
+      { resource: { ...result('final'), id: 'o2' }, provenance: {} },
+      { resource: { ...result('final'), id: 'o3' }, provenance: {} },
+    ]);
+    const results = await w.writeMany([
+      { resource: { ...result('preliminary'), id: 'o1' }, provenance: {} },
+      { resource: { ...result('registered'), id: 'o2' }, provenance: {} },
+      { resource: { ...result('cancelled'), id: 'o3' }, provenance: {} },
+      { resource: { ...result('amended'), id: 'o4' }, provenance: {} },
+    ]);
+    expect(results).toEqual(['deleted', 'deleted', 'written', 'written']);
+    expect(await ids(db)).toEqual(['o3', 'o4']);
+    await db.destroy();
+  });
+});

@@ -57,10 +57,27 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
     });
   }
 
+  /** The one delete path: a deleted resource, and a resource `projectResource` says must not have
+   *  a row (an Observation not yet authorised). Clears the rows it owns in other tables too. */
+  async function deleteById(resourceType: string, id: string): Promise<void> {
+    const table = tableForResourceType(resourceType);
+    if (table) {
+      const scopeColumn = scopeColumnFor(resourceType);
+      if (scopeColumn) await anyDb.deleteFrom(table).where(scopeColumn as any, '=', id).execute();
+      else await anyDb.deleteFrom(table).where('id', '=', id).execute();
+    }
+    for (const owned of ownedTablesFor(resourceType)) {
+      await anyDb.deleteFrom(owned.table).where(owned.scopeColumn as any, '=', id).execute();
+    }
+  }
+
+  const resourceTypeOf = (resource: unknown): string => String((resource as Record<string, unknown>)['resourceType']);
+
   return {
     async write(resource, provenance) {
       const p = projectResource(resource, provenance);
       if (!p) return 'skipped';
+      if ('delete' in p) { await deleteById(resourceTypeOf(resource), p.delete.id); return 'deleted'; }
       await replaceScope(p);
       for (const owned of projectOwnedRows(resource, provenance)) await replaceScope(owned);
       return 'written';
@@ -75,9 +92,15 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
       // hit ON CONFLICT twice for that id, which Postgres rejects; keeping only the last also
       // matches what a live re-send does, one write at a time.
       const owned = new Map<string, { scopeColumn: string; scopeValues: unknown[]; rowsByScope: Map<unknown, Record<string, unknown>[]> }>();
+      const deletes: Array<{ resourceType: string; id: string }> = [];
       items.forEach((it, idx) => {
         const p = projectResource(it.resource, it.provenance);
         if (!p) return;
+        if ('delete' in p) {
+          results[idx] = 'deleted';
+          deletes.push({ resourceType: resourceTypeOf(it.resource), id: p.delete.id });
+          return;
+        }
         results[idx] = 'written';
         // Scoped resources are applied INDIVIDUALLY. Merging two value sets into one batch would
         // make each one's scope-delete wipe the other's rows before either insert ran.
@@ -97,6 +120,9 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
           owned.set(o.table, entry);
         }
       });
+      // Deletes first, as `applyBatch` does for deleted resources: a table shared by two resource
+      // types must not lose a row this batch writes for the other type.
+      for (const d of deletes) await deleteById(d.resourceType, d.id);
       for (const [table, rows] of unscoped) await upsertOn(anyDb, table, rows);
       for (const p of scoped) await replaceScope(p);
       // One transaction per owned table: every delete for the batch's scope values runs before
@@ -115,17 +141,7 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
       }
       return results;
     },
-    async deleteById(resourceType, id) {
-      const table = tableForResourceType(resourceType);
-      if (table) {
-        const scopeColumn = scopeColumnFor(resourceType);
-        if (scopeColumn) await anyDb.deleteFrom(table).where(scopeColumn as any, '=', id).execute();
-        else await anyDb.deleteFrom(table).where('id', '=', id).execute();
-      }
-      for (const owned of ownedTablesFor(resourceType)) {
-        await anyDb.deleteFrom(owned.table).where(owned.scopeColumn as any, '=', id).execute();
-      }
-    },
+    deleteById,
     async writeIngestEvents(events) {
       // Idempotent by construction: the table's PK is (resource_type, resource_id, version), the
       // same natural key as fhir.resource_history, so re-writing an arrival is a no-op. That is

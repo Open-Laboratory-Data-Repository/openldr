@@ -126,7 +126,13 @@ describe('lab capabilities', () => {
     });
   });
 
-  it('keeps every lab key for a user with a data limit', () => {
-    for (const c of LAB) expect(LIMITED_SCOPE_DROPS).not.toContain(c.key);
+  // Slice 1b and 2 review: reception reads patients and orders from every facility, so a data limit
+  // takes away lab.receive and lab.reject. The other five lab keys stay.
+  it('drops the reception keys for a user with a data limit and keeps the other lab keys', () => {
+    const drops = ['lab.receive', 'lab.reject'];
+    for (const c of LAB) {
+      if (drops.includes(c.key)) expect(LIMITED_SCOPE_DROPS).toContain(c.key);
+      else expect(LIMITED_SCOPE_DROPS).not.toContain(c.key);
+    }
   });
 });

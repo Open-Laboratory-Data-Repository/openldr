@@ -1,4 +1,4 @@
-import type { FormEntry, FormEntrySaved, FormEntryStatus, FormEntryStore } from '@openldr/db';
+import { FormEntryRepeat, type FormEntry, type FormEntrySaved, type FormEntryStatus, type FormEntryStore } from '@openldr/db';
 import { entryFacilitiesOf, entryKeyOf, entryValuesOf, type FacilityAnswer, type FormSchema } from '@openldr/forms';
 import type { DataScope } from '@openldr/rbac';
 import type { WorkflowTriggerRunner } from '@openldr/workflows';
@@ -17,6 +17,15 @@ export class EntrySiteError extends Error {
   constructor(message: string, readonly reason: 'outside-limit' | 'free-text-facility' | 'empty-limit') {
     super(message);
     this.name = 'EntrySiteError';
+  }
+}
+
+/** A save refused because its order already exists, live, with no form entry holding it (an order
+ *  saved some other way). */
+export class OrderExists extends Error {
+  constructor(readonly entryKey: string) {
+    super(`${entryKey} is already registered at this facility.`);
+    this.name = 'OrderExists';
   }
 }
 
@@ -49,11 +58,15 @@ export interface FormEntriesService {
 
   /** The facility register row ids a limit covers. Null means no limit. Reads the register itself. */
   facilityIdsOf(scope: DataScope): Promise<string[] | null>;
-  /** Checks the site rules, then writes the row. Throws EntrySiteError or FormEntryRepeat. */
+  /** Checks the site rules, then writes the row. Throws EntrySiteError or FormEntryRepeat.
+   *  `orderIds` are the fixed ServiceRequest ids the save will write. When one is already stored
+   *  with a status other than entered-in-error, the order exists, from this form or another: it
+   *  throws FormEntryRepeat with the entry that holds it, or OrderExists when no entry does. */
   begin(input: {
     form: { id: string; schema: FormSchema };
     answers: Record<string, unknown>;
     user: { id: string; name: string; dataScope: DataScope };
+    orderIds?: string[];
   }): Promise<FormEntry>;
   /** After the save: `stored` is what the save left behind. ok true means it completed.
    *  `somethingStored` says the save stored records even when `stored` names none, because their
@@ -217,7 +230,7 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
       return { facility: only, locked: only !== null, choices };
     },
 
-    async begin({ form, answers, user }) {
+    async begin({ form, answers, user, orderIds }) {
       const values = entryValuesOf(form.schema, answers);
       // Every facility field counts: a form may carry two, and the order keeps the last answered one.
       const facilities = entryFacilitiesOf(form.schema, answers);
@@ -246,6 +259,19 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
       const facilityId = facilities.order ? rowIdOf(facilities.order) : null;
       const facilityName = facilities.order?.name ?? rows.find((r) => r.id === facilityId)?.name ?? null;
 
+      // An order is the same order whichever form entered it (its ids leave the form out), so a
+      // live one refuses the save. One marked entered-in-error is re-entered and updated.
+      const entryKey = entryKeyOf(form.schema, answers);
+      if (entryKey && orderIds?.length) {
+        for (const id of orderIds) {
+          const stored = await deps.fhir.get('ServiceRequest', id);
+          if (!stored || stored.status === 'entered-in-error') continue;
+          const holder = await deps.store.holderOfOrder({ facilityCode: picked?.code ?? null, entryKey });
+          if (holder) throw new FormEntryRepeat(holder);
+          throw new OrderExists(entryKey);
+        }
+      }
+
       // Never inside a transaction: on Postgres the unique violation aborts it, and the store's
       // follow-up read of the holding entry would then fail.
       return deps.store.create({
@@ -254,7 +280,7 @@ export function createFormEntriesService(deps: FormEntriesDeps): FormEntriesServ
         facilityCode: picked?.code ?? null,
         facilityName,
         // The number the order carries, so the repeat check and the order agree.
-        entryKey: entryKeyOf(form.schema, answers),
+        entryKey,
         summary: values.summary,
         enteredBy: user.id,
         enteredByName: user.name,

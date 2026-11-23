@@ -50,7 +50,7 @@ import {
   type TestCatalogListOpts, type TestCatalogImportOpts,
 } from './test-catalog';
 import {
-  runLabSectionsAdd, runLabSectionsList, runLabSectionsRemove, runLabSettingsSet, runLabTestsSet,
+  runLabRequisitionsRebuild, runLabSectionsAdd, runLabSectionsList, runLabSectionsRemove, runLabSettingsSet, runLabTestsSet,
   type LabTestsSetOpts,
 } from './lab';
 import {
@@ -719,6 +719,11 @@ export function buildProgram(): Command {
     .command('set <key> <value>').description('Set a lab-wide switch: allow-self-authorise true|false')
     .option('--json', 'emit JSON', false)
     .action(async (key: string, value: string, opts: { json: boolean }) => { process.exitCode = await runLabSettingsSet(key, value, opts); });
+  labCmd.command('requisitions').description('The index that finds an order by its requisition number')
+    .command('rebuild').description('Index every current order by its requisition number again. Refuses without --force')
+    .option('--force', 'rebuild it', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { force: boolean; json: boolean }) => { process.exitCode = await runLabRequisitionsRebuild(opts); });
 
   // Test mapping spec 4.6: lab test codes mapped to catalog tests. Clear and an applied import take --force.
   // With --level result the same commands map lab result codes to result dictionary fields.

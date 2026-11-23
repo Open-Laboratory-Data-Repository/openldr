@@ -1,8 +1,8 @@
 # Set up a lab
 
-The lab module will let a laboratory receive samples, work through worklists and review results inside OpenLDR. This release prepares for it. You set the lab's sections, which tests need review, whether a person may authorise their own results, and critical limits on reference bands. You also give people the new lab roles.
+The lab module lets a laboratory receive samples, work through worklists and review results inside OpenLDR. This release has the first part, Reception. It also prepares the rest. You set the lab's sections, which tests need review, whether a person may authorise their own results, and critical limits on reference bands. You also give people the new lab roles.
 
-**Reception, worklists and result review are not in this release.** They come in later releases. The settings below are stored now. Saving them changes nothing in how the lab works today.
+**Worklists, result review, returning a request to its site and rejecting a sample are not in this release.** They come in later releases. The settings below are stored now. Saving them changes nothing in how the lab works today.
 
 The in-app guide **Lab setup** shows each step on screen. This page gives the order and the commands, for an install run from the command line.
 
@@ -34,6 +34,7 @@ openldr lab tests set HGB --section haem --needs-review true
 openldr lab tests set HGB --no-section
 openldr lab settings set allow-self-authorise false
 openldr lab sections remove haem --force
+openldr lab requisitions rebuild --force
 ```
 
 - `lab sections add <code> <name>` adds a section. The code is lowercase letters, digits and dashes, starting with a letter. It cannot change later.
@@ -41,16 +42,26 @@ openldr lab sections remove haem --force
 - `lab tests set <code>` sets a test's section with `--section <code>`, clears it with `--no-section`, and sets review with `--needs-review true` or `false`. A field you leave out keeps what is stored.
 - `lab settings set allow-self-authorise true|false` turns self-authorisation on or off.
 - `lab sections remove <code> --force` removes a section. It refuses without `--force`, because a removal cannot be undone. It also refuses while a test still uses the section, with `section <code> is used by <n> tests`.
+- `lab requisitions rebuild --force` rebuilds the index Reception uses to find an order by its requisition number. OpenLDR keeps that index current by itself, so run this only when an order you know is stored does not appear in Reception. It prints `Indexed <n> orders by requisition number.` It refuses without `--force`, because it rewrites the whole index.
 
 In a source checkout, put `pnpm` in front, for example `pnpm openldr lab sections list`.
 
 ## The roles
 
-- **Reception** can receive samples, return a request to its site, reject a sample, view worklists and open the masked patient index.
+- **Reception** can receive samples, view worklists and open the masked patient index. It also holds returning a request to its site and rejecting a sample, which come in a later release.
 - **Lab Technician** can fill and submit forms, enter results and view worklists.
 - **Lab Manager** has all seven lab capabilities.
 
 On an install that ran an older version, Reception appears the first time the server starts on this version. Lab Technician and Lab Manager gain their new capabilities at that start, once. A capability you remove later stays removed.
+
+## Reception
+
+Reception is the lab's front desk in the studio. It finds an order by a scanned or typed requisition number, registers an order the lab has no record of, finds or registers the patient, receives the sample with its condition and corrects a typo in an order, and cancels an order registered at the desk so it can be registered again. The in-app guide **Reception** shows each step.
+
+- Reception needs **Receive samples**. The Reception and Lab Manager roles hold it.
+- A user with a data limit loses **Receive samples** and **Return and reject**, so they have no Reception.
+- The Lab order form now orders tests only. It no longer has a **Results** field. Results will be entered and authorised in the lab in a later release. Its **Order rejection** field stays until then.
+- Each test on a new order is saved as its own request. Orders saved before this version stay as they were stored, and Reception lists all their tests.
 
 ## Troubleshooting
 

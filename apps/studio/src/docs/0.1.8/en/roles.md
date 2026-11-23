@@ -182,7 +182,7 @@ Three system roles use them.
 - **Lab Technician** has **Use forms**, **Submit forms**, **Enter results** and **View worklists**.
 - **Lab Manager** has all seven lab capabilities, as well as what it had before.
 
-Reception, worklists and result review are not in this release. Today only **Lab settings** opens anything: the self-authorisation switch and the sections on Laboratory, and a test's section and review setting. The other six take effect in later releases.
+Today two lab capabilities open something. **Receive samples** opens **Reception**. Read [Reception](/docs/reception). **Lab settings** opens the self-authorisation switch and the sections on Laboratory, and a test's section and review setting. The other five take effect in later releases, with worklists, result review, returning a request and rejecting a sample.
 
 On an install that ran an older version, Reception appears the first time the server starts on this version. Lab Technician and Lab Manager gain their new capabilities at that start, once. If you remove one of them later, it stays removed. Reception can be edited, but not deleted.
 

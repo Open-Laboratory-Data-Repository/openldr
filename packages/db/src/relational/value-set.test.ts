@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { projectValueSet } from './value-set';
-import { projectResource } from './index';
+import { projectResource, type RelationalResult } from './index';
+
+// projectResource can also answer a delete (an Observation not yet authorised). These resources never do.
+const projectRows = (r: unknown, prov = {}) => projectResource(r, prov) as RelationalResult | null;
 
 const vs = {
   resourceType: 'ValueSet', id: 'vs-seed-biological-sex', url: 'urn:openldr:valueset:biological-sex',
@@ -90,7 +93,7 @@ describe('projectValueSet', () => {
 
 describe('projectResource for ValueSet', () => {
   it('returns the concepts scoped by value_set_id', () => {
-    const r = projectResource(vs, {});
+    const r = projectRows(vs, {});
     expect(r?.table).toBe('terminology_codes');
     expect(r?.rows).toHaveLength(2);
     expect(r?.scope).toEqual({ column: 'value_set_id', value: 'vs-seed-biological-sex' });

@@ -6,6 +6,15 @@ import { provColumns, codeable, referenceId, str, num } from './extract';
 // FHIR Quantity.comparator has four values. Anything else is dropped, so a stray code cannot reach the warehouse.
 const COMPARATORS = new Set(['<', '<=', '>=', '>']);
 
+/** Result statuses that are not yet authorised. Such a result stays out of `lab_results`, and a row
+ *  it had before is deleted (lab module design 2026-11-22, ruling 5). External migration 028 removed
+ *  the rows already there with these same two values. */
+export const UNAUTHORISED_RESULT_STATUSES = ['preliminary', 'registered'] as const;
+
+export function isUnauthorisedResult(r: Record<string, unknown>): boolean {
+  return (UNAUTHORISED_RESULT_STATUSES as readonly unknown[]).includes(r['status']);
+}
+
 export function projectObservation(r: Record<string, unknown>, prov: Provenance): Insertable<LabResultsTable> {
   const code = codeable(r['code']);
   const valueCc = codeable(r['valueCodeableConcept']);

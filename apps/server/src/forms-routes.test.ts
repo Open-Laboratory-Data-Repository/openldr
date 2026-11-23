@@ -1116,15 +1116,15 @@ describe('forms routes', () => {
       { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL' },
       { system: 'urn:openldr:codesystem:test-catalog', code: 'CD4' },
     ]]);
-    const serviceRequest = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'ServiceRequest');
-    expect(serviceRequest.code.coding).toEqual([
-      { system: 'http://loinc.org', code: '25836-8' },
-      { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL', display: 'Viral load' },
-      { system: 'urn:openldr:codesystem:test-catalog', code: 'CD4', display: 'CD4 count' },
+    // One ServiceRequest per test (lab slice 1b): each carries its own test, LOINC link first.
+    const serviceRequests = runs[0].body.entry.map((e: any) => e.resource).filter((r: any) => r.resourceType === 'ServiceRequest');
+    expect(serviceRequests.map((r: any) => r.code.coding)).toEqual([
+      [{ system: 'http://loinc.org', code: '25836-8' }, { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL', display: 'Viral load' }],
+      [{ system: 'urn:openldr:codesystem:test-catalog', code: 'CD4', display: 'CD4 count' }],
     ]);
-    // The warehouse keeps the first coding, the nameless LOINC link, so the order's name rides on
+    // The warehouse keeps the first coding, the nameless LOINC link, so each order's name rides on
     // code.text (lab_requests.panel_desc).
-    expect(serviceRequest.code.text).toBe('Viral load');
+    expect(serviceRequests.map((r: any) => r.code.text)).toEqual(['Viral load', 'CD4 count']);
   });
 
   it('a Lab order keeps its referring facility and clinician all the way to lab_requests', async () => {
@@ -1273,6 +1273,7 @@ describe('forms routes', () => {
     ] }]);
     expect(specimen.status).toBe('unsatisfactory');
     expect(request.specimen).toEqual([{ reference: `Specimen/${specimen.id}` }]);
+    expect(specimen.request).toEqual([{ reference: `ServiceRequest/${request.id}` }]);
     expect(resources.filter((r: any) => r.resourceType === 'Observation')).toEqual([]);
   });
 
@@ -1842,7 +1843,10 @@ describe('form entries on submit', () => {
   type Scope = { limited: false } | { limited: true; facilities: string[]; districts: never[]; regions: string[] };
   const onlySiteA: Scope = { limited: true, facilities: ['reg-a'], districts: [], regions: [] };
 
-  async function world(opts: { run?: (input: any) => unknown; exists?: (type: string, id: string) => boolean } = {}) {
+  async function world(opts: {
+    run?: (input: any) => unknown; exists?: (type: string, id: string) => boolean;
+    fhir?: { get: (type: string, id: string) => Promise<Record<string, unknown> | null> };
+  } = {}) {
     const { makeMigratedDb } = await import('@openldr/db/testing');
     const { createFormEntryStore } = await import('@openldr/db');
     const { createFormEntriesService, readScopeRegistryRows } = await import('@openldr/bootstrap');
@@ -1859,7 +1863,7 @@ describe('form entries on submit', () => {
     (ctx as any).formEntries = createFormEntriesService({
       store, registryRows: () => readScopeRegistryRows(db as never),
       // Every saved record reads back as stored; the void re-save goes through the same fake runner.
-      fhir: { get: async (type: string, id: string) => ({ resourceType: type, id, status: 'active' }) },
+      fhir: opts.fhir ?? { get: async (type: string, id: string) => ({ resourceType: type, id, status: 'active' }) },
       runner: { runAndRecord: (...args: [any, any, any]) => (ctx as any).workflows.runner.runAndRecord(...args) },
       audit: async () => {},
       logger: { warn: () => {}, error: () => {} } as never,
@@ -2178,6 +2182,156 @@ describe('form entries on submit', () => {
     expect(again.statusCode).toBe(201);
     expect(again.json().entryId).not.toBe(first.json().entryId);
     await w.db.destroy();
+  });
+
+  describe('one ServiceRequest per test, with fixed ids', () => {
+    const CATALOG = 'urn:openldr:codesystem:test-catalog';
+    const testsField = field({
+      id: 'tests', displayLabel: 'Tests', fieldType: 'reference', order: 2, fhirPath: 'ServiceRequest.code',
+      referenceMultiple: true, cardinality: { min: 1, max: '*' }, valueSetUrl: 'urn:openldr:valueset:lab-tests',
+    });
+    const fbc = { system: CATALOG, code: 'FBC', display: 'Full blood count' };
+    const glu = { system: CATALOG, code: 'GLU', display: 'Glucose' };
+    const requestsOf = (run: any) =>
+      (run.body.entry as { resource: any }[]).map((e) => e.resource).filter((r) => r.resourceType === 'ServiceRequest');
+
+    const detailsField = field({ id: 'details', displayLabel: 'Results', fieldType: 'testDetails', order: 3, referenceDependsOn: 'tests' });
+
+    async function orderWorld() {
+      const { makeMigratedExternalDb } = await import('@openldr/db/testing-external');
+      const { createRelationalWriter } = await import('@openldr/db');
+      const warehouse = await makeMigratedExternalDb();
+      const writer = createRelationalWriter(warehouse as never, 'postgres');
+      // The fake runner stores what it is handed and projects it, as the ingest workflow would, so
+      // the FHIR store answers what was saved and lab_requests and lab_results can be counted.
+      const stored = new Map<string, Record<string, unknown>>();
+      const w = await world({
+        run: async (input: any) => {
+          for (const e of input.body.entry as { resource: any }[]) {
+            stored.set(`${e.resource.resourceType}/${e.resource.id}`, e.resource);
+            await writer.write(e.resource, {});
+          }
+          return { runId: 'run-ok', correlationId: 'corr-1', status: 'completed', error: null };
+        },
+        fhir: { get: async (type: string, id: string) => stored.get(`${type}/${id}`) ?? null },
+      });
+      (w.ctx as any).testCatalog = { loincCodingsFor: async () => new Map() };
+      const schema = entrySchema('register');
+      const createOrderForm = async (name = 'Order') => (await w.appFor().inject({
+        method: 'POST', url: '/api/forms',
+        payload: { name, schema: { ...schema, fields: [...schema.fields, testsField, detailsField] }, targetPages: ['forms'] },
+      })).json().id as string;
+      const formId = await createOrderForm();
+      return { ...w, warehouse, formId, createOrderForm };
+    }
+
+    it('gives each test a fixed id from the facility, the number and the test', async () => {
+      const { labOrderId } = await import('@openldr/forms');
+      const w = await orderWorld();
+      const res = await w.submit(w.appFor(), w.formId, { num: 'CS-0001', fac: siteA, tests: [fbc, glu] });
+      expect(res.statusCode).toBe(201);
+      const requests = requestsOf(w.runs[0]);
+      expect(requests.map((r) => r.id)).toEqual([labOrderId('A1', 'CS-0001', fbc), labOrderId('A1', 'CS-0001', glu)]);
+      expect(requests.map((r) => r.code.coding.map((c: any) => c.code))).toEqual([['FBC'], ['GLU']]);
+      expect(requests.every((r) => r.requisition?.value === 'CS-0001')).toBe(true);
+      await w.db.destroy();
+      await w.warehouse.destroy();
+    });
+
+    it('writes the same 2 ids again after the first entry is voided, and lab_requests holds 2 rows', async () => {
+      const w = await orderWorld();
+      const answers = { num: 'CS-0001', fac: siteA, tests: [fbc, glu] };
+      const first = await w.submit(w.appFor(), w.formId, answers);
+      expect(first.statusCode).toBe(201);
+      const firstIds = requestsOf(w.runs[0]).map((r) => r.id);
+      expect(new Set(firstIds).size).toBe(2);
+
+      expect((await w.voidEntry(first.json().entryId)).statusCode).toBe(200);
+      const again = await w.submit(w.appFor(), w.formId, answers);
+      expect(again.statusCode).toBe(201);
+      expect(requestsOf(w.runs[w.runs.length - 1]).map((r) => r.id)).toEqual(firstIds);
+
+      const rows = await w.warehouse.selectFrom('lab_requests').select(['id', 'request_id', 'panel_code']).orderBy('panel_code').execute();
+      expect(rows).toHaveLength(2);
+      expect(rows.map((r: any) => r.id).sort()).toEqual([...firstIds].sort());
+      expect(rows.map((r: any) => [r.request_id, r.panel_code])).toEqual([['CS-0001', 'FBC'], ['CS-0001', 'GLU']]);
+      await w.db.destroy();
+      await w.warehouse.destroy();
+    });
+
+    it('gives two facilities using the same number 4 different ids', async () => {
+      const w = await orderWorld();
+      expect((await w.submit(w.appFor(), w.formId, { num: 'CS-0001', fac: siteA, tests: [fbc, glu] })).statusCode).toBe(201);
+      expect((await w.submit(w.appFor(), w.formId, { num: 'CS-0001', fac: siteB, tests: [fbc, glu] })).statusCode).toBe(201);
+      const ids = w.runs.flatMap((run) => requestsOf(run).map((r) => r.id));
+      expect(ids).toHaveLength(4);
+      expect(new Set(ids).size).toBe(4);
+      expect(await w.warehouse.selectFrom('lab_requests').select('id').execute()).toHaveLength(4);
+      await w.db.destroy();
+      await w.warehouse.destroy();
+    });
+
+    it('projects each result to its own test\'s lab_requests row', async () => {
+      const w = await orderWorld();
+      const result = (code: string, value: number) => ({ specimen: null, rejection: null, results: [
+        { param: { system: 'urn:openldr:default_result', code }, resultType: 'numeric', value, unit: 'x' },
+      ] });
+      const res = await w.submit(w.appFor(), w.formId, {
+        num: 'CS-0001', fac: siteA, tests: [fbc, glu],
+        details: { [`${CATALOG}|FBC`]: result('HGB', 11.2), [`${CATALOG}|GLU`]: result('GLUC', 5.1) },
+      });
+      expect(res.statusCode).toBe(201);
+      const requests = await w.warehouse.selectFrom('lab_requests').select(['id', 'panel_code']).execute();
+      const idOf = Object.fromEntries(requests.map((r: any) => [r.panel_code, r.id]));
+      const results = await w.warehouse.selectFrom('lab_results').select(['request_id', 'observation_code']).orderBy('observation_code').execute();
+      expect(results.map((r: any) => [r.observation_code, r.request_id])).toEqual([['GLUC', idOf.GLU], ['HGB', idOf.FBC]]);
+      await w.db.destroy();
+      await w.warehouse.destroy();
+    });
+
+    it('refuses the same facility and number from a second order form, and writes nothing', async () => {
+      const w = await orderWorld();
+      const first = await w.submit(w.appFor(), w.formId, { num: 'CS-0001', fac: siteA, tests: [fbc, glu] });
+      expect(first.statusCode).toBe(201);
+      const otherForm = await w.createOrderForm('Other order');
+
+      const res = await w.submit(w.appFor(), otherForm, { num: 'CS-0001', fac: siteA, tests: [glu] });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ error: 'entry-repeat', entry: { id: first.json().entryId, entryKey: 'CS-0001' } });
+      expect(res.json().message).toMatch(/^CS-0001 was already entered on /);
+      expect(w.runs).toHaveLength(1);
+      expect(await w.rows(otherForm)).toEqual([]);
+      expect(await w.warehouse.selectFrom('lab_requests').select('id').execute()).toHaveLength(2);
+      await w.db.destroy();
+      await w.warehouse.destroy();
+    });
+
+    it('takes the order again from a second form once the first entry is voided', async () => {
+      const w = await orderWorld();
+      const first = await w.submit(w.appFor(), w.formId, { num: 'CS-0001', fac: siteA, tests: [fbc] });
+      expect((await w.voidEntry(first.json().entryId)).statusCode).toBe(200);
+      const otherForm = await w.createOrderForm('Other order');
+      const again = await w.submit(w.appFor(), otherForm, { num: 'CS-0001', fac: siteA, tests: [fbc] });
+      expect(again.statusCode).toBe(201);
+      const rows = await w.warehouse.selectFrom('lab_requests').select(['id', 'status']).execute();
+      expect(rows).toEqual([{ id: requestsOf(w.runs[0])[0].id, status: 'active' }]);
+      await w.db.destroy();
+      await w.warehouse.destroy();
+    });
+
+    it('builds the ids with no facility when the facility is typed, not picked', async () => {
+      const { labOrderId } = await import('@openldr/forms');
+      // Nothing is stored yet, so the order check finds no order.
+      const w = await world({ fhir: { get: async () => null } });
+      (w.ctx as any).testCatalog = { loincCodingsFor: async () => new Map() };
+      const schema = entrySchema('free-text');
+      const formId = (await w.appFor().inject({
+        method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: { ...schema, fields: [...schema.fields, testsField] }, targetPages: ['forms'] },
+      })).json().id as string;
+      expect((await w.submit(w.appFor(), formId, { num: 'CS-7', fac: 'Hill Clinic', tests: [fbc] })).statusCode).toBe(201);
+      expect(requestsOf(w.runs[0]).map((r) => r.id)).toEqual([labOrderId(null, 'CS-7', fbc)]);
+      await w.db.destroy();
+    });
   });
 
   it('voiding an entry whose settle failed marks it and warns that its records are not known', async () => {

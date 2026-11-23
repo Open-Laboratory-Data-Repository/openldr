@@ -51,6 +51,9 @@ export interface FormEntryStore {
   remove(id: string): Promise<void>;
   /** Null when the entry is already entered-in-error. */
   void(id: string, by: { id: string; reason: string }): Promise<FormEntry | null>;
+  /** The newest active or incomplete entry on ANY form with this requisition number and facility
+   *  code (null matches an entry with none). An order's fixed ids come from these two, not the form. */
+  holderOfOrder(input: { facilityCode: string | null; entryKey: string }): Promise<FormEntry | null>;
 }
 
 const T = 'form_entries' as const;
@@ -150,6 +153,16 @@ export function createFormEntryStore(db: Kysely<InternalSchema>): FormEntryStore
 
     async remove(id) {
       await db.deleteFrom(T).where('id', '=', id).where('status', '!=', 'entered-in-error').execute();
+    },
+
+    async holderOfOrder({ facilityCode, entryKey }) {
+      const row = await db.selectFrom(T).selectAll()
+        .where(sql<string>`coalesce(facility_code, '')`, '=', facilityCode ?? '')
+        .where('entry_key', '=', entryKey)
+        .where('status', 'in', ['active', 'incomplete'])
+        .orderBy('entered_at', 'desc').orderBy('id', 'desc')
+        .executeTakeFirst();
+      return row ? toEntry(row) : null;
     },
 
     async void(id, by) {

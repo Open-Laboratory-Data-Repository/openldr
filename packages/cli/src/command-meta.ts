@@ -305,6 +305,9 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // Lab module slice 1a. Each needs lab.settings, the key of the routes it shares a service with:
   // settings-routes.ts LAB_SETTINGS for sections and the switch, and test-catalog-routes.ts LAB_FIELDS,
   // which lets lab.settings alone set a test's section and review.
+  // The requisition index (lab slices 1b and 2) has no route; lab.settings, as the lab's other
+  // maintenance. It rewrites the whole table, so it is destructive.
+  'lab requisitions rebuild': { kind: 'app', capability: 'lab.settings', destructive: true },
   'lab sections add': { kind: 'app', capability: 'lab.settings' },
   'lab sections list': { kind: 'app', capability: 'lab.settings' },
   'lab sections remove': { kind: 'app', capability: 'lab.settings', destructive: true },
