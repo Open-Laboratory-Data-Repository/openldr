@@ -6,8 +6,12 @@ import type { Capability } from '@openldr/marketplace';
 import type { HostPlugin } from '@openldr/plugins';
 import { createPluginHost, CE_READ_OPS, type PluginHostDeps } from './plugin-host';
 import { createPatientIndex } from './patient-index';
+import { pluginPatientRefs } from './plugin-patient-ref';
 import { capabilitiesUnderScope } from '@openldr/rbac';
 import { buildPatientIndexFixture, seedIdentifier, seedPatient } from './test-support/patient-index-fixture';
+
+/** The lasting pluginRef key, fixed so a test can stand in for a restart. */
+const KEY = Buffer.alloc(32, 9);
 
 const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as any;
 
@@ -25,10 +29,11 @@ const stored = (resource: unknown, pluginId?: string) => ({ resource, provenance
 function fakeDeps(over: Partial<PluginHostDeps> = {}): PluginHostDeps {
   return {
     requests: { select: vi.fn(async () => ({ rows: [] })), write: vi.fn(async () => ({ results: [] })) },
-    patients: { list: vi.fn(async () => ({ rows: [], total: 0, masked: true })), get: vi.fn() } as any,
+    patients: { list: vi.fn(async () => ({ rows: [], total: 0, masked: true })), get: vi.fn(), getById: vi.fn(), idForRef: vi.fn(() => null) } as any,
     testCatalog: { list: vi.fn(async () => ({ rows: [], total: 0 })), get: vi.fn(async () => null) } as any,
     terminology: { expand: vi.fn(async () => ({ resourceType: 'ValueSet' })), lookup: vi.fn(async () => ({ found: true, display: 'X' })) } as any,
     facilityRegistry: { list: vi.fn(async () => ({ rows: [], total: 0 })), get: vi.fn(), idsMatching: vi.fn(async () => []) } as any,
+    pluginRefKey: async () => KEY,
     fhirGetWithProvenance: vi.fn(async () => null),
     persist: vi.fn(async () => []),
     audit: vi.fn(async () => {}),
@@ -102,7 +107,7 @@ describe('plugin host: ce_read', () => {
   it('knows the first set of ops', () => {
     expect([...CE_READ_OPS]).toEqual([
       'patients.search', 'patients.get', 'patients.register', 'valueset.expand', 'valueset.lookup',
-      'testCatalog.list', 'testCatalog.get', 'facilities.search', 'caller.get',
+      'testCatalog.list', 'testCatalog.get', 'facilities.search', 'facilities.get', 'caller.get',
     ]);
   });
 
@@ -220,7 +225,7 @@ describe('plugin host: ce_read', () => {
     const deps = fakeDeps();
     const fns = createPluginHost(deps).forCall(plugin(REGISTERS), SITE);
     const patient = { resourceType: 'Patient', id: 'lab-p-1', managingOrganization: { reference: 'Organization/fac-1' } };
-    expect(await fns.ce_read({ op: 'patients.register', input: { patient } })).toEqual({ ok: true, result: { id: 'lab-p-1' } });
+    expect(await fns.ce_read({ op: 'patients.register', input: { patient } })).toEqual({ ok: true, result: { id: 'lab-p-1', pluginRef: pluginPatientRefs(KEY, 'lab').encode('lab-p-1') } });
     expect(deps.persist).toHaveBeenCalledWith([patient], { pluginId: 'lab', pluginVersion: '0.2.0', sourceSystem: 'plugin:lab' });
     expect(deps.audit).toHaveBeenCalledWith(
       { actorType: 'user', actorId: 'u-site', actorName: 'Site User' },
@@ -253,7 +258,7 @@ describe('plugin host: ce_read', () => {
     const deps = fakeDeps({ fhirGetWithProvenance: vi.fn(async () => stored({ resourceType: 'Patient', id: 'p-9', managingOrganization: { reference: 'Organization/fac-1' } }, 'lab')) });
     const fns = createPluginHost(deps).forCall(plugin(REGISTERS), SITE);
     const patient = { resourceType: 'Patient', id: 'p-9', managingOrganization: { reference: 'Organization/fac-1' } };
-    expect(await fns.ce_read({ op: 'patients.register', input: { patient } })).toEqual({ ok: true, result: { id: 'p-9' } });
+    expect(await fns.ce_read({ op: 'patients.register', input: { patient } })).toEqual({ ok: true, result: { id: 'p-9', pluginRef: expect.any(String) } });
     expect(deps.persist).toHaveBeenCalledTimes(1);
   });
 
@@ -505,7 +510,7 @@ describe('plugin host: patients.find', () => {
   it('patients.register works with patients.find alone', async () => {
     const { call, deps } = await fixture();
     const patient = { resourceType: 'Patient', id: 'lab-p-7', managingOrganization: { reference: 'Organization/fac-1' } };
-    expect(await call(FINDER, 'patients.register', { patient })).toEqual({ ok: true, result: { id: 'lab-p-7' } });
+    expect(await call(FINDER, 'patients.register', { patient })).toEqual({ ok: true, result: { id: 'lab-p-7', pluginRef: expect.stringMatching(/^p1\./) } });
     expect(deps.persist).toHaveBeenCalledTimes(1);
     const away = await call(FINDER, 'patients.register', { patient: { ...patient, managingOrganization: { reference: 'Organization/fac-2' } } });
     expect(away.error.code).toBe('OUTSIDE_DATA_LIMIT');
@@ -520,5 +525,111 @@ describe('plugin host: patients.find', () => {
     const strong = await call(viewer, 'patients.search', { identifier: { value: 'MPI-0002' } });
     expect(strong.result.rows.map((r: any) => r.id)).toEqual(['p-2']);
     expect((await call(viewer, 'patients.search', { search: 'x', identifier: { value: 'MPI-0002' } })).error.code).toBe('INVALID_REQUEST');
+  });
+});
+
+describe('plugin host: pluginRef, a lasting patient link', () => {
+  const MPI = 'urn:zm:mpi';
+  const LIMITED = { limited: true as const, facilities: ['fac-1'], districts: [], regions: [] };
+  const FINDER: PluginCaller = {
+    userId: 'u-find', displayName: 'Finder', facilities: ['fac-1'],
+    capabilities: capabilitiesUnderScope(['patients.view', 'patients.view_identifiers', 'patients.find'], LIMITED),
+  };
+
+  /** A fresh patient index each time, so its boot-time `ref` key differs: what a restart does. */
+  async function boot(f: Awaited<ReturnType<typeof buildPatientIndexFixture>>, pluginId = 'lab') {
+    const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, engine: 'postgres', refKey: randomBytes(32) });
+    const host = createPluginHost(fakeDeps({ patients: index }));
+    return (caller: PluginCaller, op: string, input: unknown) =>
+      host.forCall({ ...plugin(REGISTERS), id: pluginId }, caller).ce_read({ op, input }) as Promise<any>;
+  }
+
+  async function seeded() {
+    const f = await buildPatientIndexFixture();
+    await seedPatient(f.externalDb, { id: 'p-1', surname: 'Mwanza', firstname: 'John', dob: '1990-01-05', org: 'Organization/FAC-1' });
+    await seedPatient(f.externalDb, { id: 'p-2', surname: 'Mwale', firstname: 'Ruth', dob: '1985-03-04', org: 'Organization/fac-2' });
+    await seedIdentifier(f.externalDb, 'p-1', MPI, 'MPI-0001');
+    await seedIdentifier(f.externalDb, 'p-2', MPI, 'MPI-0002');
+    return f;
+  }
+
+  it('a masked search row carries a pluginRef that hides the id and survives a restart', async () => {
+    const f = await seeded();
+    const first = await (await boot(f))(FINDER, 'patients.search', { identifier: { value: 'MPI-0001' } });
+    const row = first.result.rows[0];
+    expect(row.id).toBeNull();
+    expect(row.pluginRef).toMatch(/^p1\.[A-Za-z0-9_-]+$/);
+    expect(row.pluginRef).not.toContain('p-1');
+    expect(JSON.stringify(first.result)).not.toMatch(/p-1|MPI-0001/);
+
+    // After a restart the old ref is dead, and the pluginRef still opens the patient.
+    const again = await boot(f);
+    expect(await again(FINDER, 'patients.get', { ref: row.ref })).toEqual({ ok: false, error: { code: 'NOT_FOUND', message: 'patient not found' } });
+    const got = await again(FINDER, 'patients.get', { pluginRef: row.pluginRef });
+    expect(got.ok).toBe(true);
+    expect(got.result).toMatchObject({ masked: true, id: null, name: 'J*** M***', pluginRef: row.pluginRef });
+    // The same patient gives the same string on a later search.
+    expect((await again(FINDER, 'patients.search', { identifier: { value: 'MPI-0001' } })).result.rows[0].pluginRef).toBe(row.pluginRef);
+  });
+
+  it('a pluginRef opens only for the plugin it was made for', async () => {
+    const f = await seeded();
+    const lab = await boot(f, 'lab');
+    const other = await boot(f, 'other');
+    const mine = (await lab(EVERYONE, 'patients.search', { search: 'Mwanza' })).result.rows[0].pluginRef;
+    const theirs = (await other(EVERYONE, 'patients.search', { search: 'Mwanza' })).result.rows[0].pluginRef;
+    expect(mine).not.toBe(theirs);
+    expect((await lab(EVERYONE, 'patients.get', { pluginRef: mine })).result.id).toBe('p-1');
+    expect(await other(EVERYONE, 'patients.get', { pluginRef: mine })).toEqual({ ok: false, error: { code: 'NOT_FOUND', message: 'patient not found' } });
+  });
+
+  it('patients.get by pluginRef keeps the data limit, and refuses an altered ref', async () => {
+    const f = await seeded();
+    const call = await boot(f);
+    const ruth = (await call(EVERYONE, 'patients.search', { search: 'Ruth' })).result.rows[0].pluginRef;
+    expect((await call(EVERYONE, 'patients.get', { pluginRef: ruth })).ok).toBe(true);
+    expect(await call(FINDER, 'patients.get', { pluginRef: ruth })).toEqual({ ok: false, error: { code: 'NOT_FOUND', message: 'patient not found' } });
+    const flipped = ruth.slice(0, -2) + (ruth.endsWith('AA') ? 'BB' : 'AA');
+    for (const bad of [flipped, 'p1.', 'p1.!!', 'nope', ruth.slice(3)]) {
+      expect((await call(EVERYONE, 'patients.get', { pluginRef: bad })).error?.code, bad).toBe('NOT_FOUND');
+    }
+  });
+
+  it('patients.get takes ref or pluginRef, one of them', async () => {
+    const call = await boot(await seeded());
+    expect((await call(EVERYONE, 'patients.get', {})).error.code).toBe('INVALID_REQUEST');
+    expect((await call(EVERYONE, 'patients.get', { ref: 'a', pluginRef: 'b' })).error.code).toBe('INVALID_REQUEST');
+  });
+
+  it('patients.register answers the pluginRef patients.get opens', async () => {
+    const f = await seeded();
+    const call = await boot(f);
+    const reg = await call(FINDER, 'patients.register', { patient: { resourceType: 'Patient', id: 'p-1', managingOrganization: { reference: 'Organization/fac-1' } } });
+    const found = await call(FINDER, 'patients.search', { identifier: { value: 'MPI-0001' } });
+    expect(reg.result.pluginRef).toBe(found.result.rows[0].pluginRef);
+  });
+});
+
+describe('plugin host: facilities.get', () => {
+  const row = { id: 'fac-1', name: 'Alpha Clinic', facilityCode: 'A1', level: 'clinic', status: 'active', region: 'R', district: 'D', source: 'manual' };
+  const registry = () => ({ list: vi.fn(), idsMatching: vi.fn(), get: vi.fn(async (id: string) => (id === 'fac-1' || id === 'fac-2' ? { ...row, id } : undefined)) });
+
+  it('gives one facility in the shape of a facilities.search row', async () => {
+    const fns = createPluginHost(fakeDeps({ facilityRegistry: registry() as any })).forCall(plugin([{ kind: 'host:ce-read' }]), EVERYONE);
+    expect(await fns.ce_read({ op: 'facilities.get', input: { id: 'fac-1' } })).toEqual({ ok: true, result: {
+      id: 'fac-1', name: 'Alpha Clinic', facilityCode: 'A1', level: 'clinic', status: 'active', region: 'R', district: 'D',
+    } });
+  });
+
+  it('answers a missing facility, and one outside the data limit, as not found', async () => {
+    const reg = registry();
+    const fns = createPluginHost(fakeDeps({ facilityRegistry: reg as any })).forCall(plugin([{ kind: 'host:ce-read' }]), SITE);
+    const notFound = { ok: false, error: { code: 'NOT_FOUND', message: 'facilities.get: facility not found' } };
+    expect(await fns.ce_read({ op: 'facilities.get', input: { id: 'fac-2' } })).toEqual(notFound);
+    expect(reg.get).not.toHaveBeenCalled();
+    expect((await fns.ce_read({ op: 'facilities.get', input: { id: 'fac-1' } }) as any).result.id).toBe('fac-1');
+    const admin = createPluginHost(fakeDeps({ facilityRegistry: reg as any })).forCall(plugin([{ kind: 'host:ce-read' }]), EVERYONE);
+    expect(await admin.ce_read({ op: 'facilities.get', input: { id: 'fac-9' } })).toEqual(notFound);
+    expect((await admin.ce_read({ op: 'facilities.get', input: {} }) as any).error.code).toBe('INVALID_REQUEST');
   });
 });

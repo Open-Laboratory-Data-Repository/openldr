@@ -54,6 +54,7 @@ import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { canRunOffThread, createPluginStore, type PluginHost, type PluginRuntime } from '@openldr/plugins';
 import { createPluginHost } from './plugin-host';
+import { loadPluginPatientRefKey } from './plugin-patient-ref';
 import { createConnectorStore, createPluginDataStore, createPluginRequests, createPluginSchemas, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope, FACILITY_REGISTRY_SYSTEM, createFormEntryStore, type FormEntryStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
@@ -2131,6 +2132,8 @@ const reporting: ReportingApi = {
     // Plugin tables live in the internal database, where install made them (plugin-registry.ts).
     requests: createPluginRequests(internal.db as unknown as Kysely<any>),
     patients: patientIndex,
+    // A random key kept in app_settings, so a plugin's stored pluginRef works after a restart.
+    pluginRefKey: () => loadPluginPatientRefKey(internal.db),
     testCatalog,
     terminology: terminology.ops,
     facilityRegistry,

@@ -92,6 +92,7 @@ describe.skipIf(!ready)('CE host functions through the real test plugin, on Post
       testCatalog: { list: notUsed('testCatalog.list'), get: notUsed('testCatalog.get') } as never,
       terminology: { expand: notUsed('expand'), lookup: notUsed('lookup') } as never,
       facilityRegistry: registry,
+      pluginRefKey: async () => Buffer.alloc(32, 7),
       fhirGetWithProvenance: (type, id) => fhirStore.getWithProvenance(type, id),
       persist: (resources: unknown[], prov: Provenance) => persistResources({ fhirStore, logger: silent }, resources, prov, {
         level: 'low', resolveServiceRequest: (id: string) => fhirStore.exists('ServiceRequest', id),

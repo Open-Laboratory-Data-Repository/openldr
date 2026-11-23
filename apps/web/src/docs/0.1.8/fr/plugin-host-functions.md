@@ -110,16 +110,25 @@ Lit les enregistrements de CE par une opération. La requête est `{ "op": "<op>
 | Opération | Entrée |
 |---|---|
 | `patients.search` | `search`, ou `identifier`, ou `given`, `family` et `birthDate` ; puis `status`, `limit`, `offset` |
-| `patients.get` | `ref` |
+| `patients.get` | `ref` ou `pluginRef`, l'un des deux |
 | `patients.register` | `patient`, un Patient FHIR avec un `id` |
 | `valueset.expand` | `url`, `count`, `offset`, `filter` |
 | `valueset.lookup` | `system`, `code` |
 | `testCatalog.list` | les filtres de liste du catalogue des tests |
 | `testCatalog.get` | `code` |
 | `facilities.search` | `q`, `limit`, `offset` |
-| `caller.get` | aucune. Donne `userId`, `displayName` et `facilities` (`*` ou la liste des identifiants d'établissement) de la personne qui appelle |
+| `facilities.get` | `id`. Donne un établissement sous la forme d'une ligne de `facilities.search` |
+| `caller.get` | aucune. Donne `userId`, `displayName` et `facilities` (`*` ou la liste des identifiants d'établissement) de la personne qui appelle. `displayName` peut être null |
 
-Chaque opération suit les mêmes règles que la page du studio qui montre les mêmes enregistrements. Les opérations patient demandent que l'appelant ait `patients.view` ou `patients.find`. Avec `patients.find` seul, une recherche doit donner un identifiant exact, ou un nom avec la date de naissance complète. Voir [Permissions des plugins](/docs/plugin-permissions). Les identifiants ne s'affichent que pour un appelant qui a `patients.view_identifiers`. Un appelant limité ne trouve que les patients et les établissements de sa limite. `patients.register` demande aussi `Patient` dans la liste `emit-fhir` du plugin.
+Chaque opération suit les mêmes règles que la page du studio qui montre les mêmes enregistrements. Les opérations patient demandent que l'appelant ait `patients.view` ou `patients.find`. Avec `patients.find` seul, une recherche doit donner un identifiant exact, ou un nom avec la date de naissance complète. Voir [Permissions des plugins](/docs/plugin-permissions). Les identifiants ne s'affichent que pour un appelant qui a `patients.view_identifiers`. Un appelant limité ne trouve que les patients et les établissements de sa limite. `patients.register` demande aussi `Patient` dans la liste `emit-fhir` du plugin. `facilities.get` répond `NOT_FOUND` pour un établissement hors de la limite de l'appelant, comme pour un établissement absent.
+
+### Garder un lien vers un patient
+
+Le `ref` d'un patient ne marche que jusqu'au redémarrage de CE. Une ligne masquée n'a pas non plus d'`id`. Ne gardez donc ni l'un ni l'autre.
+
+Gardez plutôt `pluginRef`. Chaque ligne de `patients.search`, la réponse de `patients.get` et celle de `patients.register` en portent un. Il reste le même pour le même patient à chaque appel et après un redémarrage. Il cache l'identifiant du patient. Il est fait pour votre plugin seul : un autre plugin reçoit un autre `pluginRef` pour le même patient et ne peut pas utiliser le vôtre.
+
+Pour rouvrir le patient plus tard, appelez `patients.get` avec `{ "pluginRef": "..." }`. Les mêmes règles s'appliquent qu'avec `ref`. Un patient hors de la limite de l'appelant, ou un `pluginRef` fait pour un autre plugin, donne `NOT_FOUND`.
 
 ## fhir_emit
 
