@@ -69,9 +69,9 @@ describe.skipIf(!url)('plugin schemas on disposable PostgreSQL', () => {
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = ${schema} and c.relname = 'samples'`.execute(db);
     expect(flags.rows).toEqual([{ r: true, f: true }]);
-    const policies = await sql<{ policyname: string; qual: string; with_check: string }>`
-      select policyname, qual, with_check from pg_policies where schemaname = ${schema} and tablename = 'samples'`.execute(db);
-    expect(policies.rows.map((p) => p.policyname)).toEqual([FACILITY_POLICY]);
+    const policies = await sql<{ policyname: string; permissive: string; cmd: string; qual: string; with_check: string }>`
+      select policyname, permissive, cmd, qual, with_check from pg_policies where schemaname = ${schema} and tablename = 'samples'`.execute(db);
+    expect(policies.rows.map((p) => [p.policyname, p.permissive, p.cmd])).toEqual([[FACILITY_POLICY, 'PERMISSIVE', 'ALL']]);
     expect(policies.rows[0].qual).toContain('current_setting');
     expect(policies.rows[0].with_check).toContain('current_setting');
     const notNull = await sql<{ n: string }>`
@@ -92,6 +92,10 @@ describe.skipIf(!url)('plugin schemas on disposable PostgreSQL', () => {
     expect(await codes('')).toEqual([]);
     await expect(asOwner((trx) => trx.withSchema(schema).insertInto('samples').values({ id: randomUUID(), facility: F2, code: 'c' }).execute(), F1))
       .rejects.toThrow(/row-level security/);
+    // WITH CHECK: an update may not move a row to a facility outside the list.
+    await expect(asOwner((trx) => trx.withSchema(schema).updateTable('samples').set({ facility: F2 }).where('code', '=', 'a').execute(), F1))
+      .rejects.toThrow(/row-level security/);
+    expect(await codes(F1)).toEqual(['a']);
   });
 
   it('a failed step rolls the whole apply back', async () => {

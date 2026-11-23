@@ -37,7 +37,11 @@ export * from './custom-query-store';
 export * from './custom-query-group-store';
 export * from './registry-store';
 export * from './plugin-data-store';
-export * from './plugin-schema';
+export {
+  createPluginSchemas, PluginShapeError, pluginSchemaName, columnDefault, indexName,
+  SHAPES_TABLE, FACILITY_POLICY, FACILITIES_SETTING,
+  type PluginSchemas, type ShapePlan, type PluginShapeErrorReason,
+} from './plugin-schema';
 export * from './plugin-data-requests';
 export * from './import-copy-store';
 export * from './import-check-held-store';

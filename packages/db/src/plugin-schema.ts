@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { type Kysely, type RawBuilder, sql } from 'kysely';
 import {
-  CE_MANAGED_COLUMNS, PLUGIN_IDENTIFIER, tableShapesSchema,
+  CE_MANAGED_COLUMNS, PLUGIN_IDENTIFIER, tableShapeSchema, tableShapesSchema,
   type ColumnShape, type ColumnType, type TableShape,
 } from './plugin-table-shape';
 
@@ -32,11 +32,10 @@ export interface ShapePlan {
   addIndexes: { table: string; name: string; columns: string[]; unique: boolean }[];
 }
 
-export interface PluginSchemaOptions {
-  /** Run the row-level security statements (ALTER TABLE ... ROW LEVEL SECURITY, CREATE POLICY).
-   *  Default true. pg-mem cannot run them, so its tests pass false. Never false in production. */
-  rowLevelSecurity?: boolean;
-}
+/** Passed only by pg-mem tests, which cannot run ALTER TABLE ... ROW LEVEL SECURITY or CREATE
+ *  POLICY. The package root does not export it (see index.ts), so code outside packages/db cannot
+ *  turn row-level security off. */
+export const PG_MEM_WITHOUT_RLS: unique symbol = Symbol('pg-mem tests without row-level security');
 
 export interface PluginSchemas {
   schemaName(pluginId: string): string;
@@ -244,13 +243,26 @@ function diffTable(was: TableShape, now: TableShape, plan: ShapePlan): void {
   for (const i of nowIdx) if (!wasIdx.has(i.name)) plan.addIndexes.push({ table: now.name, ...i });
 }
 
+/** A shape read back from _openldr_shapes, parsed again, so a corrupt row is refused plainly. */
+function storedShape(schema: string, table: string, raw: unknown): TableShape {
+  let value = raw;
+  if (typeof raw === 'string') {
+    try { value = JSON.parse(raw); } catch { value = undefined; }
+  }
+  const parsed = tableShapeSchema.safeParse(value);
+  if (!parsed.success || parsed.data.name !== table) {
+    throw new PluginShapeError('invalid', `schema ${schema}: the recorded shape of table ${table} is not valid`);
+  }
+  return parsed.data;
+}
+
 function isMissingRelation(e: unknown): boolean {
   const err = e as { code?: string; message?: string };
   return err?.code === '42P01' || err?.code === '3F000' || /does not exist|schema not found/i.test(String(err?.message ?? ''));
 }
 
-export function createPluginSchemas(db: Kysely<any>, options: PluginSchemaOptions = {}): PluginSchemas {
-  const rls = options.rowLevelSecurity !== false;
+export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHOUT_RLS): PluginSchemas {
+  const rls = pgMem !== PG_MEM_WITHOUT_RLS;
 
   /** The shapes applied before, and whether the schema exists. Refuses a schema CE did not make for
    *  this plugin id: one with no shapes table, or one that two plugin ids both map to. */
@@ -269,7 +281,7 @@ export function createPluginSchemas(db: Kysely<any>, options: PluginSchemaOption
       if (r.plugin_id !== pluginId) {
         throw new PluginShapeError('name', `schema ${schema} belongs to plugin '${r.plugin_id}', and '${pluginId}' maps to the same name`);
       }
-      shapes.set(r.table_name, (typeof r.shape === 'string' ? JSON.parse(r.shape) : r.shape) as TableShape);
+      shapes.set(r.table_name, storedShape(schema, r.table_name, r.shape));
     }
     return { exists: true, shapes };
   }
@@ -379,6 +391,8 @@ export function createPluginSchemas(db: Kysely<any>, options: PluginSchemaOption
       const schema = pluginSchemaName(pluginId);
       const before = await applied(pluginId, schema);
       if (!before.exists) return;
+      // CASCADE would also drop any CE object that depends on a plugin table (a view, a foreign
+      // key). None may exist: CE never builds on a plugin's tables.
       await sql`drop schema ${sql.id(schema)} cascade`.execute(db);
     },
   };

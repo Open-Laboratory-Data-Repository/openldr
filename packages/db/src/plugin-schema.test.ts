@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { newDb } from 'pg-mem';
 import { type Kysely, sql } from 'kysely';
 import {
-  createPluginSchemas, columnDefault, indexName, pluginSchemaName, PluginShapeError, SHAPES_TABLE,
+  createPluginSchemas, columnDefault, indexName, pluginSchemaName, PluginShapeError, PG_MEM_WITHOUT_RLS, SHAPES_TABLE,
   type PluginSchemas,
 } from './plugin-schema';
 import { tableShapeSchema, type TableShape } from './plugin-table-shape';
 
 // pg-mem cannot run the row-level security statements or DROP SCHEMA, so these tests pass
-// rowLevelSecurity: false and leave both to plugin-schema.live.test.ts. pg-mem DDL is also not
+// PG_MEM_WITHOUT_RLS and leave both to plugin-schema.live.test.ts. pg-mem DDL is also not
 // transactional, so a rollback after a failed step is a live-only fact too.
 
 const orders: TableShape = {
@@ -42,7 +42,7 @@ describe('plugin schemas (pg-mem)', () => {
   let schemas: PluginSchemas;
   beforeEach(() => {
     db = newDb().adapters.createKysely() as Kysely<any>;
-    schemas = createPluginSchemas(db, { rowLevelSecurity: false });
+    schemas = createPluginSchemas(db, PG_MEM_WITHOUT_RLS);
   });
 
   it('the first apply creates the schema, its tables and the record of shapes', async () => {
@@ -142,6 +142,14 @@ describe('plugin schemas (pg-mem)', () => {
     expect(await db.withSchema('plugin_lab').selectFrom('order').select(['user', 'select']).execute()).toEqual([{ user: 'u', select: 1 }]);
   });
 
+  it('refuses a corrupt recorded shape plainly', async () => {
+    await schemas.apply('lab', [orders]);
+    await db.withSchema('plugin_lab').updateTable(SHAPES_TABLE).set({ shape: JSON.stringify({ name: 'orders', columns: 'x' }) }).execute();
+    expect(await refusal(schemas.plan('lab', [orders]))).toBe('invalid');
+    await db.withSchema('plugin_lab').updateTable(SHAPES_TABLE).set({ shape: JSON.stringify({ ...orders, name: 'other' }) }).execute();
+    expect(await refusal(schemas.plan('lab', [orders]))).toBe('invalid');
+  });
+
   it('refuses a schema of the same name that CE did not make', async () => {
     await sql`create schema plugin_lab`.execute(db);
     await sql`create table plugin_lab.other (x text)`.execute(db);
@@ -187,7 +195,7 @@ describe('column defaults', () => {
 
   it('a quote in a text default stays inside the literal', async () => {
     const db = newDb().adapters.createKysely() as Kysely<any>;
-    const schemas = createPluginSchemas(db, { rowLevelSecurity: false });
+    const schemas = createPluginSchemas(db, PG_MEM_WITHOUT_RLS);
     const t: TableShape = { name: 't', columns: [{ name: 'id', type: 'integer' }, { name: 's', type: 'text', default: "x'); drop table t; --" }], primaryKey: ['id'] };
     await schemas.apply('lab', [t]);
     await db.withSchema('plugin_lab').insertInto('t').values({ id: 1 }).execute();

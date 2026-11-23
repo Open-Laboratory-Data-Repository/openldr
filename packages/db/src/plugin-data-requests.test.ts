@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { newDb } from 'pg-mem';
 import type { Kysely } from 'kysely';
-import { createPluginSchemas } from './plugin-schema';
+import { createPluginSchemas, PG_MEM_WITHOUT_RLS } from './plugin-schema';
 import {
   createPluginRequests, PluginRequestError, type PluginCaller, type PluginRequests,
 } from './plugin-data-requests';
@@ -56,7 +56,7 @@ describe('plugin data requests (pg-mem)', () => {
       return /^set local statement_timeout/i.test(q.trim()) ? [] : null;
     });
     db = mem.adapters.createKysely() as Kysely<any>;
-    await createPluginSchemas(db, { rowLevelSecurity: false }).apply(PLUGIN, shapes);
+    await createPluginSchemas(db, PG_MEM_WITHOUT_RLS).apply(PLUGIN, shapes);
     const rows = [
       { id: 1, facility: 'fa', code: 'abc', score: 1, taken: '2026-01-01', note: null },
       { id: 2, facility: 'fa', code: 'abd', score: 2, taken: '2026-01-02', note: 'x' },
