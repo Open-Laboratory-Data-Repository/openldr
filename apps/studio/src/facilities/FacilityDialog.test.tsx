@@ -342,7 +342,7 @@ describe('FacilityDialog', () => {
     render(<FacilityDialog open facility={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
 
     expect(await screen.findByText(/The published facility form cannot be used:/)).toBeInTheDocument();
-    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/^Facility form schema is invalid:/));
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/^The published facility form cannot be used:/));
     expect(screen.queryByText(/none exists yet/)).not.toBeInTheDocument();
   });
 

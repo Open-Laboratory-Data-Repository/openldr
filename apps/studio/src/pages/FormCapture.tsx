@@ -73,7 +73,7 @@ export function FormCapture() {
       const parsed = asFormSchema(loaded.schema);
       setForm(loaded);
       setSchema(parsed);
-      if (!parsed) { setLoadFailed(true); toast.error('Form schema is invalid.'); }
+      if (!parsed) { setLoadFailed(true); toast.error(t('common.formLoadFailed')); }
       setSite(null);
       // A failed read leaves the form open. The server applies the same rules on submit.
       if (parsed) {

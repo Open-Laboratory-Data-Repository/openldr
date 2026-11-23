@@ -232,7 +232,7 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
           // publish one. Name the real reason in the form's place, and toast it too.
           const reason = parsed.error.issues[0]?.message ?? 'unknown';
           setFormProblem(t('facilities.formSchemaInvalid', { reason }));
-          toast.error(`Facility form schema is invalid: ${reason}`);
+          toast.error(t('facilities.formSchemaInvalid', { reason }));
           return;
         }
         const loaded = parsed.data as FormSchema;

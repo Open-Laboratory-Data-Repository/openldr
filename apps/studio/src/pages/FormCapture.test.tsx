@@ -559,6 +559,13 @@ describe('FormCapture entries (design 2026-11-22-form-entries)', () => {
     expect(screen.queryByText('Could not load this list. Reload the page to try again.')).not.toBeInTheDocument();
   });
 
+  it('toasts the translated load-failure text when the schema is invalid', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue({ ...form, schema: { not: 'a schema' } } as unknown as typeof form);
+    renderAt();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(i18n.t('common.formLoadFailed')));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
   it('opens the Entries tab from the link, and keeps the typed answers across tabs', async () => {
     renderAt('/forms/form-1?tab=entries');
     expect(await screen.findByText('No entries yet.')).toBeInTheDocument();

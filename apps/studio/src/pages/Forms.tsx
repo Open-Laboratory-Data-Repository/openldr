@@ -18,6 +18,7 @@ import {
   ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
 } from '@/components/data-table';
 import { createForm, deleteForm, duplicateForm, exportFormBundle, formQuestionnaireUrl, listForms, publishForm, setFormStatus, type FormDefinition, type FormStatus, type FormSummary } from '@/api';
+import { useAuth } from '@/auth/AuthProvider';
 import { formCreateFromImport } from './form-import';
 
 function formatDate(iso: string): string {
@@ -82,6 +83,7 @@ const SEARCH_FIELDS = [(f: FormSummary) => f.name, (f: FormSummary) => f.fhirRes
 export function Forms() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const canEdit = useAuth().hasCapability('forms.edit');
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<FormSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -260,8 +262,8 @@ export function Forms() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => navigate('/forms/new')}>{t('forms.new')}</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => fileRef.current?.click()}>{t('forms.import')}</DropdownMenuItem>
+                  {canEdit ? <DropdownMenuItem onClick={() => navigate('/forms/new')}>{t('forms.new')}</DropdownMenuItem> : null}
+                  {canEdit ? <DropdownMenuItem onClick={() => fileRef.current?.click()}>{t('forms.import')}</DropdownMenuItem> : null}
                   <DropdownMenuItem onClick={() => { void load(); }}>{t('forms.refresh')}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -305,10 +307,10 @@ export function Forms() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}`)}>{t('forms.viewRun')}</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}/builder`)}>{t('forms.editBuilder')}</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { void duplicate(form); }}>{t('forms.duplicate')}</DropdownMenuItem>
+                          {canEdit ? <DropdownMenuItem onClick={() => { void duplicate(form); }}>{t('forms.duplicate')}</DropdownMenuItem> : null}
                           <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}/builder`)}>{t('forms.compare')}</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { void publish(form); }} disabled={form.status === 'published'}>{t('forms.publish')}</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { void changeStatus(form, 'archived'); }} disabled={form.status === 'archived'}>{t('forms.archive')}</DropdownMenuItem>
+                          {canEdit ? <DropdownMenuItem onClick={() => { void publish(form); }} disabled={form.status === 'published'}>{t('forms.publish')}</DropdownMenuItem> : null}
+                          {canEdit ? <DropdownMenuItem onClick={() => { void changeStatus(form, 'archived'); }} disabled={form.status === 'archived'}>{t('forms.archive')}</DropdownMenuItem> : null}
                           <DropdownMenuItem asChild>
                             <a href={formQuestionnaireUrl(form.id)} download={`${form.name}.questionnaire.json`}>{t('forms.export')}</a>
                           </DropdownMenuItem>
@@ -320,7 +322,7 @@ export function Forms() {
                               {t('forms.exportBundle')}
                             </DropdownMenuItem>
                           ) : null}
-                          <DropdownMenuItem onClick={() => setDeleting(form)}>{t('forms.delete')}</DropdownMenuItem>
+                          {canEdit ? <DropdownMenuItem onClick={() => setDeleting(form)}>{t('forms.delete')}</DropdownMenuItem> : null}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
