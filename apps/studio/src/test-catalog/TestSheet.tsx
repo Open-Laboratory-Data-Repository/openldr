@@ -151,6 +151,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   // Result fields added from this sheet, shown until the page reads the choices again.
   const [addedParams, setAddedParams] = useState<ParamOption[]>([]);
   const [addingField, setAddingField] = useState(false);
+  // The menu item that opens Add field is gone once the menu closes, so focus comes back to the menu's button.
+  const paramsMenuButton = useRef<HTMLButtonElement>(null);
   // What LOINC says about the test's code. Null when LOINC or its ontology is not loaded, and then the
   // sheet shows no hint and offers no LOINC action (spec, call 7).
   const [hints, setHints] = useState<LoincHints | null>(null);
@@ -225,7 +227,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     }
   }
 
-  /** A LOINC code picked here: fill each field still empty from its hints, and leave the rest to the hint lines. */
+  /** A LOINC code picked here: fill an empty category and specimen from its hints, and leave the rest to the hint lines. */
   async function pickLoinc(code: string): Promise<void> {
     set({ loinc: code });
     const h = await readHints(code);
@@ -240,8 +242,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
       patch.specimens = [{ system: only.system, code: only.code }];
     }
     if (Object.keys(patch).length > 0) set(patch);
-    // A panel has no result of its own: Fill from panel adds its members.
-    if (d.resultParams.length === 0 && h.panelMembers.length === 0) await takeFromLoinc(h, false);
+    // A pick writes nothing. LOINC's result field is only a hint line until someone chooses Use LOINC's
+    // result field or Fill from panel from the Result parameters menu (spec call 6).
   }
 
   const isNew = saved === null;
@@ -441,6 +443,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
+                          ref={paramsMenuButton}
                           variant="ghost" size="icon" className="h-8 w-8 shrink-0"
                           data-testid="result-params-menu" aria-label={t('testCatalog.sheet.resultParamsActions')}
                         >
@@ -766,6 +769,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
         <AddResultFieldSheet
         open={addingField}
         ucum={options.ucum ?? null}
+        returnFocusTo={paramsMenuButton}
         onClose={() => setAddingField(false)}
         onAdded={(field, param) => {
           takeParams([{ system: field.system, code: field.code, display: field.display, units: field.units }], [param]);

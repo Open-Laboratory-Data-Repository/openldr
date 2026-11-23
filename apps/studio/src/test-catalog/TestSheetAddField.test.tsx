@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react';
 import '@/i18n';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
@@ -137,5 +137,15 @@ describe('TestSheet: Add field', () => {
     expect(toast.error).toHaveBeenCalledWith('a result field with code HGB already exists.');
     expect(addSheet()).toBeTruthy();
     expect((screen.getByTestId('param-HGB') as HTMLElement).getAttribute('data-state')).toBe('unchecked');
+  });
+
+  it('gives focus back to the Result parameters menu button when the sheet closes', async () => {
+    vi.mocked(api.createResultField).mockResolvedValue({ system: RESULT, code: 'NOTE', display: 'Note', role: 'result', units: null, loinc: null });
+    renderSheet();
+    await choose('result-params-menu', 'add-field');
+    fireEvent.change(within(addSheet()).getByRole('textbox', { name: 'Name' }), { target: { value: 'Note' } });
+    await choose('add-field-menu', 'add-field-save');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add result field' })).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('result-params-menu')));
   });
 });

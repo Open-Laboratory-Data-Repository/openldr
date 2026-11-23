@@ -94,30 +94,49 @@ function renderSheet(test: api.CatalogTest = NEW_TEST(), options: api.TestCatalo
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe('TestSheet: LOINC hints fill empty fields', () => {
-  it('fills the category, the one equivalent specimen and LOINC result field with its unit', async () => {
+  it('fills the category and the one equivalent specimen, and only suggests the result field', async () => {
     hintsFor({ '2093-3': CHOL, '6429-5': HIV });
-    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('6429-5', { resultType: 'text' })]));
     renderSheet();
     await pickLoinc('6429-5');
     expect(categoryText()).toBe('Microbiology');
     expect(checked('specimen-BLD')).toBe(true);
     expect(checked('specimen-UR')).toBe(false);
-    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['6429-5'], false);
-    expect(checked('param-6429-5')).toBe(true);
-    expect(toast.success).toHaveBeenCalledWith('1 result field from LOINC ticked on this test.');
+    // A pick writes nothing: LOINC's field is a hint line until the menu adds it.
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    expect(screen.getByTestId('hint-result').textContent).toBe("LOINC's result field: HIV identified in Blood by culture.");
     // The narrower SNOMED match is only suggested, with how to make it tick by itself.
     expect(screen.getByTestId('hint-specimens').textContent).toBe('LOINC suggests SNOMED 122555007.');
     expect(screen.getByTestId('hint-specimens-map')).toBeTruthy();
     expect(screen.queryByTestId('hint-category')).toBeNull();
   });
 
-  it('a new range on LOINC field starts with LOINC unit', async () => {
+  it("Use LOINC's result field makes and ticks it, and a new range on it starts with LOINC's unit", async () => {
     hintsFor({ '2093-3': CHOL });
     vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));
     renderSheet();
     await pickLoinc('2093-3');
+    await choose('result-params-menu', 'use-loinc-field');
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['2093-3'], false);
+    expect(checked('param-2093-3')).toBe(true);
+    expect(toast.success).toHaveBeenCalledWith('1 result field from LOINC ticked on this test.');
+    expect(screen.queryByTestId('hint-result')).toBeNull();
     await choose('param-menu-2093-3', 'add-band-2093-3');
     expect(screen.getByRole('textbox', { name: 'unit for 2093-3 band 1' })).toHaveProperty('value', 'mg/dL');
+  });
+
+  it('picking one code and then another ticks nothing until the menu is used, and the menu uses the last code', async () => {
+    hintsFor({ '2093-3': CHOL, '6429-5': HIV });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));
+    renderSheet();
+    await pickLoinc('6429-5');
+    await pickLoinc('2093-3');
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('param-6429-5')).toBeNull();
+    expect(screen.getByTestId('hint-result').textContent).toBe("LOINC's result field: Cholesterol (mg/dL).");
+    await choose('result-params-menu', 'use-loinc-field');
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledTimes(1);
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['2093-3'], false);
+    expect(await savedParams()).toEqual([param('2093-3')]);
   });
 
   // Review focus 3.

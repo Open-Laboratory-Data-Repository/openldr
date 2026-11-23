@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
@@ -21,8 +21,10 @@ import {
 
 type FieldType = CatalogTestResultParam['resultType'];
 
-export function AddResultFieldSheet({ open, ucum, onClose, onAdded }: {
+export function AddResultFieldSheet({ open, ucum, returnFocusTo, onClose, onAdded }: {
   open: boolean;
+  /** Where focus goes when this sheet closes. Radix would aim at the menu item that opened it, which is gone. */
+  returnFocusTo?: RefObject<HTMLElement>;
   /** The UCUM code system a unit is picked from, or null when this install has none. */
   ucum: TestCatalogOptions['ucum'];
   onClose: () => void;
@@ -74,7 +76,10 @@ export function AddResultFieldSheet({ open, ucum, onClose, onAdded }: {
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
+      <SheetContent
+        className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg"
+        onCloseAutoFocus={(e) => { if (returnFocusTo?.current) { e.preventDefault(); returnFocusTo.current.focus(); } }}
+      >
         <SheetHeader className="border-b border-border px-6 py-4">
           <SheetTitle>{t('testCatalog.addField.title')}</SheetTitle>
           <SheetDescription>{t('testCatalog.addField.description')}</SheetDescription>
