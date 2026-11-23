@@ -43,7 +43,7 @@ Limite cada utilizador de local à sua unidade com `openldr users scope <user> -
 
 Quando um validador valida um resultado, o plugin envia ao CE um ServiceRequest para a análise, um Specimen para cada amostra, uma Observation por parâmetro de resultado, e uma Provenance que diz quem o validou. Cada Observation é `final`. Leva o valor e a unidade, o sinalizador em `interpretation`, e o intervalo em `referenceRange`, com o nome do intervalo como `text`. O `subject` de cada registo é a ficha do paciente no CE. O CE guarda-os como os registos de qualquer outra fonte, e o seu armazém preenche `lab_requests` e `lab_results`, por isso os resultados aparecem nos relatórios e painéis.
 
-Uma análise rejeitada sem nova colheita chega ao CE como um ServiceRequest `revoked` com o motivo da rejeição, que preenche `lab_requests.rejection_code` e `rejection_reason`.
+Uma análise rejeitada chega ao CE quando a rejeição é definitiva: logo, se for rejeitada sem nova colheita, ou quando o seu pedido de nova colheita é ligado. Chega como um ServiceRequest `revoked` com o motivo da rejeição, que preenche `lab_requests.rejection_code` e `rejection_reason`.
 
 O CE só aceita estes registos de um utilizador sem limite de unidade, que tenha também `patients.find` ou `patients.view`. Por isso um validador tem de ver todas as unidades. Uma rejeição feita por um utilizador de local limitado a uma unidade aguarda no plugin até um utilizador sem limite agir, ou até um validador selecionar **Tentar de novo** no separador **Validação**.
 

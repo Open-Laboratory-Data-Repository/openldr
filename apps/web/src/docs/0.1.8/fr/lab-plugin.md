@@ -43,7 +43,7 @@ Limitez chaque utilisateur de site à son établissement avec `openldr users sco
 
 Quand un valideur valide un résultat, le plugin envoie à CE un ServiceRequest pour l'analyse, un Specimen pour chaque échantillon, une Observation par paramètre de résultat, et une Provenance qui dit qui l'a validé. Chaque Observation est `final`. Elle porte la valeur et l'unité, le signalement dans `interpretation`, et l'intervalle dans `referenceRange`, avec le nom de l'intervalle comme `text`. Le `subject` de chaque enregistrement est la fiche du patient dans CE. CE les stocke comme les enregistrements de toute autre source, et son entrepôt remplit `lab_requests` et `lab_results`, donc les résultats apparaissent dans les rapports et tableaux de bord.
 
-Une analyse rejetée sans nouveau prélèvement arrive dans CE comme un ServiceRequest `revoked` avec le motif du rejet, qui remplit `lab_requests.rejection_code` et `rejection_reason`.
+Une analyse rejetée arrive dans CE quand son rejet est définitif : tout de suite si elle est rejetée sans nouveau prélèvement, ou quand sa demande de nouveau prélèvement est liée. Elle arrive comme un ServiceRequest `revoked` avec le motif du rejet, qui remplit `lab_requests.rejection_code` et `rejection_reason`.
 
 CE ne prend ces enregistrements que d'un utilisateur sans limite d'établissement, qui a aussi `patients.find` ou `patients.view`. Un valideur doit donc voir tous les établissements. Un rejet fait par un utilisateur de site limité à un établissement attend dans le plugin jusqu'à ce qu'un utilisateur sans limite agisse, ou qu'un valideur sélectionne **Réessayer** dans l'onglet **Validation**.
 
