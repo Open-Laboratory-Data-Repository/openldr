@@ -56,7 +56,7 @@ Numa instalação que usava uma versão anterior, Reception aparece no primeiro 
 
 ## A receção
 
-A receção é o balcão do laboratório no studio. Encontra um pedido por um número de requisição lido ou escrito, regista um pedido de que o laboratório não tem registo, encontra ou regista o paciente, recebe a amostra com a sua condição corrige um erro de escrita num pedido, e cancela um pedido registado na receção para o registar de novo. O guia da aplicação **Receção** mostra cada passo.
+A receção é o balcão do laboratório no studio. Encontra um pedido por um número de requisição lido ou escrito, regista um pedido de que o laboratório não tem registo, encontra ou regista o paciente, recebe a amostra com a sua condição e corrige um erro de escrita num pedido, e cancela um pedido registado na receção para o registar de novo. O guia da aplicação **Receção** mostra cada passo.
 
 - A receção precisa de **Receive samples**. As funções Reception e Lab Manager têm-na.
 - Um utilizador com um limite de dados perde **Receive samples** e **Return and reject**, por isso não tem a receção.

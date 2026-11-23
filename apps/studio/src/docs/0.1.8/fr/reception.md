@@ -101,7 +101,7 @@ Le lien est gardé comme une correction, avec votre nom et le motif `Patient li�
 
 Une demande garde un échantillon de chaque type. Recevoir de nouveau le même type met cet échantillon à jour et garde l'heure de la première réception.
 
-La liste des états vient du jeu de valeurs des états d'échantillon de votre laboratoire. Si le panneau indique `Les analyses de cette demande ne nomment aucun type d'échantillon. Associez ces analyses à un type d'échantillon dans le catalogue des analyses.`, ajoutez les types d'échantillon à ces analyses dans le catalogue des examens.
+La liste des états vient du jeu de valeurs des états d'échantillon de votre laboratoire. Si le panneau indique `Les analyses de cette demande ne nomment aucun type d'échantillon. Associez ces analyses à un type d'échantillon dans le catalogue des examens.`, ajoutez les types d'échantillon à ces analyses dans le catalogue des examens.
 
 ## Corriger une faute de frappe dans une demande
 

@@ -56,7 +56,7 @@ Sur une installation qui utilisait une version antérieure, Reception apparaît 
 
 ## La réception
 
-La réception est le guichet du laboratoire dans le studio. Elle trouve une demande par un numéro de demande scanné ou saisi, enregistre une demande dont le laboratoire n'a aucune trace, trouve ou enregistre le patient, reçoit l'échantillon avec son état corrige une faute de frappe dans une demande, et annule une demande enregistrée à la réception pour l'enregistrer de nouveau. Le guide intégré **Réception** montre chaque étape.
+La réception est le guichet du laboratoire dans le studio. Elle trouve une demande par un numéro de demande scanné ou saisi, enregistre une demande dont le laboratoire n'a aucune trace, trouve ou enregistre le patient, reçoit l'échantillon avec son état et corrige une faute de frappe dans une demande, et annule une demande enregistrée à la réception pour l'enregistrer de nouveau. Le guide intégré **Réception** montre chaque étape.
 
 - La réception exige **Receive samples**. Les rôles Reception et Lab Manager l'ont.
 - Un utilisateur avec une limite de données perd **Receive samples** et **Return and reject**. Il n'a donc pas la réception.

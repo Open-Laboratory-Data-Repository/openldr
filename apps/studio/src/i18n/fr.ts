@@ -1873,7 +1873,7 @@ export const fr: EnShape = {
       condition: 'État',
       noCondition: 'Non renseigné',
       tests: 'Pour les analyses',
-      noTypes: 'Les analyses de cette demande ne nomment aucun type d\'échantillon. Associez ces analyses à un type d\'échantillon dans le catalogue des analyses.',
+      noTypes: 'Les analyses de cette demande ne nomment aucun type d\'échantillon. Associez ces analyses à un type d\'échantillon dans le catalogue des examens.',
       chooseType: 'Choisissez un type d\'échantillon.',
       chooseTests: 'Choisissez au moins une analyse.',
       done: 'Échantillon reçu pour la demande {{number}}.',

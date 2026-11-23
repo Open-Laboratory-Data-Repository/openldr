@@ -1873,7 +1873,7 @@ export const pt: EnShape = {
       condition: 'Condição',
       noCondition: 'Não indicada',
       tests: 'Para as análises',
-      noTypes: 'As análises deste pedido não indicam nenhum tipo de amostra. Associe estas análises a um tipo de amostra no catálogo de análises.',
+      noTypes: 'As análises deste pedido não indicam nenhum tipo de amostra. Associe estas análises a um tipo de amostra no catálogo de exames.',
       chooseType: 'Escolha um tipo de amostra.',
       chooseTests: 'Escolha pelo menos uma análise.',
       done: 'Amostra recebida para o pedido {{number}}.',

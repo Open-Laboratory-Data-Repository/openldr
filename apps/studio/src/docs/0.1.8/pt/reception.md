@@ -101,7 +101,7 @@ A associação fica guardada como uma correção, com o seu nome e o motivo `Pac
 
 Um pedido guarda uma amostra de cada tipo. Receber de novo o mesmo tipo atualiza essa amostra e mantém a hora da primeira receção.
 
-A lista de condições vem do conjunto de valores de condições de amostra do seu laboratório. Se o painel disser `As análises deste pedido não indicam nenhum tipo de amostra. Associe estas análises a um tipo de amostra no catálogo de análises.`, acrescente os tipos de amostra a essas análises no catálogo de exames.
+A lista de condições vem do conjunto de valores de condições de amostra do seu laboratório. Se o painel disser `As análises deste pedido não indicam nenhum tipo de amostra. Associe estas análises a um tipo de amostra no catálogo de exames.`, acrescente os tipos de amostra a essas análises no catálogo de exames.
 
 ## Corrigir um erro de escrita num pedido
 
