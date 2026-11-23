@@ -4,7 +4,7 @@ import { createRoleStore, type InternalSchema, type RoleStore } from '@openldr/d
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createPluginRuntime, createPluginStore, sha256Hex, type PluginRuntime, type PluginStore } from '@openldr/plugins';
 import { CAPABILITY_GROUPS, CAPABILITY_KEYS } from '@openldr/rbac';
-import { parseArtifactManifest } from '@openldr/marketplace';
+import { generatePublisherKeypair, parseArtifactManifest, signManifest, type PublisherKeypair } from '@openldr/marketplace';
 import { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog } from './capability-catalog';
 
 // Plan 2026-11-23-plugin-host-2b, task 2: a plugin's permissions join the capability catalog while
@@ -240,5 +240,140 @@ describe('capability catalog with installed plugins', () => {
     const broken = createCapabilityCatalog({ plugins: { list: async () => { throw new Error('no table'); } }, logger: log });
     expect(await broken.keys()).toEqual([...CAPABILITY_KEYS]);
     expect(log.warn).toHaveBeenCalled();
+  });
+});
+
+describe('a permission group stays with its plugin id and publisher', () => {
+  let db: Kysely<InternalSchema>;
+  let pluginStore: PluginStore;
+  let roles: RoleStore;
+  let catalog: CapabilityCatalog;
+  let log: ReturnType<typeof logger>;
+  const acme = generatePublisherKeypair();
+  const other = generatePublisherKeypair();
+
+  function makeRuntime(devAllowUnsigned = false): PluginRuntime {
+    const sync = createPluginPermissionSync({ catalog, roles });
+    return createPluginRuntime({
+      blob: memoryBlob(), store: pluginStore, runner: { run: vi.fn() } as never, logger: log as never,
+      trustStore: { get: async () => undefined, pin: async () => {} } as never,
+      ceVersion: '0.1.0', verifyConfig: { devAllowUnsigned }, onChange: sync.onChange,
+    });
+  }
+
+  /** An artifact signed by `kp` under publisher `pubId`. */
+  function signed(kp: PublisherKeypair, id: string, version: string, permissions: unknown[], pubId = 'acme') {
+    const base = { ...artifact(id, version, permissions), publisher: { id: pubId, name: pubId, keyFingerprint: kp.fingerprint } };
+    return { ...base, signature: signManifest(base as Record<string, unknown>, wasmSha, kp.privateKeyDer) };
+  }
+
+  const opts = (kp: PublisherKeypair) => ({ publicKeyDer: kp.publicKeyDer, approval: { approvedBy: 'admin', acknowledgedCapabilities: [] } });
+  const active = async (id: string) => (await pluginStore.list()).filter((r) => r.id === id && r.active).map((r) => r.version);
+  const claim = async (group: string) =>
+    db.selectFrom('plugin_permission_groups').select(['plugin_id', 'publisher']).where('group', '=', group).executeTakeFirst();
+
+  beforeEach(async () => {
+    db = await makeMigratedDb();
+    log = logger();
+    pluginStore = createPluginStore(db);
+    catalog = createCapabilityCatalog({ plugins: pluginStore, logger: log });
+    roles = createRoleStore(db, { catalogKeys: () => catalog.keys() });
+    await roles.seedSystemRoles();
+  });
+
+  afterEach(async () => {
+    await db.destroy();
+  });
+
+  it('records the verified key fingerprint on a signed claim and null on an unsigned one', async () => {
+    const rt = makeRuntime();
+    await rt.install(wasm, signed(acme, 'lab', '0.1.0', [RECEIVE]), opts(acme));
+    await rt.install(wasm, artifact('micro', '0.1.0', [MICRO]));
+    expect(await claim('lab')).toEqual({ plugin_id: 'lab', publisher: acme.fingerprint });
+    expect(await claim('micro')).toEqual({ plugin_id: 'micro', publisher: null });
+    expect((await pluginStore.list()).map((r) => [r.id, r.publisher])).toEqual([['lab', acme.fingerprint], ['micro', null]]);
+  });
+
+  it('refuses the same id from another publisher and keeps the old version active', async () => {
+    const rt = makeRuntime();
+    await rt.install(wasm, signed(acme, 'lab', '0.1.0', [RECEIVE]), opts(acme));
+    await expect(rt.install(wasm, signed(other, 'lab', '0.2.0', [RECEIVE], 'other'), opts(other))).rejects.toThrow(
+      "lab@0.2.0 was not installed, and lab@0.1.0 stays active: the permission group 'lab' belongs to the plugin lab from a different publisher, so this copy of lab cannot declare permissions in it",
+    );
+    expect(await active('lab')).toEqual(['0.1.0']);
+    expect(await claim('lab')).toEqual({ plugin_id: 'lab', publisher: acme.fingerprint });
+  });
+
+  it('refuses the same id unsigned after a removed signed owner, so it does not inherit the kept grants', async () => {
+    const rt = makeRuntime();
+    await rt.install(wasm, signed(acme, 'lab', '0.1.0', [RECEIVE]), opts(acme));
+    await roles.create({ name: 'Bench', capabilities: [RECEIVE.key] });
+    await rt.remove('lab');
+    await expect(rt.install(wasm, artifact('lab', '0.1.1', [RECEIVE]))).rejects.toThrow(
+      "lab@0.1.1 was not installed, and nothing was installed: the permission group 'lab' belongs to the plugin lab from a different publisher",
+    );
+    expect(await pluginStore.list()).toEqual([]);
+    expect((await roles.diagnoseCapabilities()).kept).toEqual([RECEIVE.key]);
+  });
+
+  it('refuses the same id signed after an unsigned owner', async () => {
+    const rt = makeRuntime();
+    await rt.install(wasm, artifact('lab', '0.1.0', [RECEIVE]));
+    await expect(rt.install(wasm, signed(acme, 'lab', '0.2.0', [RECEIVE]), opts(acme))).rejects.toThrow(
+      "lab@0.2.0 was not installed, and lab@0.1.0 stays active: the permission group 'lab' belongs to the plugin lab from a different publisher",
+    );
+    expect(await active('lab')).toEqual(['0.1.0']);
+  });
+
+  it('records null when a manifest names the owner fingerprint but the signature was not verified', async () => {
+    await makeRuntime().install(wasm, signed(acme, 'lab', '0.1.0', [RECEIVE]), opts(acme));
+    // A copy that names acme's fingerprint, signed by another key, let through by devAllowUnsigned.
+    const forged = { ...signed(other, 'lab', '0.2.0', [RECEIVE]), publisher: { id: 'acme', name: 'acme', keyFingerprint: acme.fingerprint } };
+    await expect(makeRuntime(true).install(wasm, forged, opts(other))).rejects.toThrow(/belongs to the plugin lab from a different publisher/);
+    expect(await active('lab')).toEqual(['0.1.0']);
+  });
+
+  it('lets the same id from the same publisher back in after removal, with its kept grants', async () => {
+    const rt = makeRuntime();
+    await rt.install(wasm, signed(acme, 'lab', '0.1.0', [RECEIVE]), opts(acme));
+    await roles.create({ name: 'Bench', capabilities: [RECEIVE.key] });
+    await rt.remove('lab');
+    await rt.install(wasm, signed(acme, 'lab', '0.1.1', [RECEIVE]), opts(acme));
+    expect(await active('lab')).toEqual(['0.1.1']);
+    expect((await roles.diagnoseCapabilities()).plugin).toEqual([RECEIVE.key]);
+    // The same holds for an unsigned owner reinstalled unsigned.
+    await rt.install(wasm, artifact('micro', '0.1.0', [MICRO]));
+    await rt.remove('micro');
+    await rt.install(wasm, artifact('micro', '0.1.1', [MICRO]));
+    expect(await active('micro')).toEqual(['0.1.1']);
+  });
+
+  it('refuses a rollback or an enable to a version recorded with another publisher', async () => {
+    const rt = makeRuntime();
+    await rt.install(wasm, signed(acme, 'lab', '0.1.0', [RECEIVE]), opts(acme));
+    await rt.install(wasm, signed(acme, 'lab', '0.2.0', [RECEIVE]), opts(acme));
+    // A stored version recorded unsigned, as a row from before migration 142 is.
+    await db.updateTable('plugins').set({ publisher: null }).where('id', '=', 'lab').where('version', '=', '0.1.0').execute();
+
+    await expect(rt.rollback('lab', '0.1.0')).rejects.toThrow(
+      "cannot roll back lab to 0.1.0: the permission group 'lab' belongs to the plugin lab from a different publisher",
+    );
+    expect(await active('lab')).toEqual(['0.2.0']);
+
+    await db.updateTable('plugins').set({ active: false }).where('id', '=', 'lab').execute();
+    await db.updateTable('plugins').set({ active: true }).where('id', '=', 'lab').where('version', '=', '0.1.0').execute();
+    await rt.setEnabled('lab', false);
+    await expect(rt.setEnabled('lab', true)).rejects.toThrow("cannot enable lab: the permission group 'lab' belongs to the plugin lab from a different publisher");
+    expect((await pluginStore.list()).every((r) => !r.enabled)).toBe(true);
+  });
+
+  it('matches a boot warning group exactly, so `_` in a group is not a wildcard', async () => {
+    const rt = makeRuntime();
+    await rt.install(wasm, artifact('ab', '0.1.0', [{ ...MICRO, key: 'a_b.read' }]));
+    await rt.install(wasm, artifact('axb', '0.1.0', [{ ...MICRO, key: 'axb.read' }]));
+    await roles.create({ name: 'Own', capabilities: ['a_b.read'] });
+    await roles.create({ name: 'Other', capabilities: ['axb.read'] });
+    const out = await warnPluginOwnedCeGroups({ db, logger: log, ceKeys: [...CAPABILITY_KEYS, 'a_b.view'] });
+    expect(out).toEqual([{ group: 'a_b', plugin: 'ab', roles: ['lab_admin', 'own'] }]);
   });
 });

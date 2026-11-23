@@ -1,4 +1,5 @@
 import { PLUGIN_PERMISSION_KEY } from '@openldr/marketplace';
+import { permissionGroup } from '@openldr/rbac';
 
 /** One permission as read back from a stored plugin row. */
 export interface StoredPermission {
@@ -48,15 +49,50 @@ export function storedNavLabel(manifest: Record<string, unknown> | null | undefi
 
 /** The permission groups a stored or parsed manifest's keys use: each key's first segment. */
 export function permissionGroups(manifest: Record<string, unknown> | null | undefined): string[] {
-  return [...new Set(storedPermissions(manifest).map((p) => p.key.slice(0, p.key.indexOf('.'))))].sort();
+  return [...new Set(storedPermissions(manifest).map((p) => permissionGroup(p.key)))].sort();
 }
 
-/** A plugin declares a key in a permission group another plugin owns (ruling 1 as amended). */
+/** Who owns a permission group: the plugin id and the verified publisher key fingerprint (null
+ *  when the claiming install was unsigned). */
+export interface GroupOwner {
+  pluginId: string;
+  publisher: string | null;
+}
+
+/** A plugin declares a key in a permission group it may not use (ruling 1 as amended): another
+ *  plugin owns it, or a plugin with the same id from another publisher does. */
 export class PermissionGroupTakenError extends Error {
-  constructor(readonly group: string, readonly owner: string, readonly pluginId: string) {
-    super(`the permission group '${group}' belongs to the plugin ${owner}, so ${pluginId} cannot declare permissions in it`);
+  constructor(
+    readonly group: string,
+    readonly owner: string,
+    readonly pluginId: string,
+    readonly reason: 'plugin' | 'publisher' = 'plugin',
+  ) {
+    super(
+      reason === 'plugin'
+        ? `the permission group '${group}' belongs to the plugin ${owner}, so ${pluginId} cannot declare permissions in it`
+        : `the permission group '${group}' belongs to the plugin ${owner} from a different publisher, so this copy of ${pluginId} cannot declare permissions in it`,
+    );
     this.name = 'PermissionGroupTakenError';
   }
+}
+
+/** The first group in `groups` that `owners` keeps from plugin `id` with publisher `publisher`, as
+ *  an error, or undefined when every group is free or already this plugin's. A claim matches only
+ *  when the plugin id and the publisher are both equal; a null publisher matches only null. */
+export function groupRefusal(
+  groups: readonly string[],
+  owners: Map<string, GroupOwner>,
+  id: string,
+  publisher: string | null,
+): PermissionGroupTakenError | undefined {
+  for (const g of groups) {
+    const owner = owners.get(g);
+    if (owner === undefined) continue;
+    if (owner.pluginId !== id) return new PermissionGroupTakenError(g, owner.pluginId, id, 'plugin');
+    if (owner.publisher !== publisher) return new PermissionGroupTakenError(g, owner.pluginId, id, 'publisher');
+  }
+  return undefined;
 }
 
 /** The permissions each entrypoint needs, as a stored plugin row declares them

@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
-import { CAPABILITY_GROUPS, CAPABILITY_KEYS, reservedPermissionGroups, type CapabilityGroup, type CapabilityMeta } from '@openldr/rbac';
+import { CAPABILITY_GROUPS, CAPABILITY_KEYS, permissionGroup, reservedPermissionGroups, type CapabilityGroup, type CapabilityMeta } from '@openldr/rbac';
 import { storedNavLabel, storedPermissions, type PluginRow, type StoredPermission } from '@openldr/plugins';
 
 /** A plugin permission as the Roles page shows it. `labels` carries the French and Portuguese text
@@ -172,13 +172,15 @@ export async function warnPluginOwnedCeGroups(deps: {
   const owned = await deps.db.selectFrom('plugin_permission_groups').select(['group', 'plugin_id']).where('group', 'in', reserved).execute();
   const ce = new Set(ceKeys);
   const out: Array<{ group: string; plugin: string; roles: string[] }> = [];
+  if (owned.length === 0) return out;
+  // Matched by the key's group in code, not with LIKE, where `_` and `%` in a group are wildcards.
+  const held = await deps.db
+    .selectFrom('role_capabilities')
+    .innerJoin('roles', 'roles.id', 'role_capabilities.role_id')
+    .select(['roles.slug as slug', 'role_capabilities.capability as capability'])
+    .execute();
   for (const o of owned) {
-    const rows = await deps.db
-      .selectFrom('role_capabilities')
-      .innerJoin('roles', 'roles.id', 'role_capabilities.role_id')
-      .select(['roles.slug as slug', 'role_capabilities.capability as capability'])
-      .where('role_capabilities.capability', 'like', `${o.group}.%`)
-      .execute();
+    const rows = held.filter((r) => r.capability.includes('.') && permissionGroup(r.capability) === o.group);
     const roles = [...new Set(rows.filter((r) => !ce.has(r.capability)).map((r) => r.slug))].sort();
     out.push({ group: o.group, plugin: o.plugin_id, roles });
     deps.logger.warn({ group: o.group, plugin: o.plugin_id, roles },

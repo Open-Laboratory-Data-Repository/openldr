@@ -21,7 +21,7 @@ import type { PluginStore, PluginRow } from './store';
 import type { PluginRunner } from './runner';
 import { createWasmConverter } from './wasm-converter';
 import { createWasmSink, type WasmSink } from './wasm-sink';
-import { PermissionGroupTakenError, permissionGroups } from './stored-permissions';
+import { PermissionGroupTakenError, groupRefusal, permissionGroups } from './stored-permissions';
 
 export interface MarketplaceInstallAudit {
   action: string;
@@ -288,16 +288,19 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
       const kept = active ? `${active.id}@${active.version} stays active` : 'nothing was installed';
       const notInstalled = `${artifact.id}@${artifact.version} was not installed, and ${kept}`;
 
+      // The publisher a group claim is bound to: the fingerprint of the key the signature check
+      // above verified, never the fingerprint the manifest names. Null when nothing was verified,
+      // which includes an unverified install that devAllowUnsigned let through.
+      const publisher = signatureVerified ? keyFingerprint(opts.publicKeyDer!) : null;
+
       // The group rule (ruling 1 as amended): each group the keys use must be unowned or owned by
-      // this plugin. Checked here, before anything is written, so a refusal leaves the old version
-      // active and its tables alone. The store claims the groups in the install transaction.
+      // this plugin id from this publisher. Checked here, before anything is written, so a refusal
+      // leaves the old version active and its tables alone. The store claims the groups in the
+      // install transaction.
       if (deps.store.groupOwners) {
         const groups = permissionGroups(artifact as unknown as Record<string, unknown>);
-        const owners = await deps.store.groupOwners(groups);
-        for (const g of groups) {
-          const owner = owners.get(g);
-          if (owner !== undefined && owner !== artifact.id) throw new Error(`${notInstalled}: ${new PermissionGroupTakenError(g, owner, artifact.id).message}`);
-        }
+        const refused = groupRefusal(groups, await deps.store.groupOwners(groups), artifact.id, publisher);
+        if (refused) throw new Error(`${notInstalled}: ${refused.message}`);
       }
       if (tables === undefined || tables.length === 0) {
         const before = (active?.manifest as { payload?: { tables?: unknown[] } } | undefined)?.payload?.tables;
@@ -340,7 +343,7 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
         await deps.blob.put(uiKey(artifact.id, artifact.version), opts.ui, 'text/html');
       }
       try {
-        await deps.store.install({ id: artifact.id, version: artifact.version, sha256: payloadSha, manifest: fullManifest, approvedBy });
+        await deps.store.install({ id: artifact.id, version: artifact.version, sha256: payloadSha, manifest: fullManifest, approvedBy, publisher });
       } catch (err) {
         // Another install claimed the group between the check above and this transaction.
         if (err instanceof PermissionGroupTakenError) throw new Error(`${notInstalled}: ${err.message}`);
