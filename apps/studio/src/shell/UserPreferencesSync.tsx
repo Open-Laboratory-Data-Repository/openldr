@@ -75,24 +75,11 @@ export function UserPreferencesSync() {
   return null;
 }
 
-/** The pages of a lab desk role, in the order they are preferred. A desk user lands on theirs, not
- *  on a page every user sees (Terminology), which the desk cannot use. Reception is shown only to a
- *  user who holds lab.receive (its NAV caps), so a user who holds it lands there. */
-const DESK_PAGES: readonly string[] = ['/reception'];
-
-/** The first page for a user who cannot open the Dashboard: the first desk page in their sidebar,
- *  else their first sidebar page. */
-function firstPage(shown: Array<{ to: string }>): string | undefined {
-  return DESK_PAGES.find((p) => shown.some((n) => n.to === p))
-    ?? shown.find((n) => n.to !== '/')?.to;
-}
-
 /**
  * Wraps the `/` route. The first time the app lands on `/`, it sends the user to their saved first
  * page instead, if that page is in their sidebar. Every later visit to `/` shows the children.
  * A user who cannot open the Dashboard is sent on every visit: to their saved first page, else the
- * first page in their sidebar (Reception first, for a user who holds lab.receive). `/` is Access
- * denied for them (demo.4 item 6).
+ * first page in their sidebar. `/` is Access denied for them (demo.4 item 6).
  */
 export function StartPageGate({ children }: { children: ReactNode }) {
   const { user, hasCapability } = useAuth();
@@ -118,6 +105,6 @@ export function StartPageGate({ children }: { children: ReactNode }) {
   const shown = visibleNav(hasCapability, layout);
   const target = [prefs.startPage, layout?.startPage ?? undefined]
     .find((p): p is string => !!p && p !== '/' && shown.some((n) => n.to === p))
-    ?? (dashboard ? undefined : firstPage(shown));
+    ?? (dashboard ? undefined : shown.find((n) => n.to !== '/')?.to);
   return target ? <Navigate to={target} replace /> : <>{children}</>;
 }

@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
-  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, PanelRight, Menu, X, Sun, Moon, LogOut, PencilRuler, ShieldAlert, Building2, FlaskConical, Contact, KeyRound, ScanBarcode, type LucideIcon,
+  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, PanelRight, Menu, X, Sun, Moon, LogOut, PencilRuler, ShieldAlert, Building2, FlaskConical, Contact, KeyRound, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
@@ -41,7 +41,6 @@ export const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon
   { to: '/facilities', labelKey: 'nav.facilities', end: false, icon: Building2, caps: ['facilities.view'] },
   { to: '/test-catalog', labelKey: 'nav.testCatalog', end: false, icon: FlaskConical, caps: ['terminology.view'] },
   { to: '/patients', labelKey: 'nav.patients', end: false, icon: Contact, caps: ['patients.view'] },
-  { to: '/reception', labelKey: 'nav.reception', end: false, icon: ScanBarcode, caps: ['lab.receive'] },
   { to: '/forms', labelKey: 'nav.forms', end: false, icon: FileInput },
   { to: '/users', labelKey: 'nav.users', end: false, icon: Users, caps: ['users.view'] },
   // Sites lives under Settings → Sites (not a top-level nav item) so it isn't mistaken for a

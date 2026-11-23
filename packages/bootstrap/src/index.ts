@@ -818,8 +818,8 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const reportSchedules = createReportScheduleStore(internal.db);
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
   // RBAC Task 4: seed the system roles (lab_admin/lab_manager/data_analyst/system_auditor/
-  // lab_technician) on every boot. Deliberately UNCONDITIONAL — NOT routed through seedDatabase()/
-  // SEED_ON_START (apps/server/src/index.ts), because that flag defaults to false and only guards
+  // lab_technician) on every boot. This is deliberately unconditional. It is NOT routed through
+  // seedDatabase()/SEED_ON_START (apps/server/src/index.ts), because that flag defaults to false and only guards
   // optional demo/sample data (see seed.ts); a real production install would never seed roles if
   // this depended on it. seedSystemRoles() is idempotent (safe to call on every boot) so this
   // covers a fresh install AND an existing-DB upgrade to this feature identically. Mirrors the

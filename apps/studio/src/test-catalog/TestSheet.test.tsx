@@ -3,10 +3,6 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@/i18n';
 
-const caps = vi.hoisted(() => ({ set: new Set<string>() }));
-vi.mock('@/auth/AuthProvider', () => ({
-  useAuth: () => ({ user: null, loading: false, hasCapability: (c: string) => caps.set.has(c) }),
-}));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -26,15 +22,10 @@ const OPTIONS: api.TestCatalogOptions = {
   resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin' }],
   loinc: null,
   sexes: [{ code: 'female', labels: { en: 'Female', fr: 'Femme', pt: 'Feminino' } }, { code: 'male', labels: { en: 'Male', fr: 'Homme', pt: 'Masculino' } }],
-  sections: [],
-};
-const WITH_SECTIONS: api.TestCatalogOptions = {
-  ...OPTIONS,
-  sections: [{ code: 'CHEM', display: 'Chemistry' }, { code: 'HAEM', display: 'Haematology' }],
 };
 const HIVVL: api.CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR],
-  resultParams: [], loinc: '25836-8', active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null, section: null, needsReview: true },
+  resultParams: [], loinc: '25836-8', active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
 function renderSheet(props: { target?: TestSheetTarget; options?: api.TestCatalogOptions; ownedHere?: boolean } = {}) {
@@ -86,7 +77,6 @@ async function pickCategory(name: RegExp) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  caps.set = new Set(['terminology.manage', 'lab.settings']);
 });
 
 describe('TestSheet', () => {
@@ -113,7 +103,7 @@ describe('TestSheet', () => {
   it('switches the new test on at this lab in the same save', async () => {
     vi.mocked(api.createCatalogTest).mockResolvedValue({ ...HIVVL, specimenTypes: [], loinc: null });
     vi.mocked(api.setCatalogLabSettings)
-      .mockResolvedValue({ ...HIVVL, lab: { enabled: true, specimenTypes: null, localDisplay: 'Viral load', section: null, needsReview: true } });
+      .mockResolvedValue({ ...HIVVL, lab: { enabled: true, specimenTypes: null, localDisplay: 'Viral load' } });
     renderSheet();
     type('Code', 'HIVVL');
     type('Name', 'HIV viral load');
@@ -129,7 +119,7 @@ describe('TestSheet', () => {
     vi.mocked(api.updateCatalogTest).mockResolvedValue({ ...HIVVL, specimenTypes: [], loinc: null });
     vi.mocked(api.setCatalogLabSettings)
       .mockRejectedValueOnce(new Error('save lab settings failed: 500'))
-      .mockResolvedValueOnce({ ...HIVVL, lab: { enabled: true, specimenTypes: null, localDisplay: null, section: null, needsReview: true } });
+      .mockResolvedValueOnce({ ...HIVVL, lab: { enabled: true, specimenTypes: null, localDisplay: null } });
     const { onClose } = renderSheet();
     type('Code', 'HIVVL');
     type('Name', 'HIV viral load');
@@ -161,7 +151,7 @@ describe('TestSheet', () => {
 
   it('at a lab that receives central catalog, shows central fields as text and saves only this lab settings', async () => {
     vi.mocked(api.setCatalogLabSettings)
-      .mockResolvedValue({ ...HIVVL, lab: { enabled: false, specimenTypes: [BLD], localDisplay: null, section: null, needsReview: true } });
+      .mockResolvedValue({ ...HIVVL, lab: { enabled: false, specimenTypes: [BLD], localDisplay: null } });
     renderSheet({ target: { kind: 'edit', test: HIVVL }, ownedHere: false });
     expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
     expect(screen.getByText('HIV viral load')).toBeInTheDocument();
@@ -170,46 +160,6 @@ describe('TestSheet', () => {
     await save();
     expect(api.updateCatalogTest).not.toHaveBeenCalled();
     expect(api.setCatalogLabSettings).toHaveBeenCalledWith('HIVVL', { enabled: false, specimenTypes: [BLD], localDisplay: null });
-  });
-
-  it('hides the section select when the lab has no sections', () => {
-    renderSheet({ target: { kind: 'edit', test: HIVVL } });
-    expect(screen.queryByRole('combobox', { name: 'Section' })).toBeNull();
-    expect(screen.getByRole('switch', { name: 'Needs review' })).toBeChecked();
-  });
-
-  it('saves the section the operator picked and the review switch, beside the other lab fields', async () => {
-    vi.mocked(api.setCatalogLabSettings).mockResolvedValue(HIVVL);
-    renderSheet({ target: { kind: 'edit', test: HIVVL }, options: WITH_SECTIONS, ownedHere: false });
-    const select = screen.getByRole('combobox', { name: 'Section' });
-    expect(select.closest('.grid')).toBe(screen.getByRole('textbox', { name: 'Local name' }).closest('.grid'));
-    fireEvent.keyDown(select, { key: 'ArrowDown' });
-    fireEvent.click(await screen.findByRole('option', { name: 'Haematology' }));
-    fireEvent.click(screen.getByRole('switch', { name: 'Needs review' }));
-    await save();
-    expect(api.setCatalogLabSettings).toHaveBeenCalledWith('HIVVL', {
-      enabled: false, specimenTypes: null, localDisplay: null, section: 'HAEM', needsReview: false,
-    });
-  });
-
-  it('clears a saved section with No section, and sends only the field that changed', async () => {
-    vi.mocked(api.setCatalogLabSettings).mockResolvedValue(HIVVL);
-    const test = { ...HIVVL, lab: { ...HIVVL.lab, section: 'HAEM' } };
-    renderSheet({ target: { kind: 'edit', test }, options: WITH_SECTIONS, ownedHere: false });
-    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Section' }), { key: 'ArrowDown' });
-    fireEvent.click(await screen.findByRole('option', { name: 'No section' }));
-    await save();
-    expect(api.setCatalogLabSettings).toHaveBeenCalledWith('HIVVL', {
-      enabled: false, specimenTypes: null, localDisplay: null, section: null,
-    });
-  });
-
-  it('shows the section and review switch but disables them for a user without lab.settings', () => {
-    caps.set = new Set(['terminology.manage']);
-    renderSheet({ target: { kind: 'edit', test: HIVVL }, options: WITH_SECTIONS });
-    expect(screen.getByRole('combobox', { name: 'Section' })).toBeDisabled();
-    expect(screen.getByRole('switch', { name: 'Needs review' })).toBeDisabled();
-    expect(screen.getByRole('switch', { name: 'On at this lab' })).toBeEnabled();
   });
 
   it('lays the catalog and lab fields in one grid, so their labels share one column', () => {

@@ -20,7 +20,6 @@ import {
   type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
 import { sexLabel } from '@/forms-runtime/rangeLabel';
-import { useAuth } from '@/auth/AuthProvider';
 
 // Test catalog S2 (spec 4.3): add or edit one test, and this lab's own settings for it. Copies
 // forms-builder/FieldEditorSheet.tsx (AGENTS.md section 5).
@@ -29,8 +28,6 @@ export type TestSheetTarget = { kind: 'create' } | { kind: 'edit'; test: Catalog
 
 /** Radix Select cannot hold an empty value, so "no category" is this sentinel in the picker only. */
 const NO_CATEGORY = '__none__';
-/** The same for "no section". */
-const NO_SECTION = '__none__';
 
 interface Draft {
   code: string;
@@ -46,9 +43,6 @@ interface Draft {
   /** null means every catalog specimen. */
   labSpecimens: CatalogSpecimenCoding[] | null;
   localDisplay: string;
-  /** '' means no section. */
-  labSection: string;
-  labNeedsReview: boolean;
 }
 
 const EMPTY_BAND: CatalogResultBand = { name: null, low: null, high: null, unit: null, sex: null, ageLow: null, ageHigh: null };
@@ -88,32 +82,23 @@ function draftFrom(test: CatalogTest | null): Draft {
     labEnabled: test?.lab.enabled ?? false,
     labSpecimens: test?.lab.specimenTypes ?? null,
     localDisplay: test?.lab.localDisplay ?? '',
-    labSection: test?.lab.section ?? '',
-    labNeedsReview: test?.lab.needsReview ?? true,
   };
 }
 
-/** This lab's settings from the draft, against the test as saved. Every catalog specimen ticked is
- *  sent as null, "use the catalog's list", so a specimen central adds later reaches this lab. The
- *  section and the review switch are sent only when they changed, since sending them needs
- *  lab.settings and an operator without it may still save the other fields. */
-function labInput(d: Draft, test: CatalogTest): CatalogLabSettingsInput {
-  const offered = test.specimenTypes;
+/** This lab's settings from the draft, against the test's saved catalog list. Every catalog specimen
+ *  ticked is sent as null, "use the catalog's list", so a specimen central adds later reaches this lab. */
+function labInput(d: Draft, offered: CatalogSpecimenCoding[]): CatalogLabSettingsInput {
   const kept = d.labSpecimens === null ? null : offered.filter((s) => d.labSpecimens!.some((k) => sameCoding(k, s)));
-  const section = d.labSection || null;
   return {
     enabled: d.labEnabled,
     specimenTypes: kept === null || kept.length === offered.length ? null : kept,
     localDisplay: d.localDisplay.trim() || null,
-    ...(section !== test.lab.section ? { section } : {}),
-    ...(d.labNeedsReview !== test.lab.needsReview ? { needsReview: d.labNeedsReview } : {}),
   };
 }
 
 function sameLab(a: CatalogLabSettingsInput, b: CatalogTest['lab']): boolean {
   const key = (l: CatalogSpecimenCoding[] | null) => (l === null ? null : l.map((s) => `${s.system}|${s.code}`).sort().join(','));
-  return a.enabled === b.enabled && a.localDisplay === b.localDisplay && key(a.specimenTypes) === key(b.specimenTypes)
-    && a.section === undefined && a.needsReview === undefined;
+  return a.enabled === b.enabled && a.localDisplay === b.localDisplay && key(a.specimenTypes) === key(b.specimenTypes);
 }
 
 export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
@@ -124,9 +109,6 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const { t, i18n } = useTranslation();
-  // The section and the review switch need lab.settings on the server, so without it they are shown
-  // but cannot be changed.
-  const canSetLab = useAuth().hasCapability('lab.settings');
   const [draft, setDraft] = useState<Draft>(() => draftFrom(null));
   // The test as last saved. A create that went through sets it, so saving again edits instead of
   // adding the test twice.
@@ -168,7 +150,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
         setSaved(test);
       }
       if (!test) return;
-      const lab = labInput(draft, test);
+      const lab = labInput(draft, test.specimenTypes);
       if (!sameLab(lab, test.lab)) test = await setCatalogLabSettings(test.code, lab);
       toast.success(t('testCatalog.sheet.saved', { code: test.code }));
       onSaved();
@@ -529,32 +511,6 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
 
             <Label htmlFor="test-local-name" className="whitespace-nowrap">{t('testCatalog.sheet.localName')}</Label>
             <Input id="test-local-name" value={draft.localDisplay} onChange={(e) => set({ localDisplay: e.target.value })} />
-
-            {/* A lab with no sections sees no section field (lab module design 5.2). */}
-            {options.sections.length > 0 && (
-              <>
-                <Label htmlFor="test-section" className="whitespace-nowrap">{t('testCatalog.sheet.section')}</Label>
-                <Select
-                  disabled={!canSetLab}
-                  value={draft.labSection || NO_SECTION}
-                  onValueChange={(v) => set({ labSection: v === NO_SECTION ? '' : v })}
-                >
-                  <SelectTrigger id="test-section"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_SECTION}>{t('testCatalog.sheet.noSection')}</SelectItem>
-                    {options.sections.map((s) => <SelectItem key={s.code} value={s.code}>{s.display ?? s.code}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </>
-            )}
-
-            <Label className="whitespace-nowrap">{t('testCatalog.sheet.needsReview')}</Label>
-            <Switch
-              aria-label={t('testCatalog.sheet.needsReview')}
-              disabled={!canSetLab}
-              checked={draft.labNeedsReview}
-              onCheckedChange={(v) => set({ labNeedsReview: v })}
-            />
           </div>
         </section>
       </SheetContent>
