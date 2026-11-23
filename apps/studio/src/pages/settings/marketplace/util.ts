@@ -115,3 +115,32 @@ export function packFailureText(
     ? t('settings.marketplace.packFailedAt', { step, error: e })
     : t('settings.marketplace.packFailed', { error: e });
 }
+
+interface DeclaredPermission {
+  key: string; label: string; description: string;
+  labels?: Partial<Record<'fr' | 'pt', { label: string; description: string }>>;
+}
+
+/** One line per permission a plugin declares, for the install consent: its label and description in
+ *  the page language (English when the plugin gave none), its key, and the actions that need it.
+ *  Reads `payload.permissions` and `payload.actionPermissions` from the signed manifest. A payload
+ *  without them gives no lines. */
+export function pluginPermissionLines(
+  payload: ArtifactPayloadMeta | null | undefined, lang: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string[] {
+  const perms = Array.isArray(payload?.permissions) ? (payload.permissions as DeclaredPermission[]) : [];
+  const actions = (payload?.actionPermissions && typeof payload.actionPermissions === 'object'
+    ? payload.actionPermissions : {}) as Record<string, unknown>;
+  const code = lang.slice(0, 2);
+  return perms.map((p) => {
+    const local = code === 'fr' || code === 'pt' ? p.labels?.[code] : undefined;
+    const label = local?.label ?? p.label;
+    const description = local?.description ?? p.description;
+    const needing = Object.keys(actions).filter((a) => Array.isArray(actions[a]) && (actions[a] as unknown[]).includes(p.key));
+    const opts = { label, description, key: p.key, actions: needing.join(', '), interpolation: { escapeValue: false } };
+    return needing.length
+      ? t('settings.marketplace.pluginPermissionUsed', opts)
+      : t('settings.marketplace.pluginPermissionUnused', opts);
+  });
+}

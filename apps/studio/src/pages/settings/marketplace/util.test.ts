@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import i18n from '@/i18n';
 import type { AvailableArtifact } from '@/api';
-import { capabilityLine, newerAvailable } from './util';
+import { capabilityLine, newerAvailable, pluginPermissionLines } from './util';
 
 describe('capabilityLine', () => {
   const t = i18n.getFixedT('en');
@@ -58,5 +58,39 @@ describe('newerAvailable', () => {
 
   it('compares versions by their numbers, not as text', () => {
     expect(newerAvailable('cdr-source', '0.1.9', [avail('0.1.10')], ['0.1.9'])?.version).toBe('0.1.10');
+  });
+});
+
+describe('pluginPermissionLines', () => {
+  const payload = {
+    kind: 'plugin',
+    permissions: [
+      { key: 'whonet.review', label: 'Review isolates', description: 'See and correct held isolates.', labels: { fr: { label: 'Revoir les isolats', description: 'Voir et corriger les isolats retenus.' } } },
+      { key: 'whonet.export', label: 'Export', description: 'Download the WHONET file.' },
+    ],
+    actionPermissions: { review: ['whonet.review'], correct: ['whonet.review', 'forms.edit'] },
+  };
+
+  it('lists each declared permission with the actions that need it', () => {
+    expect(pluginPermissionLines(payload, 'en', i18n.getFixedT('en'))).toEqual([
+      'Review isolates (whonet.review): See and correct held isolates. Needed to run: review, correct.',
+      'Export (whonet.export): Download the WHONET file.',
+    ]);
+  });
+  it('uses the French label when given, and English when not', () => {
+    const lines = pluginPermissionLines(payload, 'fr', i18n.getFixedT('fr'));
+    expect(lines[0]).toBe('Revoir les isolats (whonet.review) : Voir et corriger les isolats retenus. Nécessaire pour exécuter : review, correct.');
+    expect(lines[1]).toBe('Export (whonet.export) : Download the WHONET file.');
+  });
+  it('reads in every language with no missing key', () => {
+    for (const lng of ['en', 'fr', 'pt']) {
+      for (const line of pluginPermissionLines(payload, lng, i18n.getFixedT(lng))) {
+        expect(line, lng).not.toMatch(/settings\.|\{\{/);
+      }
+    }
+  });
+  it('a payload without permissions gives no lines', () => {
+    expect(pluginPermissionLines({ kind: 'plugin' }, 'en', i18n.getFixedT('en'))).toEqual([]);
+    expect(pluginPermissionLines(null, 'en', i18n.getFixedT('en'))).toEqual([]);
   });
 });

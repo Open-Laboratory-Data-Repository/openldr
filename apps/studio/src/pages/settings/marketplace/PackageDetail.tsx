@@ -159,12 +159,13 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 ) : null}
                 {entry.installed && entry.update && installableType ? (
                   // Update installs the newer version, which becomes the active one; the older stays
-                  // for Rollback. Consent covers the NEW version's capabilities, read from its detail.
+                  // for Rollback. Consent covers the NEW version's capabilities, read from its detail, and a
+                  // plugin's declared permissions, read from the new version's payload.
                   <DropdownMenuItem
                     data-testid="detail-update"
                     onSelect={() => {
                       const u = entry.update!;
-                      void getAvailableArtifact(u.ref).then((d) => onInstall({ ...entry, ref: u.ref, version: u.version }, d?.capabilities ?? []));
+                      void getAvailableArtifact(u.ref).then((d) => onInstall({ ...entry, ref: u.ref, version: u.version, payload: entry.type === 'plugin' ? d?.payload ?? entry.payload : entry.payload }, d?.capabilities ?? []));
                     }}
                   >
                     {t('settings.marketplace.updateTo', { version: entry.update.version })}

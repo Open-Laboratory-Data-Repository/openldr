@@ -1160,6 +1160,9 @@ importers:
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
+      '@openldr/rbac':
+        specifier: workspace:*
+        version: link:../rbac
       kysely:
         specifier: ^0.28.17
         version: 0.28.17

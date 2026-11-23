@@ -1,6 +1,7 @@
 import { z } from 'zod';
 // The subpath, not the package root: the root loads pg and kysely, which the manifest does not need.
 import { tableShapesSchema } from '@openldr/db/plugin-table-shape';
+import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { capabilitySchema } from './capabilities';
 import { workflowNodeDeclSchema } from './workflow-node';
 
@@ -115,6 +116,19 @@ export function canCheck(source: ImportSource): boolean {
   return source.entrypoints.copy !== undefined && source.entrypoints.decode !== undefined;
 }
 
+/** A permission key a plugin declares. Dotted lower case, at least two parts, like `whonet.review`. */
+export const PLUGIN_PERMISSION_KEY = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
+const permissionText = z.object({ label: z.string().min(1).max(80), description: z.string().min(1).max(300) }).strict();
+/** A permission the plugin adds to CE's role editor. English is required; French and Portuguese
+ *  fall back to English when absent. */
+export const pluginPermissionSchema = z.object({
+  key: z.string().regex(PLUGIN_PERMISSION_KEY, 'permission key must be dotted lower case, like plugin.action'),
+  label: z.string().min(1).max(80),
+  description: z.string().min(1).max(300),
+  labels: z.object({ fr: permissionText.optional(), pt: permissionText.optional() }).strict().optional(),
+}).strict();
+export type PluginPermission = z.infer<typeof pluginPermissionSchema>;
+
 const pluginPayload = z.object({
   kind: z.literal('plugin'),
   // Source/sink flavor. Named `pluginKind` because this object's own discriminator is
@@ -139,6 +153,13 @@ const pluginPayload = z.object({
   // Needs host:db. Optional with no default, so a manifest without it parses to the same object
   // and its signature still verifies.
   tables: tableShapesSchema.optional(),
+  // Permissions the plugin declares, and the permissions each entrypoint needs (any one of its
+  // list). Both optional with no default, so a manifest without them parses to the same object and
+  // its signature still verifies. Cross-field rules are in parseArtifactManifest.
+  permissions: z.array(pluginPermissionSchema).max(50).optional(),
+  actionPermissions: z.record(z.string().min(1), z.array(z.string().min(1)).min(1).max(10))
+    .refine((r) => Object.keys(r).length <= 100, { message: 'payload.actionPermissions has more than 100 entries' })
+    .optional(),
 });
 const formPayload = z.object({ kind: z.literal('form-template'), questionnaireSha256: z.string().regex(HEX64) });
 const reportPayload = z.object({ kind: z.literal('report-template'), templateSha256: z.string().regex(HEX64) });
@@ -190,7 +211,35 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest {
     && !manifest.capabilities.some((c) => c.kind === 'host:db')) {
     throw new Error(`artifact ${manifest.id}: payload.tables requires the host:db capability`);
   }
+  if (manifest.payload.kind === 'plugin') checkPluginPermissions(manifest.id, manifest.payload.permissions, manifest.payload.actionPermissions, manifest.payload.entrypoints);
   return manifest;
+}
+
+const CE_CAPABILITIES: ReadonlySet<string> = new Set(CAPABILITY_KEYS);
+
+/** Rulings 1 and 2 of plan 2026-11-23-plugin-host-2b. A declared key is unique and is not a CE
+ *  capability, so a plugin cannot grant itself one. Each actionPermissions entry names a declared
+ *  entrypoint, and each listed key is the plugin's own or a CE capability. The check against other
+ *  installed plugins' keys needs the store, so the install does it. */
+function checkPluginPermissions(
+  id: string, permissions: PluginPermission[] | undefined, actionPermissions: Record<string, string[]> | undefined, entrypoints: string[],
+): void {
+  const own = new Set<string>();
+  for (const p of permissions ?? []) {
+    if (CE_CAPABILITIES.has(p.key)) throw new Error(`artifact ${id}: permission '${p.key}' is a CE capability; a plugin cannot declare it as its own`);
+    if (own.has(p.key)) throw new Error(`artifact ${id}: permission '${p.key}' is declared twice`);
+    own.add(p.key);
+  }
+  if (actionPermissions === undefined) return;
+  const exported = new Set(entrypoints);
+  for (const [entrypoint, keys] of Object.entries(actionPermissions)) {
+    if (!exported.has(entrypoint)) throw new Error(`artifact ${id}: actionPermissions names '${entrypoint}', which is not in payload.entrypoints`);
+    for (const key of keys) {
+      if (!own.has(key) && !CE_CAPABILITIES.has(key)) {
+        throw new Error(`artifact ${id}: action '${entrypoint}' needs '${key}', which is neither a declared permission nor a CE capability`);
+      }
+    }
+  }
 }
 
 /** Legacy plugin manifest shape (packages/plugins manifest.ts). A flat legacy manifest may

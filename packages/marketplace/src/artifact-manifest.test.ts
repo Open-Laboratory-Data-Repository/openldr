@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { canCheck, canCopy, canImportOnePass, importSourceSchema, parseArtifactManifest, pluginManifestToArtifact, type ImportSource } from './artifact-manifest';
+import { canonicalSigningBytes } from './bundle';
 
 const fp = 'a'.repeat(64);
 const base = {
@@ -453,5 +454,76 @@ describe('declared tables', () => {
     const m = parseArtifactManifest(base);
     expect(m.payload.kind === 'plugin' && 'tables' in m.payload).toBe(false);
     expect(parseArtifactManifest(JSON.parse(JSON.stringify(m)))).toEqual(m);
+  });
+});
+
+describe('plugin permissions and actionPermissions (plan 2026-11-23 rulings 1 and 2)', () => {
+  const perm = (key: string) => ({ key, label: `Label ${key}`, description: `Lets a person ${key}.` });
+  const withPerms = (payload: Record<string, unknown>) => ({
+    ...base, payload: { ...base.payload, pluginKind: 'sink', entrypoints: ['review', 'export'], ...payload },
+  });
+
+  it('parses declared permissions with French and Portuguese labels, and action lists', () => {
+    const m = parseArtifactManifest(withPerms({
+      permissions: [{ ...perm('whonet.review'), labels: { fr: { label: 'Revoir', description: 'Revoir.' }, pt: { label: 'Rever', description: 'Rever.' } } }],
+      actionPermissions: { review: ['whonet.review'], export: ['whonet.review', 'reports.view'] },
+    }));
+    expect(m.payload.kind === 'plugin' && m.payload.permissions?.[0]?.labels?.fr?.label).toBe('Revoir');
+    expect(m.payload.kind === 'plugin' && m.payload.actionPermissions?.export).toEqual(['whonet.review', 'reports.view']);
+  });
+  it('refuses a key that does not match the pattern', () => {
+    for (const key of ['whonet', 'Whonet.review', '1x.review', 'whonet.', 'whonet..review', 'whonet.Review', 'who-net.review', '_x.y']) {
+      expect(() => parseArtifactManifest(withPerms({ permissions: [perm(key)] })), key).toThrow();
+    }
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('whonet.review_all.v2')] }))).not.toThrow();
+  });
+  it('refuses a key that is a CE capability', () => {
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('forms.edit')] }))).toThrow(/'forms.edit' is a CE capability/);
+  });
+  it('refuses a key declared twice', () => {
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('whonet.review'), perm('whonet.review')] }))).toThrow(/declared twice/);
+  });
+  it('refuses an actionPermissions entrypoint that is not in payload.entrypoints', () => {
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('whonet.review')], actionPermissions: { nope: ['whonet.review'] } })))
+      .toThrow(/'nope', which is not in payload.entrypoints/);
+  });
+  it('refuses an empty list, and a listed key that is neither declared nor a CE capability', () => {
+    expect(() => parseArtifactManifest(withPerms({ actionPermissions: { review: [] } }))).toThrow();
+    expect(() => parseArtifactManifest(withPerms({ permissions: [perm('whonet.review')], actionPermissions: { review: ['whonet.other'] } })))
+      .toThrow(/needs 'whonet.other', which is neither/);
+  });
+  it('accepts an action that needs only a CE capability, with no declared permissions', () => {
+    expect(() => parseArtifactManifest(withPerms({ actionPermissions: { review: ['forms.edit'] } }))).not.toThrow();
+  });
+  it('refuses a long label or description, unknown keys, and an unknown language', () => {
+    expect(() => parseArtifactManifest(withPerms({ permissions: [{ ...perm('a.b'), label: 'x'.repeat(81) }] }))).toThrow();
+    expect(() => parseArtifactManifest(withPerms({ permissions: [{ ...perm('a.b'), label: 'x'.repeat(80) }] }))).not.toThrow();
+    expect(() => parseArtifactManifest(withPerms({ permissions: [{ ...perm('a.b'), description: 'x'.repeat(301) }] }))).toThrow();
+    expect(() => parseArtifactManifest(withPerms({ permissions: [{ ...perm('a.b'), description: 'x'.repeat(300) }] }))).not.toThrow();
+    expect(() => parseArtifactManifest(withPerms({ permissions: [{ ...perm('a.b'), grants: ['forms.edit'] }] }))).toThrow();
+    expect(() => parseArtifactManifest(withPerms({ permissions: [{ ...perm('a.b'), labels: { de: { label: 'x', description: 'y' } } }] }))).toThrow();
+    expect(() => parseArtifactManifest(withPerms({ permissions: [{ ...perm('a.b'), labels: { fr: { label: 'x' } } }] }))).toThrow();
+  });
+  it('refuses more than 50 permissions, 100 action entries or 10 keys in one entry', () => {
+    const many = Array.from({ length: 51 }, (_, i) => perm(`p.k${i}`));
+    expect(() => parseArtifactManifest(withPerms({ permissions: many }))).toThrow();
+    expect(() => parseArtifactManifest(withPerms({ permissions: many.slice(0, 50) }))).not.toThrow();
+    const eps = Array.from({ length: 101 }, (_, i) => `e${i}`);
+    const actions = (n: number) => Object.fromEntries(eps.slice(0, n).map((e) => [e, ['p.k0']]));
+    expect(() => parseArtifactManifest(withPerms({ entrypoints: eps, permissions: [perm('p.k0')], actionPermissions: actions(101) }))).toThrow(/more than 100/);
+    expect(() => parseArtifactManifest(withPerms({ entrypoints: eps, permissions: [perm('p.k0')], actionPermissions: actions(100) }))).not.toThrow();
+    const keys = Array.from({ length: 11 }, (_, i) => `p.k${i}`);
+    expect(() => parseArtifactManifest(withPerms({ permissions: many.slice(0, 11), actionPermissions: { review: keys } }))).toThrow();
+    expect(() => parseArtifactManifest(withPerms({ permissions: many.slice(0, 11), actionPermissions: { review: keys.slice(0, 10) } }))).not.toThrow();
+  });
+  it('a manifest without the fields parses to the same object and the same signing bytes', () => {
+    const raw = withPerms({});
+    const m = parseArtifactManifest(raw);
+    expect(m.payload.kind === 'plugin' && ('permissions' in m.payload || 'actionPermissions' in m.payload)).toBe(false);
+    const again = parseArtifactManifest(JSON.parse(JSON.stringify(m)));
+    expect(again).toEqual(m);
+    expect(canonicalSigningBytes(again as unknown as Record<string, unknown>, 'c'.repeat(64)))
+      .toEqual(canonicalSigningBytes(m as unknown as Record<string, unknown>, 'c'.repeat(64)));
+    expect(JSON.stringify(again)).toBe(JSON.stringify(m));
   });
 });
