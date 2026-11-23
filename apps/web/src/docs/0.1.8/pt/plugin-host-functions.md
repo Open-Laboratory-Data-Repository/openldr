@@ -62,6 +62,8 @@ O CE recusa uma versão que elimine ou mude o nome de uma coluna, mude um tipo, 
 
 Uma versão que não declara tabelas mantém as tabelas e as linhas da versão anterior. Desativar um plugin, voltar a uma versão anterior ou remover uma versão antiga também as mantém. Só remover o plugin e escolher não guardar nada elimina o esquema e as suas linhas.
 
+Depois de voltar a uma versão anterior, essa versão continua a ler e escrever as suas tabelas. Lê e escreve só as colunas que declara. Uma coluna acrescentada por uma versão mais recente fica na tabela, e as linhas que a versão anterior acrescenta deixam-na vazia.
+
 ## db_select
 
 Lê linhas de uma tabela declarada.

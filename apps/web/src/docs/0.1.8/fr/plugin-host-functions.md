@@ -62,6 +62,8 @@ CE refuse une version qui supprime ou renomme une colonne, change un type, chang
 
 Une version qui ne déclare aucune table garde les tables et les lignes de la version précédente. Désactiver un plugin, revenir à une version antérieure ou retirer une ancienne version les garde aussi. Seul le retrait du plugin avec le choix de ne rien garder supprime le schéma et ses lignes.
 
+Après un retour à une version antérieure, cette version continue à lire et écrire ses tables. Elle ne lit et n'écrit que les colonnes qu'elle déclare. Une colonne ajoutée par une version plus récente reste dans la table, et les lignes ajoutées par l'ancienne version la laissent vide.
+
 ## db_select
 
 Lit des lignes d'une table déclarée.

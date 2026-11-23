@@ -9,8 +9,10 @@ import {
  *  structured request, and CE builds the statement with Kysely inside the plugin's schema.
  *
  *  Every table and column name is checked twice: first against the shapes the caller passes (before
- *  any SQL), then against the shapes CE recorded in `_openldr_shapes` when it made the tables. The
- *  recorded shapes are the ones the statement is built from. Every value is checked against its
+ *  any SQL), then against the shapes CE recorded in `_openldr_shapes` when it made the tables. Every
+ *  declared column must be recorded with the same type; the recorded table may hold more columns,
+ *  which a newer version of the plugin added. The statement is built from the declared shapes, so a
+ *  version never reads or writes a column it does not declare. Every value is checked against its
  *  column type and bound, never written into the SQL text.
  *
  *  On a facility table CE adds the caller's facility filter to every select, update and delete, and
@@ -91,6 +93,8 @@ interface TableFacts {
   notNull: Set<string>;
   primaryKey: string[];
   facilityColumn: string | null;
+  /** Columns that may not be empty and have no default, so an insert must set them. */
+  required: Set<string>;
 }
 
 const MANAGED = new Set<string>(CE_MANAGED_COLUMNS);
@@ -115,11 +119,15 @@ function parse<T>(schema: z.ZodType<T>, input: unknown, what: string): T {
 function factsOf(t: TableShape): TableFacts {
   const types = new Map<string, ColumnType>();
   const notNull = new Set<string>();
+  const required = new Set<string>();
   for (const c of t.columns) {
     types.set(c.name, c.type);
-    if (c.nullable === false || t.primaryKey.includes(c.name) || t.facilityColumn === c.name) notNull.add(c.name);
+    if (c.nullable === false || t.primaryKey.includes(c.name) || t.facilityColumn === c.name) {
+      notNull.add(c.name);
+      if (c.default === undefined || c.default === null) required.add(c.name);
+    }
   }
-  return { name: t.name, types, notNull, primaryKey: [...t.primaryKey], facilityColumn: t.facilityColumn ?? null };
+  return { name: t.name, types, notNull, required, primaryKey: [...t.primaryKey], facilityColumn: t.facilityColumn ?? null };
 }
 
 /** The tables a request may name, from shapes parsed again with the manifest schema. Only declared
@@ -277,12 +285,25 @@ function checkKey(t: TableFacts, key: Record<string, unknown>): [string, unknown
   });
 }
 
-function sameFacts(a: TableFacts, b: TableFacts): boolean {
-  if (a.facilityColumn !== b.facilityColumn || a.primaryKey.join(',') !== b.primaryKey.join(',')) return false;
-  if (a.types.size !== b.types.size) return false;
-  for (const [k, v] of a.types) if (b.types.get(k) !== v) return false;
-  for (const k of a.notNull) if (!b.notNull.has(k)) return false;
-  return a.notNull.size === b.notNull.size;
+/** Why a declared table cannot use the stored one, or null when it can. Every declared column must
+ *  be stored with the same type and the same rule on being empty, and the primary key and facility
+ *  column must match. The stored table may have more columns: a newer version of the plugin added
+ *  them, and an older version (after a rollback, or while an upgrade runs) never names them. */
+function mismatch(declared: TableFacts, stored: TableFacts): string | null {
+  if (declared.facilityColumn !== stored.facilityColumn) return 'the facility column differs';
+  if (declared.primaryKey.join(',') !== stored.primaryKey.join(',')) return 'the primary key differs';
+  for (const [k, v] of declared.types) {
+    const was = stored.types.get(k);
+    if (was === undefined) return `column ${k} is not in the stored table`;
+    if (was !== v) return `column ${k} is ${v} here but ${was} in the stored table`;
+    if (declared.notNull.has(k) !== stored.notNull.has(k)) return `column ${k} differs on whether it may be empty`;
+  }
+  return null;
+}
+
+/** Stored columns this version does not declare but an insert would have to set. */
+function undeclaredRequired(declared: TableFacts, stored: TableFacts): string[] {
+  return [...stored.required].filter((k) => !declared.types.has(k));
 }
 
 /** A select, checked and ready to build. */
@@ -370,7 +391,8 @@ function planStep(tables: Map<string, TableFacts>, step: WriteStep, facilities: 
 
 export function createPluginRequests(db: Kysely<any>): PluginRequests {
   /** Inside the request's transaction: set the timeout and the facility setting, then read the
-   *  recorded shapes for the named tables and check they agree with the declared ones. */
+   *  recorded shapes for the named tables and check the declared ones fit inside them. Returns the
+   *  recorded facts. Statements are still built from the declared facts. */
   async function begin(trx: Kysely<any>, pluginId: string, schema: string, declared: Map<string, TableFacts>, names: Set<string>, facilities: string[] | '*'): Promise<Map<string, TableFacts>> {
     await sql`set local statement_timeout = ${sql.lit(STATEMENT_TIMEOUT)}`.execute(trx);
     await sql`select set_config(${FACILITIES_SETTING}, ${settingFor(facilities)}, true)`.execute(trx);
@@ -387,7 +409,8 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
     for (const name of names) {
       const was = recorded.get(name);
       if (!was) throw new PluginRequestError('table', `table '${name}' was never made for this plugin`);
-      if (!sameFacts(was, declared.get(name)!)) throw new PluginRequestError('shape', `table ${name}: the declared shape does not match the one CE made`);
+      const why = mismatch(declared.get(name)!, was);
+      if (why) throw new PluginRequestError('shape', `table ${name}: the declared shape does not match the one CE made: ${why}`);
     }
     return recorded;
   }
@@ -402,8 +425,8 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
       planSelect(declared, req);
 
       return db.transaction().execute(async (trx) => {
-        const recorded = await begin(trx, pluginId, schema, declared, new Set([req.table]), facilities);
-        const p = planSelect(recorded, req);
+        await begin(trx, pluginId, schema, declared, new Set([req.table]), facilities);
+        const p = planSelect(declared, req);
         const t = p.table;
         const scoped = (q: any) => {
           let out = q;
@@ -435,9 +458,16 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
 
       return db.transaction().execute(async (trx) => {
         const recorded = await begin(trx, pluginId, schema, declared, new Set(req.steps.map((s) => s.table)), facilities);
+        for (const s of req.steps) {
+          if (s.op !== 'insert') continue;
+          const missing = undeclaredRequired(declared.get(s.table)!, recorded.get(s.table)!);
+          if (missing.length > 0) {
+            throw new PluginRequestError('shape', `table ${s.table}: cannot add a row, because column ${missing.join(', ')} may not be empty and this version of the plugin does not declare it`);
+          }
+        }
         const results: { rowCount: number }[] = [];
         for (const s of req.steps) {
-          const p = planStep(recorded, s, facilities);
+          const p = planStep(declared, s, facilities);
           const t = p.table;
           if (p.op === 'insert') {
             const r = await trx.withSchema(schema).insertInto(t.name).values(p.values).executeTakeFirst();

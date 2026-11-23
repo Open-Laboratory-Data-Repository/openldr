@@ -13,6 +13,8 @@ import { facilityIdsInScope, type ScopeRegistryRow } from './data-scope';
 import { CopySetChangedError, copySetHashes, copySpecSchema, createImportCopyService } from './import-copy';
 import { checkIdOf, createImportCheckService } from './import-check';
 
+const ALL_DATA = { limited: false as const };
+
 function memData() {
   const m = new Map<string, unknown>();
   const k = (p: string, c: string, key: string) => `${p} ${c} ${key}`;
@@ -80,7 +82,7 @@ function broker(opts: {
   return { b, data, audited, logged };
 }
 
-const principal = { id: 'u1', roles: ['lab_admin'] };
+const principal = { id: 'u1', roles: ['lab_admin'], dataScope: ALL_DATA };
 
 describe('plugin broker', () => {
   it('allows private storage with no capability and namespaces by the trusted pluginId', async () => {
@@ -187,7 +189,7 @@ describe('plugin broker', () => {
 
   it('denies connectors.list when the caller lacks lab_admin (role gate, even with the capability)', async () => {
     const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list: async () => [{ id: 'x' }], get: async () => null } });
-    const lowPriv = { id: 'u2', roles: ['data_analyst'] };
+    const lowPriv = { id: 'u2', roles: ['data_analyst'], dataScope: ALL_DATA };
     const r = await b.handle('p1', lowPriv, { kind: 'connectors.list' });
     expect(r.ok).toBe(false);
     expect((r as any).error).toMatch(/lab_admin/);
@@ -195,13 +197,13 @@ describe('plugin broker', () => {
 
   it('allows connectors.list for lab_admin with the capability', async () => {
     const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list: async () => [{ id: 'x' }], get: async () => null } });
-    const r = await b.handle('p1', { id: 'u', roles: ['lab_admin'] }, { kind: 'connectors.list' });
+    const r = await b.handle('p1', { id: 'u', roles: ['lab_admin'], dataScope: ALL_DATA }, { kind: 'connectors.list' });
     expect(r).toEqual({ ok: true, data: [{ id: 'x' }] });
   });
 
   it('storage/reports ops require no special role (data_analyst allowed)', async () => {
     const { b } = broker({ caps: [{ kind: 'host:reports' }], reporting: { list: () => [{ id: 'r1' }], run: async () => ({}) } });
-    const low = { id: 'u3', roles: ['data_analyst'] };
+    const low = { id: 'u3', roles: ['data_analyst'], dataScope: ALL_DATA };
     expect((await b.handle('p1', low, { kind: 'storage.put', collection: 'c', key: 'k', doc: {} })).ok).toBe(true);
     expect((await b.handle('p1', low, { kind: 'reports.list' })).ok).toBe(true);
   });
@@ -236,7 +238,7 @@ describe('plugin broker', () => {
 
   it('denies connectors.metadata/push/validate when the caller lacks lab_admin (role gate)', async () => {
     const { b } = broker({ caps: [{ kind: 'host:connectors' }] });
-    const low = { id: 'u2', roles: ['data_analyst'] };
+    const low = { id: 'u2', roles: ['data_analyst'], dataScope: ALL_DATA };
     expect((await b.handle('p1', low, { kind: 'connectors.metadata', id: 'c1' })).ok).toBe(false);
     const push = await b.handle('p1', low, { kind: 'connectors.push', connectorId: 'c1', mapping: {}, period: '2026', dryRun: true });
     expect(push.ok).toBe(false);
@@ -246,7 +248,7 @@ describe('plugin broker', () => {
 
   it('denies schedule.register/list/remove when the caller lacks lab_admin (role gate)', async () => {
     const { b } = broker({ caps: [{ kind: 'host:schedule' }] });
-    const low = { id: 'u2', roles: ['data_analyst'] };
+    const low = { id: 'u2', roles: ['data_analyst'], dataScope: ALL_DATA };
     expect((await b.handle('p1', low, { kind: 'schedule.register', schedule: {} })).ok).toBe(false);
     const list = await b.handle('p1', low, { kind: 'schedule.list' });
     expect(list.ok).toBe(false);
@@ -311,7 +313,7 @@ describe('plugin broker', () => {
       caps: [{ kind: 'host:connectors' }],
       testConnector: async () => { throw new Error('connect ECONNREFUSED https://dhis.example user=admin password=s3cr3t'); },
     });
-    const r = await b.handle('p1', { id: 'u', roles: ['lab_admin'] }, { kind: 'connectors.test', id: 'c1' });
+    const r = await b.handle('p1', { id: 'u', roles: ['lab_admin'], dataScope: ALL_DATA }, { kind: 'connectors.test', id: 'c1' });
     expect(r.ok).toBe(false);
     expect((r as any).error).not.toMatch(/s3cr3t/);
     expect((r as any).error).toMatch(/connectors\.test failed/);
@@ -322,7 +324,7 @@ describe('plugin broker', () => {
       caps: [{ kind: 'host:connectors' }],
       connectorPush: async () => { throw new Error('boom ECONNREFUSED password=s3cr3t'); },
     });
-    const r = await b.handle('p1', { id: 'u', roles: ['lab_admin'] },
+    const r = await b.handle('p1', { id: 'u', roles: ['lab_admin'], dataScope: ALL_DATA },
       { kind: 'connectors.push', connectorId: 'c1', mapping: {}, period: '202601', dryRun: true });
     expect(r.ok).toBe(false);
     // The plugin-facing message carries a ref but no secret detail.
@@ -338,8 +340,8 @@ describe('plugin broker', () => {
 
   // ── SEC-03: plugin-level required-roles gate (applies to ALL ops incl. storage.*/invoke) ──
   describe('plugin required-roles gate (SEC-03)', () => {
-    const tech = { id: 'u-tech', roles: ['lab_technician'] };
-    const admin = { id: 'u-admin', roles: ['lab_admin'] };
+    const tech = { id: 'u-tech', roles: ['lab_technician'], dataScope: ALL_DATA };
+    const admin = { id: 'u-admin', roles: ['lab_admin'], dataScope: ALL_DATA };
 
     it('DENIES storage.list/get/put/invoke for a caller lacking the plugin required role', async () => {
       const { b } = broker({ caps: [], requiredRoles: ['lab_admin'], loadSink: async () => ({ invoke: async () => ({}) }) });
@@ -372,7 +374,7 @@ describe('plugin broker', () => {
 
   // ── SEC-04: egress kill-switch covers connector ops (gated to host:connectors, not net-egress) ──
   describe('egress kill-switch (SEC-04)', () => {
-    const admin = { id: 'u-admin', roles: ['lab_admin'] };
+    const admin = { id: 'u-admin', roles: ['lab_admin'], dataScope: ALL_DATA };
 
     it('DENIES every egressing connector op with the kill-switch error and does NOT reach the dep', async () => {
       const calls: string[] = [];
@@ -496,7 +498,7 @@ describe('plugin broker', () => {
 
     it('records a role-gate denial', async () => {
       const { b, audited } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list: async () => [], get: async () => null } });
-      await b.handle('p1', { id: 'u2', roles: ['data_analyst'] }, { kind: 'connectors.list' });
+      await b.handle('p1', { id: 'u2', roles: ['data_analyst'], dataScope: ALL_DATA }, { kind: 'connectors.list' });
       expect(audited[0]).toMatchObject({ op: 'connectors.list', outcome: 'denied' });
     });
 
@@ -522,7 +524,7 @@ describe('plugin broker', () => {
 });
 
 describe('plugin broker: imports', () => {
-  const admin = { id: 'u1', roles: ['lab_admin'], username: 'amina' };
+  const admin = { id: 'u1', roles: ['lab_admin'], dataScope: ALL_DATA, username: 'amina' };
   const IMPORT_CAPS = [{ kind: 'host:import' }];
   function fakeImports() {
     const calls: Array<[string, unknown[]]> = [];
@@ -563,7 +565,7 @@ describe('plugin broker: imports', () => {
     const noCap = broker({ caps: [], imports: imports.api });
     expect(await noCap.b.handle('p1', admin, { kind: 'import.list' })).toEqual({ ok: false, error: expect.stringMatching(/host:import/) });
     const withCap = broker({ caps: IMPORT_CAPS, imports: imports.api });
-    expect(await withCap.b.handle('p1', { id: 'u2', roles: ['lab_tech'] }, { kind: 'import.list' })).toEqual({ ok: false, error: expect.stringMatching(/lab_admin/) });
+    expect(await withCap.b.handle('p1', { id: 'u2', roles: ['lab_tech'], dataScope: ALL_DATA }, { kind: 'import.list' })).toEqual({ ok: false, error: expect.stringMatching(/lab_admin/) });
     expect(imports.calls).toEqual([]);
   });
 
@@ -629,7 +631,7 @@ describe('plugin broker: imports', () => {
 // service over the real plugin_data store on pg-mem. Not covered: a copy being driven, the CLI, or
 // the route that hands the broker its principal.
 describe('plugin broker: copies', () => {
-  const admin = { id: 'u1', roles: ['lab_admin'], username: 'amina' };
+  const admin = { id: 'u1', roles: ['lab_admin'], dataScope: ALL_DATA, username: 'amina' };
   const IMPORT_CAPS = [{ kind: 'host:import' }];
   const actor = { type: 'user', id: 'u1', name: 'amina' };
   // A source key. It sits in every set's cursor and must never reach the page.
@@ -690,7 +692,7 @@ describe('plugin broker: copies', () => {
     // The caller's role is the second gate, as for the import ops.
     const withCap = broker({ caps: IMPORT_CAPS, copies: copies.api });
     for (const op of ALL_OPS) {
-      expect(await withCap.b.handle('p1', { id: 'u2', roles: ['lab_tech'] }, op)).toEqual({ ok: false, error: expect.stringMatching(/lab_admin/) });
+      expect(await withCap.b.handle('p1', { id: 'u2', roles: ['lab_tech'], dataScope: ALL_DATA }, op)).toEqual({ ok: false, error: expect.stringMatching(/lab_admin/) });
     }
     expect(copies.calls).toEqual([]);
     expect(noCap.audited.map((e) => e.outcome)).toEqual(ALL_OPS.map(() => 'denied'));
@@ -807,7 +809,7 @@ describe('plugin broker: copies', () => {
 // real check service over the real plugin_data and held stores on pg-mem. Not covered: a check
 // being driven, the CLI, the route that hands the broker its principal, a real browser page.
 describe('plugin broker: checks', () => {
-  const admin = { id: 'u1', roles: ['lab_admin'], username: 'amina' };
+  const admin = { id: 'u1', roles: ['lab_admin'], dataScope: ALL_DATA, username: 'amina' };
   const IMPORT_CAPS = [{ kind: 'host:import' }];
   const actor = { type: 'user', id: 'u1', name: 'amina' };
   // A source key. It is the run's cursor and must never reach the page.
@@ -893,8 +895,8 @@ describe('plugin broker: checks', () => {
   });
 
   describe('held corrections (design 2026-11-18-held-corrections)', () => {
-    const corrector = { id: 'u2', roles: ['data_corrector'], capabilities: ['imports.correct_held'], username: 'baraka' };
-    const nobody = { id: 'u3', roles: ['data_analyst'], capabilities: ['reports.view'] };
+    const corrector = { id: 'u2', roles: ['data_corrector'], dataScope: ALL_DATA, capabilities: ['imports.correct_held'], username: 'baraka' };
+    const nobody = { id: 'u3', roles: ['data_analyst'], dataScope: ALL_DATA, capabilities: ['reports.view'] };
     const withCorrections = () => {
       const checks = fakeChecks();
       checks.api.correct = async (...args: unknown[]) => { checks.calls.push(['correct', args]); return { corrections: [{ field: 'dob_age' }] }; };
@@ -1000,7 +1002,7 @@ describe('plugin broker: checks', () => {
     }
     const withCap = broker({ caps: IMPORT_CAPS, checks: checks.api });
     for (const op of ALL_OPS) {
-      expect(await withCap.b.handle('p1', { id: 'u2', roles: ['lab_tech'] }, op)).toEqual({ ok: false, error: expect.stringMatching(/lab_admin/) });
+      expect(await withCap.b.handle('p1', { id: 'u2', roles: ['lab_tech'], dataScope: ALL_DATA }, op)).toEqual({ ok: false, error: expect.stringMatching(/lab_admin/) });
     }
     expect(checks.calls).toEqual([]);
     expect(noCap.audited.map((e) => e.outcome)).toEqual(ALL_OPS.map(() => 'denied'));
@@ -1359,7 +1361,7 @@ describe('plugin broker: the caller passed to plugin code (plugin host 2a task 6
     });
     return { b, resolveFacilities };
   }
-  const person = { id: 'u7', roles: ['lab_admin'], username: 'jdoe', displayName: 'Jane Doe', capabilities: ['patients.view'] };
+  const person = { id: 'u7', roles: ['lab_admin'], dataScope: ALL_DATA, username: 'jdoe', displayName: 'Jane Doe', capabilities: ['patients.view'] };
   const limitedTo = (over: Record<string, unknown>) => ({ ...person, dataScope: { limited: true as const, facilities: [], districts: [], regions: [], ...over } });
 
   it('passes the caller from the session and the host to a plugin with host functions', async () => {
@@ -1377,11 +1379,16 @@ describe('plugin broker: the caller passed to plugin code (plugin host 2a task 6
     expect(resolveFacilities).not.toHaveBeenCalled();
   });
 
-  it('gives an unlimited caller *, and a caller with no data limit at all *', async () => {
+  it('gives an unlimited caller *, and a caller with no data limit at all no facilities', async () => {
     const invoke = vi.fn(async () => ({}));
-    const { b } = hostBroker([{ kind: 'host:ce-read' }], { invoke });
+    const { b, resolveFacilities } = hostBroker([{ kind: 'host:ce-read' }], { invoke });
     await b.handle('p1', person, { kind: 'invoke', entrypoint: 'run', input: {} });
     expect((invoke.mock.calls[0] as any)[2].caller.facilities).toBe('*');
+    // The type requires a data limit; a caller from plain JavaScript can still leave it out.
+    const { dataScope: _d, ...noLimit } = person;
+    await b.handle('p1', noLimit as never, { kind: 'invoke', entrypoint: 'run', input: {} });
+    expect((invoke.mock.calls[1] as any)[2].caller.facilities).toEqual([]);
+    expect(resolveFacilities).not.toHaveBeenCalled();
   });
 
   it.each([

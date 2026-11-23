@@ -146,6 +146,74 @@ describe('plugin data requests (pg-mem)', () => {
     });
   });
 
+  describe('an older version keeps using its tables after a newer one added columns', () => {
+    // 0.2.0 adds a nullable column to samples. The stored shape now has it, and 0.1.0 does not.
+    const samplesV2: TableShape = { ...samples, columns: [...samples.columns, { name: 'batch', type: 'text' }] };
+    beforeEach(async () => {
+      await createPluginSchemas(db, PG_MEM_WITHOUT_RLS).apply(PLUGIN, [samplesV2, codes]);
+      await req.write(PLUGIN, [samplesV2, codes], all, { steps: [{ op: 'update', table: 'samples', key: { id: 1 }, set: { batch: 'b1' } }] });
+    });
+
+    it('selects with the older shapes and returns only the older columns', async () => {
+      const { rows } = await req.select(PLUGIN, shapes, all, { table: 'samples', where: [{ column: 'id', op: 'eq', value: 1 }] });
+      expect(Object.keys(rows[0]).sort()).toEqual(['code', 'created_at', 'facility', 'id', 'note', 'score', 'taken', 'updated_at']);
+      await expect(refusal(req.select(PLUGIN, shapes, all, { table: 'samples', columns: ['batch'] }))).resolves.toBe('column');
+    });
+
+    it('inserts, updates and deletes with the older shapes', async () => {
+      const r = await req.write(PLUGIN, shapes, all, { steps: [
+        { op: 'insert', table: 'samples', values: { id: 9, facility: 'fa', code: 'new' } },
+        { op: 'update', table: 'samples', key: { id: 1 }, set: { note: 'old version' } },
+        { op: 'delete', table: 'samples', key: { id: 2 } },
+      ] });
+      expect(r.results).toEqual([{ rowCount: 1 }, { rowCount: 1 }, { rowCount: 1 }]);
+      await expect(refusal(req.write(PLUGIN, shapes, all, { steps: [{ op: 'update', table: 'samples', key: { id: 1 }, set: { batch: 'x' } }] }))).resolves.toBe('column');
+      const { rows } = await req.select(PLUGIN, [samplesV2, codes], all, { table: 'samples', columns: ['id', 'note', 'batch'] });
+      expect(rows).toEqual([
+        { id: 1, note: 'old version', batch: 'b1' },
+        { id: 3, note: 'y', batch: null }, { id: 4, note: null, batch: null }, { id: 5, note: 'z', batch: null },
+        { id: 9, note: null, batch: null },
+      ]);
+    });
+
+    it('the facility filter still applies to the older shapes', async () => {
+      expect(await ids(siteA, {})).toEqual([1, 2, 5]);
+      await expect(refusal(req.write(PLUGIN, shapes, siteA, { steps: [{ op: 'insert', table: 'samples', values: { id: 10, facility: 'fb' } }] }))).resolves.toBe('facility');
+    });
+
+    it('a stored column that may not be empty and has no default refuses an insert with a plain error', async () => {
+      const recorded = { ...samplesV2, columns: [...samples.columns, { name: 'batch', type: 'text', nullable: false }] };
+      await db.withSchema('plugin_lab').updateTable('_openldr_shapes').set({ shape: JSON.stringify(recorded) }).where('table_name', '=', 'samples').execute();
+      const insert = req.write(PLUGIN, shapes, all, { steps: [{ op: 'insert', table: 'samples', values: { id: 11, facility: 'fa' } }] });
+      await expect(insert).rejects.toThrow(/column batch may not be empty and this version of the plugin does not declare it/);
+      await expect(refusal(req.write(PLUGIN, shapes, all, { steps: [{ op: 'insert', table: 'samples', values: { id: 11, facility: 'fa' } }] }))).resolves.toBe('shape');
+      // Reading, and changing rows that already exist, never touch that column.
+      expect(await ids(all, {})).toEqual([1, 2, 3, 4, 5]);
+      const r = await req.write(PLUGIN, shapes, all, { steps: [{ op: 'update', table: 'samples', key: { id: 1 }, set: { note: 'n' } }] });
+      expect(r.results).toEqual([{ rowCount: 1 }]);
+    });
+
+    it('a stored column that may not be empty but has a default does not block an insert', async () => {
+      const recorded = { ...samplesV2, columns: [...samples.columns, { name: 'batch', type: 'text', nullable: false, default: 'none' }] };
+      await db.withSchema('plugin_lab').updateTable('_openldr_shapes').set({ shape: JSON.stringify(recorded) }).where('table_name', '=', 'samples').execute();
+      const r = await req.write(PLUGIN, shapes, all, { steps: [{ op: 'insert', table: 'samples', values: { id: 12, facility: 'fa' } }] });
+      expect(r.results).toEqual([{ rowCount: 1 }]);
+    });
+
+    it('a declared column missing from the stored table is still refused', async () => {
+      const ahead: TableShape = { ...samples, columns: [...samples.columns, { name: 'later', type: 'text' }] };
+      await expect(refusal(req.select(PLUGIN, [ahead, codes], all, { table: 'samples', columns: ['id'] }))).resolves.toBe('shape');
+      await expect(refusal(req.write(PLUGIN, [ahead, codes], all, { steps: [{ op: 'delete', table: 'samples', key: { id: 1 } }] }))).resolves.toBe('shape');
+    });
+
+    it('a declared column with another type or emptiness rule is still refused', async () => {
+      const retyped: TableShape = { ...samples, columns: samples.columns.map((c) => (c.name === 'note' ? { ...c, type: 'integer' as const } : c)) };
+      const required: TableShape = { ...samples, columns: samples.columns.map((c) => (c.name === 'note' ? { ...c, nullable: false } : c)) };
+      await expect(refusal(req.select(PLUGIN, [retyped, codes], all, { table: 'samples' }))).resolves.toBe('shape');
+      await expect(refusal(req.select(PLUGIN, [required, codes], all, { table: 'samples' }))).resolves.toBe('shape');
+    });
+  });
+
   describe('filters, order, paging and count', () => {
     it('each filter kind', async () => {
       expect(await ids(all, { where: [{ column: 'code', op: 'eq', value: 'abd' }] })).toEqual([2]);

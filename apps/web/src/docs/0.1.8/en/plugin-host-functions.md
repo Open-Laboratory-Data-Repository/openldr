@@ -62,6 +62,8 @@ CE refuses a version that drops or renames a column, changes a type, changes whe
 
 A version that declares no tables keeps the tables and rows of the version before. Disabling a plugin, rolling it back or removing one old version keeps them too. Only removing the plugin and choosing to keep nothing drops the schema and its rows.
 
+After a rollback, the older version keeps reading and writing its tables. It reads and writes only the columns it declares. A column a newer version added stays in the table, and rows the older version adds leave it empty.
+
 ## db_select
 
 Reads rows from one declared table.

@@ -22,8 +22,9 @@ export interface BrokerPrincipal {
   /** The caller's capabilities. A holder of `imports.correct_held` may use the Feedback tab of an
    *  import plugin without the plugin's role (design 2026-11-18-held-corrections). */
   capabilities?: string[];
-  /** The caller's data limit (roles part 3). A limited caller may make only LIMITED_OPS. */
-  dataScope?: DataScope;
+  /** The caller's data limit (roles part 3). A limited caller may make only LIMITED_OPS. Required,
+   *  so a caller that forgets it is a type error, not a caller who sees every facility. */
+  dataScope: DataScope;
 }
 
 /** The only calls a caller with a data limit may make: the plugin's own storage, its wasm, and the
@@ -401,11 +402,13 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
   const brokerOpSchema = buildBrokerOpSchema(deps.maxDocBytes ?? DEFAULT_MAX_DOC_BYTES);
 
   /** The person a plugin call is made for, from the CE session (the principal), never from the op.
-   *  The data limit is resolved to facility ids once per call. A limited caller never gets '*'. */
+   *  The data limit is resolved to facility ids once per call. A limited caller never gets '*', and
+   *  nor does a principal with no data limit at all: a caller that forgot it gets no facilities. */
   async function callerOf(principal: BrokerPrincipal): Promise<PluginCaller> {
-    const scope = principal.dataScope;
-    let facilities: string[] | '*' = '*';
-    if (scope?.limited) {
+    const scope = principal.dataScope as DataScope | undefined;
+    let facilities: string[] | '*' = [];
+    if (scope && scope.limited === false) facilities = '*';
+    else if (scope?.limited) {
       const resolved = deps.resolveFacilities ? await deps.resolveFacilities(scope) : [];
       facilities = resolved === '*' ? [] : resolved.map((f) => f.toLowerCase());
     }
