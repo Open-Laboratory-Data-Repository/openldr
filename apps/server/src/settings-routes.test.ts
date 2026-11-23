@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createUpdateCheck, createLabIdentity, LabSectionError } from '@openldr/bootstrap';
+import { createUpdateCheck, createLabIdentity } from '@openldr/bootstrap';
 import { registerSettingsRoutes } from './settings-routes';
 
 const SYNC_STATUS = {
@@ -14,27 +14,6 @@ const SYNC_STATUS = {
   },
   pull: null, pendingPush: 3,
 };
-
-function fakeLabSections() {
-  const rows = new Map<string, string>();
-  const used = new Map<string, number>();
-  return {
-    __used: used,
-    listSections: async () => [...rows].sort(([a], [b]) => a.localeCompare(b)).map(([code, name]) => ({ code, name })),
-    addSection: async (code: string, name: string) => {
-      if (!/^[a-z][a-z0-9-]{0,39}$/.test(code)) throw new LabSectionError(`section code "${code}" is bad`, 'invalid');
-      if (rows.has(code)) throw new LabSectionError(`section ${code} already exists`, 'conflict');
-      rows.set(code, name.trim());
-      return { code, name: name.trim() };
-    },
-    removeSection: async (code: string) => {
-      if (!rows.has(code)) throw new LabSectionError(`no section ${code}`, 'not-found');
-      const n = used.get(code) ?? 0;
-      if (n > 0) throw new LabSectionError(`section ${code} is used by ${n} tests`, 'conflict');
-      rows.delete(code);
-    },
-  };
-}
 
 function fakeCtx(syncEnabled = true) {
   const store = new Map<string, boolean>();
@@ -84,9 +63,6 @@ function fakeCtx(syncEnabled = true) {
       // The REAL service over the same fake store, so a route test proves the whole pipeline
       // (zod schema → labIdentity.set → validateLabIdentityValue), not a stub that always agrees.
       labIdentity: createLabIdentity(appSettings as any),
-      // A small in-memory list that refuses in the service's words, so the route tests check the
-      // gate, the wire shape and the error codes. lab-sections.test.ts proves the real service on pg-mem.
-      labSections: fakeLabSections(),
       // Fake seal: prefix so a test can assert the stored value is the ENCRYPTED form, never plaintext.
       encryptSecret: (plain: string) => `enc:${plain}`,
       decryptSecret: (blob: string) => blob.replace(/^enc:/, ''),
@@ -519,115 +495,5 @@ describe('settings routes', () => {
       const res = await app.inject({ method: 'GET', url: '/api/settings/sync/central-certificate' });
       expect(res.statusCode).toBe(403);
     });
-  });
-});
-
-describe('lab-wide settings: self-authorisation and sections', () => {
-  const LAB = ['lab.settings'];
-
-  it('GET /api/settings/lab reports allowSelfAuthorise, false when nothing is stored', async () => {
-    const { ctx, deps } = fakeCtx();
-    const app = appWithUser([], (a) => registerSettingsRoutes(a, ctx, deps), ['reports.view']);
-    const res = await app.inject({ method: 'GET', url: '/api/settings/lab' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().allowSelfAuthorise).toBe(false);
-  });
-
-  it('GET /api/settings/lab/allow-self-authorise reads the switch with lab.settings alone, and is 403 without it', async () => {
-    const { ctx, deps } = fakeCtx();
-    (ctx as any).__settings.set('lab.allowSelfAuthorise', 'true');
-    const lab = appWithUser([], (a) => registerSettingsRoutes(a, ctx, deps), LAB);
-    const res = await lab.inject({ method: 'GET', url: '/api/settings/lab/allow-self-authorise' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ value: true });
-    const other = appWithUser([], (a) => registerSettingsRoutes(a, ctx, deps), ['reports.view', 'settings.view']);
-    expect((await other.inject({ method: 'GET', url: '/api/settings/lab/allow-self-authorise' })).statusCode).toBe(403);
-    // The letterhead read keeps its own gate: lab.settings alone does not open it.
-    expect((await lab.inject({ method: 'GET', url: '/api/settings/lab' })).statusCode).toBe(403);
-  });
-
-  it('PUT /api/settings/lab/allow-self-authorise stores the switch with lab.settings alone, and audits', async () => {
-    const { ctx, deps } = fakeCtx();
-    const app = appWithUser([], (a) => registerSettingsRoutes(a, ctx, deps), LAB);
-    const res = await app.inject({ method: 'PUT', url: '/api/settings/lab/allow-self-authorise', payload: { value: true } });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ value: true });
-    expect((ctx as any).__settings.get('lab.allowSelfAuthorise')).toBe('true');
-    expect((ctx as any).__audit).toContainEqual(expect.objectContaining({
-      action: 'settings.lab.allow_self_authorise', entityType: 'settings', entityId: 'lab.allowSelfAuthorise',
-      before: { value: false }, after: { value: true },
-    }));
-  });
-
-  it('PUT /api/settings/lab/allow-self-authorise is 403 without lab.settings, even with settings.edit_general', async () => {
-    const { ctx, deps } = fakeCtx();
-    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
-    const res = await app.inject({ method: 'PUT', url: '/api/settings/lab/allow-self-authorise', payload: { value: true } });
-    expect(res.statusCode).toBe(403);
-    expect((ctx as any).__settings.has('lab.allowSelfAuthorise')).toBe(false);
-  });
-
-  it('PUT /api/settings/lab/allow-self-authorise refuses a value that is not a boolean', async () => {
-    const { ctx, deps } = fakeCtx();
-    const app = appWithUser([], (a) => registerSettingsRoutes(a, ctx, deps), LAB);
-    const res = await app.inject({ method: 'PUT', url: '/api/settings/lab/allow-self-authorise', payload: { value: 'true' } });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('PUT /api/settings/lab still refuses lab.allowSelfAuthorise in the letterhead patch', async () => {
-    const { ctx, deps } = fakeCtx();
-    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
-    const res = await app.inject({ method: 'PUT', url: '/api/settings/lab', payload: { 'lab.allowSelfAuthorise': 'true' } });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('adds, lists and removes sections with lab.settings, and audits each change', async () => {
-    const { ctx, deps } = fakeCtx();
-    const app = appWithUser([], (a) => registerSettingsRoutes(a, ctx, deps), LAB);
-    const add = await app.inject({ method: 'POST', url: '/api/settings/lab/sections', payload: { code: 'haem', name: 'Haematology' } });
-    expect(add.statusCode).toBe(201);
-    expect(add.json()).toEqual({ code: 'haem', name: 'Haematology' });
-    const list = await app.inject({ method: 'GET', url: '/api/settings/lab/sections' });
-    expect(list.statusCode).toBe(200);
-    expect(list.json()).toEqual([{ code: 'haem', name: 'Haematology' }]);
-    const del = await app.inject({ method: 'DELETE', url: '/api/settings/lab/sections/haem' });
-    expect(del.statusCode).toBe(204);
-    expect((await app.inject({ method: 'GET', url: '/api/settings/lab/sections' })).json()).toEqual([]);
-    const actions = (ctx as any).__audit.map((e: any) => [e.action, e.entityId]);
-    expect(actions).toEqual([['settings.lab.section.add', 'haem'], ['settings.lab.section.remove', 'haem']]);
-  });
-
-  it('answers each section refusal with its status code and the service words, and audits nothing', async () => {
-    const { ctx, deps } = fakeCtx();
-    const app = appWithUser([], (a) => registerSettingsRoutes(a, ctx, deps), LAB);
-    await app.inject({ method: 'POST', url: '/api/settings/lab/sections', payload: { code: 'haem', name: 'Haematology' } });
-    (ctx as any).__audit.length = 0;
-    (ctx as any).labSections.__used.set('haem', 3);
-    const bad = await app.inject({ method: 'POST', url: '/api/settings/lab/sections', payload: { code: 'Haem', name: 'X' } });
-    expect(bad.statusCode).toBe(400);
-    const dup = await app.inject({ method: 'POST', url: '/api/settings/lab/sections', payload: { code: 'haem', name: 'X' } });
-    expect(dup.statusCode).toBe(409);
-    expect(dup.json()).toEqual({ error: 'section haem already exists' });
-    const used = await app.inject({ method: 'DELETE', url: '/api/settings/lab/sections/haem' });
-    expect(used.statusCode).toBe(409);
-    expect(used.json()).toEqual({ error: 'section haem is used by 3 tests' });
-    const gone = await app.inject({ method: 'DELETE', url: '/api/settings/lab/sections/micro' });
-    expect(gone.statusCode).toBe(404);
-    const noBody = await app.inject({ method: 'POST', url: '/api/settings/lab/sections', payload: { code: 'micro' } });
-    expect(noBody.statusCode).toBe(400);
-    expect((ctx as any).__audit).toEqual([]);
-  });
-
-  it('every section route is 403 without lab.settings', async () => {
-    const { ctx, deps } = fakeCtx();
-    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps), [...ALL_SETTINGS_CAPS, 'settings.view', 'reports.view']);
-    for (const [method, url, payload] of [
-      ['GET', '/api/settings/lab/sections', undefined],
-      ['POST', '/api/settings/lab/sections', { code: 'haem', name: 'Haematology' }],
-      ['DELETE', '/api/settings/lab/sections/haem', undefined],
-    ] as const) {
-      const res = await app.inject({ method, url, payload });
-      expect(res.statusCode, `${method} ${url}`).toBe(403);
-    }
   });
 });

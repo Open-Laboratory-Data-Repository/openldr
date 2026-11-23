@@ -56,29 +56,3 @@ describe('createLabIdentity', () => {
     expect(rows.size).toBe(0);
   });
 });
-
-describe('lab.allowSelfAuthorise', () => {
-  it('reads as false when no row is stored', async () => {
-    const { store } = fakeStore();
-    expect(await createLabIdentity(store).allowSelfAuthorise()).toBe(false);
-  });
-
-  it("stores the switch as 'true' or 'false' beside the other lab keys, and reads it back", async () => {
-    const { store, rows } = fakeStore();
-    const svc = createLabIdentity(store);
-    await svc.setAllowSelfAuthorise(true, 'tester');
-    expect(rows.get('lab.allowSelfAuthorise')).toBe('true');
-    expect(await svc.allowSelfAuthorise()).toBe(true);
-    await svc.setAllowSelfAuthorise(false, 'tester');
-    expect(rows.get('lab.allowSelfAuthorise')).toBe('false');
-    expect(await svc.allowSelfAuthorise()).toBe(false);
-  });
-
-  it('keeps the switch out of the letterhead values and tokens', async () => {
-    const { store } = fakeStore();
-    const svc = createLabIdentity(store);
-    await svc.setAllowSelfAuthorise(true, null);
-    expect(await svc.all()).toEqual({});
-    expect(await svc.tokens()).toEqual({});
-  });
-});

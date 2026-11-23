@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CAPABILITIES, CAPABILITY_KEYS, CAPABILITY_GROUPS } from './catalog';
 import { SYSTEM_ROLES } from './presets';
-import { LIMITED_SCOPE_DROPS } from './data-scope';
 
 describe('capability catalog', () => {
   it('includes the data_exposure.manage capability', () => {
@@ -16,10 +15,9 @@ describe('capability catalog', () => {
   // 45 -> 46: imports.correct_held, for correcting held requests (design 2026-11-18-held-corrections).
   // 46 -> 47: query.manage, for changing saved queries (design 2026-11-19-manage-saved-queries).
   // 47 -> 48: forms.void_entries, for marking a form entry as entered in error (plan 2026-11-22-form-entries).
-  // 48 -> 55: the seven lab.* keys of the lab module (design 2026-11-22-lab-module).
-  it('exposes 55 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(55);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(55);
+  it('exposes 48 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(48);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(48);
   });
 
   it('has forms.void_entries in the forms group', () => {
@@ -104,35 +102,5 @@ describe('patients capabilities', () => {
       expect(role(slug).capabilities).not.toContain('patients.manage');
     }
     expect(role('lab_technician').capabilities.some((c) => c.startsWith('patients.'))).toBe(false);
-  });
-});
-
-describe('lab capabilities', () => {
-  const LAB = [
-    { key: 'lab.receive', label: 'Receive samples', description: 'Find and register requests, receive samples, correct a typo in a request, and link its patient.' },
-    { key: 'lab.reject', label: 'Return and reject', description: 'Return a request to its site for correction, or reject a sample and ask for a redraw.' },
-    { key: 'lab.results.enter', label: 'Enter results', description: 'Enter and change results that are not yet authorised.' },
-    { key: 'lab.results.authorise', label: 'Authorise results', description: 'Authorise results entered by someone else.' },
-    { key: 'lab.results.amend', label: 'Amend results', description: 'Correct a released result, with a reason.' },
-    { key: 'lab.worklist.view', label: 'View worklists', description: "See the lab's worklists." },
-    { key: 'lab.settings', label: 'Lab settings', description: "Set the lab's sections, which tests need review, and self-authorisation." },
-  ];
-
-  it('has the seven lab keys, in order, in the lab group', () => {
-    expect(CAPABILITY_GROUPS.find((g) => g.key === 'lab')).toEqual({
-      key: 'lab',
-      label: 'Lab',
-      capabilities: LAB.map((c) => ({ ...c, group: 'lab' })),
-    });
-  });
-
-  // Slice 1b and 2 review: reception reads patients and orders from every facility, so a data limit
-  // takes away lab.receive and lab.reject. The other five lab keys stay.
-  it('drops the reception keys for a user with a data limit and keeps the other lab keys', () => {
-    const drops = ['lab.receive', 'lab.reject'];
-    for (const c of LAB) {
-      if (drops.includes(c.key)) expect(LIMITED_SCOPE_DROPS).toContain(c.key);
-      else expect(LIMITED_SCOPE_DROPS).not.toContain(c.key);
-    }
   });
 });

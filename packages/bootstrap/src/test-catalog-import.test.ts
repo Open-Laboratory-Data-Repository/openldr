@@ -82,7 +82,7 @@ describe('catalogExportRow', () => {
       code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL',
       specimenTypes: [{ system: LOCAL, code: 'BLD' }, { system: LOCAL, code: 'UR' }], resultParams: [],
       loinc: '25836-8', active: true,
-      lab: { enabled: true, specimenTypes: null, localDisplay: 'VL', section: null, needsReview: true },
+      lab: { enabled: true, specimenTypes: null, localDisplay: 'VL' },
     };
     expect(catalogExportRow(test)).toEqual({
       code: 'HIVVL', name: 'HIV viral load', short_name: '', loinc: '25836-8', category: 'MOL', specimen_types: 'BLD;UR',

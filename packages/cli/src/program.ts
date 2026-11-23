@@ -49,10 +49,7 @@ import {
   runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport, runTestCatalogParams,
   type TestCatalogListOpts, type TestCatalogImportOpts,
 } from './test-catalog';
-import {
-  runLabRequisitionsRebuild, runLabSectionsAdd, runLabSectionsList, runLabSectionsRemove, runLabSettingsSet, runLabTestsSet,
-  type LabTestsSetOpts,
-} from './lab';
+import { runLabRequisitionsRebuild } from './requisitions';
 import {
   runTestMappingList, runTestMappingSet, runTestMappingClear, runTestMappingExport, runTestMappingImport,
   runTestMappingRebuild, runTestMappingMatch, type TestMappingListOpts,
@@ -694,31 +691,9 @@ export function buildProgram(): Command {
       process.exitCode = await runTestCatalogParams(code, opts);
     });
 
-  // Lab module slice 1a: the lab-wide settings on Settings ▸ Laboratory, and a test's section and
-  // review setting. Each calls the service its route calls and needs lab.settings in served mode.
-  const labCmd = program.command('lab').description("This lab's own settings: sections, review and self-authorisation");
-  const labSections = labCmd.command('sections').description("The lab's sections, which tests are filed under");
-  labSections.command('list').description('List the sections').option('--json', 'emit JSON', false)
-    .action(async (opts: { json: boolean }) => { process.exitCode = await runLabSectionsList(opts); });
-  labSections.command('add <code> <name>')
-    .description('Add a section. The code is lowercase letters, digits and dashes, starting with a letter')
-    .option('--json', 'emit JSON', false)
-    .action(async (code: string, name: string, opts: { json: boolean }) => { process.exitCode = await runLabSectionsAdd(code, name, opts); });
-  labSections.command('remove <code>').description('Remove a section no test uses. Refuses without --force')
-    .option('--force', 'remove it', false)
-    .option('--json', 'emit JSON', false)
-    .action(async (code: string, opts: { force: boolean; json: boolean }) => { process.exitCode = await runLabSectionsRemove(code, opts); });
-  labCmd.command('tests').description("A test's lab settings")
-    .command('set <code>').description("Set a test's section or whether its results need review")
-    .option('--section <code>', 'file the test under this section')
-    .option('--no-section', 'take the test out of its section')
-    .option('--needs-review <true|false>', 'whether its results need review before authorisation')
-    .option('--json', 'emit JSON', false)
-    .action(async (code: string, opts: LabTestsSetOpts) => { process.exitCode = await runLabTestsSet(code, opts); });
-  labCmd.command('settings').description('Lab-wide switches')
-    .command('set <key> <value>').description('Set a lab-wide switch: allow-self-authorise true|false')
-    .option('--json', 'emit JSON', false)
-    .action(async (key: string, value: string, opts: { json: boolean }) => { process.exitCode = await runLabSettingsSet(key, value, opts); });
+  // The index that finds an order by its requisition number (migration 139). Repair only, so it
+  // needs settings.danger_zone in served mode.
+  const labCmd = program.command('lab').description("This lab's own maintenance");
   labCmd.command('requisitions').description('The index that finds an order by its requisition number')
     .command('rebuild').description('Index every current order by its requisition number again. Refuses without --force')
     .option('--force', 'rebuild it', false)

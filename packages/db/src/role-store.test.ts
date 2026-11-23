@@ -3,13 +3,13 @@ import { makeMigratedDb } from './migrations/internal/test-helpers';
 import { createRoleStore } from './role-store';
 
 describe('RoleStore', () => {
-  it('seedSystemRoles is idempotent and creates 6 roles with preset caps', async () => {
+  it('seedSystemRoles is idempotent and creates 5 roles with preset caps', async () => {
     const db = await makeMigratedDb();
     const store = createRoleStore(db);
     await store.seedSystemRoles();
     await store.seedSystemRoles(); // twice — no duplicates
     const roles = await store.list();
-    expect(roles.length).toBe(6);
+    expect(roles.length).toBe(5);
     const admin = roles.find((r) => r.slug === 'lab_admin')!;
     expect(admin.isSystem).toBe(true);
     expect(admin.locked).toBe(true);
@@ -266,75 +266,31 @@ describe('RoleStore', () => {
     await db.destroy();
   });
 
-  // An install from before the lab module: its five roles exist, the lab keys were never in its
-  // catalog, and the lab has edited the technician. The next boot adds Reception, grants the new
-  // keys to the technician and the manager once, and keeps the lab's own edit.
-  it('gives an existing install the lab keys once and creates Reception', async () => {
-    const db = await makeMigratedDb();
-    const store = createRoleStore(db);
-    await store.seedSystemRoles();
-    await db.deleteFrom('role_capabilities').where('capability', 'like', 'lab.%').execute();
-    await db.deleteFrom('capability_introductions').where('capability', 'like', 'lab.%').execute();
-    // An old install never had the Reception row. remove() refuses a system role, so delete it here.
-    const receptionId = (await store.getBySlug('reception'))!.id;
-    await db.deleteFrom('role_capabilities').where('role_id', '=', receptionId).execute();
-    await db.deleteFrom('roles').where('id', '=', receptionId).execute();
-    const tech = (await store.getBySlug('lab_technician'))!;
-    await store.update(tech.id, { capabilities: ['forms.view'] }); // the lab's own edit
-
-    const result = await store.seedSystemRoles();
-
-    expect(result.created).toEqual(['reception']);
-    expect((await store.getBySlug('reception'))!.capabilities.sort()).toEqual(
-      ['lab.receive', 'lab.reject', 'lab.worklist.view', 'patients.view'],
-    );
-    expect((await store.getBySlug('lab_technician'))!.capabilities.sort()).toEqual(
-      ['forms.view', 'lab.reject', 'lab.results.enter', 'lab.worklist.view'],
-    );
-    const manager = (await store.getBySlug('lab_manager'))!;
-    expect(manager.capabilities).toEqual(expect.arrayContaining([
-      'lab.receive', 'lab.reject', 'lab.results.enter', 'lab.results.authorise', 'lab.results.amend',
-      'lab.worklist.view', 'lab.settings',
-    ]));
-    const grantedTo = (slug: string) => result.granted.filter((g) => g.slug === slug).map((g) => g.capability).sort();
-    expect(grantedTo('lab_technician')).toEqual(['lab.reject', 'lab.results.enter', 'lab.worklist.view']);
-    expect(grantedTo('lab_manager')).toHaveLength(7);
-    expect(grantedTo('data_analyst')).toEqual([]);
-    expect(grantedTo('system_auditor')).toEqual([]);
-
-    // Once only: the lab revokes a new key, and later boots leave the revoke in place.
-    await store.update(tech.id, { capabilities: ['forms.view', 'lab.worklist.view'] });
-    const again = await store.seedSystemRoles();
-    expect(again.granted.filter((g) => g.slug !== 'lab_admin')).toEqual([]);
-    expect((await store.getBySlug('lab_technician'))!.capabilities.sort()).toEqual(['forms.view', 'lab.worklist.view']);
-    await db.destroy();
-  });
-
-  // A lab made its own role named Reception before the lab module. create() slugs it to
-  // 'reception', the same slug as the new system role. The seed must leave that role alone.
+  // A lab's own role holding a system slug (a row written before the slug was a system one, or by
+  // hand: create() cannot make an underscore slug). The seed must leave that role alone.
   it('leaves a custom role holding a system slug unchanged and reports it', async () => {
     const db = await makeMigratedDb();
     const store = createRoleStore(db);
     await store.seedSystemRoles();
-    const systemReception = (await store.getBySlug('reception'))!;
-    await db.deleteFrom('role_capabilities').where('role_id', '=', systemReception.id).execute();
-    await db.deleteFrom('roles').where('id', '=', systemReception.id).execute();
-    const custom = await store.create({ name: 'Reception', capabilities: ['forms.view'] });
-    expect(custom.slug).toBe('reception');
-    expect(custom.isSystem).toBe(false);
+    const systemTech = (await store.getBySlug('lab_technician'))!;
+    await db.deleteFrom('role_capabilities').where('role_id', '=', systemTech.id).execute();
+    await db.deleteFrom('roles').where('id', '=', systemTech.id).execute();
+    const customId = 'r-custom-bench';
+    await db.insertInto('roles').values({ id: customId, slug: 'lab_technician', name: 'Bench', description: null, is_system: false }).execute();
+    await db.insertInto('role_capabilities').values({ role_id: customId, capability: 'forms.view' }).execute();
 
     const result = await store.seedSystemRoles();
     const again = await store.seedSystemRoles();
 
-    expect(result.blocked).toEqual([{ slug: 'reception', roleId: custom.id, name: 'Reception' }]);
-    expect(again.blocked).toEqual([{ slug: 'reception', roleId: custom.id, name: 'Reception' }]);
+    expect(result.blocked).toEqual([{ slug: 'lab_technician', roleId: customId, name: 'Bench' }]);
+    expect(again.blocked).toEqual([{ slug: 'lab_technician', roleId: customId, name: 'Bench' }]);
     expect(result.created).toEqual([]);
-    expect(result.granted.filter((g) => g.roleId === custom.id)).toEqual([]);
-    const after = (await store.getBySlug('reception'))!;
-    expect(after.id).toBe(custom.id);
+    expect(result.granted.filter((g) => g.roleId === customId)).toEqual([]);
+    const after = (await store.getBySlug('lab_technician'))!;
+    expect(after.id).toBe(customId);
     expect(after.isSystem).toBe(false);
     expect(after.capabilities).toEqual(['forms.view']);
-    expect((await db.selectFrom('roles').select('id').where('slug', '=', 'reception').execute())).toHaveLength(1);
+    expect((await db.selectFrom('roles').select('id').where('slug', '=', 'lab_technician').execute())).toHaveLength(1);
     await db.destroy();
   });
 
@@ -354,7 +310,7 @@ describe('RoleStore', () => {
     const second = await store.seedSystemRoles();
 
     expect(first.created.sort()).toEqual(
-      ['data_analyst', 'lab_admin', 'lab_manager', 'lab_technician', 'reception', 'system_auditor'].sort(),
+      ['data_analyst', 'lab_admin', 'lab_manager', 'lab_technician', 'system_auditor'].sort(),
     );
     expect(first.granted).toEqual([]);
     expect(second.created).toEqual([]);
@@ -431,7 +387,7 @@ describe('RoleStore', () => {
     const d = await store.diagnoseCapabilities();
 
     expect(d.roles.every((r) => r.present === false)).toBe(true);
-    expect(d.roles).toHaveLength(6);
+    expect(d.roles).toHaveLength(5);
     await db.destroy();
   });
 
