@@ -361,7 +361,8 @@ function actionRefusal(
 
 export interface PluginBrokerDeps {
   plugins: {
-    list(): Promise<Array<{ id: string; version: string; enabled: boolean; manifest: Record<string, unknown> }>>;
+    /** Every installed version of every plugin. Exactly one version of a plugin is `active`. */
+    list(): Promise<Array<{ id: string; version: string; enabled: boolean; active: boolean; manifest: Record<string, unknown> }>>;
     loadSink(id: string, version?: string): Promise<{ invoke(entrypoint: string, input: unknown, opts?: unknown): Promise<unknown> } | undefined>;
   };
   pluginData: PluginDataStore;
@@ -468,9 +469,11 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
         return deny(op.kind, `operation ${op.kind} is not available with your data limit`);
       }
       try {
-        // 1. Plugin must be installed + enabled.
+        // 1. Plugin must be installed + enabled. The store lists every version of a plugin, and
+        // enabling marks them all, so take the active one: after an upgrade or a rollback an older
+        // row's manifest (its grant, its ui gate, its actionPermissions) must never be read.
         const rows = await deps.plugins.list();
-        const row = rows.find((r) => r.id === pluginId && r.enabled);
+        const row = rows.find((r) => r.id === pluginId && r.active && r.enabled);
         if (!row) return deny(op.kind, `plugin ${pluginId} is not installed or disabled`);
 
         // 1b. Plugin-level required-roles gate — applies to EVERY op (incl. storage.*/invoke),

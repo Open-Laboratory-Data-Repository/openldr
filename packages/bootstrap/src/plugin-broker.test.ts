@@ -5,7 +5,7 @@ import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { newDb } from 'pg-mem';
 import type { Kysely } from 'kysely';
 import { createPluginRequests, createPluginSchemas, type TableShape } from '@openldr/db';
-import { createWasmSink, parseManifest } from '@openldr/plugins';
+import { createPluginStore, createWasmSink, parseManifest } from '@openldr/plugins';
 import { PG_MEM_WITHOUT_RLS } from '../../db/src/plugin-schema';
 import { checkForPage, createPluginBroker, buildBrokerOpSchema, type PluginBrokerDeps } from './plugin-broker';
 import { createPluginHost } from './plugin-host';
@@ -55,7 +55,7 @@ function broker(opts: {
   const data = memData();
   const manifest: any = opts.caps === undefined ? {} : { capabilities: opts.caps };
   if (opts.requiredRoles) manifest.payload = { ui: { requiredRoles: opts.requiredRoles, ...(opts.requiredCapabilities ? { requiredCapabilities: opts.requiredCapabilities } : {}) } };
-  const row = { id: 'p1', version: '1.0.0', enabled: true, manifest };
+  const row = { id: 'p1', version: '1.0.0', enabled: true, active: true, manifest };
   const audited: Array<{ pluginId: string; op: string; outcome: string; reason?: string }> = [];
   const logged: Array<{ obj: any; msg: string }> = [];
   const b = createPluginBroker({
@@ -1240,7 +1240,7 @@ describe('plugin broker: checks', () => {
     // The copy entrypoint names one set, requests. A check start compares it with each copy's setSql.
     const copySpec = { sets: [{ name: 'requests', keyQuery: { sql: 'SELECT TOP ({{limit}}) [K] FROM [R] WHERE [K] > {{after}} ORDER BY [K]' }, detailQueries: [] }] };
     const sink = { invoke: async (entrypoint: string) => (entrypoint === 'c' ? copySpec : { groups: [] }) };
-    const plugins = { list: async () => [{ id: 'p1', version: '1.0.0', enabled: true, manifest: manifest('p1') }, { id: 'p2', version: '1.0.0', enabled: true, manifest: manifest('p2') }], loadSink: async () => sink } as any;
+    const plugins = { list: async () => [{ id: 'p1', version: '1.0.0', enabled: true, active: true, manifest: manifest('p1') }, { id: 'p2', version: '1.0.0', enabled: true, active: true, manifest: manifest('p2') }], loadSink: async () => sink } as any;
     const copyDoc = (id: string, pluginId: string) => ({
       id, kind: 'copy', rev: 1, pluginId, pluginVersion: '1.0.0', connectorId: 'c1', status: 'completed', options: {}, pageSize: 500,
       // A source copy: a check start refuses a copy with no set requests.
@@ -1347,7 +1347,7 @@ describe('plugin broker: the caller passed to plugin code (plugin host 2a task 6
   const fakeHost = { forCall: vi.fn(() => ({})) };
 
   function hostBroker(caps: unknown[], sink: unknown, over: Partial<PluginBrokerDeps> = {}) {
-    const row = { id: 'p1', version: '1.0.0', enabled: true, manifest: { capabilities: caps } };
+    const row = { id: 'p1', version: '1.0.0', enabled: true, active: true, manifest: { capabilities: caps } };
     const resolveFacilities = vi.fn(async (scope: any) => facilityIdsInScope(registry, scope));
     const b = createPluginBroker({
       plugins: { list: async () => [row], loadSink: async () => sink } as any,
@@ -1424,7 +1424,7 @@ describe('plugin broker: the caller passed to plugin code (plugin host 2a task 6
 
   it('invokes a legacy plugin (no capabilities field) exactly as before', async () => {
     const invoke = vi.fn(async () => ({}));
-    const row = { id: 'p1', version: '1.0.0', enabled: true, manifest: {} };
+    const row = { id: 'p1', version: '1.0.0', enabled: true, active: true, manifest: {} };
     const b = createPluginBroker({
       plugins: { list: async () => [row], loadSink: async () => ({ invoke }) } as any,
       pluginData: memData().store as any, reporting: defaultReporting(),
@@ -1499,7 +1499,7 @@ describe('plugin broker: the permission each action needs (plugin host 2b task 3
 
   function gated(payload: Record<string, unknown>, opts: { caps?: unknown[]; sink?: unknown; host?: PluginBrokerDeps['host']; resolveFacilities?: PluginBrokerDeps['resolveFacilities'] } = {}) {
     const invoke = vi.fn(async (entrypoint: string) => ({ ran: entrypoint }));
-    const row = { id: 'lab', version: '0.1.0', enabled: true, manifest: { capabilities: opts.caps ?? [], payload } };
+    const row = { id: 'lab', version: '0.1.0', enabled: true, active: true, manifest: { capabilities: opts.caps ?? [], payload } };
     const audited: Array<{ op: string; outcome: string; reason?: string }> = [];
     const b = createPluginBroker({
       audit: async (e) => { audited.push({ op: e.op, outcome: e.outcome, reason: e.reason }); },
@@ -1718,5 +1718,70 @@ describe('plugin broker: the permission each action needs (plugin host 2b task 3
       expect(r.data).toMatchObject({ ok: false, error: { code: 'OUTSIDE_DATA_LIMIT' } });
       expect(persist).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('plugin broker: the active version\'s manifest (plugin host 2b task 3, fix round 1)', () => {
+  const PERMISSIONS = [{ key: 'lab.orders.receive', label: 'Receive orders', description: '' }];
+  const gatedPayload = { permissions: PERMISSIONS, actionPermissions: { receive: ['lab.orders.receive'] } };
+  const manifest = (version: string, payload?: Record<string, unknown>) => ({ id: 'lab', version, capabilities: [], ...(payload ? { payload } : {}) });
+  const nobody = { id: 'u1', roles: [] as string[], dataScope: ALL_DATA, capabilities: [] as string[] };
+
+  async function withStore() {
+    const store = createPluginStore(await makeMigratedDb());
+    const loaded: Array<string | undefined> = [];
+    const invoke = vi.fn(async () => ({ ran: true }));
+    const b = createPluginBroker({
+      plugins: { list: () => store.list(), loadSink: async (_id: string, version?: string) => { loaded.push(version); return { invoke }; } },
+      pluginData: memData().store as any,
+      reporting: defaultReporting(),
+      connectors: { list: async () => [], get: async () => null },
+      policy: () => ({ uiEnabled: true, egressEnabled: true }),
+    });
+    return { store, b, invoke, loaded };
+  }
+  const install = (store: ReturnType<typeof createPluginStore>, version: string, payload?: Record<string, unknown>) =>
+    store.install({ id: 'lab', version, sha256: version, manifest: manifest(version, payload), approvedBy: null });
+
+  it('after 0.2.0 is upgraded to 0.10.0, the gate reads 0.10.0, not the older row the list sorts first', async () => {
+    const { store, b, invoke, loaded } = await withStore();
+    await install(store, '0.2.0');
+    await install(store, '0.10.0', gatedPayload);
+    // Both rows are enabled; text order puts 0.2.0 before 0.10.0.
+    const rows = (await store.list()).filter((r) => r.id === 'lab');
+    expect(rows.map((r) => [r.version, r.enabled, r.active])).toEqual([['0.2.0', true, false], ['0.10.0', true, true]]);
+
+    expect(await b.handle('lab', nobody, { kind: 'invoke', entrypoint: 'receive', input: {} })).toEqual({
+      ok: false, error: 'the action receive of plugin lab needs one of these permissions: Receive orders',
+    });
+    expect(await b.handle('lab', nobody, { kind: 'invoke', entrypoint: 'anything', input: {} })).toMatchObject({ ok: false });
+    expect(invoke).not.toHaveBeenCalled();
+
+    expect((await b.handle('lab', { ...nobody, capabilities: ['lab.orders.receive'] }, { kind: 'invoke', entrypoint: 'receive', input: {} })).ok).toBe(true);
+    expect(loaded).toEqual(['0.10.0']);
+  });
+
+  it('after a rollback, the rolled-back version\'s manifest is the one read', async () => {
+    const { store, b, invoke, loaded } = await withStore();
+    await install(store, '0.1.0', gatedPayload);
+    await install(store, '0.2.0');
+    // 0.2.0 has no actionPermissions: any caller runs any entrypoint, as before.
+    expect((await b.handle('lab', nobody, { kind: 'invoke', entrypoint: 'anything', input: {} })).ok).toBe(true);
+    await store.rollback('lab', '0.1.0');
+    expect((await b.handle('lab', nobody, { kind: 'invoke', entrypoint: 'anything', input: {} })).ok).toBe(false);
+    expect((await b.handle('lab', nobody, { kind: 'invoke', entrypoint: 'receive', input: {} })).ok).toBe(false);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(loaded).toEqual(['0.2.0']);
+  });
+
+  it('a plugin with no active row is refused', async () => {
+    const row = { id: 'lab', version: '0.1.0', enabled: true, active: false, manifest: manifest('0.1.0') };
+    const b = createPluginBroker({
+      plugins: { list: async () => [row], loadSink: async () => ({ invoke: async () => ({}) }) },
+      pluginData: memData().store as any, reporting: defaultReporting(),
+      connectors: { list: async () => [], get: async () => null },
+      policy: () => ({ uiEnabled: true, egressEnabled: true }),
+    });
+    expect(await b.handle('lab', nobody, { kind: 'storage.get', collection: 'c', key: 'k' })).toEqual({ ok: false, error: 'plugin lab is not installed or disabled' });
   });
 });
