@@ -49,7 +49,12 @@ export interface CapabilityDiagnosis {
     revoked: string[];
     pending: string[];
   }>;
+  /** Stays empty. A stored key the catalog does not list is kept on purpose (see `kept`), so no
+   *  stored key is an orphan any more. The field stays so the `--json` shape does not change. */
   orphaned: Array<{ slug: string; capability: string }>;
+  /** Stored keys the catalog does not list, each once. A save keeps them (see `writeCaps`), so a
+   *  plugin that brings the key back finds the grant still in place. Not an error. */
+  kept: string[];
   /** False when the capability ledger could not be read. In that state reconciliation is
    *  DISABLED for unlocked presets and `revoked` vs `pending` cannot be distinguished, so
    *  every missing capability is reported under the conservative `revoked` class. */
@@ -78,6 +83,12 @@ const LOCKED_SLUG = 'lab_admin';
 function validateCaps(caps: string[]): void {
   const known = new Set(CAPABILITY_KEYS);
   for (const c of caps) if (!known.has(c)) throw new OpenLdrError(`unknown capability: ${c}`);
+}
+
+/** Stored keys the catalog does not list. */
+function unlisted(caps: string[]): string[] {
+  const known = new Set(CAPABILITY_KEYS);
+  return caps.filter((c) => !known.has(c));
 }
 
 export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
@@ -154,10 +165,15 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
     return rows.length;
   }
 
+  // Writes the requested set plus any stored key the catalog does not list. Those keys are kept on
+  // purpose: the lab keys leave the catalog for a plugin, and a role must not lose its lab grants
+  // just because someone saved it. No save can remove such a key; only deleting the role does.
   async function writeCaps(roleId: string, caps: string[]): Promise<void> {
+    const keep = unlisted(await capsFor(roleId));
+    const next = [...new Set([...caps, ...keep])];
     await db.deleteFrom('role_capabilities').where('role_id', '=', roleId).execute();
-    if (caps.length) {
-      await db.insertInto('role_capabilities').values(caps.map((c) => ({ role_id: roleId, capability: c }))).execute();
+    if (next.length) {
+      await db.insertInto('role_capabilities').values(next.map((c) => ({ role_id: roleId, capability: c }))).execute();
     }
   }
 
@@ -221,7 +237,12 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       const row = await getRow(id);
       if (!row) throw new OpenLdrError(`role ${id} not found`);
       if (row.slug === LOCKED_SLUG) throw new OpenLdrError('the Administrator role cannot be modified');
-      if (patch.capabilities) validateCaps(patch.capabilities);
+      // Validate only the keys this save adds. A stored key the catalog no longer lists comes back
+      // in the list the Roles page and `roles grant` send, and must not block the save.
+      if (patch.capabilities) {
+        const stored = new Set(await capsFor(id));
+        validateCaps(patch.capabilities.filter((c) => !stored.has(c)));
+      }
       const set: Record<string, unknown> = { updated_at: sql`now()` };
       if (patch.name !== undefined) set.name = patch.name;
       if (patch.description !== undefined) set.description = patch.description;
@@ -421,13 +442,11 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       const rows = await db
         .selectFrom('role_capabilities')
         .innerJoin('roles', 'roles.id', 'role_capabilities.role_id')
-        .select(['roles.slug as slug', 'role_capabilities.capability as capability'])
+        .select(['role_capabilities.capability as capability'])
         .execute();
-      const orphaned = rows
-        .filter((r) => !known.has(r.capability))
-        .map((r) => ({ slug: r.slug, capability: r.capability }));
+      const kept = [...new Set(rows.map((r) => r.capability).filter((c) => !known.has(c)))].sort();
 
-      return { roles, orphaned, ledgerAvailable: ledger !== null };
+      return { roles, orphaned: [], kept, ledgerAvailable: ledger !== null };
     },
     async backfillUserFromRoleNames(subject, roleNames) {
       for (const name of roleNames) {

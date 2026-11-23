@@ -408,8 +408,9 @@ describe('RoleStore', () => {
     await db.destroy();
   });
 
-  // The mirror-image drift: a key retired from the catalog leaves orphan rows behind.
-  it('reports capability rows whose key no longer exists in the catalog', async () => {
+  // The mirror-image drift: a key retired from the catalog leaves rows behind. They are kept on
+  // purpose (a plugin can bring the key back), so they show under `kept`, not `orphaned`.
+  it('reports capability rows whose key no longer exists in the catalog as kept', async () => {
     const db = await makeMigratedDb();
     const store = createRoleStore(db);
     await store.seedSystemRoles();
@@ -418,7 +419,8 @@ describe('RoleStore', () => {
 
     const d = await store.diagnoseCapabilities();
 
-    expect(d.orphaned).toContainEqual({ slug: 'lab_technician', capability: 'retired.key' });
+    expect(d.kept).toEqual(['retired.key']);
+    expect(d.orphaned).toEqual([]);
     await db.destroy();
   });
 
@@ -442,6 +444,7 @@ describe('RoleStore', () => {
 
     expect(d.roles.every((r) => r.present && r.pending.length === 0 && r.revoked.length === 0)).toBe(true);
     expect(d.orphaned).toEqual([]);
+    expect(d.kept).toEqual([]);
     await db.destroy();
   });
 

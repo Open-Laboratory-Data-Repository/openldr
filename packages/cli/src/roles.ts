@@ -215,7 +215,8 @@ export async function runRolesRevoke(slug: string, capability: string, opts: Jso
  *  retired from the catalog leaving rows behind), and for an unavailable ledger (reconciliation
  *  is silently disabled and `revoked` vs `pending` can no longer be told apart) — all three are
  *  states an operator should act on. Exit 0 for `revoked`: that is a deliberate decision, not a
- *  defect. */
+ *  defect. Exit 0 for `kept`: a stored key the catalog does not list is kept on purpose, so a
+ *  plugin that brings the key back finds the grant in place. */
 export function summarizeDiagnosis(d: CapabilityDiagnosis): { lines: string[]; exitCode: number } {
   const lines: string[] = [];
   let problems = d.orphaned.length > 0 || !d.ledgerAvailable;
@@ -240,6 +241,10 @@ export function summarizeDiagnosis(d: CapabilityDiagnosis): { lines: string[]; e
   }
 
   for (const o of d.orphaned) lines.push(`${o.slug}\torphaned=${o.capability}`);
+  if (d.kept.length) {
+    lines.push('kept (stored, not in the catalog, left in place on purpose):');
+    for (const k of d.kept) lines.push(`  ${k}`);
+  }
   if (!problems) lines.push('no capability drift requiring action');
 
   return { lines, exitCode: problems ? 1 : 0 };
