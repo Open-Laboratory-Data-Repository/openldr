@@ -1,0 +1,235 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import '@/i18n';
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
+// The LOINC picker is a search box. Here it is a button per code, so a test can pick one.
+vi.mock('@/terminology/TermPicker', () => ({
+  TermPicker: ({ onChange, ariaLabel }: { onChange: (v: { system: string; code: string; display: string | null } | null) => void; ariaLabel?: string }) => (
+    <div>
+      {['6429-5', '2093-3', '24331-1'].map((code) => (
+        <button key={code} type="button" data-testid={`pick-${code}`} aria-label={ariaLabel} onClick={() => onChange({ system: 'http://loinc.org', code, display: null })}>{code}</button>
+      ))}
+    </div>
+  ),
+}));
+vi.mock('@/api', async (orig) => {
+  const actual = await orig<typeof import('@/api')>();
+  return {
+    ...actual, createCatalogTest: vi.fn(), updateCatalogTest: vi.fn(), setCatalogLabSettings: vi.fn(),
+    termExists: vi.fn(), getLoincHints: vi.fn(), resultFieldsFromLoinc: vi.fn(), listValueSets: vi.fn(),
+  };
+});
+
+import * as api from '@/api';
+import { toast } from 'sonner';
+import { TestSheet } from './TestSheet';
+
+const LOCAL = 'urn:openldr:cs:local';
+const RESULT = 'urn:openldr:default_result';
+const OPTIONS: api.TestCatalogOptions = {
+  categories: [{ code: 'CHEM', display: 'Chemistry' }, { code: 'MICRO', display: 'Microbiology' }],
+  specimenTypes: [{ system: LOCAL, code: 'BLD', display: 'Blood' }, { system: LOCAL, code: 'UR', display: 'Urine' }],
+  resultParams: [{ system: RESULT, code: 'HGB', display: 'Haemoglobin' }],
+  loinc: { systemId: 'loinc-id', system: 'http://loinc.org' },
+  sexes: [],
+};
+const NEW_TEST = (over: Partial<api.CatalogTest> = {}): api.CatalogTest => ({
+  code: 'T1', display: 'Test one', shortName: null, category: null, specimenTypes: [],
+  resultParams: [], loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+  lab: { enabled: false, specimenTypes: null, localDisplay: null }, ...over,
+});
+
+// The route's answers in task-4-report.md, for the fixture.
+const HIV: api.LoincHints = {
+  code: '6429-5', display: 'HIV identified in Blood by culture', class: 'MICRO',
+  categorySuggestion: { code: 'MICRO', display: 'Microbiology' }, unit: null, resultType: 'text',
+  specimens: [
+    { snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: { system: LOCAL, code: 'BLD', display: 'Blood' }, tick: true },
+    { snomed: '122555007', display: null, equivalence: 'narrower', specimenType: null, tick: false },
+  ],
+  answers: [], panelMembers: [],
+};
+const CHOL: api.LoincHints = {
+  code: '2093-3', display: 'Cholesterol', class: 'CHEM', categorySuggestion: { code: 'CHEM', display: 'Chemistry' },
+  unit: 'mg/dL', resultType: 'numeric', specimens: [], answers: [], panelMembers: [],
+};
+const LIPID: api.LoincHints = {
+  code: '24331-1', display: 'Lipid panel', class: 'PANEL.CHEM', categorySuggestion: null, unit: null, resultType: 'text',
+  specimens: [], answers: [],
+  panelMembers: [{ code: '2093-3', display: 'Cholesterol', required: true }, { code: '2571-8', display: 'Triglyceride', required: false }],
+};
+const param = (code: string, over: Partial<api.CatalogTestResultParam> = {}): api.CatalogTestResultParam => (
+  { system: RESULT, code, resultType: 'numeric', valueSetUrl: null, bands: [], ...over });
+const answer = (params: api.CatalogTestResultParam[]): api.ResultFieldsFromLoincAnswer => (
+  { params, created: params.map((p) => p.code), reused: [], valueSetsCreated: [] });
+const hintsFor = (map: Record<string, api.LoincHints | null>) => vi.mocked(api.getLoincHints).mockImplementation(async (c) => map[c] ?? null);
+
+async function openMenu(testId: string) {
+  const trigger = screen.getByTestId(testId);
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
+  await screen.findByRole('menu');
+}
+async function choose(menu: string, item: string) {
+  await openMenu(menu);
+  await act(async () => { fireEvent.click(await screen.findByTestId(item)); });
+}
+async function pickLoinc(code: string) {
+  await act(async () => { fireEvent.click(screen.getByTestId(`pick-${code}`)); });
+}
+async function savedParams(): Promise<api.CatalogTestResultParam[]> {
+  vi.mocked(api.updateCatalogTest).mockResolvedValue(NEW_TEST());
+  await choose('test-sheet-menu', 'test-sheet-save');
+  return vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams ?? [];
+}
+const checked = (id: string) => screen.getByTestId(id).getAttribute('data-state') === 'checked';
+const categoryText = () => screen.getByRole('combobox', { name: 'Category' }).textContent;
+
+function renderSheet(test: api.CatalogTest = NEW_TEST(), options: api.TestCatalogOptions = OPTIONS) {
+  const view = render(<TestSheet target={{ kind: 'edit', test }} options={options} ownedHere onSaved={vi.fn()} onClose={vi.fn()} onOptionsChanged={vi.fn()} />);
+  return view;
+}
+
+beforeEach(() => { vi.clearAllMocks(); });
+
+describe('TestSheet: LOINC hints fill empty fields', () => {
+  it('fills the category, the one equivalent specimen and LOINC result field with its unit', async () => {
+    hintsFor({ '2093-3': CHOL, '6429-5': HIV });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('6429-5', { resultType: 'text' })]));
+    renderSheet();
+    await pickLoinc('6429-5');
+    expect(categoryText()).toBe('Microbiology');
+    expect(checked('specimen-BLD')).toBe(true);
+    expect(checked('specimen-UR')).toBe(false);
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['6429-5'], false);
+    expect(checked('param-6429-5')).toBe(true);
+    expect(toast.success).toHaveBeenCalledWith('1 result field from LOINC ticked on this test.');
+    // The narrower SNOMED match is only suggested, with how to make it tick by itself.
+    expect(screen.getByTestId('hint-specimens').textContent).toBe('LOINC suggests SNOMED 122555007.');
+    expect(screen.getByTestId('hint-specimens-map')).toBeTruthy();
+    expect(screen.queryByTestId('hint-category')).toBeNull();
+  });
+
+  it('a new range on LOINC field starts with LOINC unit', async () => {
+    hintsFor({ '2093-3': CHOL });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));
+    renderSheet();
+    await pickLoinc('2093-3');
+    await choose('param-menu-2093-3', 'add-band-2093-3');
+    expect(screen.getByRole('textbox', { name: 'unit for 2093-3 band 1' })).toHaveProperty('value', 'mg/dL');
+  });
+
+  // Review focus 3.
+  it('never overwrites a category, specimen or field already set, and says what LOINC suggests instead', async () => {
+    hintsFor({ '6429-5': HIV });
+    const kept = param('HGB', { resultType: 'coded', valueSetUrl: 'urn:openldr:valueset:kept' });
+    renderSheet(NEW_TEST({ category: 'CHEM', specimenTypes: [{ system: LOCAL, code: 'UR' }], resultParams: [kept] }));
+    await pickLoinc('6429-5');
+    expect(categoryText()).toBe('Chemistry');
+    expect(screen.getByTestId('hint-category').textContent).toBe('LOINC suggests Microbiology.');
+    expect([checked('specimen-UR'), checked('specimen-BLD')]).toEqual([true, false]);
+    expect(screen.getByTestId('hint-specimens').textContent).toBe('LOINC suggests Blood, SNOMED 122555007.');
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    expect(screen.getByTestId('hint-result').textContent).toBe("LOINC's result field: HIV identified in Blood by culture.");
+    expect(await savedParams()).toEqual([kept]);
+  });
+
+  it("Use LOINC's result field keeps a parameter already ticked, its value set included", async () => {
+    hintsFor({ '6429-5': HIV });
+    const kept = param('6429-5', { resultType: 'coded', valueSetUrl: 'urn:openldr:valueset:mine' });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('6429-5', { resultType: 'text' })]));
+    renderSheet(NEW_TEST({ loinc: '6429-5', resultParams: [kept] }));
+    await waitFor(() => expect(api.getLoincHints).toHaveBeenCalledWith('6429-5'));
+    await choose('result-params-menu', 'use-loinc-field');
+    expect(toast.success).toHaveBeenCalledWith("LOINC's result fields are already on this test.");
+    expect(await savedParams()).toEqual([kept]);
+  });
+
+  it('opens a saved code with its hints but fills nothing', async () => {
+    hintsFor({ '6429-5': HIV });
+    renderSheet(NEW_TEST({ loinc: '6429-5' }));
+    await screen.findByTestId('hint-category');
+    expect(categoryText()).toBe('No category');
+    expect(checked('specimen-BLD')).toBe(false);
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+  });
+});
+
+describe('TestSheet: Fill from panel', () => {
+  it('adds the members in LOINC order and keeps one already ticked', async () => {
+    hintsFor({ '24331-1': LIPID });
+    const kept = param('2093-3', { bands: [{ name: null, low: 0, high: 5, unit: 'mmol/L', sex: null, ageLow: null, ageHigh: null }] });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3'), param('2571-8')]));
+    renderSheet(NEW_TEST({ resultParams: [param('HGB'), kept] }));
+    await pickLoinc('24331-1');
+    // A panel has no result of its own, so picking it makes no field by itself.
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    expect(screen.getByTestId('hint-result').textContent).toBe('This LOINC code is a panel of 2 tests. Fill from panel adds them.');
+    await openMenu('result-params-menu');
+    expect(screen.queryByTestId('use-loinc-field')).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByTestId('fill-from-panel')); });
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['24331-1'], true);
+    expect(screen.getByText('Triglyceride')).toBeTruthy();
+    expect(toast.success).toHaveBeenCalledWith('1 result field from LOINC ticked on this test.');
+    expect(await savedParams()).toEqual([param('HGB'), kept, param('2571-8')]);
+  });
+
+  it('keeps the ticks when the page reads the choices again', async () => {
+    hintsFor({ '24331-1': LIPID });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3'), param('2571-8')]));
+    const target = { kind: 'edit' as const, test: NEW_TEST({ loinc: '24331-1' }) };
+    // The page passes the same target object; only the choices are read again.
+    const view = render(<TestSheet target={target} options={OPTIONS} ownedHere onSaved={vi.fn()} onClose={vi.fn()} />);
+    await waitFor(() => expect(api.getLoincHints).toHaveBeenCalled());
+    await choose('result-params-menu', 'fill-from-panel');
+    view.rerender(<TestSheet target={target} options={{ ...OPTIONS, loinc: { ...OPTIONS.loinc! } }} ownedHere onSaved={vi.fn()} onClose={vi.fn()} />);
+    expect([checked('param-2093-3'), checked('param-2571-8')]).toEqual([true, true]);
+  });
+});
+
+// Review focus 5.
+describe('TestSheet: without LOINC hints', () => {
+  it('shows no hint and no LOINC action when the route answers null, and fills nothing', async () => {
+    hintsFor({});
+    renderSheet();
+    await pickLoinc('6429-5');
+    expect(api.getLoincHints).toHaveBeenCalledWith('6429-5');
+    expect(screen.queryByTestId('hint-category')).toBeNull();
+    expect(screen.queryByTestId('hint-specimens')).toBeNull();
+    expect(screen.queryByTestId('hint-result')).toBeNull();
+    expect(categoryText()).toBe('No category');
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    await openMenu('result-params-menu');
+    expect(screen.getByTestId('add-field')).toBeTruthy();
+    expect(screen.queryByTestId('use-loinc-field')).toBeNull();
+    expect(screen.queryByTestId('fill-from-panel')).toBeNull();
+  });
+
+  it('does not ask for hints when LOINC is not loaded here', () => {
+    renderSheet(NEW_TEST({ loinc: '6429-5' }), { ...OPTIONS, loinc: null });
+    expect(api.getLoincHints).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'LOINC code' })).toBeTruthy();
+  });
+
+  it('works as before when the hint read fails', async () => {
+    vi.mocked(api.getLoincHints).mockRejectedValue(new Error('down'));
+    renderSheet();
+    await pickLoinc('2093-3');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('hint-result')).toBeNull();
+  });
+});
+
+describe('TestSheet: hint lines on a phone', () => {
+  it('wrap inside their column instead of widening the sheet', async () => {
+    hintsFor({ '6429-5': HIV });
+    renderSheet(NEW_TEST({ category: 'CHEM', resultParams: [param('HGB')] }));
+    await pickLoinc('6429-5');
+    for (const id of ['hint-category', 'hint-specimens', 'hint-specimens-map', 'hint-result']) {
+      const el = screen.getByTestId(id);
+      expect(el.className).toContain('break-words');
+      expect(el.parentElement!.className).toContain('min-w-0');
+    }
+  });
+});

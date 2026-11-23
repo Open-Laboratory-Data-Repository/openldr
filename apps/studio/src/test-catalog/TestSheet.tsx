@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
@@ -15,7 +15,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { TermPicker } from '@/terminology/TermPicker';
 import {
-  createCatalogTest, setCatalogLabSettings, termExists, updateCatalogTest,
+  createCatalogTest, getLoincHints, resultFieldsFromLoinc, setCatalogLabSettings, termExists, updateCatalogTest,
+  type LoincHints,
   type CatalogLabSettingsInput, type CatalogTestResultParam, type CatalogSpecimenCoding, type CatalogTest, type CatalogTestInput,
   type CatalogAgeUnit, type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
@@ -150,6 +151,13 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   // Result fields added from this sheet, shown until the page reads the choices again.
   const [addedParams, setAddedParams] = useState<ParamOption[]>([]);
   const [addingField, setAddingField] = useState(false);
+  // What LOINC says about the test's code. Null when LOINC or its ontology is not loaded, and then the
+  // sheet shows no hint and offers no LOINC action (spec, call 7).
+  const [hints, setHints] = useState<LoincHints | null>(null);
+  const hintsAsked = useRef(0);
+  // The draft as last drawn, for the steps that run after a request comes back.
+  const draftNow = useRef(draft);
+  draftNow.current = draft;
   // Units typed in this sheet that UCUM does not hold, so the range can say so. A saved unit is not
   // checked: it opens as it was saved (spec 3, call 3).
   const [notUcum, setNotUcum] = useState<ReadonlySet<string>>(() => new Set());
@@ -175,6 +183,67 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     setAddedParams([]);
   }, [target]);
 
+  // A saved code shows its hints, but fills nothing: only a code picked here fills empty fields. Keyed
+  // on the LOINC system id, not the options object, which is read again after a field is added.
+  const loincSystemId = options.loinc?.systemId ?? null;
+  useEffect(() => {
+    void readHints(target?.kind === 'edit' ? target.test.loinc ?? '' : '');
+  }, [target, loincSystemId]);
+
+  /** Read the hints for a code. A later call wins, so a slow answer for an old code is dropped. */
+  async function readHints(code: string): Promise<LoincHints | null> {
+    const asked = ++hintsAsked.current;
+    if (!options.loinc || !ownedHere || code === '') { setHints(null); return null; }
+    try {
+      const found = await getLoincHints(code);
+      if (asked !== hintsAsked.current) return null;
+      setHints(found);
+      return found;
+    } catch {
+      // No hint is no harm: the sheet works as it did without them.
+      if (asked === hintsAsked.current) setHints(null);
+      return null;
+    }
+  }
+
+  /** Make or reuse LOINC's result fields and tick them. One already ticked keeps its type, value set and ranges. */
+  async function takeFromLoinc(h: LoincHints, panel: boolean): Promise<void> {
+    try {
+      const answer = await resultFieldsFromLoinc([h.code], panel);
+      const names = new Map<string, string | null>(panel ? h.panelMembers.map((m) => [m.code, m.display]) : [[h.code, h.display]]);
+      const ticked = draftNow.current.resultParams;
+      const fresh = answer.params.filter((p) => !ticked.some((k) => k.code === p.code));
+      takeParams(
+        answer.params.map((p) => ({ system: p.system, code: p.code, display: names.get(p.code) ?? p.code, units: panel ? null : h.unit })),
+        answer.params,
+      );
+      toast.success(fresh.length > 0
+        ? t('testCatalog.sheet.loincFieldsAdded', { count: fresh.length })
+        : t('testCatalog.sheet.loincFieldsKept'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  /** A LOINC code picked here: fill each field still empty from its hints, and leave the rest to the hint lines. */
+  async function pickLoinc(code: string): Promise<void> {
+    set({ loinc: code });
+    const h = await readHints(code);
+    if (!h) return;
+    const d = draftNow.current;
+    const patch: Partial<Draft> = {};
+    const category = h.categorySuggestion;
+    if (d.category === '' && category && options.categories.some((c) => c.code === category.code)) patch.category = category.code;
+    const ticks = h.specimens.filter((s) => s.tick && s.specimenType);
+    const only = ticks.length === 1 ? ticks[0].specimenType! : null;
+    if (d.specimens.length === 0 && only && options.specimenTypes.some((o) => sameCoding(o, only))) {
+      patch.specimens = [{ system: only.system, code: only.code }];
+    }
+    if (Object.keys(patch).length > 0) set(patch);
+    // A panel has no result of its own: Fill from panel adds its members.
+    if (d.resultParams.length === 0 && h.panelMembers.length === 0) await takeFromLoinc(h, false);
+  }
+
   const isNew = saved === null;
   const paramOptions: ParamOption[] = [
     ...options.resultParams,
@@ -186,6 +255,21 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     setDraft((d) => ({ ...d, resultParams: addParams(d.resultParams, params) }));
     onOptionsChanged?.();
   };
+
+  // The hint lines: what LOINC suggests that the draft does not already hold. Nothing when there are no hints.
+  const suggested = hints?.categorySuggestion ?? null;
+  const categoryHint = !hints || !hints.class || draft.category === suggested?.code ? null
+    : suggested ? t('testCatalog.sheet.hintCategory', { name: suggested.display ?? suggested.code })
+      : t('testCatalog.sheet.hintClass', { class: hints.class });
+  const untaken = (hints?.specimens ?? []).filter((s) => !s.specimenType || !draft.specimens.some((k) => sameCoding(k, s.specimenType!)));
+  const specimenHint = untaken.length === 0 ? null : t('testCatalog.sheet.hintSpecimens', {
+    names: untaken.map((s) => (s.specimenType ? s.specimenType.display ?? s.specimenType.code : s.display ?? `SNOMED ${s.snomed}`)).join(', '),
+  });
+  const specimenMapHint = untaken.some((s) => !s.specimenType);
+  const resultHint = !hints ? null
+    : hints.panelMembers.length > 0 ? t('testCatalog.sheet.hintPanel', { count: hints.panelMembers.length })
+      : draft.resultParams.some((p) => p.code === hints.code) ? null
+        : t('testCatalog.sheet.hintResult', { name: hints.display ?? hints.code, unit: hints.unit ? ` (${hints.unit})` : '' });
   // The lab chooses from the catalog list being edited here, or from central's list at a lab.
   const offered = ownedHere ? draft.specimens : saved?.specimenTypes ?? [];
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -291,16 +375,19 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                 <Input id="test-short-name" value={draft.shortName} onChange={(e) => set({ shortName: e.target.value })} />
 
                 <Label htmlFor="test-category" className="whitespace-nowrap">{t('testCatalog.sheet.category')}</Label>
-                <Select
-                  value={draft.category || NO_CATEGORY}
-                  onValueChange={(v) => set({ category: v === NO_CATEGORY ? '' : v })}
-                >
-                  <SelectTrigger id="test-category"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_CATEGORY}>{t('testCatalog.sheet.noCategory')}</SelectItem>
-                    {options.categories.map((c) => <SelectItem key={c.code} value={c.code}>{c.display ?? c.code}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <Select
+                    value={draft.category || NO_CATEGORY}
+                    onValueChange={(v) => set({ category: v === NO_CATEGORY ? '' : v })}
+                  >
+                    <SelectTrigger id="test-category"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_CATEGORY}>{t('testCatalog.sheet.noCategory')}</SelectItem>
+                      {options.categories.map((c) => <SelectItem key={c.code} value={c.code}>{c.display ?? c.code}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {categoryHint ? <span data-testid="hint-category" className="break-words text-xs text-muted-foreground">{categoryHint}</span> : null}
+                </div>
 
                 <Label htmlFor={options.loinc ? undefined : 'test-loinc'} className="whitespace-nowrap">
                   {t('testCatalog.sheet.loinc')}
@@ -309,7 +396,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                   <TermPicker
                     systemId={options.loinc.systemId}
                     value={draft.loinc ? { system: options.loinc.system, code: draft.loinc, display: null } : null}
-                    onChange={(v) => set({ loinc: v?.code ?? '' })}
+                    onChange={(v) => { void pickLoinc(v?.code ?? ''); }}
                   />
                 ) : (
                   <div className="flex flex-col gap-1">
@@ -319,6 +406,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                 )}
 
                 <Label className="self-start whitespace-nowrap pt-1.5">{t('testCatalog.sheet.specimens')}</Label>
+                <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex max-h-48 flex-col overflow-y-auto">
                   {options.specimenTypes.map((s) => (
                     <label
@@ -334,6 +422,9 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                     </label>
                   ))}
                 </div>
+                {specimenHint ? <span data-testid="hint-specimens" className="break-words px-2 text-xs text-muted-foreground">{specimenHint}</span> : null}
+                {specimenMapHint ? <span data-testid="hint-specimens-map" className="break-words px-2 text-xs text-muted-foreground">{t('testCatalog.sheet.hintSpecimenMap')}</span> : null}
+                </div>
 
                 {/* On a phone this section sits under its heading at full width: beside the heading, each range
                     field was left about 108px and a range name was cut off (measured live at 375px). From sm up it
@@ -345,6 +436,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                       {paramOptions.length === 0 ? (
                         <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.noResultParams')}</span>
                       ) : null}
+                      {resultHint ? <span data-testid="hint-result" className="break-words text-xs text-muted-foreground">{resultHint}</span> : null}
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -359,6 +451,16 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                         <DropdownMenuItem data-testid="add-field" onSelect={() => setAddingField(true)}>
                           {t('testCatalog.sheet.addField')}
                         </DropdownMenuItem>
+                        {hints && hints.panelMembers.length === 0 ? (
+                          <DropdownMenuItem data-testid="use-loinc-field" onSelect={() => void takeFromLoinc(hints, false)}>
+                            {t('testCatalog.sheet.useLoincField')}
+                          </DropdownMenuItem>
+                        ) : null}
+                        {hints && hints.panelMembers.length > 0 ? (
+                          <DropdownMenuItem data-testid="fill-from-panel" onSelect={() => void takeFromLoinc(hints, true)}>
+                            {t('testCatalog.sheet.fillFromPanel')}
+                          </DropdownMenuItem>
+                        ) : null}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

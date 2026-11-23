@@ -2877,6 +2877,30 @@ export const unlinkResultField = (code: string): Promise<ResultFieldLinkChange> 
 export interface CreatedResultField extends ResultField { system: string }
 export const createResultField = (i: { code?: string | null; display: string; units?: string | null }): Promise<CreatedResultField> =>
   authFetch('/api/test-catalog/result-fields', jbody(i, 'POST')).then((r) => okJson<CreatedResultField>(r, 'add result field'));
+// Mirrors of @openldr/bootstrap's loinc-hints.ts (test catalog hints spec, calls 4 to 7).
+export interface LoincSpecimenHint {
+  snomed: string; display: string | null; equivalence: string;
+  specimenType: { system: string; code: string; display: string | null } | null;
+  /** true only when this is the one exact match, so the sheet may tick it by itself. */
+  tick: boolean;
+}
+export interface LoincHints {
+  code: string; display: string | null; class: string | null;
+  categorySuggestion: { code: string; display: string | null } | null;
+  unit: string | null; resultType: CatalogTestResultParam['resultType'];
+  specimens: LoincSpecimenHint[];
+  answers: Array<{ code: string; display: string }>;
+  panelMembers: Array<{ code: string; display: string | null; required: boolean }>;
+}
+export interface ResultFieldsFromLoincAnswer {
+  params: CatalogTestResultParam[]; created: string[]; reused: string[]; valueSetsCreated: string[];
+}
+/** null when LOINC or its ontology is not loaded here, so the sheet offers no hints. */
+export const getLoincHints = (code: string): Promise<LoincHints | null> =>
+  apiGet<LoincHints | null>(`/api/test-catalog/loinc-hints/${encodeURIComponent(code)}`, 'read LOINC hints');
+export const resultFieldsFromLoinc = (codes: string[], panel = false): Promise<ResultFieldsFromLoincAnswer> =>
+  authFetch('/api/test-catalog/result-fields/from-loinc', jbody({ codes, panel }, 'POST'))
+    .then((r) => okJson<ResultFieldsFromLoincAnswer>(r, 'add result fields from LOINC'));
 export const downloadResultFieldsCsv = (): Promise<void> =>
   downloadCsv('/api/test-catalog/result-fields/export', 'result-fields.csv', 'export result fields');
 export const previewResultFieldsImport = (file: File): Promise<ImportReportLike> =>
