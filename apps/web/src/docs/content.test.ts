@@ -65,6 +65,20 @@ describe('website docs content', () => {
     expect(pageTitle('lab-setup', '0.1.8', 'pt')).toBe('Configurar um laboratório');
   });
 
+  it('documents the lab plugin, its install, its four permissions and the site limit, in every language', () => {
+    for (const locale of ['en', 'fr', 'pt'] as const) {
+      const page = docPage('lab-plugin', DEFAULT_DOC_VERSION, locale)!;
+      expect(page.localeUsed, locale).toBe(locale);
+      for (const term of ['`plugin_lab`', '--install --approve', '`lab.receive`', '`lab.reject`', '`lab.orders.enter`', '`lab.worklist.view`', '`patients.find`', 'openldr users scope <user> --facility <facility-id> --force']) {
+        expect(page.body, `${locale} ${term}`).toContain(term);
+      }
+      expect(page.body, locale).not.toContain('\u2014');
+    }
+    expect(pageTitle('lab-plugin', '0.1.8', 'en')).toBe('The lab plugin');
+    expect(pageTitle('lab-plugin', '0.1.8', 'fr')).toBe('Le plugin laboratoire');
+    expect(pageTitle('lab-plugin', '0.1.8', 'pt')).toBe('O plugin de laboratório');
+  });
+
   it('documents plugin tables, the four host functions, their capabilities and what is refused, in every language', () => {
     for (const locale of ['en', 'fr', 'pt'] as const) {
       const body = docPage('plugin-host-functions', DEFAULT_DOC_VERSION, locale)!.body;
@@ -119,7 +133,7 @@ describe('website docs content', () => {
     expect(SLUGS).toEqual(expect.arrayContaining([
       'getting-started', 'desktop-app', 'requirements', 'install', 'windows-server', 'upgrading',
       'environment', 'auth-providers', 'load-data', 'map-to-fhir', 'connector-diagnose',
-      'cli', 'cli-access', 'standalone', 'development', 'profile-packs', 'lab-setup',
+      'cli', 'cli-access', 'standalone', 'development', 'profile-packs', 'lab-setup', 'lab-plugin',
     ]));
   });
 });
