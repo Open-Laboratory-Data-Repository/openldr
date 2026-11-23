@@ -89,6 +89,23 @@ describe('pluginPermissionLines', () => {
       }
     }
   });
+  it('lists an action that needs only CE capabilities, by their translated label', () => {
+    const p = { kind: 'plugin', actionPermissions: { publish: ['forms.edit', 'reports.view'], sync: ['some.unknown'] } };
+    expect(pluginPermissionLines(p, 'en', i18n.getFixedT('en'))).toEqual([
+      'Action publish needs: Edit forms or View reports.',
+      'Action sync needs: some.unknown.',
+    ]);
+    // An action that also lists a declared permission is already named on that permission's line.
+    expect(pluginPermissionLines(payload, 'en', i18n.getFixedT('en'))).toHaveLength(2);
+  });
+  it('the CE-only action line exists in fr and pt', () => {
+    const p = { kind: 'plugin', actionPermissions: { publish: ['forms.edit'] } };
+    for (const lng of ['fr', 'pt']) {
+      const [line] = pluginPermissionLines(p, lng, i18n.getFixedT(lng));
+      expect(line, lng).toContain('publish');
+      expect(line, lng).not.toMatch(/settings\.|roles\.|\{\{|forms\.edit|needs/);
+    }
+  });
   it('a payload without permissions gives no lines', () => {
     expect(pluginPermissionLines({ kind: 'plugin' }, 'en', i18n.getFixedT('en'))).toEqual([]);
     expect(pluginPermissionLines(null, 'en', i18n.getFixedT('en'))).toEqual([]);

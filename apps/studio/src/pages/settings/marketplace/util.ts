@@ -121,8 +121,10 @@ interface DeclaredPermission {
   labels?: Partial<Record<'fr' | 'pt', { label: string; description: string }>>;
 }
 
-/** One line per permission a plugin declares, for the install consent: its label and description in
- *  the page language (English when the plugin gave none), its key, and the actions that need it.
+/** Lines for the install consent. First one line per permission a plugin declares: its label and
+ *  description in the page language (English when the plugin gave none), its key, and the actions
+ *  that need it. Then one line per action that needs only CE capabilities, named by the role
+ *  editor's translated label, or by the key when there is none.
  *  Reads `payload.permissions` and `payload.actionPermissions` from the signed manifest. A payload
  *  without them gives no lines. */
 export function pluginPermissionLines(
@@ -133,7 +135,8 @@ export function pluginPermissionLines(
   const actions = (payload?.actionPermissions && typeof payload.actionPermissions === 'object'
     ? payload.actionPermissions : {}) as Record<string, unknown>;
   const code = lang.slice(0, 2);
-  return perms.map((p) => {
+  const declared = new Set(perms.map((p) => p.key));
+  const own = perms.map((p) => {
     const local = code === 'fr' || code === 'pt' ? p.labels?.[code] : undefined;
     const label = local?.label ?? p.label;
     const description = local?.description ?? p.description;
@@ -143,4 +146,15 @@ export function pluginPermissionLines(
       ? t('settings.marketplace.pluginPermissionUsed', opts)
       : t('settings.marketplace.pluginPermissionUnused', opts);
   });
+  const ceOnly: string[] = [];
+  for (const [action, list] of Object.entries(actions)) {
+    if (!Array.isArray(list) || list.length === 0) continue;
+    const keys = list.filter((k): k is string => typeof k === 'string');
+    if (keys.some((k) => declared.has(k))) continue;
+    const names = keys.map((k) => t(`roles.capability.${k}.label`, { defaultValue: k }));
+    ceOnly.push(t('settings.marketplace.pluginActionNeeds', {
+      action, list: names.join(t('settings.marketplace.pluginActionOr')), interpolation: { escapeValue: false },
+    }));
+  }
+  return [...own, ...ceOnly];
 }
