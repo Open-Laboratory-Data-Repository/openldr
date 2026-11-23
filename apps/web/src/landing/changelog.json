@@ -6,6 +6,42 @@
       "version": null,
       "entries": [
         {
+          "hash": "461d5de29",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Hide form editing from view-only users, translate two load toasts"
+        },
+        {
+          "hash": "2ad2759ae",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep facilities and terminology failures readable after the toast"
+        },
+        {
+          "hash": "b00911370",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep failed loads visible and safe after the toast"
+        },
+        {
+          "hash": "7401f888b",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show facilities and terminology errors as toasts"
+        },
+        {
+          "hash": "3bb9e4662",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show load and action errors as toasts"
+        },
+        {
+          "hash": "992a44ae1",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Hide Terminology and Forms from users who cannot open them"
+        },
+        {
           "hash": "d8758079d",
           "type": "fix",
           "scope": "docs",
