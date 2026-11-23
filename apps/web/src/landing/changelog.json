@@ -6,6 +6,84 @@
       "version": null,
       "entries": [
         {
+          "hash": "db802a8a4",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Estimated birth dates do not pick day or month ranges, and doc corrections"
+        },
+        {
+          "hash": "db22febfa",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "A LOINC pick only suggests; the menu adds the field"
+        },
+        {
+          "hash": "5b6fe23d8",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "The test sheet suggests from LOINC"
+        },
+        {
+          "hash": "1245b9433",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Add a result field from the test"
+        },
+        {
+          "hash": "2c1182159",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Fields from LOINC are safe to re-run and refuse a field of another kind"
+        },
+        {
+          "hash": "567798d95",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Hints and result fields from a LOINC code"
+        },
+        {
+          "hash": "f14691a85",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Turnaround times and review on the test"
+        },
+        {
+          "hash": "682e99e46",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "A unit is checked against UCUM by its exact code"
+        },
+        {
+          "hash": "86d38182d",
+          "type": "fix",
+          "scope": "",
+          "title": "The lab's time zone is read under its real name"
+        },
+        {
+          "hash": "2404cf187",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Pick a range's unit from UCUM"
+        },
+        {
+          "hash": "7079a8ed3",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Years count from birthdays"
+        },
+        {
+          "hash": "b0ffe2d08",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "A range's age uses the lab's date, and an unknown age unit is refused"
+        },
+        {
+          "hash": "e44430598",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Reference ranges by days, months or years"
+        },
+        {
           "hash": "cc6613de2",
           "type": "fix",
           "scope": "plugins",
