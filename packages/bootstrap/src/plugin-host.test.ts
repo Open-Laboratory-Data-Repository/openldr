@@ -7,7 +7,7 @@ import type { HostPlugin } from '@openldr/plugins';
 import { createPluginHost, CE_READ_OPS, type PluginHostDeps } from './plugin-host';
 import { createPatientIndex } from './patient-index';
 import { pluginPatientRefs } from './plugin-patient-ref';
-import { bandFit, matchBand, SEX_OPTIONS, type ResultBand } from './result-params';
+import { bandFit, matchBand, SEX_OPTIONS, type BandPatient, type ResultBand } from './result-params';
 import { capabilitiesUnderScope } from '@openldr/rbac';
 import { buildPatientIndexFixture, seedIdentifier, seedPatient } from './test-support/patient-index-fixture';
 
@@ -766,7 +766,7 @@ describe('plugin host: testCatalog.resultParams', () => {
     { name: 'Adult women', low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null },
   ];
   /** resultParamsFor with the catalog's own band rules, so the bands answered are what CE picks. */
-  const resultParamsFor = vi.fn(async (tests: Array<{ system: string; code: string }>, patient: { sex?: string | null; ageYears?: number | null }) =>
+  const resultParamsFor = vi.fn(async (tests: Array<{ system: string; code: string }>, patient: BandPatient) =>
     tests.map((test) => ({
       test,
       params: [{
@@ -807,10 +807,30 @@ describe('plugin host: testCatalog.resultParams', () => {
     expect(out.result.tests[0].test).toEqual(T('FBC'));
     expect(param.band.name).toBe('Adult women');
     expect(param.fits).toEqual(['no', 'yes']);
-    // CE read sex and whole years from the stored Patient (born 1990-01-05).
+    // CE read sex and the birth date from the stored Patient (born 1990-01-05).
     const key = resultParamsFor.mock.calls[0][1];
     expect(key.sex).toBe('female');
-    expect(key.ageYears).toBeGreaterThanOrEqual(36);
+    expect(key.birthDate).toBe('1990-01-05');
+  });
+
+  it('answers the age unit of each range, and fits a newborn by days', async () => {
+    const { call, deps, ruth } = await fixture();
+    vi.mocked(deps.fhirGetWithProvenance).mockResolvedValue(stored({ resourceType: 'Patient', id: 'p-1', gender: 'female', birthDate: new Date().toISOString().slice(0, 10) }, 'ingest'));
+    const NEWBORN: ResultBand[] = [
+      { name: null, low: 14, high: 22, unit: 'g/dL', sex: null, ageLow: 0, ageHigh: 28, ageUnit: 'd' },
+      { name: 'Adult women', low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null },
+    ];
+    resultParamsFor.mockImplementationOnce(async (tests, patient) => tests.map((test) => ({
+      test,
+      params: [{
+        system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null, bands: NEWBORN,
+        unit: 'g/dL', display: 'HGB', band: matchBand(NEWBORN, patient), fits: NEWBORN.map((b) => bandFit(b, patient)),
+      }],
+    })));
+    const param = (await call(SITE, { tests: [T('FBC')], patientRef: ruth })).result.tests[0].params[0];
+    expect(param.bands[0].ageUnit).toBe('d');
+    expect(param.band).toEqual(NEWBORN[0]);
+    expect(param.fits).toEqual(['yes', 'no']);
   });
 
   it('does not return the patient sex, age, birth date or id', async () => {
@@ -849,7 +869,7 @@ describe('plugin host: testCatalog.resultParams', () => {
     const { call, deps, ruth } = await fixture();
     vi.mocked(deps.fhirGetWithProvenance).mockResolvedValue(null);
     const out = await call(SITE, { tests: [T('FBC')], patientRef: ruth });
-    expect(resultParamsFor.mock.calls[0][1]).toEqual({ sex: null, ageYears: null });
+    expect(resultParamsFor.mock.calls[0][1]).toMatchObject({ sex: null, birthDate: null });
     expect(out.result.tests[0].params[0]).toMatchObject({ band: null, fits: ['unknown', 'unknown'] });
   });
 });

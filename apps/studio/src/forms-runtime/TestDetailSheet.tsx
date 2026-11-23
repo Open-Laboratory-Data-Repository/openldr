@@ -32,11 +32,11 @@ function flagFor(band: CatalogResultBand | null, value: number | null): string |
   return null;
 }
 
-// Critical limits count too, so a band that differs only in its limits is a different band. An
-// absent limit and a null one both mean "no limit".
+// Critical limits and the age unit count too, so a band that differs only in them is a different
+// band. An absent limit and a null one both mean "no limit". An absent age unit means years.
 const sameBand = (a: CatalogResultBand, b: { name?: string | null } & Omit<CatalogResultBand, 'name'>): boolean =>
   a.name === (b.name ?? null) && a.low === b.low && a.high === b.high && a.unit === b.unit
-  && a.sex === b.sex && a.ageLow === b.ageLow && a.ageHigh === b.ageHigh
+  && a.sex === b.sex && a.ageLow === b.ageLow && a.ageHigh === b.ageHigh && (a.ageUnit ?? 'y') === (b.ageUnit ?? 'y')
   && (a.criticalLow ?? null) === (b.criticalLow ?? null) && (a.criticalHigh ?? null) === (b.criticalHigh ?? null);
 
 export function TestDetailSheet({ test, params, detail, sexes, copy, onChange, onClose }: {

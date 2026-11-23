@@ -2400,8 +2400,8 @@ export * from './patient-index';
 export * from './patient-duplicates';
 export * from './patient-mask';
 export {
-  RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey,
-  type BandFit, type SexOption, type TestResultParam, type ResultBand, type ResultType,
+  AGE_UNITS, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, ageIn, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey,
+  type AgeUnit, type BandFit, type BandPatient, type SexOption, type TestResultParam, type ResultBand, type ResultType,
 } from './result-params';
 export {
   CATALOG_IMPORT_FIELDS, CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS,

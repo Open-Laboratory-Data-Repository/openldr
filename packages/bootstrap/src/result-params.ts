@@ -13,6 +13,10 @@ export const RESULT_PARAM_VALUE_SET = 'urn:openldr:valueset:reportable-result';
 
 export type ResultType = 'numeric' | 'coded' | 'text';
 
+/** The unit a band's age window is written in: days, months or years. A band without one is in years. */
+export type AgeUnit = 'd' | 'mo' | 'y';
+export const AGE_UNITS: readonly AgeUnit[] = ['d', 'mo', 'y'];
+
 /** One reference band. A band naming neither sex nor an age window is the catch-all. */
 export interface ResultBand {
   /** Typed by whoever edits the test, such as "Highland women". Null when the range has no name. */
@@ -23,6 +27,9 @@ export interface ResultBand {
   sex: string | null;
   ageLow: number | null;
   ageHigh: number | null;
+  /** The unit of ageLow and ageHigh. Absent means years, so a band saved before units existed reads
+   *  back unchanged and fits the same patients. */
+  ageUnit?: AgeUnit;
   /** The critical low limit. Absent when the band sets none. Slice 5 decides how results are flagged against it. */
   criticalLow?: number;
   /** The critical high limit. Absent when the band sets none. Slice 5 decides how results are flagged against it. */
@@ -54,10 +61,13 @@ function toBand(value: unknown): ResultBand | null {
   const b = value as Record<string, unknown>;
   const criticalLow = num(b.criticalLow);
   const criticalHigh = num(b.criticalHigh);
-  // The critical limits are left out when not set, so a band stored without them reads back unchanged.
+  const ageUnit = AGE_UNITS.find((u) => u === b.ageUnit);
+  // The age unit and critical limits are left out when not set, so a band stored without them reads
+  // back unchanged.
   return {
     name: str(b.name), low: num(b.low), high: num(b.high), unit: str(b.unit),
     sex: str(b.sex), ageLow: num(b.ageLow), ageHigh: num(b.ageHigh),
+    ...(ageUnit ? { ageUnit } : {}),
     ...(criticalLow !== null ? { criticalLow } : {}),
     ...(criticalHigh !== null ? { criticalHigh } : {}),
   };
@@ -84,39 +94,82 @@ export function parseResultParams(value: unknown): TestResultParam[] {
 }
 
 /**
- * The band that applies to one patient. A band matches when its sex matches, or it names none, and
- * the age falls inside its window, both edges counted as inside. The first match in the stored order
- * wins, so a lab that writes overlapping bands gets the one it wrote first. Null means nothing
- * matched, and the sheet then shows no range rather than a wrong one.
+ * Who a band is matched against: the patient's sex and birth date, and the moment the age is taken at.
+ * The age is worked out per band, in the band's own unit, so the birth date travels and not an age.
  */
-export function matchBand(bands: ResultBand[], patient: { sex?: string | null; ageYears?: number | null }): ResultBand | null {
-  const sex = patient.sex ?? null;
-  const age = patient.ageYears ?? null;
-  for (const band of bands) {
-    if (band.sex !== null && band.sex !== sex) continue;
-    if (band.ageLow !== null && (age === null || age < band.ageLow)) continue;
-    if (band.ageHigh !== null && (age === null || age > band.ageHigh)) continue;
-    return band;
-  }
-  return null;
+export interface BandPatient {
+  sex?: string | null;
+  /** A FHIR date or dateTime, such as "1990-01-05". Null or unreadable means the age is unknown. */
+  birthDate?: string | null;
+  /** Epoch milliseconds. Defaults to now. */
+  at?: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const YEAR_MS = 365.2425 * DAY_MS;
+
+function bornAt(birthDate: string | null | undefined): Date | null {
+  if (typeof birthDate !== 'string' || birthDate.trim() === '') return null;
+  const born = new Date(birthDate);
+  return Number.isNaN(born.getTime()) ? null : born;
+}
+
+/**
+ * The patient's age in one unit, or null when the birth date is missing or unreadable.
+ * - y: whole years completed, by the average year (365.2425 days). This is the rule CE used before
+ *   units existed, kept exactly so a band saved in years fits the same patients as before.
+ * - mo: whole calendar months completed, read in UTC. A birth on the 31st completes a month on the
+ *   last day of a shorter month (born 31 January: 1 month on 28 February, or the 29th in a leap year).
+ * - d: whole days completed since the birth date. Born today is 0 days.
+ */
+export function ageIn(unit: AgeUnit, birthDate: string | null | undefined, at: number = Date.now()): number | null {
+  const born = bornAt(birthDate);
+  if (!born) return null;
+  const ms = at - born.getTime();
+  if (unit === 'd') return Math.floor(ms / DAY_MS);
+  if (unit === 'y') return Math.floor(ms / YEAR_MS);
+  const now = new Date(at);
+  let months = (now.getUTCFullYear() - born.getUTCFullYear()) * 12 + (now.getUTCMonth() - born.getUTCMonth());
+  const lastDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+  const monthDay = Math.min(born.getUTCDate(), lastDay);
+  const bornTime = born.getTime() - Date.UTC(born.getUTCFullYear(), born.getUTCMonth(), born.getUTCDate());
+  const nowTime = at - Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  if (now.getUTCDate() < monthDay || (now.getUTCDate() === monthDay && nowTime < bornTime)) months -= 1;
+  return months;
 }
 
 /** Whether a range fits one patient. Unknown means the range names a sex or an age the record lacks. */
 export type BandFit = 'yes' | 'no' | 'unknown';
 
-export function bandFit(band: ResultBand, patient: { sex?: string | null; ageYears?: number | null }): BandFit {
+/**
+ * Whether one band fits one patient. The sex must match when the band names one. The age, in the
+ * band's unit, must fall inside its window, both edges counted as inside: a band "0 to 28 days" fits
+ * through day 28, and "18+ years" from the 18th birthday. A band naming a sex or an age the record
+ * lacks is unknown, unless the other half already rules it out.
+ */
+export function bandFit(band: ResultBand, patient: BandPatient): BandFit {
   const sex = patient.sex ?? null;
-  const age = patient.ageYears ?? null;
   let unknown = false;
   if (band.sex !== null) {
     if (sex === null) unknown = true;
     else if (band.sex !== sex) return 'no';
   }
   if (band.ageLow !== null || band.ageHigh !== null) {
+    const age = ageIn(band.ageUnit ?? 'y', patient.birthDate, patient.at ?? Date.now());
     if (age === null) unknown = true;
     else if ((band.ageLow !== null && age < band.ageLow) || (band.ageHigh !== null && age > band.ageHigh)) return 'no';
   }
   return unknown ? 'unknown' : 'yes';
+}
+
+/**
+ * The band that applies to one patient: the first, in the stored order, that fits for certain. A lab
+ * that writes overlapping bands gets the one it wrote first. Null means nothing matched, and the
+ * sheet then shows no range rather than a wrong one.
+ */
+export function matchBand(bands: ResultBand[], patient: BandPatient): ResultBand | null {
+  const at = patient.at ?? Date.now();
+  return bands.find((band) => bandFit(band, { ...patient, at }) === 'yes') ?? null;
 }
 
 /** A sex a range can name, with its label in each language the studio ships. */
@@ -139,24 +192,22 @@ export const SEX_OPTIONS: SexOption[] = Patient.shape.gender.unwrap().options
   .map((code) => ({ code, labels: SEX_LABELS[code] ?? { en: code } }));
 
 /**
- * A patient's sex and whole years of age, as the band rules read them, from a stored FHIR Patient.
- * Bench result entry and a plugin's testCatalog.resultParams both call this, so both pick the same
- * band. A missing Patient or birth date gives null, and the catalog then answers the catch-all band.
+ * A patient's sex and birth date, as the band rules read them, from a stored FHIR Patient, with the
+ * moment the age is taken at. Bench result entry and a plugin's testCatalog.resultParams both call
+ * this, so both pick the same band. A missing Patient or an unreadable birth date gives null, and the
+ * catalog then answers the catch-all band.
  */
 export function patientBandKey(
   patient: { gender?: unknown; birthDate?: unknown } | null,
   now: number = Date.now(),
-): { sex: string | null; ageYears: number | null } {
-  if (!patient) return { sex: null, ageYears: null };
-  const born = typeof patient.birthDate === 'string' ? new Date(patient.birthDate) : null;
-  const ageYears = born && !Number.isNaN(born.getTime())
-    ? Math.floor((now - born.getTime()) / (365.2425 * 24 * 60 * 60 * 1000))
-    : null;
-  return { sex: typeof patient.gender === 'string' ? patient.gender : null, ageYears };
+): { sex: string | null; birthDate: string | null; at: number } {
+  if (!patient) return { sex: null, birthDate: null, at: now };
+  const birthDate = typeof patient.birthDate === 'string' && bornAt(patient.birthDate) ? patient.birthDate : null;
+  return { sex: typeof patient.gender === 'string' ? patient.gender : null, birthDate, at: now };
 }
 
 const NUMBER_FIELDS = ['low', 'high', 'ageLow', 'ageHigh', 'criticalLow', 'criticalHigh'] as const;
-const STRING_FIELDS = ['name', 'unit', 'sex'] as const;
+const STRING_FIELDS = ['name', 'unit', 'sex', 'ageUnit'] as const;
 
 /**
  * False when a raw submitted field is neither the field's proper type nor null/absent. `toBand`
@@ -172,13 +223,15 @@ function bandFieldTypesOk(raw: Record<string, unknown>): boolean {
     const v = raw[f];
     if (v !== null && v !== undefined && typeof v !== 'string') return false;
   }
+  // An age unit CE does not know would read as years, and so match a years band it is not.
+  if (raw.ageUnit !== null && raw.ageUnit !== undefined && !AGE_UNITS.includes(raw.ageUnit as AgeUnit)) return false;
   return true;
 }
 
 /**
- * The catalog range a submitted band matches, field for field, name and critical limits included. A
- * missing name reads as none, so a range saved before names existed still matches an unnamed one. A
- * missing critical limit reads as none too. Null when the value
+ * The catalog range a submitted band matches, field for field, name, age unit and critical limits
+ * included. A missing name reads as none, so a range saved before names existed still matches an
+ * unnamed one. A missing critical limit reads as none too, and a missing age unit as years. Null when the value
  * is not band-shaped, a field carries the wrong type, or no catalog range matches.
  */
 export function findCatalogBand(band: unknown, bands: ResultBand[]): ResultBand | null {
@@ -189,6 +242,7 @@ export function findCatalogBand(band: unknown, bands: ResultBand[]): ResultBand 
   if (!b) return null;
   return bands.find((c) => c.name === b.name && c.low === b.low && c.high === b.high && c.unit === b.unit
     && c.sex === b.sex && c.ageLow === b.ageLow && c.ageHigh === b.ageHigh
+    && (c.ageUnit ?? 'y') === (b.ageUnit ?? 'y')
     && (c.criticalLow ?? null) === (b.criticalLow ?? null) && (c.criticalHigh ?? null) === (b.criticalHigh ?? null)) ?? null;
 }
 

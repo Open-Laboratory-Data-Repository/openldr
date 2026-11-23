@@ -1,6 +1,6 @@
 import type { FhirResource, Observation, Questionnaire, QuestionnaireResponse, QuestionnaireResponseItem } from 'fhir/r4'
 import type { FormSchema } from '../schema/form-schema'
-import { parseTestDetails, type ResultCoding, type TestDetail, type TypedResult } from '../test-details'
+import { parseTestDetails, type BandAgeUnit, type ResultBandRef, type ResultCoding, type TestDetail, type TypedResult } from '../test-details'
 import { orderedTests, type ExtractionContext, type ResourceExtractor } from './extract'
 import { orderRejectionOf } from './order-rejection'
 
@@ -23,6 +23,23 @@ function valueOf(result: TypedResult): Partial<Observation> {
   return {}
 }
 
+const UCUM = 'http://unitsofmeasure.org'
+// UCUM writes a year as "a" (annum). Days and months keep their own codes.
+const UCUM_AGE: Record<BandAgeUnit, string> = { d: 'd', mo: 'mo', y: 'a' }
+
+/** The band's age window as a FHIR Range in UCUM, or nothing when the band has no age window. */
+function ageOf(band: ResultBandRef): { age?: { low?: object; high?: object } } {
+  if (band.ageLow === null && band.ageHigh === null) return {}
+  const code = UCUM_AGE[band.ageUnit ?? 'y'] ?? 'a'
+  const q = (value: number) => ({ value, unit: code, system: UCUM, code })
+  return {
+    age: {
+      ...(band.ageLow !== null ? { low: q(band.ageLow) } : {}),
+      ...(band.ageHigh !== null ? { high: q(band.ageHigh) } : {}),
+    },
+  }
+}
+
 function rangeOf(result: TypedResult, key: string, ctx: ExtractionContext): Partial<Observation> {
   // The band never survives a QuestionnaireResponse answer, so the forms route puts it in the
   // context. A response replayed through ingest carries none and so gets no referenceRange, which is
@@ -34,6 +51,8 @@ function rangeOf(result: TypedResult, key: string, ctx: ExtractionContext): Part
     referenceRange: [{
       ...(band.low !== null ? { low: { value: band.low, ...(unit ? { unit } : {}) } } : {}),
       ...(band.high !== null ? { high: { value: band.high, ...(unit ? { unit } : {}) } } : {}),
+      // Who the range is for, so the record says which age it was read against.
+      ...ageOf(band),
       // The name the bench picked by, so the record says which range was used.
       ...(band.name ? { text: band.name } : {}),
     }],

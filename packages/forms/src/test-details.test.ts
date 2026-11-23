@@ -29,6 +29,14 @@ describe('test details answer', () => {
     expect(parseTestDetails(named)[`${CATALOG}|FBC`].results[0].band?.name).toBe('Highland women')
   })
 
+  it('keeps the age unit of the range the bench picked', () => {
+    const days = { [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+      { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 18, unit: 'g/dL',
+        band: { name: null, low: 14, high: 22, unit: 'g/dL', sex: null, ageLow: 0, ageHigh: 28, ageUnit: 'd' } },
+    ] } }
+    expect(parseTestDetails(days)[`${CATALOG}|FBC`].results[0].band?.ageUnit).toBe('d')
+  })
+
   it('reads a rejection and drops nothing else', () => {
     const rejected = { [`${CATALOG}|FBC`]: { ...answer[`${CATALOG}|FBC`], rejection: { system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' } } }
     const parsed = parseTestDetails(rejected)[`${CATALOG}|FBC`]

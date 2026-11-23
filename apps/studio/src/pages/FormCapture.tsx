@@ -272,6 +272,12 @@ export function FormCapture() {
                 ageFrom: t('forms.rangeAgeFrom'),
                 ageTo: t('forms.rangeAgeTo'),
                 ageBetween: t('forms.rangeAgeBetween'),
+                ageFromDays: t('forms.rangeAgeFromDays'),
+                ageToDays: t('forms.rangeAgeToDays'),
+                ageBetweenDays: t('forms.rangeAgeBetweenDays'),
+                ageFromMonths: t('forms.rangeAgeFromMonths'),
+                ageToMonths: t('forms.rangeAgeToMonths'),
+                ageBetweenMonths: t('forms.rangeAgeBetweenMonths'),
               }}
               browseCopy={{
                 title: t('forms.browseTitle'),

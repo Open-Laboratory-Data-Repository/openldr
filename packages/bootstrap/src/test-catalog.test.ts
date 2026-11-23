@@ -1019,7 +1019,7 @@ describe('test catalog: what a result sheet needs', () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
     await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
-    const answer = await catalog.resultParamsFor([test('FBC')], { sex: 'female', ageYears: 30 });
+    const answer = await catalog.resultParamsFor([test('FBC')], { sex: 'female', birthDate: '1996-01-01', at: Date.parse('2026-11-23T12:00:00Z') });
     expect(answer).toEqual([{
       test: { system: TEST_CATALOG_SYSTEM, code: 'FBC' },
       params: [{
@@ -1034,7 +1034,7 @@ describe('test catalog: what a result sheet needs', () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
     await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
-    const answer = await catalog.resultParamsFor([test('FBC')], { sex: null, ageYears: null });
+    const answer = await catalog.resultParamsFor([test('FBC')], { sex: null, birthDate: null });
     expect(answer[0].params[0].band).toBeNull();
   });
 
@@ -1049,11 +1049,28 @@ describe('test catalog: what a result sheet needs', () => {
     expect(await catalog.resultParamsFor([{ system: LOINC_SYSTEM, code: '718-7' }], {})).toEqual([]);
   });
 
+  it('stores a range age unit, reads it back, and fits a newborn by days and a child by years', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    const neonatal = { name: null, low: 14, high: 22, unit: 'g/dL', sex: null, ageLow: 0, ageHigh: 28, ageUnit: 'd' as const };
+    const infant = { name: null, low: 10, high: 14, unit: 'g/dL', sex: null, ageLow: 1, ageHigh: 12, ageUnit: 'mo' as const };
+    const child = { name: null, low: 11, high: 14, unit: 'g/dL', sex: null, ageLow: 1, ageHigh: 5, ageUnit: 'y' as const };
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [neonatal, infant, child, ...HGB.bands] }] });
+    expect((await catalog.get('FBC'))?.resultParams[0].bands.map((b) => b.ageUnit)).toEqual(['d', 'mo', 'y', undefined, undefined]);
+    const at = Date.parse('2026-11-23T12:00:00Z');
+    const [newborn] = await catalog.resultParamsFor([test('FBC')], { sex: 'female', birthDate: '2026-11-23', at });
+    expect(newborn.params[0].band).toEqual(neonatal);
+    expect(newborn.params[0].fits).toEqual(['yes', 'no', 'no', 'no', 'no']);
+    const [twoYears] = await catalog.resultParamsFor([test('FBC')], { sex: 'female', birthDate: '2024-11-23', at });
+    expect(twoYears.params[0].band).toEqual(child);
+    expect(twoYears.params[0].fits).toEqual(['no', 'no', 'yes', 'no', 'no']);
+  });
+
   it('answers unknown for a range that names a fact the patient record lacks', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
     await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
-    const answer = await catalog.resultParamsFor([test('FBC')], { sex: null, ageYears: null });
+    const answer = await catalog.resultParamsFor([test('FBC')], { sex: null, birthDate: null });
     expect(answer[0].params[0].fits).toEqual(['unknown', 'unknown']);
   });
 });

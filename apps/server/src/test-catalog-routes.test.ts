@@ -401,6 +401,26 @@ describe('test catalog routes', () => {
     expect(Object.keys(bands[1] as object)).not.toContain('criticalLow');
   });
 
+  it('carries the age unit of a range through a create, refuses one it does not know, and adds no key when left out', async () => {
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    await app.inject({
+      method: 'POST', url: '/api/test-catalog',
+      payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [
+        { low: 12, high: 15, ageLow: 0, ageHigh: 28, ageUnit: 'd' }, { low: 12, high: 15, ageLow: 1, ageHigh: 12, ageUnit: 'mo' }, { low: 12, high: 15, ageLow: 18 },
+      ] }] },
+    });
+    const created = calls.find((c) => c.method === 'create');
+    const bands = (created?.args[0] as { resultParams: Array<{ bands: Array<Record<string, unknown>> }> }).resultParams[0].bands;
+    expect(bands.map((b) => b.ageUnit)).toEqual(['d', 'mo', undefined]);
+    expect(Object.keys(bands[2])).not.toContain('ageUnit');
+    const bad = await app.inject({
+      method: 'POST', url: '/api/test-catalog',
+      payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 1, ageUnit: 'w' }] }] },
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('POST /result-params answers the sex choices with their labels, so the studio names no code', async () => {
     const { ctx } = fakeCtx();
     const res = await appWith(ctx, ['forms.view']).inject({
@@ -423,15 +443,17 @@ describe('test catalog routes', () => {
     expect(calls[0].args[0]).toEqual(tests);
   });
 
-  it('resolves the patient itself, and passes sex and age to the catalog', async () => {
+  it('resolves the patient itself, and passes sex and birth date to the catalog', async () => {
     const { ctx, calls } = fakeCtx();
     await appWith(ctx, ['forms.view']).inject({
       method: 'POST', url: '/api/test-catalog/result-params',
       payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }], patient: { reference: 'Patient/p1' } },
     });
-    const patient = calls[0].args[1] as { sex: string | null; ageYears: number | null };
+    const patient = calls[0].args[1] as { sex: string | null; birthDate: string | null; at: number };
     expect(patient.sex).toBe('female');
-    expect(patient.ageYears).toBeGreaterThan(30);
+    // The birth date, not whole years, so each range reads the age in its own unit.
+    expect(patient.birthDate).toBe('1990-01-01');
+    expect(typeof patient.at).toBe('number');
   });
 
   it('asks with no patient when the order names none, rather than refusing', async () => {
@@ -441,7 +463,7 @@ describe('test catalog routes', () => {
       payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }] },
     });
     expect(res.statusCode).toBe(200);
-    expect(calls[0].args[1]).toEqual({ sex: null, ageYears: null });
+    expect(calls[0].args[1]).toMatchObject({ sex: null, birthDate: null });
   });
 
   it('answers the rejection reasons for both levels, so the studio names no value set', async () => {

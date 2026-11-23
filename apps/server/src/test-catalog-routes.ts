@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   catalogChangeAction, catalogImportAudit, catalogImportInputSchema, parseCatalogListQuery, readCatalogImportFile,
-  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, patientBandKey, type AppContext,
+  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, patientBandKey, type AppContext, type BandPatient,
 } from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
@@ -29,6 +29,8 @@ const band = z.object({
   name: z.string().nullish(),
   low: z.number().nullish(), high: z.number().nullish(), unit: z.string().nullish(),
   sex: z.string().nullish(), ageLow: z.number().nullish(), ageHigh: z.number().nullish(),
+  // The unit of the age window. Left out means years, so a range sent as before keeps its meaning.
+  ageUnit: z.enum(['d', 'mo', 'y']).nullish(),
   criticalLow: z.number().nullish(), criticalHigh: z.number().nullish(),
 });
 // zod strips what it does not declare, so a parameter list left out of this schema would vanish
@@ -48,6 +50,7 @@ const resultParam = z.object({
     name: b.name ?? null,
     low: b.low ?? null, high: b.high ?? null, unit: b.unit ?? null,
     sex: b.sex ?? null, ageLow: b.ageLow ?? null, ageHigh: b.ageHigh ?? null,
+    ...(b.ageUnit != null ? { ageUnit: b.ageUnit } : {}),
     // Optional on the band, so a limit not given adds no key.
     ...(b.criticalLow != null ? { criticalLow: b.criticalLow } : {}),
     ...(b.criticalHigh != null ? { criticalHigh: b.criticalHigh } : {}),
@@ -77,14 +80,15 @@ const resultParamsInput = z.object({
 });
 
 /**
- * The patient's sex and whole years of age, read from the stored Patient. The studio sends a
- * reference only, so no date arithmetic happens in the browser and no birth date travels with a
- * picker answer. A patient that cannot be read gives nulls, and the catalog then answers the
- * catch-all band (bench result entry, spec 7).
+ * The patient's sex and birth date, read from the stored Patient, with the moment the age is taken
+ * at. The studio sends a reference only, so no date arithmetic happens in the browser and no birth
+ * date travels with a picker answer. Each band then reads the age in its own unit. A patient that
+ * cannot be read gives nulls, and the catalog then answers the catch-all band (bench result entry,
+ * spec 7).
  */
-async function patientBandKeyFor(ctx: AppContext, reference: string | undefined): Promise<{ sex: string | null; ageYears: number | null }> {
+async function patientBandKeyFor(ctx: AppContext, reference: string | undefined): Promise<BandPatient> {
   const id = reference?.split('/')[1];
-  if (!id) return { sex: null, ageYears: null };
+  if (!id) return patientBandKey(null);
   const patient = (await ctx.fhirStore.get('Patient', id).catch(() => null)) as { gender?: string; birthDate?: string } | null;
   return patientBandKey(patient);
 }

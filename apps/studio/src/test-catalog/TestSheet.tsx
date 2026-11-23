@@ -17,9 +17,9 @@ import { TermPicker } from '@/terminology/TermPicker';
 import {
   createCatalogTest, setCatalogLabSettings, updateCatalogTest,
   type CatalogLabSettingsInput, type CatalogTestResultParam, type CatalogSpecimenCoding, type CatalogTest, type CatalogTestInput,
-  type CatalogResultBand, type TestCatalogOptions,
+  type CatalogAgeUnit, type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
-import { sexLabel } from '@/forms-runtime/rangeLabel';
+import { criteriaLabel, sexLabel, type RangeCopy } from '@/forms-runtime/rangeLabel';
 
 // Test catalog S2 (spec 4.3): add or edit one test, and this lab's own settings for it. Copies
 // forms-builder/FieldEditorSheet.tsx (AGENTS.md section 5).
@@ -48,6 +48,12 @@ interface Draft {
 const EMPTY_BAND: CatalogResultBand = { name: null, low: null, high: null, unit: null, sex: null, ageLow: null, ageHigh: null };
 /** Radix Select cannot hold an empty value, so "any sex" is this sentinel in the picker only. */
 const ANY_SEX = '__any__';
+/** The age units a range can be written in. A range with none is in years. */
+const AGE_UNITS: Array<{ code: CatalogAgeUnit; key: string }> = [
+  { code: 'd', key: 'testCatalog.sheet.ageUnitDays' },
+  { code: 'mo', key: 'testCatalog.sheet.ageUnitMonths' },
+  { code: 'y', key: 'testCatalog.sheet.ageUnitYears' },
+];
 
 /** Tick or untick one parameter, keeping the order the operator ticked them in. */
 function toggleParam(list: CatalogTestResultParam[], option: { system: string; code: string }, on: boolean): CatalogTestResultParam[] {
@@ -109,6 +115,14 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const { t, i18n } = useTranslation();
+  // The words an unnamed range is shown by, the same the bench sheet uses (FormCapture.tsx).
+  const rangeCopy: RangeCopy = {
+    language: i18n.language,
+    anyone: t('forms.rangeAnyone'),
+    ageFrom: t('forms.rangeAgeFrom'), ageTo: t('forms.rangeAgeTo'), ageBetween: t('forms.rangeAgeBetween'),
+    ageFromDays: t('forms.rangeAgeFromDays'), ageToDays: t('forms.rangeAgeToDays'), ageBetweenDays: t('forms.rangeAgeBetweenDays'),
+    ageFromMonths: t('forms.rangeAgeFromMonths'), ageToMonths: t('forms.rangeAgeToMonths'), ageBetweenMonths: t('forms.rangeAgeBetweenMonths'),
+  };
   const [draft, setDraft] = useState<Draft>(() => draftFrom(null));
   // The test as last saved. A create that went through sets it, so saving again edits instead of
   // adding the test twice.
@@ -383,6 +397,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                       className="h-8 sm:col-span-3"
                                       aria-label={t('testCatalog.sheet.bandNameFor', { code: p.code, n })}
                                       value={band.name ?? ''}
+                                      // An unnamed range is shown at the bench by who it is for, such as "up to 28 days".
+                                      placeholder={criteriaLabel(band, options.sexes, rangeCopy)}
                                       onChange={(e) => setBand({ name: e.target.value === '' ? null : e.target.value })}
                                     />
                                     {(['low', 'high'] as const).map((edge) => (
@@ -425,6 +441,15 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                         />
                                       </Fragment>
                                     ))}
+                                    {label('ageUnit', 'testCatalog.sheet.bandAgeUnit')}
+                                    <div className="sm:col-span-3">
+                                      <Select value={band.ageUnit ?? 'y'} onValueChange={(v) => setBand({ ageUnit: v as CatalogAgeUnit })}>
+                                        <SelectTrigger id={id('ageUnit')} className="h-8 sm:w-40" aria-label={t('testCatalog.sheet.bandAgeUnitFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          {AGE_UNITS.map((u) => <SelectItem key={u.code} value={u.code}>{t(u.key)}</SelectItem>)}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
                                     {(['criticalLow', 'criticalHigh'] as const).map((edge) => (
                                       <Fragment key={edge}>
                                         {label(edge, edge === 'criticalLow' ? 'testCatalog.sheet.bandCriticalLow' : 'testCatalog.sheet.bandCriticalHigh')}

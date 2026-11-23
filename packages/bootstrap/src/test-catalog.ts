@@ -7,7 +7,7 @@ import { toCsv } from '@openldr/reporting';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { readTableFile, TableFileError, type TableFileFormat } from './table-file';
 import {
-  bandFit, matchBand, parseResultParams, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, type BandFit, type ResultBand,
+  bandFit, matchBand, parseResultParams, type BandPatient, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, type BandFit, type ResultBand,
   type SexOption, type TestResultParam,
 } from './result-params';
 import type { AuditDetails } from './record-audit';
@@ -242,7 +242,7 @@ export interface TestCatalog {
    *  patient. Codings outside the catalog are ignored (bench result entry, spec 7). */
   resultParamsFor(
     tests: Array<{ system: string; code: string }>,
-    patient: { sex?: string | null; ageYears?: number | null },
+    patient: BandPatient,
   ): Promise<TestParamsAnswer[]>;
 }
 
@@ -1027,10 +1027,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
 
   async function resultParamsFor(
     tests: Array<{ system: string; code: string }>,
-    patient: { sex?: string | null; ageYears?: number | null },
+    patient: BandPatient,
   ): Promise<TestParamsAnswer[]> {
     const codes = tests.filter((t) => t.system === TEST_CATALOG_SYSTEM).map((t) => t.code);
     if (codes.length === 0) return [];
+    // One moment for every band, so two bands never read the patient at different ages.
+    const who: BandPatient = { ...patient, at: patient.at ?? Date.now() };
     const wanted = new Set(codes);
     const found = (await readTests()).filter((t) => wanted.has(t.code));
     const paramCodes = [...new Set(found.flatMap((t) => t.resultParams.map((p) => p.code)))];
@@ -1052,8 +1054,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
           ...p,
           unit: unitOf.get(p.code)?.unit ?? null,
           display: unitOf.get(p.code)?.display ?? null,
-          band: matchBand(p.bands, patient),
-          fits: p.bands.map((b) => bandFit(b, patient)),
+          band: matchBand(p.bands, who),
+          fits: p.bands.map((b) => bandFit(b, who)),
         })),
       };
     });

@@ -2866,8 +2866,11 @@ export const catalogSpecimensFor = (
     .then((r) => okJson<{ specimens: { system: string; code: string; display: string | null }[] }>(r, 'narrow specimens'))
     .then((b) => b.specimens);
 
+export type CatalogAgeUnit = 'd' | 'mo' | 'y';
 export interface CatalogResultBand {
   name: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null;
+  /** The unit of ageLow and ageHigh: days, months or years. Absent means years. */
+  ageUnit?: CatalogAgeUnit;
   /** Absent when the band sets none. The editor sends null for a limit it cleared, which the server drops. */
   criticalLow?: number | null; criticalHigh?: number | null;
 }

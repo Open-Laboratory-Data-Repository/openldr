@@ -104,6 +104,13 @@ describe('test-catalog params', () => {
     expect(param.bands[0].name).toBe('Highland women');
   });
 
+  it('keeps a range age unit from a set file', () => {
+    const [param] = readResultParamsFile(JSON.stringify([
+      { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 14, high: 22, ageLow: 0, ageHigh: 28, ageUnit: 'd' }] },
+    ]));
+    expect(param.bands[0].ageUnit).toBe('d');
+  });
+
   it('refuses a set file that is not a list', () => {
     expect(() => readResultParamsFile('{"code":"HGB"}')).toThrow(/list of result parameters/);
   });

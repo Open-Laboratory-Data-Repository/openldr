@@ -451,8 +451,9 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         },
 
         // The result parameters of each test, with the band that fits one patient (plan 2, task 1).
-        // The patient's sex and age are read inside CE and used only to pick the band: the answer
-        // carries neither, nor anything else about the patient.
+        // The patient's sex and birth date are read inside CE and used only to pick the band, each
+        // band reading the age in its own unit (days, months or years). The answer carries neither,
+        // nor anything else about the patient.
         async 'testCatalog.resultParams'(raw) {
           needPatientsAccess('testCatalog.resultParams');
           const i = parse(resultParamsInput, raw, 'testCatalog.resultParams');

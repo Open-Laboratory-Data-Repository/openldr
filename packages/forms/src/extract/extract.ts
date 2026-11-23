@@ -16,7 +16,7 @@ import type {
 import type { FieldDiscriminator, FormField, FormSchema } from '../schema/form-schema'
 import { fromAnswer } from '../answer-value'
 import { discriminatorEquals, extrasDiscriminator } from '../discriminator'
-import { parseTestDetails } from '../test-details'
+import { parseTestDetails, type ResultBandRef } from '../test-details'
 import { ORDER_REJECTION_EXTENSION, isOrderRejectionBinding } from '../order-rejection-path'
 import { orderRejectionOf } from './order-rejection'
 import { isRequesterFacilityBinding, isRequisitionNumberBinding, pickedFacilityOf, type PickedFacility } from './order-fields'
@@ -40,7 +40,7 @@ export interface ExtractionContext {
    * (bench result entry). A replayed response carries none, and the Observation then has no
    * referenceRange.
    */
-  testBands?: ReadonlyMap<string, { name?: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }>
+  testBands?: ReadonlyMap<string, ResultBandRef>
   /**
    * The fixed id of the order for one test (lab slices 1b and 2, ruling 1). The forms route builds it
    * from the facility and the requisition number (`order-ids.ts`). With it, each test's

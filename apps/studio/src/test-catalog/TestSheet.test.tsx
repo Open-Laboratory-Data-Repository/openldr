@@ -258,7 +258,7 @@ describe('TestSheet: result parameters', () => {
     const block = screen.getByTestId('band-HGB-1');
     const pairs: Array<[string, RegExp]> = [
       ['Name', /name for HGB band 1/i], ['Low', /low for HGB band 1/i], ['High', /high for HGB band 1/i],
-      ['Unit', /unit for HGB band 1/i], ['Age from', /age from for HGB band 1/i], ['Age to', /age to for HGB band 1/i],
+      ['Unit', /^unit for HGB band 1/i], ['Age from', /age from for HGB band 1/i], ['Age to', /age to for HGB band 1/i],
     ];
     for (const [word, control] of pairs) {
       const label = within(block).getByText(word, { selector: 'label' });
@@ -332,6 +332,35 @@ describe('TestSheet: result parameters', () => {
     expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands).toEqual([
       { name: 'Highland women', low: null, high: null, unit: null, sex: 'female', ageLow: 15, ageHigh: null },
     ]);
+  });
+
+  it('saves the age unit the operator picked, and shows an unnamed range by it', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    renderSheet({ target: { kind: 'edit', test: withParam } });
+    await addBand('HGB');
+    const unit = screen.getByRole('combobox', { name: /age unit for HGB band 1/i });
+    // A new range is in years until the operator picks another unit.
+    expect(unit).toHaveTextContent('Years');
+    expect(within(screen.getByTestId('band-HGB-1')).getByText('Age in', { selector: 'label' }).getAttribute('for')).toBe(unit.id);
+    fireEvent.keyDown(unit, { key: 'ArrowDown' });
+    await act(async () => { fireEvent.click(await screen.findByRole('option', { name: 'Days' })); });
+    fireEvent.change(screen.getByLabelText(/age to for HGB band 1/i), { target: { value: '28' } });
+    expect(screen.getByLabelText(/name for HGB band 1/i)).toHaveAttribute('placeholder', 'up to 28 days');
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands).toEqual([
+      { name: null, low: null, high: null, unit: null, sex: null, ageLow: null, ageHigh: 28, ageUnit: 'd' },
+    ]);
+  });
+
+  it('keeps a range saved before units without a unit when the operator does not touch it', async () => {
+    const old: api.CatalogTest = { ...withParam, resultParams: [{ ...withParam.resultParams[0], bands: [
+      { name: null, low: 11, high: 14, unit: null, sex: null, ageLow: 2, ageHigh: 17 },
+    ] }] };
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(old);
+    renderSheet({ target: { kind: 'edit', test: old } });
+    expect(screen.getByRole('combobox', { name: /age unit for HGB band 1/i })).toHaveTextContent('Years');
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands[0]).not.toHaveProperty('ageUnit');
   });
 
   it('moves a range up, and removes one, from the range menu', async () => {
