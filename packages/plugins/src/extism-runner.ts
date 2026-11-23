@@ -78,7 +78,7 @@ const failure = (code: string, message: string): HostFailure => ({ ok: false, er
 
 /** The memory a host function bridge needs: read the plugin's input block, store the answer. */
 export interface HostFnMemory {
-  read(offset: bigint): { text(): string } | null;
+  read(offset: bigint): { byteLength: number; text(): string } | null;
   store(value: string): bigint;
 }
 
@@ -104,10 +104,11 @@ export function bridgeHostFn(name: string, fn: HostFn, onError?: (name: string, 
   };
   return async (cp, offset) => {
     const block = cp.read(offset);
-    const raw = block ? block.text() : '';
-    if (Buffer.byteLength(raw, 'utf8') > HOST_FN_MAX_BYTES) {
+    // The size is checked on the block itself, before any of it is decoded.
+    if (block && block.byteLength > HOST_FN_MAX_BYTES) {
       return answer(cp, failure('TOO_LARGE', `${name}: the request is over ${HOST_FN_MAX_BYTES} bytes`));
     }
+    const raw = block ? block.text() : '';
     let input: unknown;
     try {
       input = raw.trim() === '' ? null : JSON.parse(raw);
@@ -145,9 +146,9 @@ export function createExtismRunner(runnerOpts: { execArgv?: readonly string[] } 
       }
       const userFns: Record<string, (cp: CurrentPlugin, offset: bigint) => Promise<bigint>> = {};
       for (const n of hostNames) {
-        const bridged = bridgeHostFn(n, hostFns[n], (name, err) => {
-          opts.host.log('error', `host function ${name} failed: ${err instanceof Error ? err.message : String(err)}`);
-        });
+        // An unexpected error's details go to CE's own logger (onHostError), never to the plugin's
+        // log channel.
+        const bridged = bridgeHostFn(n, hostFns[n], opts.onHostError);
         userFns[n] = (cp, offset) => bridged(cp as unknown as HostFnMemory, offset);
       }
 

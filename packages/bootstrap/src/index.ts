@@ -2107,7 +2107,7 @@ const reporting: ReportingApi = {
     testCatalog,
     terminology: terminology.ops,
     facilityRegistry,
-    fhirGet: (resourceType, id) => canonicalFhirStore.get(resourceType, id),
+    fhirGetWithProvenance: (resourceType, id) => canonicalFhirStore.getWithProvenance(resourceType, id),
     persist: workflowPersist,
     audit: (actor, details) => recordAuditEvent({ audit, logger }, actor, details),
     logger,
@@ -2504,7 +2504,7 @@ export { recordAuditEvent } from './record-audit';
 export { checkReadOp, recordCheckRead } from './check-read-audit';
 export type { CheckReadKind } from './check-read-audit';
 export type { AuditActor, AuditDetails } from './record-audit';
-export { createPluginHost, CE_READ_OPS, MAX_PATIENT_SCOPE_FACILITIES, type PluginHostDeps, type HostResult } from './plugin-host';
+export { createPluginHost, CE_READ_OPS, MAX_PATIENT_SCOPE_FACILITIES, MAX_AUDITED_IDS, type PluginHostDeps, type HostResult } from './plugin-host';
 export { copyStorage } from './storage-copy';
 export type { StorageCopyReport } from './storage-copy';
 export {

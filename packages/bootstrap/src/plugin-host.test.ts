@@ -17,6 +17,10 @@ function plugin(capabilities: Capability[], tables: HostPlugin['tables'] = []): 
   return { id: 'lab', version: '0.2.0', capabilities, tables };
 }
 
+/** A plugin that may register patients: host:ce-read, and Patient in its emit-fhir list. */
+const REGISTERS: Capability[] = [{ kind: 'host:ce-read' }, { kind: 'emit-fhir', resourceTypes: ['Patient'] }];
+const stored = (resource: unknown, pluginId?: string) => ({ resource, provenance: pluginId ? { pluginId } : { sourceSystem: 'disa' } });
+
 function fakeDeps(over: Partial<PluginHostDeps> = {}): PluginHostDeps {
   return {
     requests: { select: vi.fn(async () => ({ rows: [] })), write: vi.fn(async () => ({ results: [] })) },
@@ -24,7 +28,7 @@ function fakeDeps(over: Partial<PluginHostDeps> = {}): PluginHostDeps {
     testCatalog: { list: vi.fn(async () => ({ rows: [], total: 0 })), get: vi.fn(async () => null) } as any,
     terminology: { expand: vi.fn(async () => ({ resourceType: 'ValueSet' })), lookup: vi.fn(async () => ({ found: true, display: 'X' })) } as any,
     facilityRegistry: { list: vi.fn(async () => ({ rows: [], total: 0 })), get: vi.fn(), idsMatching: vi.fn(async () => []) } as any,
-    fhirGet: vi.fn(async () => null),
+    fhirGetWithProvenance: vi.fn(async () => null),
     persist: vi.fn(async () => []),
     audit: vi.fn(async () => {}),
     logger,
@@ -187,7 +191,7 @@ describe('plugin host: ce_read', () => {
 
   it('patients.register saves a Patient through the FHIR save path and audits the caller', async () => {
     const deps = fakeDeps();
-    const fns = createPluginHost(deps).forCall(plugin([{ kind: 'host:ce-read' }]), SITE);
+    const fns = createPluginHost(deps).forCall(plugin(REGISTERS), SITE);
     const patient = { resourceType: 'Patient', id: 'lab-p-1', managingOrganization: { reference: 'Organization/fac-1' } };
     expect(await fns.ce_read({ op: 'patients.register', input: { patient } })).toEqual({ ok: true, result: { id: 'lab-p-1' } });
     expect(deps.persist).toHaveBeenCalledWith([patient], { pluginId: 'lab', pluginVersion: '0.2.0', sourceSystem: 'plugin:lab' });
@@ -197,9 +201,38 @@ describe('plugin host: ce_read', () => {
     );
   });
 
-  it('patients.register refuses another facility, another resource type, and an overwrite outside the limit', async () => {
-    const deps = fakeDeps({ fhirGet: vi.fn(async () => ({ resourceType: 'Patient', id: 'p-2', managingOrganization: { reference: 'Organization/fac-2' } })) });
-    const fns = createPluginHost(deps).forCall(plugin([{ kind: 'host:ce-read' }]), SITE);
+  it('patients.register needs Patient in the emit-fhir list granted at install', async () => {
+    const deps = fakeDeps();
+    const fns = createPluginHost(deps).forCall(plugin([{ kind: 'host:ce-read' }, { kind: 'emit-fhir', resourceTypes: ['Observation'] }]), EVERYONE);
+    const out = await fns.ce_read({ op: 'patients.register', input: { patient: { resourceType: 'Patient', id: 'x' } } }) as any;
+    expect(out.error.code).toBe('FORBIDDEN');
+    expect(out.error.message).toMatch(/emit-fhir for Patient/);
+    expect(deps.persist).not.toHaveBeenCalled();
+  });
+
+  it('patients.register refuses to update a patient another plugin or an ingest wrote, for any caller', async () => {
+    for (const pluginId of [undefined, 'cdr-source']) {
+      const deps = fakeDeps({ fhirGetWithProvenance: vi.fn(async () => stored({ resourceType: 'Patient', id: 'p-2' }, pluginId)) });
+      const fns = createPluginHost(deps).forCall(plugin(REGISTERS), EVERYONE);
+      const out = await fns.ce_read({ op: 'patients.register', input: { patient: { resourceType: 'Patient', id: 'p-2' } } }) as any;
+      expect(out.error.code).toBe('FORBIDDEN');
+      expect(out.error.message).toMatch(/not written by this plugin/);
+      expect(deps.persist).not.toHaveBeenCalled();
+      expect(deps.audit).not.toHaveBeenCalled();
+    }
+  });
+
+  it('patients.register updates a patient this plugin wrote', async () => {
+    const deps = fakeDeps({ fhirGetWithProvenance: vi.fn(async () => stored({ resourceType: 'Patient', id: 'p-9', managingOrganization: { reference: 'Organization/fac-1' } }, 'lab')) });
+    const fns = createPluginHost(deps).forCall(plugin(REGISTERS), SITE);
+    const patient = { resourceType: 'Patient', id: 'p-9', managingOrganization: { reference: 'Organization/fac-1' } };
+    expect(await fns.ce_read({ op: 'patients.register', input: { patient } })).toEqual({ ok: true, result: { id: 'p-9' } });
+    expect(deps.persist).toHaveBeenCalledTimes(1);
+  });
+
+  it('patients.register refuses another facility, another resource type, and an own patient held outside the limit', async () => {
+    const deps = fakeDeps({ fhirGetWithProvenance: vi.fn(async () => stored({ resourceType: 'Patient', id: 'p-2', managingOrganization: { reference: 'Organization/fac-2' } }, 'lab')) });
+    const fns = createPluginHost(deps).forCall(plugin(REGISTERS), SITE);
     const other = await fns.ce_read({ op: 'patients.register', input: { patient: { resourceType: 'Patient', id: 'x', managingOrganization: { reference: 'Organization/fac-2' } } } }) as any;
     expect(other.error.code).toBe('OUTSIDE_DATA_LIMIT');
     const obs = await fns.ce_read({ op: 'patients.register', input: { patient: { resourceType: 'Observation', id: 'x' } } }) as any;
@@ -213,7 +246,7 @@ describe('plugin host: ce_read', () => {
   it('patients.register answers a validation failure with its issues', async () => {
     const issue = { severity: 'error', code: 'required', diagnostics: 'Patient.name is required' };
     const deps = fakeDeps({ persist: vi.fn(async () => { throw appError('VA0002', { details: { outcome: { issue: [issue] } } }); }) });
-    const fns = createPluginHost(deps).forCall(plugin([{ kind: 'host:ce-read' }]), EVERYONE);
+    const fns = createPluginHost(deps).forCall(plugin(REGISTERS), EVERYONE);
     const out = await fns.ce_read({ op: 'patients.register', input: { patient: { resourceType: 'Patient', id: 'x' } } }) as any;
     expect(out).toEqual({ ok: false, error: { code: 'VALIDATION_FAILED', message: expect.stringMatching(/nothing was saved/), issues: [issue] } });
     expect(deps.audit).not.toHaveBeenCalled();
@@ -290,6 +323,53 @@ describe('plugin host: fhir_emit', () => {
     const forged = await fns.fhir_emit({ resources, provenance: { pluginId: 'cdr-source' } }) as any;
     expect(forged.error.code).toBe('INVALID_REQUEST');
     expect(deps.persist).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to overwrite a record another plugin or an ingest wrote, and saves nothing', async () => {
+    for (const pluginId of [undefined, 'cdr-source']) {
+      const deps = fakeDeps({ fhirGetWithProvenance: vi.fn(async (t: string, id: string) => (id === 'o2' ? stored({ resourceType: t, id }, pluginId) : null)) });
+      const out = await createPluginHost(deps).forCall(emit(['Observation']), EVERYONE).fhir_emit({
+        resources: [{ resourceType: 'Observation', id: 'o1' }, { resourceType: 'Observation', id: 'o2' }],
+      }) as any;
+      expect(out.error.code).toBe('FORBIDDEN');
+      expect(out.error.message).toMatch(/Observation\/o2 was not written by this plugin/);
+      expect(deps.persist).not.toHaveBeenCalled();
+      expect(deps.audit).not.toHaveBeenCalled();
+    }
+  });
+
+  it('updates a record this plugin wrote', async () => {
+    const deps = fakeDeps({ fhirGetWithProvenance: vi.fn(async (t: string, id: string) => stored({ resourceType: t, id }, 'lab')) });
+    const out = await createPluginHost(deps).forCall(emit(['Observation']), EVERYONE).fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o1' }] });
+    expect(out).toEqual({ ok: true, result: { saved: 1 } });
+  });
+
+  it('refuses a Bundle and a record with contained records, and saves nothing', async () => {
+    const deps = fakeDeps();
+    const fns = createPluginHost(deps).forCall(emit(['Observation', 'Bundle']), EVERYONE);
+    const bundle = await fns.fhir_emit({ resources: [{ resourceType: 'Bundle', id: 'b', entry: [] }] }) as any;
+    expect(bundle.error.code).toBe('RESOURCE_TYPE_NOT_ALLOWED');
+    const contained = await fns.fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o', contained: [{ resourceType: 'Patient', id: 'p' }] }] }) as any;
+    expect(contained.error.code).toBe('INVALID_RESOURCE');
+    expect(deps.persist).not.toHaveBeenCalled();
+  });
+
+  it('writes one audit row per call, with the caller, types, count and ids', async () => {
+    const deps = fakeDeps();
+    await createPluginHost(deps).forCall(emit(['Observation', 'ServiceRequest']), EVERYONE).fhir_emit({
+      resources: [{ resourceType: 'ServiceRequest', id: 's1' }, { resourceType: 'Observation', id: 'o1' }, { resourceType: 'Observation', id: 'o2' }],
+    });
+    expect(deps.audit).toHaveBeenCalledTimes(1);
+    expect(deps.audit).toHaveBeenCalledWith(
+      { actorType: 'user', actorId: 'u-admin', actorName: 'Admin' },
+      {
+        action: 'fhir.emit', entityType: 'fhir', entityId: 'ServiceRequest/s1',
+        metadata: {
+          pluginId: 'lab', pluginVersion: '0.2.0', count: 3, types: ['Observation', 'ServiceRequest'],
+          ids: ['ServiceRequest/s1', 'Observation/o1', 'Observation/o2'], idsTruncated: false,
+        },
+      },
+    );
   });
 
   it('answers an unexpected save failure plainly, without its text', async () => {

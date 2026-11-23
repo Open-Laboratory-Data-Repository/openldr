@@ -11,7 +11,7 @@ function memory(input: string): HostFnMemory & { stored: string[] } {
   const stored: string[] = [];
   return {
     stored,
-    read: (offset) => (offset === 1n ? { text: () => input } : null),
+    read: (offset) => (offset === 1n ? { byteLength: Buffer.byteLength(input), text: () => input } : null),
     store: (v) => { stored.push(v); return 99n; },
   };
 }
@@ -39,6 +39,17 @@ describe('host function bridge', () => {
     await bridgeHostFn('db_write', fn)(mem, 1n);
     expect(fn).not.toHaveBeenCalled();
     expect(JSON.parse(mem.stored[0]).error.code).toBe('TOO_LARGE');
+  });
+
+  it('checks the block size before decoding it', async () => {
+    const fn = vi.fn(async () => ({}));
+    const text = vi.fn(() => '{}');
+    const stored: string[] = [];
+    const mem: HostFnMemory = { read: () => ({ byteLength: HOST_FN_MAX_BYTES + 1, text }), store: (v) => { stored.push(v); return 1n; } };
+    await bridgeHostFn('db_write', fn)(mem, 1n);
+    expect(text).not.toHaveBeenCalled();
+    expect(fn).not.toHaveBeenCalled();
+    expect(JSON.parse(stored[0]).error.code).toBe('TOO_LARGE');
   });
 
   it('refuses an answer over the limit', async () => {
@@ -93,6 +104,17 @@ describe('sink: host functions for a call', () => {
     expect(host.forCall).toHaveBeenCalledWith({ id: 'lab', version: '0.2.0', capabilities: grant, tables }, caller);
     const opts = (r.run as any).mock.calls[0][2];
     expect(Object.keys(opts.hostFns)).toEqual(['db_select']);
+  });
+
+  it('sends a host function failure to CE logger with the plugin id, not the plugin log channel', async () => {
+    const r = runner();
+    const log = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as any;
+    const sink = createWasmSink(manifest, new Uint8Array(), r, log, [{ kind: 'host:db' }], tables);
+    await sink.invoke('orders_list', {}, { caller, host: fakeHost() });
+    const opts = (r.run as any).mock.calls[0][2];
+    const err = new Error('boom at 10.0.0.5');
+    opts.onHostError('db_select', err);
+    expect(log.error).toHaveBeenCalledWith({ err, plugin: 'lab', fn: 'db_select' }, 'plugin host function failed');
   });
 
   it('refuses a host:db plugin call with no caller', async () => {

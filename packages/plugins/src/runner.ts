@@ -24,6 +24,8 @@ export interface RunOptions {
    *  are async, so a call that has any runs on the worker path, and fails with a plain message
    *  where the process cannot start a worker. */
   hostFns?: Record<string, HostFn>;
+  /** Told when a host function throws unexpectedly. The caller logs it to CE's own logger. */
+  onHostError?: (name: string, err: unknown) => void;
 }
 
 /**

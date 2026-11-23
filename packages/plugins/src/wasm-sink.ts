@@ -109,7 +109,10 @@ export function createWasmSink(
         host,
         allowedHosts: opts.allowedHosts,
         offThread: opts.offThread,
-        ...(hostFns ? { hostFns } : {}),
+        ...(hostFns ? {
+          hostFns,
+          onHostError: (fn: string, err: unknown) => logger.error({ err, plugin: manifest.id, fn }, 'plugin host function failed'),
+        } : {}),
       });
     } finally {
       doneOp();

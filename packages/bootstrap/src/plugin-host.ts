@@ -41,8 +41,8 @@ export interface PluginHostDeps {
   testCatalog: Pick<TestCatalog, 'list' | 'get'>;
   terminology: Pick<Operations, 'expand' | 'lookup'>;
   facilityRegistry: Pick<FacilityRegistryStore, 'list' | 'get' | 'idsMatching'>;
-  /** The latest stored FHIR resource, or null. */
-  fhirGet(resourceType: string, id: string): Promise<unknown | null>;
+  /** The latest stored FHIR resource with its stored provenance, or null. */
+  fhirGetWithProvenance(resourceType: string, id: string): Promise<{ resource: unknown; provenance: Provenance } | null>;
   /** CE's FHIR save path with validation (bootstrap index.ts `workflowPersist`). */
   persist(resources: unknown[], provenance: Provenance): Promise<unknown>;
   audit(actor: AuditActor, details: AuditDetails): Promise<void>;
@@ -75,6 +75,9 @@ const facilitySearchInput = z.object({
 }).strict();
 const ceReadInput = z.object({ op: z.string().min(1).max(100), input: z.unknown().optional() }).strict();
 const fhirEmitInput = z.object({ resources: z.array(z.unknown()) }).strict();
+
+/** The most record ids one fhir_emit audit row lists. The count and types are always complete. */
+export const MAX_AUDITED_IDS = 200;
 
 /** The ops `ce_read` answers (ruling 6). */
 export const CE_READ_OPS = [
@@ -151,6 +154,19 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           }
         };
 
+      const allowedTypes = new Set(allowedResourceTypes(plugin.capabilities));
+
+      /** A stored record with this id, if this plugin wrote it; null when there is none. A record
+       *  another plugin or an ingest wrote is refused, so a plugin cannot rewrite it. */
+      const ownedOrNew = async (fn: string, resourceType: string, id: string): Promise<unknown | null> => {
+        const stored = await deps.fhirGetWithProvenance(resourceType, id);
+        if (!stored) return null;
+        if (stored.provenance.pluginId !== plugin.id) {
+          throw new HostInputError('FORBIDDEN', `${fn}: ${resourceType}/${id} was not written by this plugin, so it cannot change it; nothing was saved`);
+        }
+        return stored.resource;
+      };
+
       // As the studio's patient routes: the patient ops need patients.view.
       const needPatientsView = (op: string) => {
         if (!caller.capabilities.includes('patients.view')) {
@@ -194,6 +210,10 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
 
         async 'patients.register'(raw) {
           needPatientsView('patients.register');
+          // Writing a Patient is consent given at install: the plugin's emit-fhir list must name it.
+          if (!allowedTypes.has('Patient')) {
+            throw new HostInputError('FORBIDDEN', 'patients.register: this plugin was not granted emit-fhir for Patient at install');
+          }
           const { patient } = parse(patientRegisterInput, raw, 'patients.register');
           if (patient.resourceType !== 'Patient') throw new HostInputError('INVALID_REQUEST', 'patients.register: the record must be a Patient');
           if (typeof patient.id !== 'string' || !FHIR_ID.test(patient.id)) {
@@ -201,15 +221,13 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           }
           const id = patient.id;
           const managing = (patient.managingOrganization as { reference?: unknown } | undefined)?.reference;
-          if (scope !== '*') {
-            if (!inScope(scope, managing)) {
-              throw new HostInputError('OUTSIDE_DATA_LIMIT', "patients.register: the Patient's managingOrganization must be one of the caller's facilities");
-            }
-            // A limited caller may not overwrite a patient another facility holds.
-            const existing = (await deps.fhirGet('Patient', id)) as { managingOrganization?: { reference?: unknown } } | null;
-            if (existing && !inScope(scope, existing.managingOrganization?.reference)) {
-              throw new HostInputError('OUTSIDE_DATA_LIMIT', 'patients.register: a patient with this id is held by a facility outside the caller\'s data limit');
-            }
+          if (scope !== '*' && !inScope(scope, managing)) {
+            throw new HostInputError('OUTSIDE_DATA_LIMIT', "patients.register: the Patient's managingOrganization must be one of the caller's facilities");
+          }
+          // For every caller: it may create a patient, and update only one this plugin wrote.
+          const existing = await ownedOrNew('patients.register', 'Patient', id);
+          if (existing && scope !== '*' && !inScope(scope, (existing as { managingOrganization?: { reference?: unknown } }).managingOrganization?.reference)) {
+            throw new HostInputError('OUTSIDE_DATA_LIMIT', 'patients.register: a patient with this id is held by a facility outside the caller\'s data limit');
           }
           await deps.persist([patient], provenance);
           await deps.audit(actor, { action: 'patients.register', entityType: 'patient', entityId: id, metadata: auditMeta });
@@ -285,7 +303,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
       // fhir_emit needs host:db as well as emit-fhir. A plugin with emit-fhir alone (cdr-source)
       // returns its records as output and gets no host functions.
       if (kinds.has('emit-fhir') && kinds.has('host:db')) {
-        const allowed = new Set(allowedResourceTypes(plugin.capabilities));
+        const allowed = allowedTypes;
         fns.fhir_emit = guard('fhir_emit', async (raw) => {
           // A limited caller may not send records into CE: nothing checks a record's facility here.
           if (scope !== '*') {
@@ -300,7 +318,26 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
               : refused === 'NO_RESOURCES' ? 'fhir_emit: no records were sent' : 'fhir_emit: every record needs a resourceType; nothing was saved';
             throw new HostInputError(refused, message);
           }
+          for (const r of resources as Array<{ resourceType: string; contained?: unknown }>) {
+            if (r.resourceType === 'Bundle') throw new HostInputError('RESOURCE_TYPE_NOT_ALLOWED', 'fhir_emit: a Bundle cannot be sent; send its records one by one. Nothing was saved');
+            if (Array.isArray(r.contained) ? r.contained.length > 0 : r.contained !== undefined) {
+              throw new HostInputError('INVALID_RESOURCE', `fhir_emit: a ${r.resourceType} with contained records cannot be sent; nothing was saved`);
+            }
+          }
+          // Each record is new or one this plugin wrote, checked before any is saved.
+          const ids: string[] = [];
+          for (const r of resources as Array<{ resourceType: string; id?: unknown }>) {
+            if (typeof r.id === 'string' && r.id.length > 0) {
+              await ownedOrNew('fhir_emit', r.resourceType, r.id);
+              ids.push(`${r.resourceType}/${r.id}`);
+            }
+          }
           await deps.persist(resources, provenance);
+          const types = [...new Set((resources as Array<{ resourceType: string }>).map((r) => r.resourceType))].sort();
+          await deps.audit(actor, {
+            action: 'fhir.emit', entityType: 'fhir', entityId: ids[0] ?? 'batch',
+            metadata: { ...auditMeta, count: resources.length, types, ids: ids.slice(0, MAX_AUDITED_IDS), idsTruncated: ids.length > MAX_AUDITED_IDS },
+          });
           return { saved: resources.length };
         });
       }
