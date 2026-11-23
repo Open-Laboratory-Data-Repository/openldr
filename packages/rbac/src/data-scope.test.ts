@@ -26,4 +26,9 @@ describe('capabilities under a data limit', () => {
     expect(kept).toContain('roles.manage');
     expect(kept.length).toBe(all.length - LIMITED_SCOPE_DROPS.length);
   });
+
+  it('keeps patients.find for a limited user, while patients.view goes', () => {
+    const kept = capabilitiesUnderScope(['patients.view', 'patients.find'], { limited: true, facilities: ['f1'], districts: [], regions: [] });
+    expect(kept).toEqual(['patients.find']);
+  });
 });

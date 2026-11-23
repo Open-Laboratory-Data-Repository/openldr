@@ -14,7 +14,7 @@ import {
 import { RemovePluginSheet } from './marketplace/RemovePluginSheet';
 import { RemovePackDialog } from './marketplace/RemovePackDialog';
 import { MarketplaceTabs } from './marketplace/MarketplaceTabs';
-import { capabilityLine, packFailureText, type CardEntry } from './marketplace/util';
+import { capabilityLine, packFailureText, pluginPermissionLines, type CardEntry } from './marketplace/util';
 import { notifyPluginsChanged } from '@/plugins/pluginEvents';
 import { PayloadPreview } from './marketplace/PayloadPreview';
 
@@ -25,7 +25,7 @@ function isOlderVersion(entry: CardEntry): boolean {
 }
 
 export function Marketplace() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [configured, setConfigured] = useState(true);
   const [source, setSource] = useState<'local' | 'http' | null>(null);
@@ -172,6 +172,17 @@ export function Marketplace() {
                     {consent.capabilities.map((cap, i) => <li key={i}>{capabilityLine(cap, t)}</li>)}
                   </ul>
                 )}
+                {(() => {
+                  const lines = pluginPermissionLines(consent.entry.payload, i18n.language, t);
+                  return lines.length === 0 ? null : (
+                    <>
+                      <div className="mb-1 mt-3 font-medium">{t('settings.marketplace.pluginPermissions')}</div>
+                      <ul data-testid="plugin-permissions" className="list-disc pl-5 text-muted-foreground">
+                        {lines.map((line, i) => <li key={i}>{line}</li>)}
+                      </ul>
+                    </>
+                  );
+                })()}
               </div>
               )}
               <div className="flex gap-2 pt-2">

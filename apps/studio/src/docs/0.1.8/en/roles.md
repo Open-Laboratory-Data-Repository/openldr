@@ -136,6 +136,20 @@ Open the sheet dots and select **Save**.
 
 ![The updated description appears in the role row.](roles-guide-edited-result.png)
 
+## Give a role a plugin's permissions
+
+Use this after a plugin that adds its own permissions is installed. Its permissions appear in a group named after the plugin.
+
+1. Open your user menu at the bottom left, choose **Settings**, then select **Roles**.
+2. Find the role, open its row dots and select **Edit**.
+3. Scroll the sheet to the group named after the plugin.
+4. Turn on each plugin permission the role needs. Read the description beside each switch.
+5. Open the sheet dots and select **Save**.
+
+**Expected result:** people who hold the role can run the plugin actions that need these permissions. If the plugin shows its page only to some permissions, they now see it in the main menu.
+
+The Administrator gets every permission of a plugin when the plugin is installed. Other roles get none until you turn them on.
+
 ## Delete a custom role
 
 Use this only when people should lose the permissions this role grants. System roles cannot be deleted.
@@ -184,11 +198,21 @@ Administrator is locked. Other system roles can be edited but cannot be deleted.
 
 Creating a role does not assign it to anyone. Role assignments are managed on Users. Check the people affected before changing or deleting an assigned role.
 
+## Plugin permissions and Find a patient
+
+A plugin's permissions stay on the roles that hold them when the plugin is disabled or removed. Its group leaves the Roles page, and the permissions open nothing. Saving the role keeps them. When the plugin is installed again, its group comes back with the same switches on. To take a permission away, turn it off while the plugin is installed. `openldr roles doctor` lists the permissions a removed plugin left as kept.
+
+**Find a patient** (`patients.find`) is in the Patients group. It lets a plugin page find one patient at the person's own facilities, by an exact identifier, or by name with full birth date. It does not open the Patient Index. A person whose data is limited to some places keeps it, and loses **View patient index**. Among the system roles, only Administrator has it.
+
 ## Troubleshooting
 
 **The role is read-only.** Check whether you opened the locked Administrator role and whether your account has Manage roles.
 
 **A new role does not change anyone's access.** Creating the role only stores its permissions. Use Users to assign the role to the intended person.
+
+**A plugin's group is missing.** The plugin is disabled or removed, or it adds no permissions. Check Marketplace.
+
+**A person does not see a plugin in the main menu.** Their roles do not hold the permission the plugin asks for, or their layout does not list the plugin's page. Check their roles, then the plugin's checkbox under **Plugin pages** in their layout (see [Layouts](/docs/layouts)).
 
 ## Related guides
 

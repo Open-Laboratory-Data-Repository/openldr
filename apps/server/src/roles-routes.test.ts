@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
-import type { AppContext } from '@openldr/bootstrap';
+import { createCapabilityCatalog, type AppContext } from '@openldr/bootstrap';
+import type { PluginRow } from '@openldr/plugins';
 import type { RoleRecord, RoleStore } from '@openldr/db';
 import { OpenLdrError } from '@openldr/core';
 import { CAPABILITY_KEYS } from '@openldr/rbac';
@@ -120,8 +121,9 @@ function buildFakeRoleStore() {
       userRoles.set(subject, new Set(roleIds));
     },
     async seedSystemRoles() { return { created: [], granted: [], blocked: [] }; },
-    async diagnoseCapabilities() { return { roles: [], orphaned: [], kept: [], ledgerAvailable: true }; },
+    async diagnoseCapabilities() { return { roles: [], orphaned: [], kept: [], plugin: [], ledgerAvailable: true }; },
     async backfillUserFromRoleNames() { /* unused in these tests */ },
+    async grantAdministrator() { return []; },
   };
 
   return {
@@ -145,13 +147,15 @@ function fakeCtx() {
   const auditEvents: AuditRecord[] = [];
   /** Role id to the id of the content pack that made it. */
   const roleOwners = new Map<string, string>();
+  const pluginRows: PluginRow[] = [];
   const ctx = {
     roles: store,
+    capabilityCatalog: createCapabilityCatalog({ plugins: { list: async () => pluginRows }, ttlMs: 0 }),
     packItems: { owners: async (kind: string) => (kind === 'role' ? roleOwners : new Map()) },
     audit: { record: async (e: AuditRecord) => { auditEvents.push(e); return { ...e, id: `audit-${auditEvents.length}`, occurredAt: new Date().toISOString() }; } },
     logger: { error() {}, warn() {}, info() {} },
   } as unknown as AppContext & { __auditEvents: AuditRecord[] };
-  return { ctx, auditEvents, seedRole, assign, roleOwners };
+  return { ctx, auditEvents, seedRole, assign, roleOwners, pluginRows };
 }
 
 function appWithUser(ctx: AppContext, capabilities: string[]) {
@@ -196,6 +200,30 @@ describe('roles routes — CRUD happy paths', () => {
     const body = res.json() as { groups: Array<{ key: string }> };
     expect(Array.isArray(body.groups)).toBe(true);
     expect(body.groups.some((g) => g.key === 'roles')).toBe(true);
+  });
+
+  it('GET /api/roles/catalog adds a group for an active, enabled plugin, with its French and Portuguese text', async () => {
+    const { ctx, pluginRows } = fakeCtx();
+    const permissions = [
+      { key: 'lab.orders.receive', label: 'Receive orders', description: 'Receive lab orders.', labels: { fr: { label: 'Recevoir', description: 'Recevoir les demandes.' }, pt: { label: 'Receber', description: 'Receber pedidos.' } } },
+    ];
+    const row = (id: string, enabled: boolean, nav?: string): PluginRow => ({
+      id, version: '0.1.0', sha256: 'x', status: 'installed', enabled, active: true, approvedBy: null,
+      manifest: { schemaVersion: 1, payload: { kind: 'plugin', permissions, ...(nav ? { ui: { nav: { label: nav } } } : {}) } },
+    });
+    pluginRows.push(row('lab', true, 'Lab'));
+    const app = appWithUser(ctx, ['roles.view']);
+    const body = (await app.inject({ method: 'GET', url: '/api/roles/catalog' })).json() as {
+      groups: Array<{ key: string; label: string; plugin?: string; capabilities: Array<{ key: string; label: string; labels?: { fr?: { label: string }; pt?: { label: string } } }> }>;
+    };
+    const group = body.groups.find((g) => g.plugin === 'lab');
+    expect(group).toMatchObject({ key: 'plugin:lab', label: 'Lab' });
+    expect(group!.capabilities[0]).toMatchObject({ key: 'lab.orders.receive', label: 'Receive orders', labels: { fr: { label: 'Recevoir' }, pt: { label: 'Receber' } } });
+
+    // A disabled plugin's group leaves the catalog.
+    pluginRows.splice(0, 1, row('lab', false, 'Lab'));
+    const after = (await app.inject({ method: 'GET', url: '/api/roles/catalog' })).json() as { groups: Array<{ plugin?: string }> };
+    expect(after.groups.some((g) => g.plugin === 'lab')).toBe(false);
   });
 
   it('GET /api/roles/:id returns a role; 404 when missing', async () => {

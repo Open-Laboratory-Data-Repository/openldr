@@ -63,6 +63,26 @@ const hostManifest = {
       indexes: [{ columns: ['facility', 'code'] }],
       facilityColumn: 'facility',
     }],
+    // Plugin host 2b: the plugin's own permission, in its own group `sinkhost`, and the permission
+    // each action needs (any one of the list). host_db_roundtrip is left out on purpose, so the
+    // broker refuses it (closed by default). host_fhir_emit needs a CE capability, which the plugin
+    // only asks of callers and never gets for itself.
+    permissions: [{
+      key: 'sinkhost.run',
+      label: 'Run the test sink',
+      description: 'Run the actions of the test sink plugin.',
+      labels: {
+        fr: { label: 'Lancer le plugin de test', description: 'Lancer les actions du plugin de test.' },
+        pt: { label: 'Executar o plugin de teste', description: 'Executar as ações do plugin de teste.' },
+      },
+    }],
+    actionPermissions: {
+      health_check: ['sinkhost.run'],
+      host_db_select: ['sinkhost.run'],
+      host_db_write: ['sinkhost.run'],
+      host_ce_read: ['sinkhost.run', 'patients.find'],
+      host_fhir_emit: ['forms.edit'],
+    },
   },
 };
 writeFileSync(join(hostBuild.dir, 'manifest.json'), JSON.stringify(hostManifest, null, 2) + '\n');

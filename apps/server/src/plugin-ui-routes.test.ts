@@ -139,6 +139,65 @@ describe('plugin-ui routes', () => {
     expect(seen.dataScope).toEqual({ limited: true, facilities: [], districts: [], regions: [] });
   });
 
+  it('lists who may open each page, and an entry with no limits gets empty lists', async () => {
+    const body = (await app.inject({ method: 'GET', url: '/api/plugins/ui' })).json();
+    expect(body.find((p: any) => p.id === 'dhis2-sink')).toMatchObject({ requiredRoles: ['lab_admin'], requiredCapabilities: [] });
+    expect(body.find((p: any) => p.id === 'ui-demo')).toMatchObject({ requiredRoles: [], requiredCapabilities: [] });
+  });
+
+  it('a user without any of the required capabilities gets no entry and a 404 for the page (review focus 5)', async () => {
+    const ctx = fakeCtx();
+    ctx.plugins.list = async () => [
+      { id: 'lab', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'z', nav: { label: 'Lab', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1', requiredCapabilities: ['lab.receive', 'lab.worklist.view'] } } } },
+    ];
+    ctx.plugins.loadUi = async () => new TextEncoder().encode('<div>lab</div>');
+    const outsider = build(ctx, ['lab_technician'], ['reports.view']);
+    expect((await outsider.inject({ method: 'GET', url: '/api/plugins/ui' })).json()).toEqual([]);
+    expect((await outsider.inject({ method: 'GET', url: '/api/plugins/lab/ui/asset' })).statusCode).toBe(404);
+    const receiver = build(ctx, ['lab_technician'], ['lab.receive']);
+    const listed = (await receiver.inject({ method: 'GET', url: '/api/plugins/ui' })).json();
+    expect(listed).toMatchObject([{ id: 'lab', requiredCapabilities: ['lab.receive', 'lab.worklist.view'] }]);
+    expect((await receiver.inject({ method: 'GET', url: '/api/plugins/lab/ui/asset' })).statusCode).toBe(200);
+  });
+
+  it('the page asset follows the active version, not an older one listed first', async () => {
+    const ui = { entry: 'ui.html', sha256: 'z', nav: { label: 'Lab', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1' };
+    const ctx = fakeCtx();
+    ctx.plugins.list = async () => [
+      { id: 'lab', version: '0.1.0', enabled: true, active: false, manifest: { payload: { kind: 'plugin', ui } } },
+      { id: 'lab', version: '0.2.0', enabled: true, active: true, manifest: { payload: { kind: 'plugin', ui: { ...ui, requiredCapabilities: ['lab.receive'] } } } },
+    ];
+    ctx.plugins.loadUi = async () => new TextEncoder().encode('<div>lab</div>');
+    expect((await build(ctx, ['lab_technician'], []).inject({ method: 'GET', url: '/api/plugins/lab/ui/asset' })).statusCode).toBe(404);
+    expect((await build(ctx, ['lab_technician'], ['lab.receive']).inject({ method: 'GET', url: '/api/plugins/lab/ui/asset' })).statusCode).toBe(200);
+  });
+
+  it('GET asset 404s for a disabled plugin', async () => {
+    const ctx = fakeCtx();
+    ctx.plugins.list = async () => [
+      { id: 'ui-demo', version: '1.0.0', enabled: false, manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'x', nav: { label: 'Demo', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1' } } } },
+    ];
+    expect((await build(ctx).inject({ method: 'GET', url: '/api/plugins/ui-demo/ui/asset' })).statusCode).toBe(404);
+    // The same row enabled is served, so the 404 above is the enabled check.
+    const on = fakeCtx();
+    expect((await build(on).inject({ method: 'GET', url: '/api/plugins/ui-demo/ui/asset' })).statusCode).toBe(200);
+  });
+
+  it("lists each plugin's own permission keys, and none for a plugin that declares none", async () => {
+    const ctx = fakeCtx();
+    ctx.plugins.list = async () => [
+      { id: 'lab', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', permissions: [{ key: 'lab.receive' }, { key: 'lab.worklist.view' }], ui: { entry: 'ui.html', sha256: 'z', nav: { label: 'Lab', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1' } } } },
+      { id: 'ui-demo', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'x', nav: { label: 'Demo', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1' } } } },
+    ];
+    const body = (await build(ctx).inject({ method: 'GET', url: '/api/plugins/ui' })).json();
+    expect(body.find((p: any) => p.id === 'lab').permissionKeys).toEqual(['lab.receive', 'lab.worklist.view']);
+    expect(body.find((p: any) => p.id === 'ui-demo').permissionKeys).toEqual([]);
+  });
+
+  it('GET asset 404s for an id that is not installed', async () => {
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ghost/ui/asset' })).statusCode).toBe(404);
+  });
+
   it('GET asset serves the html for an admin on a requiredRoles plugin', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/plugins/dhis2-sink/ui/asset' });
     expect(res.statusCode).toBe(200);

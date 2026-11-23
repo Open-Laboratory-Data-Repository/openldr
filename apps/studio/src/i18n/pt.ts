@@ -496,6 +496,7 @@ export const pt: EnShape = {
       patients: {
         view: { label: 'Ver o índice de pacientes', description: 'Abrir o índice de pacientes. Os nomes e identificadores ficam ocultos, e a pesquisa só encontra um identificador exato.' },
         view_identifiers: { label: 'Ver identificadores de pacientes', description: 'Ver por inteiro os nomes, identificadores, datas de nascimento, telefones e e-mails dos pacientes, e pesquisar por nome. Cada vista sem ocultação é auditada.' },
+        find: { label: 'Encontrar um paciente', description: 'Encontrar um paciente por um identificador exato, ou pelo nome com a data de nascimento completa, nas suas próprias unidades.' },
         manage: { label: 'Gerir o índice de pacientes', description: 'Dar nome aos sistemas de identificadores e escolher quais são listados e pesquisados.' },
       },
       roles: {
@@ -1074,6 +1075,12 @@ export const pt: EnShape = {
       notConfigured: 'Ainda não há registo marketplace. Abra o separador Registos e escolha Adicionar registo no menu ⋯.',
       consentTitle: 'Rever e aprovar: {{id}}',
       requestedCapabilities: 'Capacidades solicitadas',
+      pluginPermissions: 'Permissões que este plugin adiciona, e o que as suas ações precisam',
+      pluginPermissionUsed: '{{label}} ({{key}}): {{description}} Necessária para executar: {{actions}}.',
+      pluginPermissionUnused: '{{label}} ({{key}}): {{description}}',
+      pluginActionNeeds: 'A ação {{action}} precisa de: {{list}}.',
+      pluginActionAlsoRunBy: 'A ação {{action}} também pode ser executada por quem tiver: {{list}}.',
+      pluginActionOr: ' ou ',
       approveInstall: 'Aprovar e instalar',
       cancel: 'Cancelar',
       enable: 'Ativar',
@@ -2527,6 +2534,8 @@ export const pt: EnShape = {
     startPage: "Página inicial",
     startPageNone: "Painel",
     pages: "Páginas",
+    pluginPages: 'Páginas de plugins',
+    pluginPagesFailed: 'Não foi possível ler as páginas de plugins: {{error}}',
     roles: "Predefinição para as funções",
     rolesUnavailable: "Não foi possível ler as funções, por isso as predefinições ficam como estão.",
     errRequired: "Dê um nome à disposição e pelo menos uma página.",
@@ -2545,6 +2554,7 @@ export const pt: EnShape = {
   plugins: {
     notFound: 'Plugin não encontrado ou não instalado.',
     noUi: 'Este plugin não fornece interface.',
+    loadFailed: 'Não foi possível carregar a página deste plugin. Recarregue a página para tentar novamente.',
     loadError: 'Falha ao carregar a interface do plugin.',
     sites: {
       menu: 'Locais',

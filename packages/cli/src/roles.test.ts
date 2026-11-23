@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const CE_KEYS = vi.hoisted(() => ['dashboards.view', 'reports.view', 'forms.view', 'roles.manage']);
+
 const mocks = vi.hoisted(() => ({
   appCtx: {
     roles: {
@@ -11,6 +13,8 @@ const mocks = vi.hoisted(() => ({
       assignRole: vi.fn(),
       unassignRole: vi.fn(),
     },
+    // CE's catalog plus one installed plugin key.
+    capabilityCatalog: { keys: vi.fn(async () => [...CE_KEYS, 'lab.orders.receive']) },
     close: vi.fn(),
   },
   createAppContext: vi.fn(),
@@ -149,8 +153,17 @@ describe('roles CLI', () => {
 
       expect(code).toBe(1);
       expect(err).toContain('bogus.cap');
-      expect(mocks.createAppContext).not.toHaveBeenCalled();
       expect(mocks.appCtx.roles.create).not.toHaveBeenCalled();
+      expect(mocks.appCtx.close).toHaveBeenCalled();
+    });
+
+    it('accepts a permission of an installed plugin', async () => {
+      mocks.appCtx.roles.create.mockResolvedValue({ ...seededRole, id: 'role-4', capabilities: ['lab.orders.receive'] });
+
+      const code = await runRolesCreate('Bench', { json: false, caps: 'lab.orders.receive' });
+
+      expect(code).toBe(0);
+      expect(mocks.appCtx.roles.create).toHaveBeenCalledWith(expect.objectContaining({ capabilities: ['lab.orders.receive'] }));
     });
 
     it('creates with an empty capability set when --caps is omitted', async () => {

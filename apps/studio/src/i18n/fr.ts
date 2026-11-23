@@ -496,6 +496,7 @@ export const fr: EnShape = {
       patients: {
         view: { label: 'Voir l’index des patients', description: 'Ouvrir l’index des patients. Les noms et les identifiants sont masqués, et la recherche ne trouve qu’un identifiant exact.' },
         view_identifiers: { label: 'Voir les identifiants des patients', description: 'Voir en entier les noms, identifiants, dates de naissance, téléphones et e-mails des patients, et chercher par nom. Chaque vue non masquée est auditée.' },
+        find: { label: 'Trouver un patient', description: 'Trouver un patient par un identifiant exact, ou par son nom avec la date de naissance complète, dans vos propres établissements.' },
         manage: { label: 'Gérer l’index des patients', description: 'Nommer les systèmes d’identifiants et choisir ceux qui sont listés et cherchés.' },
       },
       roles: {
@@ -1074,6 +1075,12 @@ export const fr: EnShape = {
       notConfigured: 'Aucun registre marketplace pour l’instant. Ouvrez l’onglet Registres et choisissez Ajouter un registre dans son menu ⋯.',
       consentTitle: 'Vérifier et approuver : {{id}}',
       requestedCapabilities: 'Capacités demandées',
+      pluginPermissions: 'Permissions ajoutées par ce plugin, et ce que ses actions nécessitent',
+      pluginPermissionUsed: '{{label}} ({{key}}) : {{description}} Nécessaire pour exécuter : {{actions}}.',
+      pluginPermissionUnused: '{{label}} ({{key}}) : {{description}}',
+      pluginActionNeeds: 'L\'action {{action}} nécessite : {{list}}.',
+      pluginActionAlsoRunBy: 'L\'action {{action}} peut aussi être exécutée par toute personne ayant : {{list}}.',
+      pluginActionOr: ' ou ',
       approveInstall: 'Approuver et installer',
       cancel: 'Annuler',
       enable: 'Activer',
@@ -2527,6 +2534,8 @@ export const fr: EnShape = {
     startPage: "Page de démarrage",
     startPageNone: "Tableau de bord",
     pages: "Pages",
+    pluginPages: 'Pages des plugins',
+    pluginPagesFailed: "Les pages des plugins n'ont pas pu être lues : {{error}}",
     roles: "Par défaut pour les rôles",
     rolesUnavailable: "Les rôles n'ont pas pu être lus, les valeurs par défaut restent inchangées.",
     errRequired: "Donnez un nom à la disposition et au moins une page.",
@@ -2545,6 +2554,7 @@ export const fr: EnShape = {
   plugins: {
     notFound: "Extension introuvable ou non installée.",
     noUi: "Cette extension ne fournit aucune interface.",
+    loadFailed: "Impossible de charger la page de cette extension. Rechargez la page pour réessayer.",
     loadError: "Échec du chargement de l'interface de l'extension.",
     sites: {
       menu: 'Emplacements',

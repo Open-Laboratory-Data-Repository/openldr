@@ -1,7 +1,7 @@
-import { createAppContext, createDbContext, recordAuditEvent } from '@openldr/bootstrap';
+import { createAppContext, createCapabilityCatalog, createDbContext, recordAuditEvent } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
-import { CAPABILITY_KEYS } from '@openldr/rbac';
 import { createRoleStore, type RoleRecord, type CapabilityDiagnosis } from '@openldr/db';
+import { createPluginStore } from '@openldr/plugins';
 import { cliActor } from './cli-actor';
 
 interface JsonOpt {
@@ -12,10 +12,12 @@ function emit(json: boolean, payload: unknown, human: string): void {
   process.stdout.write(json ? JSON.stringify(payload, null, 2) + '\n' : human + '\n');
 }
 
-/** Validate capability keys against the catalog BEFORE calling the store. Returns an error
- *  message for the first unknown key(s), or null when every key is known. */
-function validateCaps(caps: string[]): string | null {
-  const known = new Set(CAPABILITY_KEYS);
+/** Validate capability keys against the catalog BEFORE calling the store: CE's capabilities plus
+ *  those of active, enabled plugins (plan 2026-11-23-plugin-host-2b, ruling 3). Returns an error
+ *  message for the unknown key(s), or null when every key is known. */
+async function validateCaps(ctx: { capabilityCatalog: { keys(): Promise<string[]> } }, caps: string[]): Promise<string | null> {
+  if (caps.length === 0) return null;
+  const known = new Set(await ctx.capabilityCatalog.keys());
   const unknown = caps.filter((c) => !known.has(c));
   return unknown.length ? `unknown capability: ${unknown.join(', ')}` : null;
 }
@@ -65,13 +67,13 @@ export async function runRolesCreate(
   opts: JsonOpt & { slug?: string; desc?: string; caps?: string },
 ): Promise<number> {
   const capabilities = parseCaps(opts.caps);
-  const capErr = validateCaps(capabilities);
-  if (capErr) {
-    process.stderr.write(`${capErr}\n`);
-    return 1;
-  }
   const ctx = await createAppContext(loadConfig());
   try {
+    const capErr = await validateCaps(ctx, capabilities);
+    if (capErr) {
+      process.stderr.write(`${capErr}\n`);
+      return 1;
+    }
     let created: RoleRecord;
     try {
       created = await ctx.roles.create({ name, slug: opts.slug, description: opts.desc, capabilities });
@@ -97,19 +99,20 @@ export async function runRolesEdit(
   opts: JsonOpt & { name?: string; desc?: string; caps?: string },
 ): Promise<number> {
   const capabilities = opts.caps !== undefined ? parseCaps(opts.caps) : undefined;
-  if (capabilities) {
-    const capErr = validateCaps(capabilities);
-    if (capErr) {
-      process.stderr.write(`${capErr}\n`);
-      return 1;
-    }
-  }
   const ctx = await createAppContext(loadConfig());
   try {
     const before = await ctx.roles.getBySlug(slug);
     if (!before) {
       emit(opts.json, { error: 'role not found' }, `role ${slug} not found`);
       return 1;
+    }
+    if (capabilities) {
+      // A key the role already holds passes, as in the store: a kept key comes back in the list.
+      const capErr = await validateCaps(ctx, capabilities.filter((c) => !before.capabilities.includes(c)));
+      if (capErr) {
+        process.stderr.write(`${capErr}\n`);
+        return 1;
+      }
     }
     let after: RoleRecord;
     try {
@@ -166,9 +169,9 @@ async function grantOrRevoke(
   opts: JsonOpt,
   mutate: (caps: string[]) => string[],
 ): Promise<number> {
-  const capErr = validateCaps([capability]);
   const ctx = await createAppContext(loadConfig());
   try {
+    const capErr = await validateCaps(ctx, [capability]);
     const before = await ctx.roles.getBySlug(slug);
     // A key the catalog does not list, but the role already holds, is kept on purpose for a plugin.
     // Say that, rather than calling a key the role holds unknown.
@@ -249,6 +252,10 @@ export function summarizeDiagnosis(d: CapabilityDiagnosis): { lines: string[]; e
   }
 
   for (const o of d.orphaned) lines.push(`${o.slug}\torphaned=${o.capability}`);
+  if (d.plugin?.length) {
+    lines.push('plugin (stored, declared by an installed plugin, known):');
+    for (const k of d.plugin) lines.push(`  ${k}`);
+  }
   if (d.kept.length) {
     lines.push('kept (stored, not in the catalog, left in place on purpose):');
     for (const k of d.kept) lines.push(`  ${k}`);
@@ -266,7 +273,9 @@ export function summarizeDiagnosis(d: CapabilityDiagnosis): { lines: string[]; e
 export async function runRolesDoctor(opts: JsonOpt): Promise<number> {
   const ctx = await createDbContext(loadConfig());
   try {
-    const diagnosis = await createRoleStore(ctx.internalDb).diagnoseCapabilities();
+    // Read-only too: the catalog only reads the plugin rows.
+    const catalog = createCapabilityCatalog({ plugins: createPluginStore(ctx.internalDb) });
+    const diagnosis = await createRoleStore(ctx.internalDb, { catalogKeys: () => catalog.keys() }).diagnoseCapabilities();
     const { lines, exitCode } = summarizeDiagnosis(diagnosis);
     emit(opts.json, { ...diagnosis, exitCode }, lines.join('\n'));
     return exitCode;

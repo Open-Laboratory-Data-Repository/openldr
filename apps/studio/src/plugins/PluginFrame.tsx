@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { SDK_BOOTSTRAP_V1, type PluginInitContext, type PluginSiteName } from '@openldr/plugin-ui-sdk';
+import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
+import { LoadingState } from '@/components/ui/spinner';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { authFetch, pluginUiAssetUrl, pluginBrokerCall } from '@/api';
 import { createDownloadGate, wireHostPort, type DownloadGate, type HostPortLike } from './host-bridge';
 import { hostThemeTokens, themeStyleTag } from './plugin-theme';
 import { randomId } from '@/lib/random-id';
+import { CAPABILITY_KEYS } from '@openldr/rbac';
+
+const CE_KEYS: ReadonlySet<string> = new Set(CAPABILITY_KEYS);
 
 const CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'";
@@ -15,9 +21,16 @@ function hostTheme(): 'light' | 'dark' {
 }
 
 /** The init context for one drawing of a plugin's page. `site` tells the page where it is:
- *  its own page, a dashboard card, or the side panel. */
-export function pluginFrameContext(pluginId: string, site: PluginSiteName): PluginInitContext {
-  return { pluginId, capabilities: [], theme: hostTheme(), locale: i18n.language, sessionId: randomId(), site };
+ *  its own page, a dashboard card, or the side panel. `capabilities` are the signed-in user's CE
+ *  capabilities plus those of `ownKeys` (the plugin's declared permission keys) the user holds.
+ *  Another plugin's keys are left out. The page uses them only to show or hide its own tabs; the
+ *  broker on the server is the real gate. */
+export function pluginFrameContext(
+  pluginId: string, site: PluginSiteName, capabilities: readonly string[], ownKeys: readonly string[] = [],
+): PluginInitContext {
+  const own = new Set(ownKeys);
+  const passed = capabilities.filter((k) => CE_KEYS.has(k) || own.has(k));
+  return { pluginId, capabilities: passed, theme: hostTheme(), locale: i18n.language, sessionId: randomId(), site };
 }
 
 /** Wrap the plugin's body HTML in a host-controlled document: strict CSP + the injected SDK
@@ -32,6 +45,9 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [srcdoc, setSrcdoc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
+  // The reason goes in a toast; the frame keeps only muted words in its place.
+  useLoadErrorToast(error, t('plugins.loadFailed'));
   // One download limit per mounted frame. A page can reload itself, which fires load again; the
   // limit must hold across that, so it lives here and not in one wiring.
   const gateRef = useRef<DownloadGate | null>(null);
@@ -79,8 +95,8 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
     win.postMessage({ type: 'openldr:init', context: { ...context, theme: hostTheme(), themeTokens: hostThemeTokens() } }, '*', [channel.port2]);
   }
 
-  if (error) return <div className="p-6 text-sm text-destructive">Failed to load plugin UI: {error}</div>;
-  if (!srcdoc) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+  if (error) return <LoadFailed className="min-h-0 h-full" message={t('plugins.loadFailed')} />;
+  if (!srcdoc) return <LoadingState />;
   return (
     <iframe
       ref={iframeRef}

@@ -21,6 +21,7 @@ import type { PluginStore, PluginRow } from './store';
 import type { PluginRunner } from './runner';
 import { createWasmConverter } from './wasm-converter';
 import { createWasmSink, type WasmSink } from './wasm-sink';
+import { PermissionGroupTakenError, groupRefusal, permissionGroups } from './stored-permissions';
 
 export interface MarketplaceInstallAudit {
   action: string;
@@ -44,6 +45,11 @@ export interface PluginRuntimeDeps {
   /** Builds the tables a plugin declares in payload.tables. Install only plans and applies them.
    *  Removal drops them (plugin-removal.ts), never install, rollback or disable. */
   schemas?: Pick<PluginSchemas, 'plan' | 'apply'>;
+  /** Told after a version is installed, enabled, disabled, removed or rolled back. The host uses
+   *  it to refresh the capability catalog and grant a plugin's permissions to the Administrator
+   *  (plan 2026-11-23-plugin-host-2b, rulings 3 and 4). A failure here is logged, never thrown:
+   *  the lifecycle change has already happened. */
+  onChange?: (e: { id: string; action: 'install' | 'enable' | 'disable' | 'remove' | 'rollback' }) => Promise<void>;
 }
 
 export interface InstallApproval {
@@ -111,7 +117,7 @@ function artifactToPluginManifest(a: ArtifactManifest): PluginManifest {
 function pluginManifestFromRow(row: PluginRow): PluginManifest {
   const m = row.manifest;
   if (m.schemaVersion && m.payload && (m.payload as { kind?: string }).kind === 'plugin') {
-    return artifactToPluginManifest(parseArtifactManifest(m));
+    return artifactToPluginManifest(parseArtifactManifest(m, { stored: true }));
   }
   return parseManifest(m);
 }
@@ -119,6 +125,15 @@ function pluginManifestFromRow(row: PluginRow): PluginManifest {
 export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
   const cache = new Map<string, Converter>();
   const sinkCache = new Map<string, WasmSink>();
+
+  async function changed(id: string, action: 'install' | 'enable' | 'disable' | 'remove' | 'rollback'): Promise<void> {
+    if (!deps.onChange) return;
+    try {
+      await deps.onChange({ id, action });
+    } catch (err) {
+      deps.logger.warn({ id, action, err }, 'plugin change hook failed');
+    }
+  }
 
   function invalidateCache(id: string) {
     for (const k of [...cache.keys()]) {
@@ -272,6 +287,21 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
       const active = (await deps.store.list()).find((r) => r.id === artifact.id && r.active);
       const kept = active ? `${active.id}@${active.version} stays active` : 'nothing was installed';
       const notInstalled = `${artifact.id}@${artifact.version} was not installed, and ${kept}`;
+
+      // The publisher a group claim is bound to: the fingerprint of the key the signature check
+      // above verified, never the fingerprint the manifest names. Null when nothing was verified,
+      // which includes an unverified install that devAllowUnsigned let through.
+      const publisher = signatureVerified ? keyFingerprint(opts.publicKeyDer!) : null;
+
+      // The group rule (ruling 1 as amended): each group the keys use must be unowned or owned by
+      // this plugin id from this publisher. Checked here, before anything is written, so a refusal
+      // leaves the old version active and its tables alone. The store claims the groups in the
+      // install transaction.
+      if (deps.store.groupOwners) {
+        const groups = permissionGroups(artifact as unknown as Record<string, unknown>);
+        const refused = groupRefusal(groups, await deps.store.groupOwners(groups), artifact.id, publisher);
+        if (refused) throw new Error(`${notInstalled}: ${refused.message}`);
+      }
       if (tables === undefined || tables.length === 0) {
         const before = (active?.manifest as { payload?: { tables?: unknown[] } } | undefined)?.payload?.tables;
         if (Array.isArray(before) && before.length > 0) {
@@ -312,9 +342,16 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
       if (uiMeta?.entry && opts.ui) {
         await deps.blob.put(uiKey(artifact.id, artifact.version), opts.ui, 'text/html');
       }
-      await deps.store.install({ id: artifact.id, version: artifact.version, sha256: payloadSha, manifest: fullManifest, approvedBy });
+      try {
+        await deps.store.install({ id: artifact.id, version: artifact.version, sha256: payloadSha, manifest: fullManifest, approvedBy, publisher });
+      } catch (err) {
+        // Another install claimed the group between the check above and this transaction.
+        if (err instanceof PermissionGroupTakenError) throw new Error(`${notInstalled}: ${err.message}`);
+        throw err;
+      }
       invalidateCache(artifact.id);
       deps.logger.info({ id: artifact.id, version: artifact.version }, 'plugin installed');
+      await changed(artifact.id, 'install');
 
       if (deps.recordInstall) {
         await deps.recordInstall({
@@ -353,6 +390,7 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     async remove(id, version, o = {}) {
       await deps.store.remove(id, version);
       invalidateCache(id);
+      await changed(id, 'remove');
       await deps.recordInstall?.({
         action: 'marketplace.remove',
         entityType: 'artifact',
@@ -364,8 +402,14 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     },
 
     async rollback(id, version, o = {}) {
-      await deps.store.rollback(id, version);
+      try {
+        await deps.store.rollback(id, version);
+      } catch (err) {
+        if (err instanceof PermissionGroupTakenError) throw new Error(`cannot roll back ${id} to ${version}: ${err.message}`);
+        throw err;
+      }
       invalidateCache(id);
+      await changed(id, 'rollback');
       await deps.recordInstall?.({
         action: 'marketplace.rollback',
         entityType: 'artifact',
@@ -377,8 +421,14 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     },
 
     async setEnabled(id, enabled, o = {}) {
-      await deps.store.setEnabled(id, enabled);
+      try {
+        await deps.store.setEnabled(id, enabled);
+      } catch (err) {
+        if (err instanceof PermissionGroupTakenError) throw new Error(`cannot enable ${id}: ${err.message}`);
+        throw err;
+      }
       invalidateCache(id);
+      await changed(id, enabled ? 'enable' : 'disable');
       await deps.recordInstall?.({
         action: enabled ? 'marketplace.enable' : 'marketplace.disable',
         entityType: 'artifact',

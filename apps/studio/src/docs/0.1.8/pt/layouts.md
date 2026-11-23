@@ -42,6 +42,8 @@ Selecione as páginas a mostrar nesta barra lateral. Escolha pelo menos uma. Doc
 
 ![Selecione as páginas a mostrar. Docs continua sempre disponível.](layouts-guide-pages.png)
 
+Uma página de plugin tem a sua própria caixa em **Plugin pages**, com o nome que tem no menu principal. Só aparecem os plugins que pode abrir. Quando um layout está em uso, um plugin só aparece na barra lateral se o layout o listar. Se a lista de plugins não puder ser lida, uma mensagem avisa, e o layout mantém as páginas de plugin que já tinha.
+
 ### 5. Escolher a página inicial
 
 Abra **Start page** e escolha uma página selecionada. O exemplo escolhe Reports. A opção predefinida é Dashboard.

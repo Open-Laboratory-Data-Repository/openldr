@@ -1,6 +1,7 @@
 import { z } from 'zod';
 // The subpath, not the package root: the root loads pg and kysely, which the manifest does not need.
 import { tableShapesSchema } from '@openldr/db/plugin-table-shape';
+import { CAPABILITY_KEYS, permissionGroup, reservedPermissionGroups } from '@openldr/rbac';
 import { capabilitySchema } from './capabilities';
 import { workflowNodeDeclSchema } from './workflow-node';
 
@@ -115,6 +116,19 @@ export function canCheck(source: ImportSource): boolean {
   return source.entrypoints.copy !== undefined && source.entrypoints.decode !== undefined;
 }
 
+/** A permission key a plugin declares. Dotted lower case, at least two parts, like `whonet.review`. */
+export const PLUGIN_PERMISSION_KEY = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
+const permissionText = z.object({ label: z.string().min(1).max(80), description: z.string().min(1).max(300) }).strict();
+/** A permission the plugin adds to CE's role editor. English is required; French and Portuguese
+ *  fall back to English when absent. */
+export const pluginPermissionSchema = z.object({
+  key: z.string().regex(PLUGIN_PERMISSION_KEY, 'permission key must be dotted lower case, like plugin.action'),
+  label: z.string().min(1).max(80),
+  description: z.string().min(1).max(300),
+  labels: z.object({ fr: permissionText.optional(), pt: permissionText.optional() }).strict().optional(),
+}).strict();
+export type PluginPermission = z.infer<typeof pluginPermissionSchema>;
+
 const pluginPayload = z.object({
   kind: z.literal('plugin'),
   // Source/sink flavor. Named `pluginKind` because this object's own discriminator is
@@ -139,6 +153,13 @@ const pluginPayload = z.object({
   // Needs host:db. Optional with no default, so a manifest without it parses to the same object
   // and its signature still verifies.
   tables: tableShapesSchema.optional(),
+  // Permissions the plugin declares, and the permissions each entrypoint needs (any one of its
+  // list). Both optional with no default, so a manifest without them parses to the same object and
+  // its signature still verifies. Cross-field rules are in parseArtifactManifest.
+  permissions: z.array(pluginPermissionSchema).max(50).optional(),
+  actionPermissions: z.record(z.string().min(1), z.array(z.string().min(1)).min(1).max(10))
+    .refine((r) => Object.keys(r).length <= 100, { message: 'payload.actionPermissions has more than 100 entries' })
+    .optional(),
 });
 const formPayload = z.object({ kind: z.literal('form-template'), questionnaireSha256: z.string().regex(HEX64) });
 const reportPayload = z.object({ kind: z.literal('report-template'), templateSha256: z.string().regex(HEX64) });
@@ -170,7 +191,14 @@ export const artifactManifestSchema = z.object({
 
 export type ArtifactManifest = z.infer<typeof artifactManifestSchema>;
 
-export function parseArtifactManifest(raw: unknown): ArtifactManifest {
+export interface ParseArtifactOptions {
+  /** True when reading a manifest CE already accepted and stored. A later CE release may add a
+   *  capability equal to a key the plugin declares, so that key is not refused here: the catalog
+   *  treats it as CE's and logs a warning. Install never sets this. */
+  stored?: boolean;
+}
+
+export function parseArtifactManifest(raw: unknown, opts: ParseArtifactOptions = {}): ArtifactManifest {
   const manifest = artifactManifestSchema.parse(raw);
   // Cross-field rules for an importing plugin. Checked here, not as a schema refinement, so the
   // payload stays a plain object schema for the discriminated union.
@@ -190,7 +218,60 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest {
     && !manifest.capabilities.some((c) => c.kind === 'host:db')) {
     throw new Error(`artifact ${manifest.id}: payload.tables requires the host:db capability`);
   }
+  if (manifest.payload.kind === 'plugin') {
+    checkPluginPermissions(manifest.id, manifest.payload.permissions, manifest.payload.actionPermissions, manifest.payload.entrypoints, opts.stored === true);
+    checkUiCapabilities(manifest.id, manifest.payload.permissions, manifest.payload.ui?.requiredCapabilities, opts.stored === true);
+  }
   return manifest;
+}
+
+const CE_CAPABILITIES: ReadonlySet<string> = new Set(CAPABILITY_KEYS);
+const CE_GROUPS: ReadonlySet<string> = reservedPermissionGroups();
+
+/** Rulings 1 and 2 of plan 2026-11-23-plugin-host-2b. A declared key is unique and is not a CE
+ *  capability, so a plugin cannot grant itself one. Each actionPermissions entry names a declared
+ *  entrypoint, and each listed key is the plugin's own or a CE capability. The check against other
+ *  installed plugins' keys needs the store, so the install does it. */
+function checkPluginPermissions(
+  id: string, permissions: PluginPermission[] | undefined, actionPermissions: Record<string, string[]> | undefined, entrypoints: string[],
+  stored: boolean,
+): void {
+  const own = new Set<string>();
+  for (const p of permissions ?? []) {
+    if (CE_CAPABILITIES.has(p.key) && !stored) throw new Error(`artifact ${id}: permission '${p.key}' is a CE capability; a plugin cannot declare it as its own`);
+    // The group rule (ruling 1 as amended): CE keeps its own groups, so a later CE permission cannot
+    // already belong to a plugin. Install only: a stored manifest is read again after CE changes.
+    if (CE_GROUPS.has(permissionGroup(p.key)) && !stored) {
+      throw new Error(`artifact ${id}: permission '${p.key}' is in the group '${permissionGroup(p.key)}', which CE keeps for its own permissions`);
+    }
+    if (own.has(p.key)) throw new Error(`artifact ${id}: permission '${p.key}' is declared twice`);
+    own.add(p.key);
+  }
+  if (actionPermissions === undefined) return;
+  const exported = new Set(entrypoints);
+  for (const [entrypoint, keys] of Object.entries(actionPermissions)) {
+    if (!exported.has(entrypoint)) throw new Error(`artifact ${id}: actionPermissions names '${entrypoint}', which is not in payload.entrypoints`);
+    for (const key of keys) {
+      if (!own.has(key) && !CE_CAPABILITIES.has(key)) {
+        throw new Error(`artifact ${id}: action '${entrypoint}' needs '${key}', which is neither a declared permission nor a CE capability`);
+      }
+    }
+  }
+}
+
+/** A plugin that declares `permissions` may gate its page only on its own keys or CE capabilities,
+ *  the same rule as actionPermissions. A plugin without `permissions` keeps today's free list, so
+ *  old bundles still install. Install only: a stored manifest is read again after CE changes. */
+function checkUiCapabilities(
+  id: string, permissions: PluginPermission[] | undefined, required: string[] | undefined, stored: boolean,
+): void {
+  if (permissions === undefined || required === undefined || stored) return;
+  const own = new Set(permissions.map((p) => p.key));
+  for (const key of required) {
+    if (!own.has(key) && !CE_CAPABILITIES.has(key)) {
+      throw new Error(`artifact ${id}: ui.requiredCapabilities lists '${key}', which is neither a declared permission nor a CE capability`);
+    }
+  }
 }
 
 /** Legacy plugin manifest shape (packages/plugins manifest.ts). A flat legacy manifest may

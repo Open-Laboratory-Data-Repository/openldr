@@ -2,7 +2,7 @@
 
 A plugin's server code can keep its own records, read some of CE's records and send FHIR records into CE. It does this through four host functions: `db_select`, `db_write`, `ce_read` and `fhir_emit`. A plugin never sends SQL. It sends a JSON request, and CE checks it and builds the statement.
 
-This page is for the person who writes the plugin. The administrator sees the capabilities on the install screen and approves them there.
+This page is for the person who writes the plugin. The administrator sees the capabilities on the install screen and approves them there. The permissions a person needs to run each action are on [Plugin permissions](/docs/plugin-permissions).
 
 ## Capabilities
 
@@ -62,7 +62,7 @@ CE refuses a version that drops or renames a column, changes a type, changes whe
 
 A version that declares no tables keeps the tables and rows of the version before. Disabling a plugin, rolling it back or removing one old version keeps them too. Only removing the plugin and choosing to keep nothing drops the schema and its rows.
 
-After a rollback, the older version keeps reading and writing its tables. It reads and writes only the columns it declares. A column a newer version added stays in the table, and rows the older version adds leave it empty.
+After a rollback, the older version keeps reading and writing its tables. It reads and writes only the columns it declares. A column a newer version added stays in the table. Rows the older version adds leave it empty, or give it its default when the column has one.
 
 ## db_select
 
@@ -109,7 +109,7 @@ Reads CE's own records through one op. The request is `{ "op": "<op>", "input": 
 
 | Op | Input |
 |---|---|
-| `patients.search` | `search`, `status`, `limit`, `offset` |
+| `patients.search` | `search`, or `identifier`, or `given`, `family` and `birthDate`; then `status`, `limit`, `offset` |
 | `patients.get` | `ref` |
 | `patients.register` | `patient`, a FHIR Patient with an `id` |
 | `valueset.expand` | `url`, `count`, `offset`, `filter` |
@@ -118,7 +118,7 @@ Reads CE's own records through one op. The request is `{ "op": "<op>", "input": 
 | `testCatalog.get` | `code` |
 | `facilities.search` | `q`, `limit`, `offset` |
 
-Each op follows the same rules as the studio page that shows the same records. The patient ops need the caller to hold `patients.view`. Identifiers show only to a caller who holds `patients.view_identifiers`. A limited caller finds only patients and facilities inside their limit. `patients.register` also needs `Patient` in the plugin's `emit-fhir` list.
+Each op follows the same rules as the studio page that shows the same records. The patient ops need the caller to hold `patients.view` or `patients.find`. With `patients.find` alone, a search must be an exact identifier, or a name with full birth date. See [Plugin permissions](/docs/plugin-permissions). Identifiers show only to a caller who holds `patients.view_identifiers`. A limited caller finds only patients and facilities inside their limit. `patients.register` also needs `Patient` in the plugin's `emit-fhir` list.
 
 ## fhir_emit
 

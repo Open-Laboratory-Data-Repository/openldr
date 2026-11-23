@@ -31,7 +31,9 @@ export interface ProfileDeps {
   };
   /** Installed version of a plugin or content pack, or null. */
   installedVersion(bundleId: string): Promise<string | null>;
-  capabilityKeys: readonly string[];
+  /** The keys a role step may grant. The app passes the capability catalog, so an installed
+   *  plugin's permissions count (plan 2026-11-23-plugin-host-2b, ruling 3). */
+  capabilityKeys: readonly string[] | (() => Promise<readonly string[]>);
 }
 
 /** The capabilities of the person installing. 'all' when nothing limits them, as on the CLI. */
@@ -67,7 +69,7 @@ export async function checkProfileSteps(
 
   const ownedId = (kind: PackItemKind, key: string): string | null =>
     items.find((i) => i.kind === kind && i.key === key)?.itemId ?? null;
-  const known = new Set(deps.capabilityKeys);
+  const known = new Set(typeof deps.capabilityKeys === 'function' ? await deps.capabilityKeys() : deps.capabilityKeys);
   // Slugs of the roles the steps so far create. A layout or form may name only these.
   const created = new Set<string>();
   const namesEarlierRoles = (n: number, slugs: string[]) => {

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { looksLikeAccessKey, type AppContext } from '@openldr/bootstrap';
 import { safeRecord } from '@openldr/audit';
-import { CAPABILITY_KEYS, EVERYTHING, type DataScope } from '@openldr/rbac';
+import { EVERYTHING, type DataScope } from '@openldr/rbac';
 import { reasonFromError, createAuthFailedThrottle, subFromUnverifiedToken, type AuthFailReason } from './auth-failed';
 import { INVALID_ACCESS_KEY, signInWithAccessKey } from './access-key-auth';
 
@@ -90,13 +90,17 @@ async function devActor(ctx: AppContext): Promise<RequestActor> {
     .split(',')
     .map((r) => r.trim())
     .filter((r) => r.length > 0);
+  // The dev actor stands in for the Administrator, who holds every permission of an installed
+  // plugin too (plan 2026-11-23-plugin-host-2b, ruling 4). The catalog is cached and lists CE's
+  // keys alone when it cannot read the plugins, so this never fails.
+  const capabilities = await ctx.capabilityCatalog.keys();
   try {
     const existing = await ctx.users.getByUsername(username);
     const u = existing ?? (await ctx.users.create({ username, displayName: 'Dev Admin', roles }));
-    return { id: u.id, username: u.username, displayName: u.displayName, roles: u.roles.length > 0 ? u.roles : roles, capabilities: [...CAPABILITY_KEYS], dataScope: EVERYTHING };
+    return { id: u.id, username: u.username, displayName: u.displayName, roles: u.roles.length > 0 ? u.roles : roles, capabilities, dataScope: EVERYTHING };
   } catch (e) {
     ctx.logger.warn({ error: e instanceof Error ? e.message : String(e) }, 'dev-bypass actor fell back to synthetic (user store unavailable)');
-    return { id: `dev:${username}`, username, displayName: 'Dev Admin', roles, capabilities: [...CAPABILITY_KEYS], dataScope: EVERYTHING };
+    return { id: `dev:${username}`, username, displayName: 'Dev Admin', roles, capabilities, dataScope: EVERYTHING };
   }
 }
 

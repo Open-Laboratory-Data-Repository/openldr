@@ -5,7 +5,8 @@ import type { PluginUiEntry } from '@/api';
 // but the panel lives above the routes (PluginPanelHost in App.tsx) so its iframe is not reloaded
 // on every page change. Both read this one value.
 
-export interface OpenPanel { id: string; title: string }
+/** `permissionKeys` are the plugin's own keys, so the panel's page gets only those and CE's. */
+export interface OpenPanel { id: string; title: string; permissionKeys?: string[] }
 
 let open: OpenPanel | null = null;
 const listeners = new Set<() => void>();
@@ -28,8 +29,8 @@ export function usePluginPanel(): OpenPanel | null {
   return useSyncExternalStore(subscribe, getPluginPanel, getPluginPanel);
 }
 
-export function openPluginPanel(id: string, title: string): void {
-  set({ id, title });
+export function openPluginPanel(id: string, title: string, permissionKeys: string[] = []): void {
+  set({ id, title, permissionKeys });
 }
 
 export function closePluginPanel(): void {
@@ -42,5 +43,5 @@ export function syncPluginPanel(entries: PluginUiEntry[]): void {
   if (!open) return;
   const panel = entries.find((e) => e.id === open!.id)?.sites?.panel;
   if (!panel) set(null);
-  else if (panel.title !== open.title) set({ id: open.id, title: panel.title });
+  else if (panel.title !== open.title) set({ ...open, title: panel.title });
 }

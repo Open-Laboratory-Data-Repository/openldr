@@ -115,3 +115,50 @@ export function packFailureText(
     ? t('settings.marketplace.packFailedAt', { step, error: e })
     : t('settings.marketplace.packFailed', { error: e });
 }
+
+interface DeclaredPermission {
+  key: string; label: string; description: string;
+  labels?: Partial<Record<'fr' | 'pt', { label: string; description: string }>>;
+}
+
+/** Lines for the install consent. First one line per permission a plugin declares: its label and
+ *  description in the page language (English when the plugin gave none), its key, and the actions
+ *  that need it. Then one line per action whose list has any CE capability, naming those
+ *  capabilities by the role editor's translated label (or by the key when there is none). When the
+ *  list also has one of the plugin's own keys, the line says holders of the CE capability can run it too.
+ *  Reads `payload.permissions` and `payload.actionPermissions` from the signed manifest. A payload
+ *  without them gives no lines. */
+export function pluginPermissionLines(
+  payload: ArtifactPayloadMeta | null | undefined, lang: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string[] {
+  const perms = Array.isArray(payload?.permissions) ? (payload.permissions as DeclaredPermission[]) : [];
+  const actions = (payload?.actionPermissions && typeof payload.actionPermissions === 'object'
+    ? payload.actionPermissions : {}) as Record<string, unknown>;
+  const code = lang.slice(0, 2);
+  const declared = new Set(perms.map((p) => p.key));
+  const own = perms.map((p) => {
+    const local = code === 'fr' || code === 'pt' ? p.labels?.[code] : undefined;
+    const label = local?.label ?? p.label;
+    const description = local?.description ?? p.description;
+    const needing = Object.keys(actions).filter((a) => Array.isArray(actions[a]) && (actions[a] as unknown[]).includes(p.key));
+    const opts = { label, description, key: p.key, actions: needing.join(', '), interpolation: { escapeValue: false } };
+    return needing.length
+      ? t('settings.marketplace.pluginPermissionUsed', opts)
+      : t('settings.marketplace.pluginPermissionUnused', opts);
+  });
+  const ceLines: string[] = [];
+  for (const [action, list] of Object.entries(actions)) {
+    if (!Array.isArray(list) || list.length === 0) continue;
+    const keys = list.filter((k): k is string => typeof k === 'string');
+    const ce = keys.filter((k) => !declared.has(k));
+    if (ce.length === 0) continue;
+    const names = ce.map((k) => t(`roles.capability.${k}.label`, { defaultValue: k }));
+    // An action that also lists one of the plugin's own keys: holders of the CE capability can run it too.
+    const msg = ce.length === keys.length ? 'pluginActionNeeds' : 'pluginActionAlsoRunBy';
+    ceLines.push(t(`settings.marketplace.${msg}`, {
+      action, list: names.join(t('settings.marketplace.pluginActionOr')), interpolation: { escapeValue: false },
+    }));
+  }
+  return [...own, ...ceLines];
+}

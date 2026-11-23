@@ -42,6 +42,8 @@ Sélectionnez les pages à afficher dans cette barre latérale. Choisissez-en au
 
 ![Sélectionnez les pages à afficher. Docs reste toujours disponible.](layouts-guide-pages.png)
 
+Une page de plugin a sa propre case sous **Plugin pages**, avec le nom qu'elle porte dans le menu principal. Seuls les plugins que vous pouvez ouvrir sont listés. Quand une présentation est utilisée, un plugin n'apparaît dans la barre latérale que si la présentation le liste. Si la liste des plugins ne peut pas être lue, un message le dit, et la présentation garde les pages de plugin qu'elle avait déjà.
+
 ### 5. Choisir la page d'accueil
 
 Ouvrez **Start page** et choisissez une page sélectionnée. L'exemple choisit Reports. L'option par défaut est Dashboard.

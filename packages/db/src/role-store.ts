@@ -55,6 +55,9 @@ export interface CapabilityDiagnosis {
   /** Stored keys the catalog does not list, each once. A save keeps them (see `writeCaps`), so a
    *  plugin that brings the key back finds the grant still in place. Not an error. */
   kept: string[];
+  /** Stored keys an installed, enabled plugin declares, each once. Known, not kept: a save can
+   *  grant and revoke them like any CE capability. */
+  plugin: string[];
   /** False when the capability ledger could not be read. In that state reconciliation is
    *  DISABLED for unlocked presets and `revoked` vs `pending` cannot be distinguished, so
    *  every missing capability is reported under the conservative `revoked` class. */
@@ -76,22 +79,33 @@ export interface RoleStore {
   seedSystemRoles(): Promise<CapabilityReconciliation>;
   diagnoseCapabilities(): Promise<CapabilityDiagnosis>;
   backfillUserFromRoleNames(subject: string, roleNames: string[]): Promise<void>;
+  /** Grant keys to the locked Administrator role. Idempotent. Returns the keys it added. Used for
+   *  an installed plugin's permissions (plan 2026-11-23-plugin-host-2b, ruling 4). */
+  grantAdministrator(keys: string[]): Promise<CapabilityReconciliation['granted']>;
+}
+
+export interface RoleStoreOptions {
+  /** Every key the catalog lists now: CE's static keys plus those of active, enabled plugins.
+   *  Defaults to CE's static keys. The capability ledger never reads this: it records CE keys only. */
+  catalogKeys?: () => Promise<readonly string[]> | readonly string[];
 }
 
 const LOCKED_SLUG = 'lab_admin';
 
-function validateCaps(caps: string[]): void {
-  const known = new Set(CAPABILITY_KEYS);
-  for (const c of caps) if (!known.has(c)) throw new OpenLdrError(`unknown capability: ${c}`);
-}
-
-/** Stored keys the catalog does not list. */
-function unlisted(caps: string[]): string[] {
-  const known = new Set(CAPABILITY_KEYS);
-  return caps.filter((c) => !known.has(c));
-}
-
-export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
+export function createRoleStore(db: Kysely<InternalSchema>, opts: RoleStoreOptions = {}): RoleStore {
+  async function knownKeys(): Promise<Set<string>> {
+    return new Set(opts.catalogKeys ? await opts.catalogKeys() : CAPABILITY_KEYS);
+  }
+  async function validateCaps(caps: string[]): Promise<void> {
+    if (caps.length === 0) return;
+    const known = await knownKeys();
+    for (const c of caps) if (!known.has(c)) throw new OpenLdrError(`unknown capability: ${c}`);
+  }
+  /** Stored keys the catalog does not list. */
+  async function unlisted(caps: string[]): Promise<string[]> {
+    const known = await knownKeys();
+    return caps.filter((c) => !known.has(c));
+  }
   async function capsFor(roleId: string, exec: Kysely<InternalSchema> = db): Promise<string[]> {
     const rows = await exec.selectFrom('role_capabilities').select('capability').where('role_id', '=', roleId).execute();
     return rows.map((r) => r.capability);
@@ -171,7 +185,7 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
   // Pass the transaction as `exec` when the caller has already read the stored set, so the read
   // here, the delete and the insert see the same rows.
   async function writeCaps(roleId: string, caps: string[], exec: Kysely<InternalSchema> = db): Promise<void> {
-    const keep = unlisted(await capsFor(roleId, exec));
+    const keep = await unlisted(await capsFor(roleId, exec));
     const next = [...new Set([...caps, ...keep])];
     await exec.deleteFrom('role_capabilities').where('role_id', '=', roleId).execute();
     if (next.length) {
@@ -227,7 +241,7 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       return r ? toRecord(r) : null;
     },
     async create(input) {
-      validateCaps(input.capabilities);
+      await validateCaps(input.capabilities);
       const slug = (input.slug && slugify(input.slug)) || slugify(input.name);
       if (!slug) throw new OpenLdrError('role slug cannot be empty');
       const id = randomUUID();
@@ -247,7 +261,7 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       await db.transaction().execute(async (trx) => {
         if (caps) {
           const stored = new Set(await capsFor(id, trx));
-          validateCaps(caps.filter((c) => !stored.has(c)));
+          await validateCaps(caps.filter((c) => !stored.has(c)));
         }
         const set: Record<string, unknown> = { updated_at: sql`now()` };
         if (patch.name !== undefined) set.name = patch.name;
@@ -420,7 +434,8 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
     },
     async diagnoseCapabilities() {
       const ledger = await readLedger();
-      const known = new Set(CAPABILITY_KEYS);
+      const known = await knownKeys();
+      const ce = new Set(CAPABILITY_KEYS);
       const roles: CapabilityDiagnosis['roles'] = [];
 
       for (const def of SYSTEM_ROLES) {
@@ -451,15 +466,33 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
         .innerJoin('roles', 'roles.id', 'role_capabilities.role_id')
         .select(['role_capabilities.capability as capability'])
         .execute();
-      const kept = [...new Set(rows.map((r) => r.capability).filter((c) => !known.has(c)))].sort();
+      const stored = [...new Set(rows.map((r) => r.capability))];
+      const kept = stored.filter((c) => !known.has(c)).sort();
+      const plugin = stored.filter((c) => known.has(c) && !ce.has(c)).sort();
 
-      return { roles, orphaned: [], kept, ledgerAvailable: ledger !== null };
+      return { roles, orphaned: [], kept, plugin, ledgerAvailable: ledger !== null };
     },
     async backfillUserFromRoleNames(subject, roleNames) {
       for (const name of roleNames) {
         const role = await store.getBySlug(name);
         if (role) await store.assignRole(subject, role.id);
       }
+    },
+    async grantAdministrator(keys) {
+      const admin = await store.getBySlug(LOCKED_SLUG);
+      if (!admin || !admin.isSystem) return [];
+      const have = new Set(admin.capabilities);
+      const granted: CapabilityReconciliation['granted'] = [];
+      for (const capability of [...new Set(keys)]) {
+        if (have.has(capability)) continue;
+        await db
+          .insertInto('role_capabilities')
+          .values({ role_id: admin.id, capability })
+          .onConflict((oc) => oc.columns(['role_id', 'capability']).doNothing())
+          .execute();
+        granted.push({ slug: LOCKED_SLUG, roleId: admin.id, capability });
+      }
+      return granted;
     },
   };
 

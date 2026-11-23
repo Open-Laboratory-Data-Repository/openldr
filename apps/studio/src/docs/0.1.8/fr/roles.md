@@ -136,6 +136,20 @@ Ouvrez les points du panneau et sélectionnez **Save**.
 
 ![La description mise à jour apparaît sur la ligne du rôle.](roles-guide-edited-result.png)
 
+## Donner à un rôle les permissions d'un plugin
+
+Faites-le après l'installation d'un plugin qui ajoute ses propres permissions. Elles apparaissent dans un groupe qui porte le nom du plugin.
+
+1. Ouvrez votre menu utilisateur en bas à gauche, choisissez **Settings**, puis **Roles**.
+2. Trouvez le rôle, ouvrez les points de sa ligne et sélectionnez **Edit**.
+3. Faites défiler le panneau jusqu'au groupe qui porte le nom du plugin.
+4. Activez chaque permission du plugin dont le rôle a besoin. Lisez la description près de chaque interrupteur.
+5. Ouvrez les points du panneau et sélectionnez **Save**.
+
+**Résultat attendu :** les personnes qui ont ce rôle peuvent lancer les actions du plugin qui demandent ces permissions. Si le plugin ne montre sa page qu'à certaines permissions, elles la voient maintenant dans le menu principal.
+
+Administrator reçoit toutes les permissions d'un plugin à son installation. Les autres rôles n'en reçoivent aucune tant que vous ne les activez pas.
+
 ## Supprimer un rôle personnalisé
 
 Utilisez cette tâche seulement pour retirer les permissions accordées par ce rôle. Les rôles système ne peuvent pas être supprimés.
@@ -184,11 +198,21 @@ Administrator est verrouillé. Les autres rôles système sont modifiables mais 
 
 Créer un rôle ne l'attribue à personne. Les attributions se gèrent dans Users. Vérifiez les personnes concernées avant de modifier ou supprimer un rôle attribué.
 
+## Permissions des plugins et Trouver un patient
+
+Les permissions d'un plugin restent sur les rôles qui les ont quand le plugin est désactivé ou retiré. Son groupe quitte la page Roles, et les permissions n'ouvrent plus rien. Enregistrer le rôle les garde. Quand le plugin est réinstallé, son groupe revient avec les mêmes interrupteurs activés. Pour retirer une permission, désactivez-la pendant que le plugin est installé. `openldr roles doctor` liste comme conservées les permissions laissées par un plugin retiré.
+
+**Find a patient** (`patients.find`), c'est-à-dire trouver un patient, est dans le groupe **Patients**. Elle permet à une page de plugin de trouver un patient dans les établissements de la personne, par un identifiant exact, ou par son nom avec la date de naissance complète. Elle n'ouvre pas l'index des patients. Une personne dont les données sont limitées à certains lieux la garde, et perd **View patient index** (`patients.view`). Parmi les rôles système, seul Administrator l'a.
+
 ## Dépannage
 
 **Le rôle est en lecture seule.** Vérifiez s'il s'agit du rôle Administrator verrouillé et si votre compte possède Manage roles.
 
 **Un nouveau rôle ne change aucun accès.** Créer le rôle enregistre seulement ses permissions. Utilisez Users pour l'attribuer à la personne voulue.
+
+**Le groupe d'un plugin manque.** Le plugin est désactivé ou retiré, ou il n'ajoute aucune permission. Vérifiez Marketplace.
+
+**Une personne ne voit pas un plugin dans le menu principal.** Ses rôles n'ont pas la permission que demande le plugin, ou sa mise en page ne liste pas la page du plugin. Vérifiez ses rôles, puis la case du plugin sous **Plugin pages** dans sa mise en page (voir [Layouts](/docs/layouts)).
 
 ## Guides associés
 

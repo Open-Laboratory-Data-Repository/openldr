@@ -24,6 +24,12 @@ function chunks<T>(xs: T[], size = CHUNK): T[][] {
 
 export type PatientStatus = typeof STATUSES[number];
 export interface PatientListQuery { q: string; status: PatientStatus; limit: number; offset: number }
+/** A strong-match lookup (patients.find, plan 2026-11-23-plugin-host-2b ruling 5): one exact
+ *  identifier, or given and family name with a full birth date. Never a prefix or a part. */
+export type PatientFindMatch =
+  | { kind: 'identifier'; system: string | null; value: string }
+  | { kind: 'name'; given: string; family: string; birthDate: string };
+export interface PatientFindQuery { match: PatientFindMatch; status: PatientStatus; limit: number; offset: number }
 export interface PatientIdentifierView { system: string | null; label: string | null; value: string }
 export interface PatientRow {
   ref: string; id: string | null; name: string | null; sex: string | null; birthDate: string | null;
@@ -41,6 +47,8 @@ export interface PatientIndex {
    *  facility ids (compared without case). An empty list matches no one. A plugin's caller with a
    *  data limit passes it (plugin-host.ts); the studio route passes none. */
   list(q: PatientListQuery, opts: { unmask: boolean; facilities?: string[] }): Promise<PatientList>;
+  /** A strong-match lookup only: never a partial name or identifier. `facilities` as in `list`. */
+  find(q: PatientFindQuery, opts: { unmask: boolean; facilities?: string[] }): Promise<PatientList>;
   get(ref: string, opts: { unmask: boolean }): Promise<PatientDetail>;
   getById(id: string, opts: { unmask: boolean }): Promise<PatientDetail>;
   idForRef(ref: string): string | null;
@@ -67,6 +75,47 @@ export function parsePatientListQuery(raw: Record<string, unknown>): { ok: true;
   if (!page.ok) return page;
   const q = typeof raw.search === 'string' ? raw.search.trim() : '';
   return { ok: true, query: { q, status: status as PatientStatus, ...page.query } };
+}
+
+const FULL_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** True for a real calendar date written YYYY-MM-DD. A year alone or a year and month is not one. */
+export function isFullBirthDate(s: string): boolean {
+  const m = FULL_DATE.exec(s);
+  if (!m) return false;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
+}
+
+/** Checks a strong-match lookup: exactly one exact identifier, or given, family and a full birth
+ *  date together. */
+export function parsePatientFindQuery(raw: {
+  identifier?: { system?: string; value: string }; given?: string; family?: string; birthDate?: string;
+  status?: string; limit?: number; offset?: number;
+}): { ok: true; query: PatientFindQuery } | { ok: false; error: string } {
+  const status = raw.status === undefined || raw.status === '' ? 'active' : raw.status;
+  if (!(STATUSES as readonly string[]).includes(status)) return { ok: false, error: 'status must be active, merged or all' };
+  const page = parsePageQuery({ limit: raw.limit, offset: raw.offset });
+  if (!page.ok) return page;
+  const named = raw.given !== undefined || raw.family !== undefined || raw.birthDate !== undefined;
+  if (raw.identifier && named) return { ok: false, error: 'give an identifier, or a name with birth date, not both' };
+  let match: PatientFindMatch;
+  if (raw.identifier) {
+    const value = raw.identifier.value.trim();
+    if (!value) return { ok: false, error: 'the identifier value is empty' };
+    const system = raw.identifier.system?.trim() || null;
+    match = { kind: 'identifier', system, value };
+  } else if (named) {
+    const given = raw.given?.trim() ?? '';
+    const family = raw.family?.trim() ?? '';
+    const birthDate = raw.birthDate?.trim() ?? '';
+    if (!given || !family || !birthDate) return { ok: false, error: 'a name search needs given, family and birthDate together' };
+    if (!isFullBirthDate(birthDate)) return { ok: false, error: 'birthDate must be a full date, YYYY-MM-DD' };
+    match = { kind: 'name', given, family, birthDate };
+  } else {
+    return { ok: false, error: 'give an exact identifier, or given, family and birthDate' };
+  }
+  return { ok: true, query: { match, status: status as PatientStatus, ...page.query } };
 }
 
 type PatientRecord = {
@@ -183,15 +232,69 @@ export function createPatientIndex(deps: {
     });
   }
 
-  async function list(q: PatientListQuery, opts: { unmask: boolean; facilities?: string[] }): Promise<PatientList> {
+  /** The patients table cut to the caller's facilities and the status. Null when the facility list
+   *  is empty, which matches no one. */
+  function scoped(status: PatientStatus, facilities: string[] | undefined) {
     let base = db.selectFrom('patients');
-    if (opts.facilities) {
-      if (opts.facilities.length === 0) return { rows: [], total: 0, masked: !opts.unmask };
-      const orgs = [...new Set(opts.facilities.map((f) => `organization/${f.toLowerCase()}`))];
+    if (facilities) {
+      if (facilities.length === 0) return null;
+      const orgs = [...new Set(facilities.map((f) => `organization/${f.toLowerCase()}`))];
       base = base.where(sql<boolean>`lower(${sql.ref('managing_organization')}) in (${sql.join(orgs)})`);
     }
-    if (q.status === 'active') base = base.where('active', '=', true).where('replaced_by_id', 'is', null);
-    if (q.status === 'merged') base = base.where((eb) => eb.or([eb('active', '=', false), eb('replaced_by_id', 'is not', null)]));
+    if (status === 'active') base = base.where('active', '=', true).where('replaced_by_id', 'is', null);
+    if (status === 'merged') base = base.where((eb) => eb.or([eb('active', '=', false), eb('replaced_by_id', 'is not', null)]));
+    return base;
+  }
+
+  async function find(q: PatientFindQuery, opts: { unmask: boolean; facilities?: string[] }): Promise<PatientList> {
+    let base = scoped(q.status, opts.facilities);
+    if (!base) return { rows: [], total: 0, masked: !opts.unmask };
+    const m = q.match;
+    if (m.kind === 'identifier') {
+      // Equality only. A system marked not searchable is skipped, as in the list's exact match.
+      const unsearchable = await systems.unsearchableSystems();
+      if (m.system !== null && unsearchable.includes(m.system)) return { rows: [], total: 0, masked: !opts.unmask };
+      let byIdentifier = db.selectFrom('patient_identifiers').select('patient_id').where('value', '=', m.value);
+      if (m.system !== null) byIdentifier = byIdentifier.where('system', '=', m.system);
+      else if (unsearchable.length) {
+        byIdentifier = byIdentifier.where((eb) => eb.or([eb('system', 'is', null), eb('system', 'not in', unsearchable)]));
+      }
+      const ids = new Set((await byIdentifier.execute()).map((r) => r.patient_id));
+      // patient_guid has no system, so only a search without one matches it.
+      if (m.system === null) {
+        for (const r of await db.selectFrom('patients').select('id').where('patient_guid', '=', m.value).execute()) ids.add(r.id);
+      }
+      if (!ids.size) return { rows: [], total: 0, masked: !opts.unmask };
+      base = base.where('id', 'in', [...ids]);
+    } else {
+      // Whole given and family name, without case, and the full birth date. A stored date may carry
+      // a time after the day.
+      base = base
+        .where(sql<boolean>`lower(${sql.ref('firstname')}) = ${m.given.toLowerCase()}`)
+        .where(sql<boolean>`lower(${sql.ref('surname')}) = ${m.family.toLowerCase()}`)
+        .where((eb) => eb.or([eb('date_of_birth', '=', m.birthDate), eb('date_of_birth', 'like', `${m.birthDate}T%`)]));
+    }
+    return page(base, q, opts.unmask);
+  }
+
+  async function page(base: NonNullable<ReturnType<typeof scoped>>, q: { limit: number; offset: number }, unmask: boolean): Promise<PatientList> {
+    // A masked list sorts by a hash of the id (neutralOrder), so the order hints at neither the name
+    // nor the identifier. The unique id ends both orders.
+    let ordered = base.select([...PATIENT_COLUMNS]);
+    ordered = unmask
+      ? ordered.orderBy('surname').orderBy('firstname').orderBy('id')
+      : ordered.orderBy(neutralOrder(deps.engine)).orderBy('id');
+    const [records, counted] = await Promise.all([
+      ordered.limit(q.limit).offset(q.offset).execute(),
+      base.select((eb) => eb.fn.countAll<string | number>().as('n')).executeTakeFirst(),
+    ]);
+    const rows = (await build(records as PatientRecord[], unmask, false)).map(({ record: _r, ...row }) => row);
+    return { rows, total: Number(counted?.n ?? 0), masked: !unmask };
+  }
+
+  async function list(q: PatientListQuery, opts: { unmask: boolean; facilities?: string[] }): Promise<PatientList> {
+    let base = scoped(q.status, opts.facilities);
+    if (!base) return { rows: [], total: 0, masked: !opts.unmask };
     if (q.q) {
       const exact = await exactMatches(q.q);
       if (opts.unmask) {
@@ -206,18 +309,7 @@ export function createPatientIndex(deps: {
         base = base.where('id', 'in', exact);
       }
     }
-    // A masked list sorts by a hash of the id (neutralOrder), so the order hints at neither the name
-    // nor the identifier. The unique id ends both orders.
-    let ordered = base.select([...PATIENT_COLUMNS]);
-    ordered = opts.unmask
-      ? ordered.orderBy('surname').orderBy('firstname').orderBy('id')
-      : ordered.orderBy(neutralOrder(deps.engine)).orderBy('id');
-    const [records, counted] = await Promise.all([
-      ordered.limit(q.limit).offset(q.offset).execute(),
-      base.select((eb) => eb.fn.countAll<string | number>().as('n')).executeTakeFirst(),
-    ]);
-    const rows = (await build(records as PatientRecord[], opts.unmask, false)).map(({ record: _r, ...row }) => row);
-    return { rows, total: Number(counted?.n ?? 0), masked: !opts.unmask };
+    return page(base, q, opts.unmask);
   }
 
   async function getById(id: string, opts: { unmask: boolean }): Promise<PatientDetail> {
@@ -286,6 +378,7 @@ export function createPatientIndex(deps: {
 
   return {
     list,
+    find,
     get: async (ref, opts) => getById(requireId(ref), opts),
     getById,
     idForRef,

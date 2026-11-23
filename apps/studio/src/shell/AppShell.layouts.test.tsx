@@ -168,3 +168,90 @@ describe('first page under a layout', () => {
     expect(await screen.findByTestId('dashboard')).toBeTruthy();
   });
 });
+
+describe('plugin pages under a layout', () => {
+  const entry = (id: string, over: Partial<api.PluginUiEntry> = {}): api.PluginUiEntry => ({
+    id, version: '1', nav: { label: id.toUpperCase(), icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1',
+    hasWebview: true, hasDeclarative: false, declarative: null, ...over,
+  });
+  const withLab = { ...bench, pages: [...bench.pages, '/x/lab'] };
+  async function loadWith(prefs: api.UserPreferences, layouts: api.LayoutPreset[], plugins: api.PluginUiEntry[]) {
+    vi.mocked(api.listPluginUis).mockResolvedValue(plugins);
+    vi.mocked(api.getMyPreferences).mockResolvedValue(prefs);
+    vi.mocked(api.listLayouts).mockResolvedValue({ layouts, roleOrder: ['tech'], myRoles: ['tech'] });
+    await act(async () => { await loadUserPreferences(); await loadLayouts(); });
+  }
+
+  it('a layout that lists /x/<id> shows that entry, and hides one it does not list', async () => {
+    await loadWith({}, [withLab, data], [entry('lab'), entry('other')]);
+    shell();
+    await waitFor(() => expect(sidebar()).toContain('/x/lab'));
+    expect(sidebar()).not.toContain('/x/other');
+  });
+
+  it('a layout that lists no plugin page hides every plugin entry', async () => {
+    await loadWith({}, [bench, data], [entry('lab')]);
+    shell();
+    await waitFor(() => expect(vi.mocked(api.listPluginUis)).toHaveBeenCalled());
+    await act(async () => {});
+    expect(sidebar()).not.toContain('/x/lab');
+  });
+
+  it('with no layout every plugin entry shows, as before', async () => {
+    await loadWith({}, [], [entry('lab'), entry('other')]);
+    shell();
+    await waitFor(() => expect(sidebar()).toEqual(expect.arrayContaining(['/x/lab', '/x/other'])));
+  });
+
+  it("a layout never shows an entry the user's capabilities do not open (review focus 5)", async () => {
+    caps = ['forms.view'];
+    await loadWith({}, [withLab], [entry('lab', { requiredCapabilities: ['lab.receive'] })]);
+    shell();
+    await waitFor(() => expect(vi.mocked(api.listPluginUis)).toHaveBeenCalled());
+    await act(async () => {});
+    expect(sidebar()).not.toContain('/x/lab');
+  });
+
+  it('holding any one of the required capabilities shows the entry', async () => {
+    caps = ['forms.view', 'lab.worklist.view'];
+    await loadWith({}, [withLab], [entry('lab', { requiredCapabilities: ['lab.receive', 'lab.worklist.view'] })]);
+    shell();
+    await waitFor(() => expect(sidebar()).toContain('/x/lab'));
+  });
+
+  const gate = () => render(
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route path="/" element={<StartPageGate><div data-testid="dashboard" /></StartPageGate>} />
+        <Route path="/forms" element={<div data-testid="forms" />} />
+        <Route path="/x/:pluginId" element={<div data-testid="plugin-page" />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  it("a start page of /x/<id> opens when the layout shows the entry", async () => {
+    await loadWith({}, [{ ...withLab, startPage: '/x/lab' }], [entry('lab')]);
+    gate();
+    expect(await screen.findByTestId('plugin-page')).toBeTruthy();
+  });
+
+  it("a user's own start page of /x/<id> opens with no layout", async () => {
+    await loadWith({ startPage: '/x/lab' }, [], [entry('lab')]);
+    gate();
+    expect(await screen.findByTestId('plugin-page')).toBeTruthy();
+  });
+
+  it('a start page of /x/<id> the user may not open falls back like any hidden page', async () => {
+    caps = ['forms.view', 'dashboards.view'];
+    await loadWith({ startPage: '/x/lab' }, [], [entry('lab', { requiredCapabilities: ['lab.receive'] })]);
+    gate();
+    expect(await screen.findByTestId('dashboard')).toBeTruthy();
+    expect(screen.queryByTestId('plugin-page')).toBeNull();
+  });
+
+  it('a start page of /x/<id> for a plugin that is not installed falls through to the next one', async () => {
+    await loadWith({ startPage: '/x/gone' }, [{ ...withLab, startPage: '/forms' }], []);
+    gate();
+    expect(await screen.findByTestId('forms')).toBeTruthy();
+  });
+});

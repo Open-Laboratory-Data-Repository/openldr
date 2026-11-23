@@ -168,6 +168,48 @@ describe('Marketplace', () => {
     expect(screen.queryByText(/v0\.9\.0/)).toBeNull();
   }, 20000);
 
+  it('the consent lists a plugin\'s declared permissions and the actions that need them', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    mockDetail();
+    const d = await (api.getAvailableArtifact as any)();
+    (api.getAvailableArtifact as any).mockResolvedValue({ ...d, payload: { ...d.payload,
+      permissions: [{ key: 'whonet.review', label: 'Review isolates', description: 'See held isolates.' }],
+      actionPermissions: { review: ['whonet.review'] } } });
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('card-whonet-narrow'));
+    await openDetailMenu();
+    fireEvent.click(await screen.findByTestId('detail-install'));
+    const list = await screen.findByTestId('plugin-permissions');
+    expect(list.textContent).toBe('Review isolates (whonet.review): See held isolates. Needed to run: review.');
+  });
+
+  it('the update consent lists the new version\'s declared permissions', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
+    (api.listInstalledArtifacts as any).mockResolvedValue([{ ...twoVersions[1], active: true }]);
+    mockDetail();
+    const d = await (api.getAvailableArtifact as any)();
+    (api.getAvailableArtifact as any).mockResolvedValue({ ...d, payload: { ...d.payload,
+      permissions: [{ key: 'whonet.export', label: 'Export', description: 'Download the file.' }] } });
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    await openInstalledCard('0.9.0');
+    await openDetailMenu();
+    fireEvent.click(await screen.findByTestId('detail-update'));
+    expect((await screen.findByTestId('plugin-permissions')).textContent).toBe('Export (whonet.export): Download the file.');
+  }, 20000);
+
+  it('the consent shows no plugin permission list when the plugin declares none', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    mockDetail();
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('card-whonet-narrow'));
+    await openDetailMenu();
+    fireEvent.click(await screen.findByTestId('detail-install'));
+    await screen.findByTestId('approve-install');
+    expect(screen.queryByTestId('plugin-permissions')).toBeNull();
+  });
+
   it('installs a form-template bundle from Browse after consent', async () => {
     (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [{ ref: 'demo-form-1', id: 'demo-form', version: '1.0.0', type: 'form-template', publisher: { id: 'p', name: 'P' }, valid: true }] });
     (api.listInstalledArtifacts as any).mockResolvedValue([]);

@@ -5,7 +5,7 @@ import { makeMigratedDb } from '../../db/src/migrations/internal/test-helpers';
 import { newDb } from 'pg-mem';
 import type { Kysely } from 'kysely';
 import { createPluginRequests, createPluginSchemas, type TableShape } from '@openldr/db';
-import { createWasmSink, parseManifest } from '@openldr/plugins';
+import { createPluginStore, createWasmSink, parseManifest } from '@openldr/plugins';
 import { PG_MEM_WITHOUT_RLS } from '../../db/src/plugin-schema';
 import { checkForPage, createPluginBroker, buildBrokerOpSchema, type PluginBrokerDeps } from './plugin-broker';
 import { createPluginHost } from './plugin-host';
@@ -55,7 +55,7 @@ function broker(opts: {
   const data = memData();
   const manifest: any = opts.caps === undefined ? {} : { capabilities: opts.caps };
   if (opts.requiredRoles) manifest.payload = { ui: { requiredRoles: opts.requiredRoles, ...(opts.requiredCapabilities ? { requiredCapabilities: opts.requiredCapabilities } : {}) } };
-  const row = { id: 'p1', version: '1.0.0', enabled: true, manifest };
+  const row = { id: 'p1', version: '1.0.0', enabled: true, active: true, manifest };
   const audited: Array<{ pluginId: string; op: string; outcome: string; reason?: string }> = [];
   const logged: Array<{ obj: any; msg: string }> = [];
   const b = createPluginBroker({
@@ -1240,7 +1240,7 @@ describe('plugin broker: checks', () => {
     // The copy entrypoint names one set, requests. A check start compares it with each copy's setSql.
     const copySpec = { sets: [{ name: 'requests', keyQuery: { sql: 'SELECT TOP ({{limit}}) [K] FROM [R] WHERE [K] > {{after}} ORDER BY [K]' }, detailQueries: [] }] };
     const sink = { invoke: async (entrypoint: string) => (entrypoint === 'c' ? copySpec : { groups: [] }) };
-    const plugins = { list: async () => [{ id: 'p1', version: '1.0.0', enabled: true, manifest: manifest('p1') }, { id: 'p2', version: '1.0.0', enabled: true, manifest: manifest('p2') }], loadSink: async () => sink } as any;
+    const plugins = { list: async () => [{ id: 'p1', version: '1.0.0', enabled: true, active: true, manifest: manifest('p1') }, { id: 'p2', version: '1.0.0', enabled: true, active: true, manifest: manifest('p2') }], loadSink: async () => sink } as any;
     const copyDoc = (id: string, pluginId: string) => ({
       id, kind: 'copy', rev: 1, pluginId, pluginVersion: '1.0.0', connectorId: 'c1', status: 'completed', options: {}, pageSize: 500,
       // A source copy: a check start refuses a copy with no set requests.
@@ -1347,7 +1347,7 @@ describe('plugin broker: the caller passed to plugin code (plugin host 2a task 6
   const fakeHost = { forCall: vi.fn(() => ({})) };
 
   function hostBroker(caps: unknown[], sink: unknown, over: Partial<PluginBrokerDeps> = {}) {
-    const row = { id: 'p1', version: '1.0.0', enabled: true, manifest: { capabilities: caps } };
+    const row = { id: 'p1', version: '1.0.0', enabled: true, active: true, manifest: { capabilities: caps } };
     const resolveFacilities = vi.fn(async (scope: any) => facilityIdsInScope(registry, scope));
     const b = createPluginBroker({
       plugins: { list: async () => [row], loadSink: async () => sink } as any,
@@ -1424,7 +1424,7 @@ describe('plugin broker: the caller passed to plugin code (plugin host 2a task 6
 
   it('invokes a legacy plugin (no capabilities field) exactly as before', async () => {
     const invoke = vi.fn(async () => ({}));
-    const row = { id: 'p1', version: '1.0.0', enabled: true, manifest: {} };
+    const row = { id: 'p1', version: '1.0.0', enabled: true, active: true, manifest: {} };
     const b = createPluginBroker({
       plugins: { list: async () => [row], loadSink: async () => ({ invoke }) } as any,
       pluginData: memData().store as any, reporting: defaultReporting(),
@@ -1486,5 +1486,302 @@ describe('plugin broker: the caller passed to plugin code (plugin host 2a task 6
 
     const all = await b.handle('p1', { ...person, dataScope: { limited: false } }, op) as any;
     expect(all.data.result.rows).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
+  });
+});
+
+describe('plugin broker: the permission each action needs (plugin host 2b task 3)', () => {
+  const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as any;
+  const PERMISSIONS = [
+    { key: 'lab.orders.receive', label: 'Receive orders', description: 'Mark a sample as received.' },
+    { key: 'lab.results.enter', label: 'Enter results', description: 'Type a result.' },
+  ];
+  const ACTIONS = { receive: ['lab.orders.receive'], enter: ['lab.results.enter', 'lab.orders.receive'], editForm: ['forms.edit'] };
+
+  function gated(payload: Record<string, unknown>, opts: { caps?: unknown[]; sink?: unknown; host?: PluginBrokerDeps['host']; resolveFacilities?: PluginBrokerDeps['resolveFacilities'] } = {}) {
+    const invoke = vi.fn(async (entrypoint: string) => ({ ran: entrypoint }));
+    const row = { id: 'lab', version: '0.1.0', enabled: true, active: true, manifest: { capabilities: opts.caps ?? [], payload } };
+    const audited: Array<{ op: string; outcome: string; reason?: string }> = [];
+    const b = createPluginBroker({
+      audit: async (e) => { audited.push({ op: e.op, outcome: e.outcome, reason: e.reason }); },
+      plugins: { list: async () => [row], loadSink: async () => opts.sink ?? { invoke } } as any,
+      pluginData: memData().store as any,
+      reporting: defaultReporting(),
+      connectors: { list: async () => [], get: async () => null },
+      policy: () => ({ uiEnabled: true, egressEnabled: true }),
+      host: opts.host,
+      resolveFacilities: opts.resolveFacilities,
+    });
+    return { b, invoke, audited };
+  }
+  const who = (capabilities: string[], over: Record<string, unknown> = {}) => ({ id: 'u1', roles: [] as string[], dataScope: ALL_DATA, capabilities, ...over });
+  const run = (entrypoint: string, input: unknown = {}) => ({ kind: 'invoke', entrypoint, input });
+
+  it('refuses a caller without the action\'s permission, names the permission, audits it and runs nothing', async () => {
+    const { b, invoke, audited } = gated({ permissions: PERMISSIONS, actionPermissions: ACTIONS });
+    const r = await b.handle('lab', who(['lab.results.enter']), run('receive'));
+    expect(r).toEqual({ ok: false, error: 'the action receive of plugin lab needs one of these permissions: Receive orders' });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(audited).toEqual([{ op: 'invoke:receive', outcome: 'denied', reason: expect.stringMatching(/Receive orders/) }]);
+  });
+
+  it('runs the action for a caller holding any one of its permissions', async () => {
+    const { b, invoke } = gated({ permissions: PERMISSIONS, actionPermissions: ACTIONS });
+    expect(await b.handle('lab', who(['lab.orders.receive']), run('receive'))).toEqual({ ok: true, data: { ran: 'receive' } });
+    expect(await b.handle('lab', who(['lab.orders.receive']), run('enter'))).toEqual({ ok: true, data: { ran: 'enter' } });
+    expect(await b.handle('lab', who(['lab.results.enter']), run('enter'))).toEqual({ ok: true, data: { ran: 'enter' } });
+    expect(invoke).toHaveBeenCalledTimes(3);
+  });
+
+  it('refuses a crafted op that names an entrypoint the plugin does not list, even for a caller with every key', async () => {
+    const { b, invoke, audited } = gated({ permissions: PERMISSIONS, actionPermissions: ACTIONS });
+    const everything = who(['lab.orders.receive', 'lab.results.enter', 'forms.edit'], { roles: ['lab_admin'] });
+    for (const entrypoint of ['delete_everything', 'constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      const r = await b.handle('lab', everything, run(entrypoint));
+      expect(r, entrypoint).toEqual({ ok: false, error: `the action ${entrypoint} of plugin lab is closed: the plugin names no permission for it` });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+    expect(audited.every((a) => a.outcome === 'denied')).toBe(true);
+  });
+
+  it('takes the permissions from the stored row, never from the op input', async () => {
+    const { b, invoke } = gated({ permissions: PERMISSIONS, actionPermissions: ACTIONS });
+    const input = { actionPermissions: { receive: [] }, capabilities: ['lab.orders.receive'], caller: { capabilities: ['lab.orders.receive'] } };
+    expect((await b.handle('lab', who([]), run('receive', input))).ok).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('a listed CE capability is only required of the caller; the plugin\'s own grant gives none', async () => {
+    // The plugin is granted every host capability. That is its ceiling, not the caller's permission.
+    const caps = [{ kind: 'host:db' }, { kind: 'host:ce-read' }, { kind: 'emit-fhir', resourceTypes: ['Patient'] }];
+    const { b, invoke } = gated({ permissions: PERMISSIONS, actionPermissions: ACTIONS }, { caps });
+    expect(await b.handle('lab', who(['lab.orders.receive']), run('editForm'))).toEqual({
+      ok: false, error: 'the action editForm of plugin lab needs one of these permissions: Edit forms',
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(await b.handle('lab', who(['forms.edit']), run('editForm'))).toEqual({ ok: true, data: { ran: 'editForm' } });
+  });
+
+  it('a stored row that declares a CE key as its own still only requires it of the caller', async () => {
+    // Install refuses this (Task 1). A row written another way gains nothing from it.
+    const { b, invoke } = gated({
+      permissions: [{ key: 'forms.edit', label: 'Anything', description: '' }],
+      actionPermissions: { go: ['forms.edit'] },
+    });
+    expect(await b.handle('lab', who([]), run('go'))).toEqual({ ok: false, error: 'the action go of plugin lab needs one of these permissions: Edit forms' });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('a listed key that is neither the plugin\'s own nor a CE capability opens nothing, even to a holder of it', async () => {
+    // For example a kept grant of an uninstalled plugin's key.
+    const { b, invoke } = gated({ permissions: PERMISSIONS, actionPermissions: { go: ['other.orders.receive'], both: ['other.orders.receive', 'lab.orders.receive'] } });
+    expect(await b.handle('lab', who(['other.orders.receive']), run('go'))).toEqual({
+      ok: false, error: 'the action go of plugin lab is closed: it names no permission CE knows',
+    });
+    expect(await b.handle('lab', who(['other.orders.receive']), run('both'))).toEqual({
+      ok: false, error: 'the action both of plugin lab needs one of these permissions: Receive orders',
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('a malformed stored actionPermissions closes every action', async () => {
+    for (const actionPermissions of [null, 'receive', ['receive'], { receive: 'lab.orders.receive' }, { receive: [] }]) {
+      const { b, invoke } = gated({ permissions: PERMISSIONS, actionPermissions });
+      const r = await b.handle('lab', who(['lab.orders.receive']), run('receive'));
+      expect(r.ok, JSON.stringify(actionPermissions)).toBe(false);
+      expect(invoke).not.toHaveBeenCalled();
+    }
+  });
+
+  it('an Administrator, who holds the plugin keys, runs every listed action', async () => {
+    const { b, invoke } = gated({ permissions: PERMISSIONS, actionPermissions: { receive: ACTIONS.receive, enter: ACTIONS.enter } });
+    const admin = who(['lab.orders.receive', 'lab.results.enter', 'forms.edit', 'patients.view'], { roles: ['lab_admin'] });
+    expect((await b.handle('lab', admin, run('receive'))).ok).toBe(true);
+    expect((await b.handle('lab', admin, run('enter'))).ok).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('the lab_admin role alone does not open an action: the permission does', async () => {
+    const { b, invoke } = gated({ permissions: PERMISSIONS, actionPermissions: ACTIONS });
+    expect((await b.handle('lab', who([], { roles: ['lab_admin'] }), run('receive'))).ok).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('a caller let in by a capability may run an action it holds the permission for, and nothing else', async () => {
+    const ui = { requiredCapabilities: ['lab.orders.receive'] };
+    const { b, invoke } = gated({ ui, permissions: PERMISSIONS, actionPermissions: ACTIONS });
+    const site = who(['lab.orders.receive']);
+    expect(await b.handle('lab', site, run('receive'))).toEqual({ ok: true, data: { ran: 'receive' } });
+    // The action gate still decides: the caller lacks forms.edit.
+    expect((await b.handle('lab', site, run('editForm'))).ok).toBe(false);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    // Storage and other ops stay closed to a caller let in by a capability, as before.
+    expect(await b.handle('lab', site, { kind: 'storage.get', collection: 'c', key: 'k' })).toEqual({
+      ok: false, error: "operation storage.get is not open to a caller without the plugin's role",
+    });
+    // Without the opening capability the page itself is closed.
+    expect((await b.handle('lab', who(['lab.results.enter']), run('enter'))).ok).toBe(false);
+  });
+
+  it('a corrector gains no action: holding imports.correct_held does not open an action that needs another key', async () => {
+    const ui = { requiredRoles: ['lab_admin'], requiredCapabilities: ['imports.correct_held'] };
+    const { b, invoke } = gated({ ui, permissions: PERMISSIONS, actionPermissions: ACTIONS });
+    expect((await b.handle('lab', who(['imports.correct_held']), run('receive'))).ok).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  describe('a plugin without actionPermissions behaves exactly as before', () => {
+    it('any caller with the plugin open runs any entrypoint', async () => {
+      const { b, invoke } = gated({ permissions: PERMISSIONS });
+      expect(await b.handle('lab', who([]), run('anything'))).toEqual({ ok: true, data: { ran: 'anything' } });
+      expect(invoke).toHaveBeenCalledWith('anything', {});
+    });
+
+    it('a caller let in by a capability may still make only the corrector\'s calls, not invoke', async () => {
+      const ui = { requiredRoles: ['lab_admin'], requiredCapabilities: ['imports.correct_held'] };
+      const { b, invoke } = gated({ ui });
+      const corrector = who(['imports.correct_held']);
+      expect(await b.handle('lab', corrector, run('receive'))).toEqual({ ok: false, error: "operation invoke is not open to a caller without the plugin's role" });
+      expect(invoke).not.toHaveBeenCalled();
+      // A corrector's call passes the opening gate (and then needs host:import, which this plugin lacks).
+      expect(await b.handle('lab', corrector, { kind: 'import.check.access' })).toEqual({
+        ok: false, error: 'operation import.check.access requires the host:import capability, which plugin lab was not granted',
+      });
+      // A caller holding the role invokes as before.
+      expect((await b.handle('lab', who([], { roles: ['lab_admin'] }), run('receive'))).ok).toBe(true);
+    });
+  });
+
+  describe('with the real host functions', () => {
+    const registry: ScopeRegistryRow[] = [
+      { id: 'fac-1', name: 'One', facility_code: null, region: 'Dodoma', district: 'Kondoa' },
+      { id: 'fac-2', name: 'Two', facility_code: null, region: 'Dodoma', district: 'Chamwino' },
+    ];
+    const shapes: TableShape[] = [{
+      name: 'orders',
+      columns: [{ name: 'id', type: 'integer' }, { name: 'facility', type: 'text' }],
+      primaryKey: ['id'],
+      facilityColumn: 'facility',
+    }];
+    const caps = [{ kind: 'host:db' }, { kind: 'emit-fhir', resourceTypes: ['Patient'] }];
+
+    async function setup() {
+      const mem = newDb();
+      mem.public.interceptQueries((q) => (/^set local statement_timeout/i.test(q.trim()) ? [] : null));
+      const db = mem.adapters.createKysely() as Kysely<any>;
+      await createPluginSchemas(db, PG_MEM_WITHOUT_RLS).apply('lab', shapes);
+      const requests = createPluginRequests(db);
+      await requests.write('lab', shapes, { userId: 'seed', displayName: null, capabilities: [], facilities: '*' }, { steps: [
+        { op: 'insert', table: 'orders', values: { id: 1, facility: 'fac-1' } },
+        { op: 'insert', table: 'orders', values: { id: 2, facility: 'fac-2' } },
+      ] });
+      const persist = vi.fn(async () => []);
+      const host = createPluginHost({
+        requests,
+        patients: {} as any, testCatalog: {} as any, terminology: {} as any, facilityRegistry: {} as any,
+        fhirGetWithProvenance: async () => null, persist, audit: async () => {}, logger,
+      });
+      // What the plugin's code would do: call the host function the input names.
+      const runner = {
+        async run(_wasm: Uint8Array, input: Uint8Array, opts: any) {
+          const req = JSON.parse(new TextDecoder().decode(input));
+          const out = await opts.hostFns[req.fn](req.args);
+          return new TextEncoder().encode(JSON.stringify(out));
+        },
+      };
+      const manifest = parseManifest({ id: 'lab', version: '0.1.0', kind: 'sink', entrypoints: ['list', 'emit'], wasmSha256: 'a'.repeat(64) });
+      const sink = createWasmSink(manifest, new Uint8Array([0]), runner as never, logger, caps as never, shapes);
+      const { b } = gated(
+        { permissions: PERMISSIONS, actionPermissions: { list: ['lab.orders.receive'], emit: ['lab.results.enter'] } },
+        { caps, sink, host, resolveFacilities: async (scope) => facilityIdsInScope(registry, scope) },
+      );
+      return { b, persist };
+    }
+    const limited = (capabilities: string[]) => who(capabilities, { dataScope: { limited: true as const, facilities: ['fac-1'], districts: [], regions: [] } });
+    const listOp = run('list', { fn: 'db_select', args: { table: 'orders', columns: ['id'], orderBy: [{ column: 'id' }] } });
+    const emitOp = run('emit', { fn: 'fhir_emit', args: { resources: [{ resourceType: 'Patient', id: 'p1' }] } });
+
+    it('a facility-limited caller with the permission reaches the action, and db_select sees only its facility', async () => {
+      const { b } = await setup();
+      const r = await b.handle('lab', limited(['lab.orders.receive']), listOp) as any;
+      expect(r.ok).toBe(true);
+      expect(r.data).toEqual({ ok: true, result: { rows: [{ id: 1 }] } });
+      expect((await b.handle('lab', limited(['lab.results.enter']), listOp)).ok).toBe(false);
+    });
+
+    it('fhir_emit needs the action\'s permission, and still refuses a facility-limited caller who holds it', async () => {
+      const { b, persist } = await setup();
+      expect(await b.handle('lab', who(['lab.orders.receive']), emitOp)).toEqual({
+        ok: false, error: 'the action emit of plugin lab needs one of these permissions: Enter results',
+      });
+      const r = await b.handle('lab', limited(['lab.results.enter']), emitOp) as any;
+      expect(r.ok).toBe(true);
+      expect(r.data).toMatchObject({ ok: false, error: { code: 'OUTSIDE_DATA_LIMIT' } });
+      expect(persist).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('plugin broker: the active version\'s manifest (plugin host 2b task 3, fix round 1)', () => {
+  const PERMISSIONS = [{ key: 'lab.orders.receive', label: 'Receive orders', description: '' }];
+  const gatedPayload = { permissions: PERMISSIONS, actionPermissions: { receive: ['lab.orders.receive'] } };
+  const manifest = (version: string, payload?: Record<string, unknown>) => ({ id: 'lab', version, capabilities: [], ...(payload ? { payload } : {}) });
+  const nobody = { id: 'u1', roles: [] as string[], dataScope: ALL_DATA, capabilities: [] as string[] };
+
+  async function withStore() {
+    const store = createPluginStore(await makeMigratedDb());
+    const loaded: Array<string | undefined> = [];
+    const invoke = vi.fn(async () => ({ ran: true }));
+    const b = createPluginBroker({
+      plugins: { list: () => store.list(), loadSink: async (_id: string, version?: string) => { loaded.push(version); return { invoke }; } },
+      pluginData: memData().store as any,
+      reporting: defaultReporting(),
+      connectors: { list: async () => [], get: async () => null },
+      policy: () => ({ uiEnabled: true, egressEnabled: true }),
+    });
+    return { store, b, invoke, loaded };
+  }
+  const install = (store: ReturnType<typeof createPluginStore>, version: string, payload?: Record<string, unknown>) =>
+    store.install({ id: 'lab', version, sha256: version, manifest: manifest(version, payload), approvedBy: null });
+
+  it('after 0.2.0 is upgraded to 0.10.0, the gate reads 0.10.0, not the older row the list sorts first', async () => {
+    const { store, b, invoke, loaded } = await withStore();
+    await install(store, '0.2.0');
+    await install(store, '0.10.0', gatedPayload);
+    // Both rows are enabled; text order puts 0.2.0 before 0.10.0.
+    const rows = (await store.list()).filter((r) => r.id === 'lab');
+    expect(rows.map((r) => [r.version, r.enabled, r.active])).toEqual([['0.2.0', true, false], ['0.10.0', true, true]]);
+
+    expect(await b.handle('lab', nobody, { kind: 'invoke', entrypoint: 'receive', input: {} })).toEqual({
+      ok: false, error: 'the action receive of plugin lab needs one of these permissions: Receive orders',
+    });
+    expect(await b.handle('lab', nobody, { kind: 'invoke', entrypoint: 'anything', input: {} })).toMatchObject({ ok: false });
+    expect(invoke).not.toHaveBeenCalled();
+
+    expect((await b.handle('lab', { ...nobody, capabilities: ['lab.orders.receive'] }, { kind: 'invoke', entrypoint: 'receive', input: {} })).ok).toBe(true);
+    expect(loaded).toEqual(['0.10.0']);
+  });
+
+  it('after a rollback, the rolled-back version\'s manifest is the one read', async () => {
+    const { store, b, invoke, loaded } = await withStore();
+    await install(store, '0.1.0', gatedPayload);
+    await install(store, '0.2.0');
+    // 0.2.0 has no actionPermissions: any caller runs any entrypoint, as before.
+    expect((await b.handle('lab', nobody, { kind: 'invoke', entrypoint: 'anything', input: {} })).ok).toBe(true);
+    await store.rollback('lab', '0.1.0');
+    expect((await b.handle('lab', nobody, { kind: 'invoke', entrypoint: 'anything', input: {} })).ok).toBe(false);
+    expect((await b.handle('lab', nobody, { kind: 'invoke', entrypoint: 'receive', input: {} })).ok).toBe(false);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(loaded).toEqual(['0.2.0']);
+  });
+
+  it('a plugin with no active row is refused', async () => {
+    const row = { id: 'lab', version: '0.1.0', enabled: true, active: false, manifest: manifest('0.1.0') };
+    const b = createPluginBroker({
+      plugins: { list: async () => [row], loadSink: async () => ({ invoke: async () => ({}) }) },
+      pluginData: memData().store as any, reporting: defaultReporting(),
+      connectors: { list: async () => [], get: async () => null },
+      policy: () => ({ uiEnabled: true, egressEnabled: true }),
+    });
+    expect(await b.handle('lab', nobody, { kind: 'storage.get', collection: 'c', key: 'k' })).toEqual({ ok: false, error: 'plugin lab is not installed or disabled' });
   });
 });

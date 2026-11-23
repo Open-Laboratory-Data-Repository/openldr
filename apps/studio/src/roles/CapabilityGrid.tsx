@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { CapabilityGroup } from '@/api';
 import { Switch } from '@/components/ui/switch';
 import {
-  totalCapabilityCount, selectedCapabilityCount, toggleCapability,
+  totalCapabilityCount, selectedCapabilityCount, toggleCapability, capabilityText,
 } from './capabilityGrid.model';
 
 export interface CapabilityGridProps {
@@ -20,7 +20,7 @@ export interface CapabilityGridProps {
  * capabilityGrid.model.ts — this component is a thin shadcn shell over those pure functions.
  */
 export function CapabilityGrid({ groups, selected, onChange, readOnly = false }: CapabilityGridProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const total = totalCapabilityCount(groups);
   const count = selectedCapabilityCount(groups, selected);
 
@@ -47,12 +47,13 @@ export function CapabilityGrid({ groups, selected, onChange, readOnly = false }:
               <div className="flex flex-col gap-4 pt-4">
                 {group.capabilities.map((cap) => {
                   const capId = `capability-${cap.key}`;
+                  const text = capabilityText(cap, i18n.language);
                   return (
                     <div key={cap.key} className="flex items-start justify-between gap-4">
                       <div>
-                        <div className="text-sm font-medium">{cap.label}</div>
+                        <div className="text-sm font-medium">{text.label}</div>
                         <div className="text-xs text-muted-foreground">
-                          {cap.key === 'data_exposure.manage' ? t('settings.dataExposure.description') : cap.description}
+                          {cap.key === 'data_exposure.manage' ? t('settings.dataExposure.description') : text.description}
                         </div>
                       </div>
                       <Switch
@@ -60,7 +61,7 @@ export function CapabilityGrid({ groups, selected, onChange, readOnly = false }:
                         checked={selected.has(cap.key)}
                         disabled={readOnly}
                         onCheckedChange={() => onChange(toggleCapability(selected, cap.key))}
-                        aria-label={cap.label}
+                        aria-label={text.label}
                       />
                     </div>
                   );

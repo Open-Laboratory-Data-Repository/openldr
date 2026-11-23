@@ -33,6 +33,28 @@ describe('CapabilityGrid (render smoke tests — selection logic itself is cover
     },
   );
 
+  it.each([
+    ['en', 'Receive orders', 'Receive lab orders.'],
+    ['fr', 'Recevoir les demandes', 'Recevoir les demandes du labo.'],
+    ['pt', 'Receber pedidos', 'Receive lab orders.'],
+    ['sw', 'Receive orders', 'Receive lab orders.'],
+  ] as const)('shows a plugin permission in the user language when the plugin gives it (%s)', async (language, label, description) => {
+    await act(async () => { await i18n.changeLanguage(language); });
+    const plugin: CapabilityGroup[] = [{
+      key: 'plugin:lab', label: 'Lab', plugin: 'lab',
+      capabilities: [{
+        key: 'lab.orders.receive', group: 'plugin:lab', label: 'Receive orders', description: 'Receive lab orders.',
+        // Portuguese gives a label only; the description falls back to English.
+        labels: { fr: { label: 'Recevoir les demandes', description: 'Recevoir les demandes du labo.' }, pt: { label: 'Receber pedidos', description: '' } },
+      }],
+    }];
+    render(<CapabilityGrid groups={plugin} selected={new Set()} onChange={vi.fn()} />);
+    const group = screen.getByTestId('capability-group-plugin:lab');
+    expect(within(group).getByText(label)).toBeTruthy();
+    expect(within(group).getByText(description)).toBeTruthy();
+    expect(within(group).getByTestId('capability-lab.orders.receive')).toHaveAttribute('aria-label', label);
+  });
+
   it('renders group cards and the selected/total counter', () => {
     render(<CapabilityGrid groups={groups} selected={new Set()} onChange={vi.fn()} />);
     expect(screen.getByText('Users')).toBeTruthy();

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listPluginUis, type PluginUiEntry } from '@/api';
+import { useAuth } from '@/auth/AuthProvider';
 import { Card } from '@/components/ui/card';
 import { PluginFrame, pluginFrameContext } from './PluginFrame';
 
@@ -11,6 +12,7 @@ const HEIGHT_PX = { small: 160, medium: 240, large: 360 } as const;
  *  or when the plugin list cannot be read: the dashboard itself must never fail because of it. */
 export function PluginWidgets() {
   const [entries, setEntries] = useState<PluginUiEntry[]>([]);
+  const { capabilities } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -29,7 +31,7 @@ export function PluginWidgets() {
           <Card key={e.id} className="flex min-w-0 flex-col overflow-hidden p-0">
             <div className="truncate border-b border-border px-4 py-2 text-sm font-medium">{w.title}</div>
             <div style={{ height: HEIGHT_PX[w.height] ?? HEIGHT_PX.medium }} data-testid={`plugin-widget-${e.id}`}>
-              <PluginFrame pluginId={e.id} context={pluginFrameContext(e.id, 'widget')} />
+              <PluginFrame pluginId={e.id} context={pluginFrameContext(e.id, 'widget', capabilities ?? [], e.permissionKeys ?? [])} />
             </div>
           </Card>
         );

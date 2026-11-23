@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import i18n from '@/i18n';
 import type { AvailableArtifact } from '@/api';
-import { capabilityLine, newerAvailable } from './util';
+import { capabilityLine, newerAvailable, pluginPermissionLines } from './util';
 
 describe('capabilityLine', () => {
   const t = i18n.getFixedT('en');
@@ -58,5 +58,65 @@ describe('newerAvailable', () => {
 
   it('compares versions by their numbers, not as text', () => {
     expect(newerAvailable('cdr-source', '0.1.9', [avail('0.1.10')], ['0.1.9'])?.version).toBe('0.1.10');
+  });
+});
+
+describe('pluginPermissionLines', () => {
+  const payload = {
+    kind: 'plugin',
+    permissions: [
+      { key: 'whonet.review', label: 'Review isolates', description: 'See and correct held isolates.', labels: { fr: { label: 'Revoir les isolats', description: 'Voir et corriger les isolats retenus.' } } },
+      { key: 'whonet.export', label: 'Export', description: 'Download the WHONET file.' },
+    ],
+    actionPermissions: { review: ['whonet.review'], correct: ['whonet.review', 'forms.edit'] },
+  };
+
+  it('lists each declared permission with the actions that need it', () => {
+    expect(pluginPermissionLines(payload, 'en', i18n.getFixedT('en')).slice(0, 2)).toEqual([
+      'Review isolates (whonet.review): See and correct held isolates. Needed to run: review, correct.',
+      'Export (whonet.export): Download the WHONET file.',
+    ]);
+  });
+  it('uses the French label when given, and English when not', () => {
+    const lines = pluginPermissionLines(payload, 'fr', i18n.getFixedT('fr'));
+    expect(lines[0]).toBe('Revoir les isolats (whonet.review) : Voir et corriger les isolats retenus. Nécessaire pour exécuter : review, correct.');
+    expect(lines[1]).toBe('Export (whonet.export) : Download the WHONET file.');
+  });
+  it('reads in every language with no missing key', () => {
+    for (const lng of ['en', 'fr', 'pt']) {
+      for (const line of pluginPermissionLines(payload, lng, i18n.getFixedT(lng))) {
+        expect(line, lng).not.toMatch(/settings\.|\{\{/);
+      }
+    }
+  });
+  it('lists an action that needs only CE capabilities, by their translated label', () => {
+    const p = { kind: 'plugin', actionPermissions: { publish: ['forms.edit', 'reports.view'], sync: ['some.unknown'] } };
+    expect(pluginPermissionLines(p, 'en', i18n.getFixedT('en'))).toEqual([
+      'Action publish needs: Edit forms or View reports.',
+      'Action sync needs: some.unknown.',
+    ]);
+  });
+  it('names a CE capability on an action that also lists a plugin key', () => {
+    // correct: ['whonet.review', 'forms.edit'] means anyone with Edit forms can run correct.
+    const lines = pluginPermissionLines(payload, 'en', i18n.getFixedT('en'));
+    expect(lines).toHaveLength(3);
+    expect(lines[2]).toBe('Action correct can also be run by anyone with: Edit forms.');
+    for (const lng of ['fr', 'pt']) {
+      const l = pluginPermissionLines(payload, lng, i18n.getFixedT(lng))[2];
+      expect(l, lng).toContain('correct');
+      expect(l, lng).not.toMatch(/settings\.|roles\.|\{\{|forms\.edit|anyone/);
+    }
+  });
+  it('the CE-only action line exists in fr and pt', () => {
+    const p = { kind: 'plugin', actionPermissions: { publish: ['forms.edit'] } };
+    for (const lng of ['fr', 'pt']) {
+      const [line] = pluginPermissionLines(p, lng, i18n.getFixedT(lng));
+      expect(line, lng).toContain('publish');
+      expect(line, lng).not.toMatch(/settings\.|roles\.|\{\{|forms\.edit|needs/);
+    }
+  });
+  it('a payload without permissions gives no lines', () => {
+    expect(pluginPermissionLines({ kind: 'plugin' }, 'en', i18n.getFixedT('en'))).toEqual([]);
+    expect(pluginPermissionLines(null, 'en', i18n.getFixedT('en'))).toEqual([]);
   });
 });

@@ -163,6 +163,8 @@ export interface PluginsTable {
   active: Generated<boolean>;
   approved_by: string | null;
   granted_at: Date | null;
+  /** The verified publisher key fingerprint, or null for an unsigned install (migration 142). */
+  publisher: string | null;
 }
 
 export interface AuditEventsTable {
@@ -1024,6 +1026,15 @@ export interface CapabilityIntroductionsTable {
   introduced_at: Generated<Date>;
 }
 
+/** Which plugin owns each permission group (migration 142). A row is never deleted. */
+export interface PluginPermissionGroupsTable {
+  group: string;
+  plugin_id: string;
+  /** The verified publisher key fingerprint of the claiming install, or null when it was unsigned. */
+  publisher: string | null;
+  claimed_at: Generated<Date>;
+}
+
 export interface ReportDesignsTable {
   id: string;
   name: string;
@@ -1281,5 +1292,6 @@ export interface InternalSchema {
   roles: RolesTable;
   role_capabilities: RoleCapabilitiesTable;
   capability_introductions: CapabilityIntroductionsTable;
+  plugin_permission_groups: PluginPermissionGroupsTable;
   user_roles: UserRolesTable;
 }

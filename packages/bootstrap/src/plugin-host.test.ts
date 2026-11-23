@@ -6,7 +6,8 @@ import type { Capability } from '@openldr/marketplace';
 import type { HostPlugin } from '@openldr/plugins';
 import { createPluginHost, CE_READ_OPS, type PluginHostDeps } from './plugin-host';
 import { createPatientIndex } from './patient-index';
-import { buildPatientIndexFixture, seedPatient } from './test-support/patient-index-fixture';
+import { capabilitiesUnderScope } from '@openldr/rbac';
+import { buildPatientIndexFixture, seedIdentifier, seedPatient } from './test-support/patient-index-fixture';
 
 const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() } as any;
 
@@ -147,14 +148,14 @@ describe('plugin host: ce_read', () => {
     );
   });
 
-  it('patients ops need patients.view; other ops do not', async () => {
+  it('patients ops need patients.view or patients.find; other ops do not', async () => {
     const deps = fakeDeps();
     const fns = createPluginHost(deps).forCall(plugin([{ kind: 'host:ce-read' }]), { ...EVERYONE, capabilities: [] });
     for (const [op, input] of [
       ['patients.search', {}], ['patients.get', { ref: 'r' }],
       ['patients.register', { patient: { resourceType: 'Patient', id: 'x' } }],
     ] as const) {
-      expect(await fns.ce_read({ op, input })).toEqual({ ok: false, error: { code: 'FORBIDDEN', message: `${op}: the caller does not hold patients.view` } });
+      expect(await fns.ce_read({ op, input })).toEqual({ ok: false, error: { code: 'FORBIDDEN', message: `${op}: the caller holds neither patients.view nor patients.find` } });
     }
     expect(deps.patients.list).not.toHaveBeenCalled();
     expect(deps.persist).not.toHaveBeenCalled();
@@ -376,5 +377,122 @@ describe('plugin host: fhir_emit', () => {
     const deps = fakeDeps({ persist: vi.fn(async () => { throw new Error('duplicate key value violates unique constraint "fhir_resources_pkey" at /srv/app'); }) });
     const out = await createPluginHost(deps).forCall(emit(['Observation']), EVERYONE).fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o1' }] });
     expect(out).toEqual({ ok: false, error: { code: 'HOST_ERROR', message: 'fhir_emit failed inside CE' } });
+  });
+});
+
+// Ruling 5 of plan 2026-11-23-plugin-host-2b: patients.find, a strong-match lookup a limited user keeps.
+describe('plugin host: patients.find', () => {
+  const MPI = 'urn:zm:mpi';
+  const LIMITED = { limited: true as const, facilities: ['fac-1'], districts: [], regions: [] };
+  // A site user whose role holds view, view_identifiers and find: the data limit leaves only find.
+  const FINDER: PluginCaller = {
+    userId: 'u-find', displayName: 'Finder', facilities: ['fac-1'],
+    capabilities: capabilitiesUnderScope(['patients.view', 'patients.view_identifiers', 'patients.find'], LIMITED),
+  };
+  const ADMIN_FINDER: PluginCaller = { ...FINDER, userId: 'u-af', facilities: '*', capabilities: ['patients.find'] };
+
+  async function fixture() {
+    const f = await buildPatientIndexFixture();
+    const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, engine: 'postgres', refKey: randomBytes(32) });
+    await seedPatient(f.externalDb, { id: 'p-1', surname: 'Mwanza', firstname: 'John', dob: '1990-01-05', guid: 'G-1', org: 'Organization/FAC-1' });
+    await seedPatient(f.externalDb, { id: 'p-2', surname: 'Mwale', firstname: 'Ruth', dob: '1985-03-04', guid: 'G-2', org: 'Organization/fac-2' });
+    await seedIdentifier(f.externalDb, 'p-1', MPI, 'MPI-0001');
+    await seedIdentifier(f.externalDb, 'p-2', MPI, 'MPI-0002');
+    const deps = fakeDeps({ patients: index });
+    const host = createPluginHost(deps);
+    const call = (caller: PluginCaller, op: string, input: unknown) =>
+      host.forCall(plugin(REGISTERS), caller).ce_read({ op, input }) as Promise<any>;
+    return { deps, call };
+  }
+
+  it('a limited user keeps patients.find after the data-limit drop', () => {
+    expect(FINDER.capabilities).toEqual(['patients.find']);
+  });
+
+  it('finds a patient at their facility by exact identifier, masked, and not one at another facility', async () => {
+    const { call, deps } = await fixture();
+    const own = await call(FINDER, 'patients.search', { identifier: { value: 'MPI-0001' } });
+    expect(own.ok).toBe(true);
+    expect(own.result.total).toBe(1);
+    expect(own.result.masked).toBe(true);
+    expect(own.result.rows[0]).toMatchObject({ id: null, name: 'J*** M***', birthDate: '1990', managingFacility: { reference: 'Organization/FAC-1' } });
+    expect(JSON.stringify(own.result)).not.toMatch(/Mwanza|MPI-0001|1990-01-05|G-1|p-1/);
+    expect((await call(FINDER, 'patients.search', { identifier: { system: MPI, value: 'MPI-0001' } })).result.total).toBe(1);
+    expect((await call(FINDER, 'patients.search', { identifier: { system: 'urn:other', value: 'MPI-0001' } })).result.total).toBe(0);
+    expect((await call(FINDER, 'patients.search', { identifier: { value: 'G-1' } })).result.total).toBe(1);
+    // The patient at fac-2 exists, but the limited user does not find it.
+    expect((await call(FINDER, 'patients.search', { identifier: { value: 'MPI-0002' } })).result).toMatchObject({ rows: [], total: 0 });
+    expect(deps.audit).not.toHaveBeenCalled();
+  });
+
+  it('cannot browse: no partial identifier, no free-text search, no empty search', async () => {
+    const { call } = await fixture();
+    expect((await call(FINDER, 'patients.search', { identifier: { value: 'MPI-000' } })).result.total).toBe(0);
+    expect((await call(FINDER, 'patients.search', { identifier: { value: 'MPI' } })).result.total).toBe(0);
+    const text = await call(FINDER, 'patients.search', { search: 'Mwan' });
+    expect(text.error.code).toBe('FORBIDDEN');
+    expect(text.error.message).toMatch(/exact identifier/);
+    expect((await call(FINDER, 'patients.search', {})).error.code).toBe('INVALID_REQUEST');
+    expect((await call(FINDER, 'patients.search', { identifier: { value: '  ' } })).error.code).toBe('INVALID_REQUEST');
+  });
+
+  it('finds by given and family name with a full birth date only', async () => {
+    const { call } = await fixture();
+    const hit = await call(FINDER, 'patients.search', { given: 'john', family: 'MWANZA', birthDate: '1990-01-05' });
+    expect(hit.result.total).toBe(1);
+    expect(hit.result.rows[0].name).toBe('J*** M***');
+    // A part of a name, or a wrong day, matches no one.
+    expect((await call(FINDER, 'patients.search', { given: 'Jo', family: 'Mwanza', birthDate: '1990-01-05' })).result.total).toBe(0);
+    expect((await call(FINDER, 'patients.search', { given: 'J%', family: 'Mwanza', birthDate: '1990-01-05' })).result.total).toBe(0);
+    expect((await call(FINDER, 'patients.search', { given: 'John', family: 'Mwanza', birthDate: '1990-01-06' })).result.total).toBe(0);
+    // Year-only, year-month, impossible dates and a missing part are refused.
+    for (const input of [
+      { given: 'John', family: 'Mwanza', birthDate: '1990' },
+      { given: 'John', family: 'Mwanza', birthDate: '1990-01' },
+      { given: 'John', family: 'Mwanza', birthDate: '1990-02-30' },
+      { given: 'John', family: 'Mwanza' },
+      { family: 'Mwanza', birthDate: '1990-01-05' },
+      { identifier: { value: 'MPI-0001' }, given: 'John', family: 'Mwanza', birthDate: '1990-01-05' },
+    ]) {
+      const out = await call(FINDER, 'patients.search', input);
+      expect(out.error?.code, JSON.stringify(input)).toBe('INVALID_REQUEST');
+    }
+    // Ruth is at fac-2, outside the limit.
+    expect((await call(FINDER, 'patients.search', { given: 'Ruth', family: 'Mwale', birthDate: '1985-03-04' })).result.total).toBe(0);
+  });
+
+  it('patients.get gives a patient at the caller facilities, and answers another as not found', async () => {
+    const { call } = await fixture();
+    const own = await call(FINDER, 'patients.search', { identifier: { value: 'MPI-0001' } });
+    const got = await call(FINDER, 'patients.get', { ref: own.result.rows[0].ref });
+    expect(got.ok).toBe(true);
+    expect(got.result).toMatchObject({ masked: true, id: null, phone: null });
+    const other = await call(ADMIN_FINDER, 'patients.search', { identifier: { value: 'MPI-0002' } });
+    expect(other.result.total).toBe(1);
+    const ref = other.result.rows[0].ref;
+    // A caller with no limit may open it; the limited user gets the same answer as for no patient.
+    expect((await call(ADMIN_FINDER, 'patients.get', { ref })).ok).toBe(true);
+    expect(await call(FINDER, 'patients.get', { ref })).toEqual({ ok: false, error: { code: 'NOT_FOUND', message: 'patient not found' } });
+    expect(await call(FINDER, 'patients.get', { ref: 'no-such-ref' })).toEqual({ ok: false, error: { code: 'NOT_FOUND', message: 'patient not found' } });
+  });
+
+  it('patients.register works with patients.find alone', async () => {
+    const { call, deps } = await fixture();
+    const patient = { resourceType: 'Patient', id: 'lab-p-7', managingOrganization: { reference: 'Organization/fac-1' } };
+    expect(await call(FINDER, 'patients.register', { patient })).toEqual({ ok: true, result: { id: 'lab-p-7' } });
+    expect(deps.persist).toHaveBeenCalledTimes(1);
+    const away = await call(FINDER, 'patients.register', { patient: { ...patient, managingOrganization: { reference: 'Organization/fac-2' } } });
+    expect(away.error.code).toBe('OUTSIDE_DATA_LIMIT');
+  });
+
+  it('a patients.view caller keeps the free-text search, and may also use the strong fields', async () => {
+    const { call } = await fixture();
+    const viewer: PluginCaller = { userId: 'u-v', displayName: 'V', capabilities: ['patients.view', 'patients.view_identifiers'], facilities: '*' };
+    const text = await call(viewer, 'patients.search', { search: 'mwa' });
+    expect(text.result.rows.map((r: any) => r.id).sort()).toEqual(['p-1', 'p-2']);
+    expect((await call(viewer, 'patients.search', {})).result.total).toBe(2);
+    const strong = await call(viewer, 'patients.search', { identifier: { value: 'MPI-0002' } });
+    expect(strong.result.rows.map((r: any) => r.id)).toEqual(['p-2']);
+    expect((await call(viewer, 'patients.search', { search: 'x', identifier: { value: 'MPI-0002' } })).error.code).toBe('INVALID_REQUEST');
   });
 });

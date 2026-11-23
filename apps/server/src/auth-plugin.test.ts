@@ -26,6 +26,8 @@ function ctx(opts: {
     backfillUserFromRoleNames?: (subject: string, roleNames: string[]) => Promise<void>;
   };
   markRbacInitialized?: (id: string) => Promise<void>;
+  /** Keys installed plugins add to the catalog. */
+  pluginKeys?: string[];
 }): AppContext {
   const providedUser = opts.user ?? { id: 'u1', username: 'ada', displayName: 'Ada', roles: ['lab_manager'], status: 'active' as const };
   // Default already-initialized so pre-existing tests (which don't care about RBAC backfill)
@@ -42,6 +44,7 @@ function ctx(opts: {
       rolesForUser: async () => [],
     },
     dataScopes: { get: async () => ({ limited: false }) },
+    capabilityCatalog: { keys: async () => [...CAPABILITY_KEYS, ...(opts.pluginKeys ?? [])] },
     users: {
       isSubjectBlocked: async () => false,
       syncFromClaims: async () => u,
@@ -204,6 +207,14 @@ describe('registerAuth', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().user.capabilities).toHaveLength(CAPABILITY_KEYS.length);
     expect(new Set(res.json().user.capabilities as string[])).toEqual(new Set(CAPABILITY_KEYS));
+  });
+
+  // The dev actor stands in for the Administrator, who holds an installed plugin's permissions.
+  it('gives the dev-bypass actor the permissions of installed plugins too', async () => {
+    const app = await appWith(ctx({ bypass: true, pluginKeys: ['lab.orders.receive'] }));
+    const res = await app.inject({ method: 'GET', url: '/api/probe' });
+    expect(res.json().user.capabilities).toContain('lab.orders.receive');
+    expect(res.json().user.capabilities).toHaveLength(CAPABILITY_KEYS.length + 1);
   });
 
   it('backfills token realm roles into user_roles exactly once, on first login', async () => {

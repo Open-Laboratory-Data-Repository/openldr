@@ -1978,8 +1978,11 @@ export interface RoleRecord {
   /** The content pack that made this role, or null for one an admin made. */
   ownerPack?: string | null;
 }
-export interface CapabilityMeta { key: string; group: string; label: string; description: string }
-export interface CapabilityGroup { key: string; label: string; capabilities: CapabilityMeta[] }
+/** A plugin permission may carry French and Portuguese text (plan 2026-11-23-plugin-host-2b). */
+export interface CapabilityText { label: string; description: string }
+export interface CapabilityMeta { key: string; group: string; label: string; description: string; labels?: { fr?: CapabilityText; pt?: CapabilityText } }
+/** `plugin` names the installed plugin a group comes from. */
+export interface CapabilityGroup { key: string; label: string; plugin?: string; capabilities: CapabilityMeta[] }
 
 export const getMyCapabilities = (): Promise<string[]> =>
   authFetch('/api/me/capabilities').then((r) => okJson<{ capabilities: string[] }>(r, 'get capabilities')).then((x) => x.capabilities);
@@ -3691,6 +3694,12 @@ export interface PluginUiEntry {
   declarative: unknown | null;
   /** Dashboard card and side panel, minus any an admin switched off. Older servers omit it. */
   sites?: PluginUiSites;
+  /** Who may open the page: any one of these roles or capabilities. Both empty means everyone.
+   *  Older servers omit them. */
+  requiredRoles?: string[];
+  requiredCapabilities?: string[];
+  /** The permission keys this plugin declares. Older servers omit it. */
+  permissionKeys?: string[];
 }
 
 /** Places outside its own page where a plugin draws its ui.html. Mirrors UiSites in @openldr/marketplace. */
