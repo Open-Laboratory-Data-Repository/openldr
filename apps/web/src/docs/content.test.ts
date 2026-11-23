@@ -52,6 +52,7 @@ describe('website docs content', () => {
       expect(body, locale).toContain('**Lab order**');
       expect(body, locale).toContain('openldr roles doctor');
       expect(body, locale).toContain('OPENLDR_KEY');
+      expect(body, locale).toContain('(/docs/lab-plugin)');
       expect(body, locale).not.toContain('openldr lab sections');
       expect(body, locale).not.toContain('allow-self-authorise');
       expect(body, locale).not.toContain('Lab settings');

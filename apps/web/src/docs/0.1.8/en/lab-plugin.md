@@ -2,6 +2,8 @@
 
 The lab plugin adds a **Lab** page to the studio. The desk at the lab finds an order by its requisition number, registers it if needed, receives samples, and returns or rejects what it cannot use. Staff at a site enter their own orders and see only their own facility's orders. The plugin keeps its records in its own tables, in the schema `plugin_lab`. CE works the same without it.
 
+Orders and samples stay in the plugin's tables and do not reach CE's reports yet. Only a newly registered patient reaches CE.
+
 The plugin is not in the marketplace yet. This page says how to try a signed bundle on a test install.
 
 ## What it needs

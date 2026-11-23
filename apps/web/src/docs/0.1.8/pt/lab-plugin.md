@@ -2,6 +2,8 @@
 
 O plugin de laboratório acrescenta uma página **Lab** ao studio. A receção do laboratório encontra um pedido pelo número de requisição, regista-o se for preciso, recebe amostras, e devolve ou rejeita o que não pode usar. O pessoal de um local regista os seus próprios pedidos e vê apenas os pedidos da sua unidade sanitária. O plugin guarda os seus dados nas suas próprias tabelas, no esquema `plugin_lab`. O CE funciona da mesma forma sem ele.
 
+Os pedidos e as amostras ficam nas tabelas do plugin e ainda não chegam aos relatórios do CE. Só um paciente registado de novo chega ao CE.
+
 O plugin ainda não está no marketplace. Esta página diz como experimentar um pacote assinado numa instalação de teste.
 
 ## O que precisa

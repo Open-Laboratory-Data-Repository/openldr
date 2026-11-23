@@ -2,6 +2,8 @@
 
 Le plugin laboratoire ajoute une page **Lab** au studio. La réception du laboratoire trouve une demande par son numéro, l'enregistre si besoin, reçoit les échantillons, et renvoie ou rejette ce qu'elle ne peut pas utiliser. Le personnel d'un site saisit ses propres demandes et ne voit que les demandes de son établissement. Le plugin garde ses données dans ses propres tables, dans le schéma `plugin_lab`. CE fonctionne de la même façon sans lui.
 
+Les demandes et les échantillons restent dans les tables du plugin et n'arrivent pas encore dans les rapports de CE. Seul un patient nouvellement enregistré arrive dans CE.
+
 Le plugin n'est pas encore dans le marketplace. Cette page dit comment essayer un bundle signé sur une installation de test.
 
 ## Ce qu'il lui faut
