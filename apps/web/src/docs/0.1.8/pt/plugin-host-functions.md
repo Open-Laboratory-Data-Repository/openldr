@@ -110,15 +110,32 @@ Lê os registos do próprio CE através de uma operação. O pedido é `{ "op": 
 | Operação | Entrada |
 |---|---|
 | `patients.search` | `search`, ou `identifier`, ou `given`, `family` e `birthDate`; depois `status`, `limit`, `offset` |
-| `patients.get` | `ref` |
+| `patients.get` | `ref` ou `pluginRef`, um dos dois |
+| `patients.getMany` | `pluginRefs`, uma lista de 1 a 100 |
 | `patients.register` | `patient`, um Patient FHIR com um `id` |
 | `valueset.expand` | `url`, `count`, `offset`, `filter` |
 | `valueset.lookup` | `system`, `code` |
 | `testCatalog.list` | os filtros de lista do catálogo de testes |
 | `testCatalog.get` | `code` |
 | `facilities.search` | `q`, `limit`, `offset` |
+| `facilities.get` | `id`. Dá uma unidade na forma de uma linha de `facilities.search` |
+| `caller.get` | nenhuma. Dá `userId`, `displayName` e `facilities` (`*` ou a lista de identificadores de unidade) de quem chama. `displayName` pode ser null |
 
-Cada operação segue as mesmas regras da página do studio que mostra os mesmos registos. As operações de pacientes precisam que quem chama tenha `patients.view` ou `patients.find`. Só com `patients.find`, uma pesquisa tem de dar um identificador exato, ou um nome com a data de nascimento completa. Veja [Permissões dos plugins](/docs/plugin-permissions). Os identificadores só aparecem a quem tem `patients.view_identifiers`. Quem tem um limite só encontra pacientes e unidades dentro do seu limite. `patients.register` também precisa de `Patient` na lista `emit-fhir` do plugin.
+Cada operação segue as mesmas regras da página do studio que mostra os mesmos registos. As operações de pacientes precisam que quem chama tenha `patients.view` ou `patients.find`. Só com `patients.find`, uma pesquisa tem de dar um identificador exato, ou um nome com a data de nascimento completa. Veja [Permissões dos plugins](/docs/plugin-permissions). Os identificadores só aparecem a quem tem `patients.view_identifiers`. Quem tem um limite só encontra pacientes e unidades dentro do seu limite. `patients.register` também precisa de `Patient` na lista `emit-fhir` do plugin. `facilities.get` responde `NOT_FOUND` para uma unidade fora do limite de quem chama, tal como para uma que não existe.
+
+### Guardar uma ligação a um paciente
+
+O `ref` de um paciente só funciona até o CE reiniciar. Uma linha mascarada também não tem `id`. Por isso não guarde nenhum dos dois.
+
+Guarde antes o `pluginRef`. Cada linha de `patients.search`, a resposta de `patients.get` e a de `patients.register` trazem um. Fica igual para o mesmo paciente em cada chamada e depois de reiniciar. Esconde o identificador do paciente. É feito só para o seu plugin: outro plugin recebe um `pluginRef` diferente para o mesmo paciente e não pode usar o seu.
+
+Para abrir o paciente mais tarde, chame `patients.get` com `{ "pluginRef": "..." }`. Aplicam-se as mesmas regras que com `ref`. Um paciente fora do limite de quem chama, ou um `pluginRef` feito para outro plugin, dá `NOT_FOUND`.
+
+Para abrir vários pacientes de uma vez, como pede uma lista de pedidos, chame `patients.getMany` com `{ "pluginRefs": ["...", "..."] }`. A resposta é `{ "rows": [...] }`, pela mesma ordem. Cada linha é o que `patients.get` daria, ou `null` onde `patients.get` daria `NOT_FOUND`. Uma leitura sem máscara escreve uma só linha de auditoria para toda a chamada, com o número.
+
+A linha de um paciente fundido também tem `replacedByPluginRef`, o `pluginRef` do registo que o substituiu. É null para um paciente que não foi fundido. Siga-o para que a ligação guardada aponte para o registo que ficou.
+
+Um `pluginRef` pertence ao identificador do plugin, não a uma instalação. Se remover um plugin e mais tarde instalar outro com o mesmo identificador, este pode abrir as refs que o anterior guardou. Uma reposição de fábrica mantém as ligações a funcionar.
 
 ## fhir_emit
 

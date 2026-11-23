@@ -1,5 +1,6 @@
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
+import { PLUGIN_PATIENT_REF_KEY } from './plugin-patient-ref';
 
 /** Kysely's own bookkeeping — never truncate these or migration tracking breaks. */
 export const RESERVED_TABLES = ['kysely_migration', 'kysely_migration_lock'] as const;
@@ -30,8 +31,24 @@ export async function truncateTables(db: Kysely<InternalSchema>, tables: string[
  *  the caller via seedDatabase(). Does NOT touch the external target store or Keycloak. */
 export async function wipeInternalDatabase(db: Kysely<InternalSchema>): Promise<string[]> {
   const tables = await listInternalDataTables(db);
-  await truncateTables(db, tables);
+  await wipeTables(db, tables);
   return tables;
+}
+
+/** app_settings rows a factory reset keeps. The plugin patient ref key: plugin schemas keep their
+ *  rows through a reset, and the refs stored in them only open with this key. Keeping the row also
+ *  keeps the running process's cached key right. */
+export const RESET_KEPT_SETTING_KEYS: readonly string[] = [PLUGIN_PATIENT_REF_KEY];
+
+/** Truncate `tables` in one transaction, putting the kept app_settings rows back. */
+export async function wipeTables(db: Kysely<InternalSchema>, tables: string[]): Promise<void> {
+  await db.transaction().execute(async (trx) => {
+    const kept = tables.includes('app_settings')
+      ? await trx.selectFrom('app_settings').selectAll().where('key', 'in', [...RESET_KEPT_SETTING_KEYS]).execute()
+      : [];
+    await truncateTables(trx, tables);
+    if (kept.length) await trx.insertInto('app_settings').values(kept).execute();
+  });
 }
 
 /** Clear the audit log + workflow run history only. */

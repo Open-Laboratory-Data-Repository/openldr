@@ -125,6 +125,7 @@ describe.skipIf(!ready)('plugin permissions through the broker, on PostgreSQL', 
       testCatalog: { list: async () => { throw new Error('not part of this test'); }, get: async () => { throw new Error('not part of this test'); } } as never,
       terminology: { expand: async () => { throw new Error('not part of this test'); }, lookup: async () => { throw new Error('not part of this test'); } } as never,
       facilityRegistry: registry,
+      pluginRefKey: async () => Buffer.alloc(32, 7),
       fhirGetWithProvenance: (type, id) => fhirStore.getWithProvenance(type, id),
       persist: (resources: unknown[], prov: Provenance) => persistResources({ fhirStore, logger: silent }, resources, prov, {
         level: 'low', resolveServiceRequest: (id: string) => fhirStore.exists('ServiceRequest', id),

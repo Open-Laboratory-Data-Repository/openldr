@@ -109,6 +109,16 @@ describe('applyReferenceChange', () => {
     await db.destroy();
   });
 
+  it('refuses a setting key that is not center-owned, so central cannot replace or delete a lab key', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    await db.insertInto('app_settings').values({ key: 'plugins.patient_ref_key', value: 'LAB-KEY', updated_by: 'system' }).execute();
+    await expect(apply({ entityType: 'setting', entityId: 'plugins.patient_ref_key', op: 'upsert', body: 'CENTRAL' })).rejects.toThrow(/not center-owned/);
+    await expect(apply({ entityType: 'setting', entityId: 'plugins.patient_ref_key', op: 'delete' })).rejects.toThrow(/not center-owned/);
+    expect((await db.selectFrom('app_settings').select('value').where('key', '=', 'plugins.patient_ref_key').executeTakeFirst())?.value).toBe('LAB-KEY');
+    await db.destroy();
+  });
+
   it('applies a publisher (upsert stamped central, match_prefixes jsonb round-trips)', async () => {
     const db = await makeMigratedDb();
     const apply = createReferenceApplier(db);

@@ -2,7 +2,7 @@
 
 Cette page dit ce qu'OpenLDR offre à un laboratoire dans cette version, et ce qu'il faut vérifier après une mise à niveau. Le guide intégré **Configuration du laboratoire** montre les étapes à l'écran.
 
-Un plugin de laboratoire est prévu pour la réception et la vérification des résultats. Il ne fait pas partie de cette version.
+La réception et les demandes viennent dans un plugin séparé, le [plugin laboratoire](/docs/lab-plugin). Il n'est pas encore dans le marketplace. La vérification des résultats est prévue dans une version suivante.
 
 ## Ce qu'un laboratoire a dans cette version
 

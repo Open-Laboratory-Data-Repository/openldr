@@ -75,7 +75,7 @@ export const NAV_SECTIONS: Array<{ id: string; label: Record<DocLocale, string>;
       { slug: 'auth-providers' },
       { slug: 'load-data', children: ['map-to-fhir'] },
       { slug: 'connector-diagnose' },
-      { slug: 'lab-setup' },
+      { slug: 'lab-setup', children: ['lab-plugin'] },
     ],
   },
   {

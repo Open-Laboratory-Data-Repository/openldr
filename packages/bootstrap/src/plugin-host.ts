@@ -7,10 +7,11 @@ import type { FacilityRegistryStore } from '@openldr/db';
 import { TerminologyError, type Operations } from '@openldr/terminology';
 import type { HostFn, HostPlugin, PluginHost } from '@openldr/plugins';
 import { checkResources } from './import-run';
-import { parsePatientFindQuery, parsePatientListQuery, type PatientIndex } from './patient-index';
+import { parsePatientFindQuery, parsePatientListQuery, type PatientDetail, type PatientIndex } from './patient-index';
 import { PatientIndexError } from './patient-identifier-systems';
 import { parseCatalogListQuery, type TestCatalog } from './test-catalog';
 import type { AuditActor, AuditDetails } from './record-audit';
+import { pluginPatientRefs } from './plugin-patient-ref';
 
 // The CE host functions a plugin's server code calls (design 2026-11-23-lab-plugin, 5.2; plan
 // 2026-11-23-plugin-host-2a-data, task 5). One set is built per call, for one plugin and one caller.
@@ -37,7 +38,9 @@ export const MAX_PATIENT_SCOPE_FACILITIES = 2000;
 export interface PluginHostDeps {
   /** Structured requests on a plugin's own tables (Task 3), on the internal database. */
   requests: Pick<PluginRequests, 'select' | 'write'>;
-  patients: Pick<PatientIndex, 'list' | 'find' | 'get'>;
+  patients: Pick<PatientIndex, 'list' | 'find' | 'get' | 'getById' | 'idForRef' | 'rowsByIds'>;
+  /** The lasting key behind `pluginRef` (plugin-patient-ref.ts), read once and kept. */
+  pluginRefKey(): Promise<Buffer>;
   testCatalog: Pick<TestCatalog, 'list' | 'get'>;
   terminology: Pick<Operations, 'expand' | 'lookup'>;
   facilityRegistry: Pick<FacilityRegistryStore, 'list' | 'get' | 'idsMatching'>;
@@ -63,7 +66,11 @@ const patientSearchInput = z.object({
   limit: z.number().int().optional(),
   offset: z.number().int().optional(),
 }).strict();
-const patientGetInput = z.object({ ref: z.string().min(1).max(500) }).strict();
+const patientGetInput = z.object({ ref: z.string().min(1).max(500).optional(), pluginRef: z.string().min(1).max(500).optional() })
+  .strict().refine((i) => (i.ref === undefined) !== (i.pluginRef === undefined), 'give ref or pluginRef, one of them');
+/** The most patients one patients.getMany reads. */
+export const MAX_GET_MANY = 100;
+const patientGetManyInput = z.object({ pluginRefs: z.array(z.string().min(1).max(500)).min(1).max(MAX_GET_MANY) }).strict();
 const patientRegisterInput = z.object({ patient: z.record(z.unknown()) }).strict();
 const expandInput = z.object({
   url: z.string().min(1).max(2000),
@@ -79,16 +86,18 @@ const facilitySearchInput = z.object({
   limit: z.number().int().min(1).max(200).optional(),
   offset: z.number().int().min(0).optional(),
 }).strict();
+const facilityGetInput = z.object({ id: z.string().min(1).max(200) }).strict();
 const ceReadInput = z.object({ op: z.string().min(1).max(100), input: z.unknown().optional() }).strict();
 const fhirEmitInput = z.object({ resources: z.array(z.unknown()) }).strict();
+const callerGetInput = z.object({}).strict();
 
 /** The most record ids one fhir_emit audit row lists. The count and types are always complete. */
 export const MAX_AUDITED_IDS = 200;
 
 /** The ops `ce_read` answers (ruling 6). */
 export const CE_READ_OPS = [
-  'patients.search', 'patients.get', 'patients.register', 'valueset.expand', 'valueset.lookup',
-  'testCatalog.list', 'testCatalog.get', 'facilities.search',
+  'patients.search', 'patients.get', 'patients.getMany', 'patients.register', 'valueset.expand', 'valueset.lookup',
+  'testCatalog.list', 'testCatalog.get', 'facilities.search', 'facilities.get', 'caller.get',
 ] as const;
 type CeReadOp = typeof CE_READ_OPS[number];
 
@@ -119,6 +128,13 @@ function orgId(reference: unknown): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
+type FacilityRow = { id: string; name: string; facilityCode?: string | null; level?: string | null; status?: string | null; region?: string | null; district?: string | null };
+/** One facility as facilities.search and facilities.get answer it. */
+const facilityView = (r: FacilityRow) => ({
+  id: r.id, name: r.name, facilityCode: r.facilityCode ?? null, level: r.level ?? null,
+  status: r.status ?? null, region: r.region ?? null, district: r.district ?? null,
+});
+
 function inScope(scope: Set<string> | '*', reference: unknown): boolean {
   if (scope === '*') return true;
   const id = orgId(reference);
@@ -140,6 +156,13 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
     deps.logger.error({ err, plugin: plugin.id, fn }, 'plugin host function failed');
     return fail('HOST_ERROR', `${fn} failed inside CE`);
   }
+
+  // Read once, on the first patient answer, then kept. A failed read is tried again next call.
+  let refKey: Promise<Buffer> | null = null;
+  const loadRefKey = () => {
+    refKey ??= deps.pluginRefKey().catch((err) => { refKey = null; throw err; });
+    return refKey;
+  };
 
   return {
     forCall(plugin, caller) {
@@ -191,6 +214,42 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         return [...scope];
       };
 
+      const refsFor = async () => pluginPatientRefs(await loadRefKey(), plugin.id);
+      /** A boot-time ref as this plugin's lasting ref, or null. */
+      const lasting = (refs: { encode(id: string): string }, ref: string | null): string | null => {
+        const id = ref === null ? null : deps.patients.idForRef(ref);
+        return id === null ? null : refs.encode(id);
+      };
+      /** The survivor ids, of those given, whose managing facility is inside the caller's limit. A
+       *  survivor outside it is not named, so the answer says nothing about whether it exists. */
+      const survivorsInScope = async (ids: string[]): Promise<Set<string>> => {
+        if (scope === '*' || ids.length === 0) return new Set(ids);
+        const rows = await deps.patients.rowsByIds([...new Set(ids)], { unmask: false });
+        const seen = new Set<string>();
+        for (const row of rows) {
+          const id = deps.patients.idForRef(row.ref);
+          if (id !== null && inScope(scope, row.managingFacility?.reference)) seen.add(id);
+        }
+        return seen;
+      };
+      /** Each row with its pluginRef, and for a merged patient replacedByRef and replacedByPluginRef,
+       *  both null when the survivor is outside the caller's limit. The row's id is hidden when
+       *  masked, so it comes from its ref. */
+      const withPluginRefs = async <R extends { ref: string; replacedByRef: string | null }>(rows: R[]) => {
+        const refs = await refsFor();
+        const survivorIds = new Map(rows.map((r) => [r, r.replacedByRef === null ? null : deps.patients.idForRef(r.replacedByRef)]));
+        const shown = await survivorsInScope([...survivorIds.values()].filter((id): id is string => id !== null));
+        return rows.map((r) => {
+          const survivor = survivorIds.get(r) ?? null;
+          const named = survivor !== null && shown.has(survivor);
+          return {
+            ...r, pluginRef: lasting(refs, r.ref),
+            replacedByRef: named ? r.replacedByRef : null,
+            replacedByPluginRef: named ? refs.encode(survivor) : null,
+          };
+        });
+      };
+
       const readOps: Record<CeReadOp, (input: unknown) => Promise<unknown>> = {
         async 'patients.search'(raw) {
           needPatientsAccess('patients.search');
@@ -210,7 +269,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
             if (!fq.ok) throw new HostInputError('INVALID_REQUEST', `patients.search: ${fq.error}`);
             const out = await deps.patients.find(fq.query, { unmask, facilities: searchFacilities() });
             if (unmask) await deps.audit(actor, { action: 'patients.list', entityType: 'patient', entityId: 'list', metadata: { ...auditMeta, count: out.total } });
-            return out;
+            return { ...out, rows: await withPluginRefs(out.rows) };
           }
           const q = parsePatientListQuery({
             search: i.search, status: i.status,
@@ -221,18 +280,57 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           const out = await deps.patients.list(q.query, { unmask, facilities: searchFacilities() });
           // As the studio route: an unmasked list is audited, with the count only.
           if (unmask) await deps.audit(actor, { action: 'patients.list', entityType: 'patient', entityId: 'list', metadata: { ...auditMeta, count: out.total } });
-          return out;
+          return { ...out, rows: await withPluginRefs(out.rows) };
         },
 
         async 'patients.get'(raw) {
           needPatientsAccess('patients.get');
-          const { ref } = parse(patientGetInput, raw, 'patients.get');
-          const detail = await deps.patients.get(ref, { unmask });
+          const i = parse(patientGetInput, raw, 'patients.get');
+          const refs = await refsFor();
+          let id: string | null;
+          if (i.pluginRef !== undefined) {
+            // A pluginRef opens only for the plugin it was made for: another plugin's fails here.
+            id = refs.decode(i.pluginRef);
+          } else {
+            id = deps.patients.idForRef(i.ref as string);
+          }
+          if (id === null) throw new PatientIndexError('patient not found', 'not-found');
+          const detail = await deps.patients.getById(id, { unmask });
           // A patient outside the caller's data limit is answered as not found, so the answer says
           // nothing about whether it exists.
           if (!inScope(scope, detail.managingFacility?.reference)) throw new PatientIndexError('patient not found', 'not-found');
           if (unmask) await deps.audit(actor, { action: 'patients.view', entityType: 'patient', entityId: detail.id ?? 'unknown', metadata: auditMeta });
-          return detail;
+          const [withRefs] = await withPluginRefs([detail]);
+          return { ...withRefs, pluginRef: refs.encode(id) };
+        },
+
+        // Several patients by pluginRef in one call, as an order list needs them. Each answer is
+        // what patients.get gives, or null where patients.get would answer not found: a ref that
+        // is not valid or not this plugin's, no such patient, or one outside the caller's limit.
+        async 'patients.getMany'(raw) {
+          needPatientsAccess('patients.getMany');
+          const { pluginRefs } = parse(patientGetManyInput, raw, 'patients.getMany');
+          const refs = await refsFor();
+          const byId = new Map<string, PatientDetail | null>();
+          const ids = pluginRefs.map((r) => refs.decode(r));
+          for (const id of ids) {
+            if (id === null || byId.has(id)) continue;
+            let detail: PatientDetail | null = null;
+            try {
+              detail = await deps.patients.getById(id, { unmask });
+            } catch (err) {
+              if (!(err instanceof PatientIndexError && err.kind === 'not-found')) throw err;
+            }
+            byId.set(id, detail && inScope(scope, detail.managingFacility?.reference) ? detail : null);
+          }
+          const foundIds = [...byId].filter(([, d]) => d !== null).map(([id]) => id);
+          // As patients.get, but one row for the call, with the count and the ids read.
+          if (unmask && foundIds.length > 0) {
+            await deps.audit(actor, { action: 'patients.view', entityType: 'patient', entityId: 'many', metadata: { ...auditMeta, count: foundIds.length, ids: foundIds } });
+          }
+          const shown = await withPluginRefs(foundIds.map((id) => byId.get(id) as PatientDetail));
+          const answer = new Map(foundIds.map((id, n) => [id, { ...shown[n], pluginRef: refs.encode(id) }]));
+          return { rows: ids.map((id) => (id === null ? null : answer.get(id) ?? null)) };
         },
 
         async 'patients.register'(raw) {
@@ -258,7 +356,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           }
           await deps.persist([patient], provenance);
           await deps.audit(actor, { action: 'patients.register', entityType: 'patient', entityId: id, metadata: auditMeta });
-          return { id };
+          return { id, pluginRef: (await refsFor()).encode(id) };
         },
 
         async 'valueset.expand'(raw) {
@@ -285,14 +383,22 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           return test;
         },
 
+        // Who is calling, from CE's session. The capabilities stay out: the plugin gets only what
+        // the caller could see of itself.
+        async 'caller.get'(raw) {
+          parse(callerGetInput, raw, 'caller.get');
+          return {
+            userId: caller.userId,
+            displayName: caller.displayName,
+            facilities: caller.facilities === '*' ? '*' : [...caller.facilities],
+          };
+        },
+
         async 'facilities.search'(raw) {
           const i = parse(facilitySearchInput, raw, 'facilities.search');
           const limit = i.limit ?? 50;
           const offset = i.offset ?? 0;
-          const view = (r: { id: string; name: string; facilityCode?: string | null; level?: string | null; status?: string | null; region?: string | null; district?: string | null }) => ({
-            id: r.id, name: r.name, facilityCode: r.facilityCode ?? null, level: r.level ?? null,
-            status: r.status ?? null, region: r.region ?? null, district: r.district ?? null,
-          });
+          const view = facilityView;
           if (scope === '*') {
             const { rows, total } = await deps.facilityRegistry.list({ q: i.q, limit, offset });
             return { rows: rows.map(view), total };
@@ -307,6 +413,17 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
             if (r) rows.push(view(r));
           }
           return { rows, total: matching.length };
+        },
+
+        // One facility by its register id. Outside the caller's data limit it is answered as not
+        // found, as a missing one is, so the answer says nothing about whether it exists.
+        async 'facilities.get'(raw) {
+          // Ids are compared without case, as facilities.search and the data limit compare them.
+          const id = parse(facilityGetInput, raw, 'facilities.get').id.toLowerCase();
+          if (scope !== '*' && !scope.has(id)) throw new HostInputError('NOT_FOUND', 'facilities.get: facility not found');
+          const r = await deps.facilityRegistry.get(id);
+          if (!r) throw new HostInputError('NOT_FOUND', 'facilities.get: facility not found');
+          return facilityView(r);
         },
       };
 

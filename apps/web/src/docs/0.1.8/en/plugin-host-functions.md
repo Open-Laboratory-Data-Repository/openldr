@@ -110,15 +110,32 @@ Reads CE's own records through one op. The request is `{ "op": "<op>", "input": 
 | Op | Input |
 |---|---|
 | `patients.search` | `search`, or `identifier`, or `given`, `family` and `birthDate`; then `status`, `limit`, `offset` |
-| `patients.get` | `ref` |
+| `patients.get` | `ref` or `pluginRef`, one of them |
+| `patients.getMany` | `pluginRefs`, a list of 1 to 100 |
 | `patients.register` | `patient`, a FHIR Patient with an `id` |
 | `valueset.expand` | `url`, `count`, `offset`, `filter` |
 | `valueset.lookup` | `system`, `code` |
 | `testCatalog.list` | the test catalog's list filters |
 | `testCatalog.get` | `code` |
 | `facilities.search` | `q`, `limit`, `offset` |
+| `facilities.get` | `id`. Gives one facility in the shape of a `facilities.search` row |
+| `caller.get` | none. Gives `userId`, `displayName` and `facilities` (`*` or the list of facility ids) of the person calling. `displayName` may be null |
 
-Each op follows the same rules as the studio page that shows the same records. The patient ops need the caller to hold `patients.view` or `patients.find`. With `patients.find` alone, a search must be an exact identifier, or a name with full birth date. See [Plugin permissions](/docs/plugin-permissions). Identifiers show only to a caller who holds `patients.view_identifiers`. A limited caller finds only patients and facilities inside their limit. `patients.register` also needs `Patient` in the plugin's `emit-fhir` list.
+Each op follows the same rules as the studio page that shows the same records. The patient ops need the caller to hold `patients.view` or `patients.find`. With `patients.find` alone, a search must be an exact identifier, or a name with full birth date. See [Plugin permissions](/docs/plugin-permissions). Identifiers show only to a caller who holds `patients.view_identifiers`. A limited caller finds only patients and facilities inside their limit. `patients.register` also needs `Patient` in the plugin's `emit-fhir` list. `facilities.get` answers a facility outside the caller's limit as `NOT_FOUND`, the same as a missing one.
+
+### Keeping a link to a patient
+
+A patient's `ref` works only until CE restarts. A masked row also has no `id`. So do not store either.
+
+Store `pluginRef` instead. Each `patients.search` row, the `patients.get` answer and the `patients.register` answer carry one. It stays the same for the same patient on every call and after a restart. It hides the patient id. It is made for your plugin only, so another plugin gets a different `pluginRef` for the same patient and cannot use yours.
+
+To open the patient later, call `patients.get` with `{ "pluginRef": "..." }`. The same rules apply as with `ref`. A patient outside the caller's limit, or a `pluginRef` made for another plugin, gives `NOT_FOUND`.
+
+To open several patients at once, as a list of orders needs, call `patients.getMany` with `{ "pluginRefs": ["...", "..."] }`. It answers `{ "rows": [...] }` in the same order. Each row is what `patients.get` would give, or `null` where `patients.get` would give `NOT_FOUND`. An unmasked read writes one audit row for the whole call, with the count.
+
+A merged patient's row also has `replacedByPluginRef`, the `pluginRef` of the record that replaced it. It is null for a patient that was not merged. Follow it to keep a stored link pointing at the surviving record.
+
+A `pluginRef` belongs to the plugin id, not to one install. If you remove a plugin and later install one under the same id, it can open the refs the earlier one stored. A factory reset keeps the links working.
 
 ## fhir_emit
 

@@ -1457,7 +1457,7 @@ describe('plugin broker: the caller passed to plugin code (plugin host 2a task 6
 
     const host = createPluginHost({
       requests,
-      patients: {} as any, testCatalog: {} as any, terminology: {} as any, facilityRegistry: {} as any,
+      patients: {} as any, pluginRefKey: async () => Buffer.alloc(32), testCatalog: {} as any, terminology: {} as any, facilityRegistry: {} as any,
       fhirGetWithProvenance: async () => null, persist: async () => [], audit: async () => {}, logger,
     });
     const caps = [{ kind: 'host:db' }];
@@ -1677,7 +1677,7 @@ describe('plugin broker: the permission each action needs (plugin host 2b task 3
       const persist = vi.fn(async () => []);
       const host = createPluginHost({
         requests,
-        patients: {} as any, testCatalog: {} as any, terminology: {} as any, facilityRegistry: {} as any,
+        patients: {} as any, pluginRefKey: async () => Buffer.alloc(32), testCatalog: {} as any, terminology: {} as any, facilityRegistry: {} as any,
         fhirGetWithProvenance: async () => null, persist, audit: async () => {}, logger,
       });
       // What the plugin's code would do: call the host function the input names.

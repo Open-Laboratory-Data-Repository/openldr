@@ -2,7 +2,7 @@
 
 Esta página diz o que o OpenLDR oferece a um laboratório nesta versão, e o que verificar depois de uma atualização. O guia na aplicação **Configuração do laboratório** mostra os passos no ecrã.
 
-Está previsto um plugin de laboratório para a receção e a revisão de resultados. Não faz parte desta versão.
+A receção e os pedidos vêm num plugin separado, o [plugin de laboratório](/docs/lab-plugin). Ainda não está no marketplace. A revisão de resultados está prevista numa versão seguinte.
 
 ## O que um laboratório tem nesta versão
 

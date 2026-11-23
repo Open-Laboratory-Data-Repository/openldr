@@ -2,7 +2,7 @@
 
 This page says what OpenLDR offers a laboratory in this release, and what to check after an upgrade. The in-app guide **Lab setup** shows the steps on screen.
 
-A lab plugin is planned for reception and result review. It is not part of this release.
+Reception and orders come in a separate plugin, the [lab plugin](/docs/lab-plugin). It is not in the marketplace yet. Result review is planned for a later version of it.
 
 ## What a lab has in this release
 
