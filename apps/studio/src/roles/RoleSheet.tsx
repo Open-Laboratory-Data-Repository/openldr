@@ -17,6 +17,7 @@ import {
 import { useAuth } from '@/auth/AuthProvider';
 import { createRole, updateRole, getRoleCatalog, type RoleRecord, type CapabilityGroup } from '@/api';
 import { CapabilityGrid } from './CapabilityGrid';
+import { LoadFailed } from '@/components/ui/load-failed';
 
 export interface RoleSheetProps {
   open: boolean;
@@ -48,19 +49,27 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
   const [description, setDescription] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [groups, setGroups] = useState<CapabilityGroup[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalog, setCatalog] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [saving, setSaving] = useState(false);
 
-  // Fetch the capability catalog once — it's mounted for the lifetime of the parent page
-  // (open/close only toggles visibility), and the catalog doesn't change during a session.
+  // Read the capability catalog when the sheet opens, and keep it once read: it does not change
+  // during a session. The Roles page mounts two sheets for its whole life, so reading on mount
+  // gave two toasts on page open and nothing when a sheet opened. A failed read is tried again on
+  // the next open.
   useEffect(() => {
+    if (!open || catalog === 'ready') return;
     let cancelled = false;
+    setCatalog('loading');
     getRoleCatalog()
-      .then((res) => { if (!cancelled) setGroups(res.groups); })
-      .catch((e: unknown) => { if (!cancelled) toast.error(e instanceof Error ? e.message : String(e)); })
-      .finally(() => { if (!cancelled) setCatalogLoading(false); });
+      .then((res) => { if (!cancelled) { setGroups(res.groups); setCatalog('ready'); } })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setCatalog('failed');
+        toast.error(e instanceof Error ? e.message : String(e));
+      });
     return () => { cancelled = true; };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // (Re)seed the draft whenever the sheet opens, for whichever role it was opened with.
   useEffect(() => {
@@ -166,8 +175,10 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
 
           <div className="mt-6">
             <h3 className="mb-3 text-sm font-semibold">{t('roles.capabilitiesHeading')}</h3>
-            {catalogLoading ? (
+            {catalog === 'loading' ? (
               <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            ) : catalog === 'failed' ? (
+              <LoadFailed className="min-h-[8rem]" />
             ) : (
               <CapabilityGrid groups={groups} selected={selected} onChange={setSelected} readOnly={readOnly} />
             )}

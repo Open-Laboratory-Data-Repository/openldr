@@ -132,6 +132,26 @@ describe('ImportQueriesSheet', () => {
     expect(toast.error).toHaveBeenCalledTimes(1);
   });
 
+  it('says it could not compare, not new, when the saved queries fail to load, and keeps a line beside the preview', async () => {
+    vi.mocked(queryApi.list).mockRejectedValue(new Error('boom'));
+    render(<ImportQueriesSheet open onOpenChange={() => {}} />);
+    expect(await screen.findByText('Could not load the saved queries, so the file cannot be compared with them.')).toBeInTheDocument();
+    await chooseFile(FILE);
+    expect(await screen.findByText('Fresh')).toBeInTheDocument();
+    expect(screen.getAllByText('could not compare')).toHaveLength(2);
+    expect(screen.queryByText('new')).not.toBeInTheDocument();
+  });
+
+  it('keeps the two reads apart: a connectors failure does not mark the preview unknown', async () => {
+    vi.mocked(queryApi.connectors).mockRejectedValue(new Error('connectors down'));
+    render(<ImportQueriesSheet open onOpenChange={() => {}} />);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not load existing queries or connectors: connectors down'));
+    await chooseFile(FILE);
+    expect(await screen.findByText('Fresh')).toBeInTheDocument();
+    expect(screen.getByText('new')).toBeInTheDocument();
+    expect(screen.queryByTestId('import-existing-failed')).not.toBeInTheDocument();
+  });
+
   it('leaves the connector empty and Import disabled when no connector has the default name', async () => {
     vi.mocked(queryApi.connectors).mockResolvedValue([{ id: 'c1', name: 'Other', type: 'postgres' }]);
     render(<ImportQueriesSheet open onOpenChange={() => {}} />);

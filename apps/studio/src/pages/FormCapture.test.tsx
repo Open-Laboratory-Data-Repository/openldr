@@ -554,6 +554,9 @@ describe('FormCapture entries (design 2026-11-22-form-entries)', () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('get form failed: 404'));
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('get form failed: 404')).not.toBeInTheDocument();
+    // The toast closes; this line stays, worded for a form, not a list.
+    expect(await screen.findByText('Could not load this form. Reload the page to try again.')).toBeInTheDocument();
+    expect(screen.queryByText('Could not load this list. Reload the page to try again.')).not.toBeInTheDocument();
   });
 
   it('opens the Entries tab from the link, and keeps the typed answers across tabs', async () => {

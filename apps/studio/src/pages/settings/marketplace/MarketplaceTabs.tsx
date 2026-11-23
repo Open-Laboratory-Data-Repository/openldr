@@ -251,7 +251,8 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
           {!props.configured ? (
             <div className="px-1 py-6 text-sm text-muted-foreground">{t('settings.marketplace.notConfigured')}</div>
           ) : browseEntries.length === 0 && props.loadError ? (
-            <LoadFailed />
+            // The reason stays under the text after the toast closes.
+            <LoadFailed detail={props.loadError} />
           ) : browseEntries.length === 0 ? (
             <div className="px-1 py-6 text-center text-sm text-muted-foreground">{t('settings.marketplace.emptyBrowse')}</div>
           ) : (

@@ -7,11 +7,18 @@ import { cn } from '@/lib/cn';
  * What a list shows when its load failed. Plain muted text, no stripes: stripes mean empty, and a
  * failed load is not empty. The reason goes in a toast (useLoadErrorToast).
  */
-export function LoadFailed({ className }: { className?: string }) {
+export function LoadFailed({ className, message, detail }: {
+  className?: string;
+  /** Words for what failed, when it is not a list. Defaults to common.loadFailed. */
+  message?: string;
+  /** A second muted line, such as the server's reason, kept after the toast closes. */
+  detail?: string | null;
+}) {
   const { t } = useTranslation();
   return (
-    <div className={cn('flex min-h-[16rem] flex-1 items-center justify-center px-6 text-center text-xs text-muted-foreground', className)}>
-      {t('common.loadFailed')}
+    <div className={cn('flex min-h-[16rem] flex-1 flex-col items-center justify-center gap-1 px-6 text-center text-xs text-muted-foreground', className)}>
+      <p className="m-0">{message ?? t('common.loadFailed')}</p>
+      {detail ? <p className="m-0 break-all font-mono text-[11px] leading-snug">{detail}</p> : null}
     </div>
   );
 }

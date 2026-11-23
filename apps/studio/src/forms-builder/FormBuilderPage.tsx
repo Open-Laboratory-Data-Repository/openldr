@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { LoadFailed } from '@/components/ui/load-failed';
 import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, loadStarterPack, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
 import { createDefaultFormSchema, formSchemaOf, makeUniqueFieldId, newField, slugify } from './builderModel';
 import {
@@ -64,6 +65,8 @@ export function FormBuilderPage(): JSX.Element {
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
   const [pendingNewFieldId, setPendingNewFieldId] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(id));
+  // The stored form could not be read. The builder is not shown, so a Save cannot write a blank form.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
@@ -89,6 +92,7 @@ export function FormBuilderPage(): JSX.Element {
     if (!id) return;
     let cancelled = false;
     setLoading(true);
+    setLoadFailed(false);
     void getForm(id)
       .then((loaded) => {
         if (cancelled) return;
@@ -100,7 +104,7 @@ export function FormBuilderPage(): JSX.Element {
           .catch(() => { /* the number is a nicety; a failure here must not break the builder */ });
       })
       .catch((err) => {
-        if (!cancelled) toast.error(err instanceof Error ? err.message : String(err));
+        if (!cancelled) { setLoadFailed(true); toast.error(err instanceof Error ? err.message : String(err)); }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -454,6 +458,7 @@ export function FormBuilderPage(): JSX.Element {
   };
 
   const save = async () => {
+    if (loadFailed) return;
     try {
       const saved = await saveDraft();
       toast.success(t('formBuilder.page.saved', { name: saved.name }));
@@ -562,6 +567,14 @@ export function FormBuilderPage(): JSX.Element {
       />
     </div>
   );
+
+  if (loadFailed) {
+    return (
+      <AppShell title={t('formBuilder.page.title')} fullBleed>
+        <LoadFailed message={t('common.formLoadFailed')} />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title={t('formBuilder.page.title')} fullBleed>

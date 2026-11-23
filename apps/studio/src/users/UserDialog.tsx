@@ -140,6 +140,16 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
   // re-attempts the role assignment instead of creating a duplicate user / re-PUTting identity.
   const [savedIdentity, setSavedIdentity] = useState<UserSummary | null>(null);
 
+  // The schema, roles and data-limit reads run together, so one outage can fail all three.
+  // The first failure each time the sheet opens is a toast; the rest say the same thing.
+  const loadToasted = useRef(false);
+  useEffect(() => { if (open) loadToasted.current = false; }, [open]);
+  const loadFailed = (message: string) => {
+    if (loadToasted.current) return;
+    loadToasted.current = true;
+    toast.error(message);
+  };
+
   // Load the published 'users' form schema when the dialog opens
   useEffect(() => {
     if (!open) return;
@@ -164,7 +174,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
         const parsed = FormSchemaZ.safeParse(def.schema);
         if (!parsed.success) {
           setNoForm(true);
-          toast.error(`User form schema is invalid: ${parsed.error.issues[0]?.message ?? 'unknown'}`);
+          loadFailed(`User form schema is invalid: ${parsed.error.issues[0]?.message ?? 'unknown'}`);
           return;
         }
         const loaded = parsed.data as FormSchema;
@@ -178,7 +188,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
         else setInitialAnswers({});
       })
       .catch((e: unknown) => {
-        toast.error(e instanceof Error ? e.message : String(e));
+        loadFailed(e instanceof Error ? e.message : String(e));
       })
       .finally(() => setSchemaLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,7 +219,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
     };
     load()
       .catch((e: unknown) => {
-        if (!cancelled) toast.error(e instanceof Error ? e.message : String(e));
+        if (!cancelled) loadFailed(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
         if (!cancelled) setRolesLoading(false);
@@ -230,7 +240,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
         setScope(current);
         setSavedScope(current);
       })
-      .catch((e: unknown) => { if (!cancelled) toast.error(e instanceof Error ? e.message : String(e)); });
+      .catch((e: unknown) => { if (!cancelled) loadFailed(e instanceof Error ? e.message : String(e)); });
     return () => { cancelled = true; };
   }, [open, user?.id, canSetDataScope]);
 

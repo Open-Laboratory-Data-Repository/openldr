@@ -102,7 +102,7 @@ export function RemovePackDialog({ packId, open, onOpenChange, onRemoved }: {
                 </ul>
               </div>
             ) : null}
-            {loadFailed ? <LoadFailed className="min-h-[8rem]" /> : null}
+            {loadFailed ? <LoadFailed className="min-h-[8rem]" message={t(`${P}.loadFailed`)} /> : null}
           </div>
         )}
 

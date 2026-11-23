@@ -142,6 +142,7 @@ export const en = {
     next: 'Next',
     close: 'Close',
     loadFailed: 'Could not load this list. Reload the page to try again.',
+    formLoadFailed: 'Could not load this form. Reload the page to try again.',
   },
   table: {
     unknownTotalRange: "{{from}}–{{to}} (total unknown)",
@@ -1122,6 +1123,7 @@ export const en = {
       packLayoutDefaultFor: 'default for {{roles}}',
       packRoleShow: 'Show the capabilities of {{name}}',
       removePack: {
+        loadFailed: 'Could not load what removing this pack would change. Close and try again.',
         title: 'Remove {{id}}',
         intro: 'This deletes the roles and layouts the pack made, and its install record. Its forms stay, with every response.',
         rolesGo: 'Roles removed',
@@ -2278,7 +2280,8 @@ export const en = {
       connector: 'Connector', replace: 'Replace queries that already exist',
       invalidFile: 'This is not an OpenLDR queries file.',
       colName: 'Name', colStatus: 'Status',
-      statusNew: 'new', statusSkip: 'exists (skip)', statusReplace: 'exists (replace)',
+      statusNew: 'new', statusSkip: 'exists (skip)', statusReplace: 'exists (replace)', statusUnknown: 'could not compare',
+      existingLoadFailed: 'Could not load the saved queries, so the file cannot be compared with them.',
       importAction: 'Import', importing: 'Importing…',
       importFailed: 'Import failed: {{error}}',
       importDone: '{{created}} created, {{replaced}} replaced, {{skipped}} skipped.',

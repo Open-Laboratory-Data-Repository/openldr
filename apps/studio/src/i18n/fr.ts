@@ -144,6 +144,7 @@ export const fr: EnShape = {
     next: 'Suivant',
     close: 'Fermer',
     loadFailed: 'Impossible de charger cette liste. Rechargez la page pour réessayer.',
+    formLoadFailed: 'Impossible de charger ce formulaire. Rechargez la page pour réessayer.',
   },
   table: {
     unknownTotalRange: "{{from}}–{{to}} (total inconnu)",
@@ -1118,6 +1119,7 @@ export const fr: EnShape = {
       packLayoutDefaultFor: 'par défaut pour {{roles}}',
       packRoleShow: 'Afficher les capacités de {{name}}',
       removePack: {
+        loadFailed: 'Impossible de charger ce que la suppression de ce pack changerait. Fermez et réessayez.',
         title: 'Supprimer {{id}}',
         intro: "Cela supprime les rôles et les dispositions créés par le pack, ainsi que son enregistrement d'installation. Ses formulaires restent, avec toutes les réponses.",
         rolesGo: 'Rôles supprimés',
@@ -2168,7 +2170,8 @@ export const fr: EnShape = {
       connector: 'Connecteur', replace: 'Remplacer les requêtes déjà existantes',
       invalidFile: 'Ce n’est pas un fichier de requêtes OpenLDR.',
       colName: 'Nom', colStatus: 'Statut',
-      statusNew: 'nouvelle', statusSkip: 'existe (ignorée)', statusReplace: 'existe (remplacée)',
+      statusNew: 'nouvelle', statusSkip: 'existe (ignorée)', statusReplace: 'existe (remplacée)', statusUnknown: 'comparaison impossible',
+      existingLoadFailed: 'Impossible de charger les requêtes enregistrées, le fichier ne peut donc pas être comparé avec elles.',
       importAction: 'Importer', importing: 'Importation…',
       importFailed: 'Échec de l’importation : {{error}}',
       importDone: '{{created}} créée(s), {{replaced}} remplacée(s), {{skipped}} ignorée(s).',

@@ -424,7 +424,11 @@ describe('Marketplace', () => {
     }));
     expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeTruthy();
     expect(screen.queryByText('No artifacts available.')).toBeNull();
-    expect(screen.queryByText(/ENOENT/), 'no red box repeats the toast').toBeNull();
+    // The toast may close, so the reason stays as a muted line under the text, with its path.
+    const reason = screen.getByText(/ENOENT/);
+    expect(reason.textContent).toContain('.docs-marketplace');
+    expect(reason.className).toContain('text-[11px]');
+    expect(reason.closest('.bg-destructive\\/10'), 'no red box').toBeNull();
     expect(toast.error).toHaveBeenCalledTimes(1);
   });
 

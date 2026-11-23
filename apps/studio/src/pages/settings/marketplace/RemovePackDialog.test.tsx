@@ -86,7 +86,8 @@ describe('RemovePackDialog', () => {
   it('a failed removal plan load shows a toast and the could-not-load text, not a spinner', async () => {
     (api.getPackRemoval as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('pack removal failed: 500'));
     render(<RemovePackDialog packId="collection-site" open onOpenChange={() => {}} onRemoved={() => {}} />);
-    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeTruthy();
+    expect(await screen.findByText('Could not load what removing this pack would change. Close and try again.')).toBeTruthy();
+    expect(screen.queryByText('Could not load this list. Reload the page to try again.')).toBeNull();
     expect(toast.error).toHaveBeenCalledTimes(1);
     expect(toast.error).toHaveBeenCalledWith('pack removal failed: 500');
     expect(screen.queryByText('pack removal failed: 500')).toBeNull();

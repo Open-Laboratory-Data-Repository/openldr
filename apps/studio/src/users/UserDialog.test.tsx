@@ -368,3 +368,18 @@ describe('UserDialog — data limit', () => {
     expect(onSaved).not.toHaveBeenCalled();
   });
 });
+
+describe('UserDialog, load failure', () => {
+  it('shows one toast when the schema, roles and data-limit reads all fail on open', async () => {
+    const outage = new Error('server unreachable');
+    (api.listPublishedForms as ReturnType<typeof vi.fn>).mockRejectedValue(outage);
+    (api.listRoles as ReturnType<typeof vi.fn>).mockRejectedValue(outage);
+    (api.getDataScopeChoices as ReturnType<typeof vi.fn>).mockRejectedValue(outage);
+    (api.getUserDataScope as ReturnType<typeof vi.fn>).mockRejectedValue(outage);
+    render(<UserDialog open user={editUser} onOpenChange={vi.fn()} onSaved={vi.fn()} canSetDataScope />);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('server unreachable'));
+    await waitFor(() => expect(api.getDataScopeChoices).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+});

@@ -177,4 +177,18 @@ describe('RoleSheet', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(api.createRole).not.toHaveBeenCalled();
   });
+
+  it('reads the catalog when the sheet opens, toasts a failure once, and shows the could-not-load text in place of the capabilities', async () => {
+    (api.getRoleCatalog as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('role catalog failed: 500'));
+    const { rerender } = render(<><RoleSheet open={false} role={null} onOpenChange={vi.fn()} onSaved={vi.fn()} /><RoleSheet open={false} role={existingRole} onOpenChange={vi.fn()} onSaved={vi.fn()} /></>);
+    // Two closed sheets, as the Roles page mounts them: no read, no toast.
+    expect(api.getRoleCatalog).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+
+    rerender(<><RoleSheet open role={null} onOpenChange={vi.fn()} onSaved={vi.fn()} /><RoleSheet open={false} role={existingRole} onOpenChange={vi.fn()} onSaved={vi.fn()} /></>);
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeTruthy();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('role catalog failed: 500');
+    expect(screen.queryByTestId('capability-group-users')).toBeNull();
+  });
 });

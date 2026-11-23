@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TruncatedText } from '@/components/ui/truncated-text';
+import { LoadFailed } from '@/components/ui/load-failed';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   catalogResultParams, FormEntryRepeatError, getForm, getFormEntryContext, submitFormResponse,
@@ -43,6 +44,8 @@ export function FormCapture() {
   const [form, setForm] = useState<FormDefinition | null>(null);
   const [schema, setSchema] = useState<FormSchema | null>(null);
   const [loading, setLoading] = useState(true);
+  // The form could not be read. A line stays in the New tab after the toast closes.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // The order-level rejection (2026-10-11 spec). The page owns it, the runtime only submits it.
   const [orderRejection, setOrderRejection] = useState<CodingAnswer | null>(null);
@@ -64,12 +67,13 @@ export function FormCapture() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadFailed(false);
     void getForm(id ?? '').then((loaded) => {
       if (cancelled) return;
       const parsed = asFormSchema(loaded.schema);
       setForm(loaded);
       setSchema(parsed);
-      if (!parsed) toast.error('Form schema is invalid.');
+      if (!parsed) { setLoadFailed(true); toast.error('Form schema is invalid.'); }
       setSite(null);
       // A failed read leaves the form open. The server applies the same rules on submit.
       if (parsed) {
@@ -79,7 +83,7 @@ export function FormCapture() {
           .then((controls) => { if (!cancelled) setSite(controls); });
       }
     }).catch((err) => {
-      if (!cancelled) toast.error(err instanceof Error ? err.message : String(err));
+      if (!cancelled) { setLoadFailed(true); toast.error(err instanceof Error ? err.message : String(err)); }
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -210,6 +214,7 @@ export function FormCapture() {
             data-[state=inactive]:hidden hides it (AGENTS.md section 6). */}
         <TabsContent value="new" forceMount className="min-h-0 flex-1 overflow-auto">
           {loading || (schema && !site) ? <div className="px-6 py-8 text-center text-muted-foreground">Loading...</div> : null}
+          {!loading && loadFailed ? <LoadFailed message={t('common.formLoadFailed')} /> : null}
           {/* A form with no requisition field has nowhere beside it to say so. */}
           {repeatNotice && !keyFieldId ? <div className="mx-6 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{repeatNotice}</div> : null}
           {form && !isPublished ? <div className="mx-6 mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">This form is not published. Submission is disabled until it is published.</div> : null}

@@ -144,6 +144,7 @@ export const pt: EnShape = {
     next: 'Próximo',
     close: 'Fechar',
     loadFailed: 'Não foi possível carregar esta lista. Recarregue a página para tentar novamente.',
+    formLoadFailed: 'Não foi possível carregar este formulário. Recarregue a página para tentar novamente.',
   },
   table: {
     unknownTotalRange: "{{from}}–{{to}} (total desconhecido)",
@@ -1118,6 +1119,7 @@ export const pt: EnShape = {
       packLayoutDefaultFor: 'predefinição para {{roles}}',
       packRoleShow: 'Mostrar as capacidades de {{name}}',
       removePack: {
+        loadFailed: 'Não foi possível carregar o que a remoção deste pacote alteraria. Feche e tente novamente.',
         title: 'Remover {{id}}',
         intro: 'Isto apaga as funções e as disposições que o pacote criou, e o seu registo de instalação. Os formulários ficam, com todas as respostas.',
         rolesGo: 'Funções removidas',
@@ -2168,7 +2170,8 @@ export const pt: EnShape = {
       connector: 'Conector', replace: 'Substituir consultas que já existem',
       invalidFile: 'Este não é um ficheiro de consultas OpenLDR.',
       colName: 'Nome', colStatus: 'Estado',
-      statusNew: 'nova', statusSkip: 'existe (ignorada)', statusReplace: 'existe (substituída)',
+      statusNew: 'nova', statusSkip: 'existe (ignorada)', statusReplace: 'existe (substituída)', statusUnknown: 'não foi possível comparar',
+      existingLoadFailed: 'Não foi possível carregar as consultas guardadas, por isso o ficheiro não pode ser comparado com elas.',
       importAction: 'Importar', importing: 'A importar…',
       importFailed: 'Falha na importação: {{error}}',
       importDone: '{{created}} criada(s), {{replaced}} substituída(s), {{skipped}} ignorada(s).',
