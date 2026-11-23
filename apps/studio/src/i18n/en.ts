@@ -1022,6 +1022,8 @@ export const en = {
         hostSchedule: 'Schedule its own jobs',
         hostFhir: 'Read the facility list',
         hostImport: 'Read the database connectors an admin allows, and save what it imports',
+        hostDb: 'Keep its own tables in CE\'s database, apart from CE\'s tables',
+        hostCeRead: 'Read CE\'s records, such as patients, requests and results',
         none: 'none',
       },
       heading: 'Marketplace',

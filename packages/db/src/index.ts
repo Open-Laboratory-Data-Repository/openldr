@@ -157,3 +157,8 @@ export {
   findByRequisition, indexRequisitions, rebuildRequisitions, requisitionRowOf, type RequisitionRow,
 } from './lab-requisitions';
 export { requesterFacility, requesterPractitionerDisplay, type RequesterFacility } from './relational/requester';
+export {
+  COLUMN_TYPES, PLUGIN_IDENTIFIER, CE_MANAGED_COLUMNS, MAX_PLUGIN_TABLES, MAX_PLUGIN_COLUMNS,
+  columnShapeSchema, tableShapeSchema, tableShapesSchema,
+  type ColumnType, type ColumnShape, type TableShape,
+} from './plugin-table-shape';

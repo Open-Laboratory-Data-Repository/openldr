@@ -9,7 +9,8 @@
     "./testing": "./src/migrations/internal/test-helpers.ts",
     "./testing-external": "./src/test-helpers-external.ts",
     "./facility-answers": "./src/facility-answers.ts",
-    "./facility-observed": "./src/facility-observed.ts"
+    "./facility-observed": "./src/facility-observed.ts",
+    "./plugin-table-shape": "./src/plugin-table-shape.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -23,7 +24,8 @@
     "@openldr/rbac": "workspace:*",
     "@openldr/table-query": "workspace:*",
     "kysely": "^0.28.17",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/pg": "^8.11.10",

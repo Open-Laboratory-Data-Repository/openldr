@@ -45,4 +45,7 @@ describe('host-service capabilities', () => {
   it('accepts host:import, the gate for reading a granted connector and saving records', () => {
     expect(parseCapabilities([{ kind: 'host:import' }])).toEqual([{ kind: 'host:import' }]);
   });
+  it('accepts host:db and host:ce-read, presence-only like the other host gates', () => {
+    expect(parseCapabilities([{ kind: 'host:db' }, { kind: 'host:ce-read' }])).toEqual([{ kind: 'host:db' }, { kind: 'host:ce-read' }]);
+  });
 });

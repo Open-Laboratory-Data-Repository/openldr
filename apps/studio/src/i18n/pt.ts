@@ -1018,6 +1018,8 @@ export const pt: EnShape = {
         hostSchedule: 'Agendar as suas próprias tarefas',
         hostFhir: 'Ler a lista de unidades de saúde',
         hostImport: 'Ler os conectores de base de dados que um administrador autoriza, e guardar o que importa',
+        hostDb: 'Guardar as suas próprias tabelas na base de dados do CE, separadas das tabelas do CE',
+        hostCeRead: 'Ler os registos do CE, como doentes, pedidos e resultados',
         none: 'nenhum',
       },
       heading: 'Marketplace',

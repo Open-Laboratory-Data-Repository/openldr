@@ -1,4 +1,6 @@
 import { z } from 'zod';
+// The subpath, not the package root: the root loads pg and kysely, which the manifest does not need.
+import { tableShapesSchema } from '@openldr/db/plugin-table-shape';
 import { capabilitySchema } from './capabilities';
 import { workflowNodeDeclSchema } from './workflow-node';
 
@@ -133,6 +135,10 @@ const pluginPayload = z.object({
   // Optional and part of the signed payload. Absent means the plugin cannot import, and existing
   // signed plugin artifacts stay byte-identical and verify.
   importSource: importSourceSchema.optional(),
+  // Tables the plugin wants CE to build for it, as data (see @openldr/db plugin-table-shape.ts).
+  // Needs host:db. Optional with no default, so a manifest without it parses to the same object
+  // and its signature still verifies.
+  tables: tableShapesSchema.optional(),
 });
 const formPayload = z.object({ kind: z.literal('form-template'), questionnaireSha256: z.string().regex(HEX64) });
 const reportPayload = z.object({ kind: z.literal('report-template'), templateSha256: z.string().regex(HEX64) });
@@ -179,6 +185,10 @@ export function parseArtifactManifest(raw: unknown): ArtifactManifest {
         throw new Error(`artifact ${manifest.id}: import entrypoint '${name}' is not in payload.entrypoints`);
       }
     }
+  }
+  if (manifest.payload.kind === 'plugin' && manifest.payload.tables !== undefined
+    && !manifest.capabilities.some((c) => c.kind === 'host:db')) {
+    throw new Error(`artifact ${manifest.id}: payload.tables requires the host:db capability`);
   }
   return manifest;
 }
