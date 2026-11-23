@@ -65,6 +65,21 @@ describe('website docs content', () => {
     expect(pageTitle('lab-setup', '0.1.8', 'pt')).toBe('Configurar um laboratório');
   });
 
+  it('documents plugin tables, the four host functions, their capabilities and what is refused, in every language', () => {
+    for (const locale of ['en', 'fr', 'pt'] as const) {
+      const body = docPage('plugin-host-functions', DEFAULT_DOC_VERSION, locale)!.body;
+      for (const fn of ['db_select', 'db_write', 'ce_read', 'fhir_emit']) expect(body, `${locale} ${fn}`).toContain(`## ${fn}`);
+      for (const cap of ['host:db', 'host:ce-read', 'emit-fhir']) expect(body, `${locale} ${cap}`).toContain(`\`${cap}\``);
+      expect(body, locale).toContain('"facilityColumn": "facility"');
+      expect(body, locale).toContain('RESOURCE_TYPE_NOT_ALLOWED');
+      expect(body, locale).toContain('`pg_catalog.pg_roles`');
+      expect(body, locale).not.toContain('\u2014');
+    }
+    expect(pageTitle('plugin-host-functions', '0.1.8', 'en')).toBe('Plugin tables and host functions');
+    expect(pageTitle('plugin-host-functions', '0.1.8', 'fr')).toBe('Tables et fonctions hôtes des plugins');
+    expect(pageTitle('plugin-host-functions', '0.1.8', 'pt')).toBe('Tabelas e funções do anfitrião para plugins');
+  });
+
   it('takes each page title from the file in the reader\'s language', () => {
     expect(pageTitle('upgrading', '0.1.8', 'en')).toBe('Planned upgrades');
     expect(pageTitle('upgrading', '0.1.8', 'fr')).toBe('Mises à niveau planifiées');
