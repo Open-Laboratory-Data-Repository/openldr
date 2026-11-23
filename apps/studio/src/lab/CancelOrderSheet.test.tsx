@@ -15,8 +15,10 @@ import { CancelOrderSheet } from './CancelOrderSheet';
 const ORDER: api.ReceptionOrder = {
   requisition: 'REQ-1', facility: { code: 'F1', display: 'Facility one' }, origin: 'lab-desk',
   patient: null, priority: null, clinician: null, note: null,
-  tests: [{ serviceRequestId: 'sr1', system: 'urn:test:catalog', code: 'T1', display: 'Test one', status: 'active' }],
+  tests: [{ serviceRequestId: 'sr1', system: 'urn:test:catalog', code: 'T1', display: 'Test one', status: 'active', rejection: null }],
   specimens: [],
+  returned: null,
+  redraws: [],
 };
 
 function openMenu(testId: string) {

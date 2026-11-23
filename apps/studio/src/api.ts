@@ -3915,8 +3915,17 @@ export interface ReceptionOrder {
   priority: string | null;
   clinician: string | null;
   note: string | null;
-  tests: Array<{ serviceRequestId: string; system: string; code: string; display: string | null; status: string }>;
-  specimens: Array<{ id: string; type: ReceptionCoding | null; condition: string | null; receivedTime: string | null }>;
+  tests: Array<{
+    serviceRequestId: string; system: string; code: string; display: string | null; status: string;
+    /** Why the request was rejected, from its rejection extension (lab slice 3). */
+    rejection: { code: string; display: string | null } | null;
+  }>;
+  /** status is the Specimen status as stored: unsatisfactory is a rejected sample. */
+  specimens: Array<{ id: string; type: ReceptionCoding | null; condition: string | null; receivedTime: string | null; status: string | null }>;
+  /** The open return Task: why the lab returned the order to its site, who did and when. */
+  returned: { reason: { code: string; display: string | null }; by: string | null; at: string } | null;
+  /** The redraw Tasks of the order's samples and requests. */
+  redraws: Array<{ taskId: string; status: 'requested' | 'completed'; focus: string; replacedBy: string | null }>;
 }
 export interface ReceptionPatient {
   id: string;
@@ -3945,6 +3954,36 @@ export interface CancelReceptionOrderInput {
   facilityCode: string | null;
   reason: string;
 }
+export interface ReturnReceptionOrderInput {
+  requisition: string;
+  facilityCode: string | null;
+  reasonCode: string;
+  note?: string;
+}
+export interface MarkReceptionOrderCorrectedInput {
+  requisition: string;
+  facilityCode: string | null;
+  changes: CorrectReceptionOrderInput['changes'];
+  reason: string;
+}
+export interface RejectReceptionSampleInput {
+  requisition: string;
+  facilityCode: string | null;
+  specimenTypeCode: string;
+  conditionCode: string;
+  reasonCode: string;
+  redraw: boolean;
+}
+export interface RejectReceptionTestInput {
+  serviceRequestId: string;
+  reasonCode: string;
+  redraw: boolean;
+}
+export interface LinkReceptionRedrawInput {
+  requisition: string;
+  facilityCode: string | null;
+  replacesRequisition: string;
+}
 export interface RegisterReceptionPatientInput {
   given: string;
   family: string;
@@ -3969,6 +4008,16 @@ export const correctReceptionOrder = (input: CorrectReceptionOrderInput): Promis
   authFetch('/api/lab/orders/correct', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'correct order'));
 export const cancelReceptionOrder = (input: CancelReceptionOrderInput): Promise<ReceptionOrder> =>
   authFetch('/api/lab/orders/cancel', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'cancel order'));
+export const returnReceptionOrder = (input: ReturnReceptionOrderInput): Promise<ReceptionOrder> =>
+  authFetch('/api/lab/orders/return', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'return order'));
+export const markReceptionOrderCorrected = (input: MarkReceptionOrderCorrectedInput): Promise<ReceptionOrder> =>
+  authFetch('/api/lab/orders/corrected', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'mark order corrected'));
+export const rejectReceptionSample = (input: RejectReceptionSampleInput): Promise<ReceptionOrder> =>
+  authFetch('/api/lab/samples/reject', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'reject sample'));
+export const rejectReceptionTest = (input: RejectReceptionTestInput): Promise<ReceptionOrder> =>
+  authFetch('/api/lab/tests/reject', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'reject test'));
+export const linkReceptionRedraw = (input: LinkReceptionRedrawInput): Promise<ReceptionOrder> =>
+  authFetch('/api/lab/orders/redraw', jbody(input, 'POST')).then((r) => okJson<ReceptionOrder>(r, 'link redraw'));
 export function searchReceptionPatients(q: { identifier?: string; name?: string; birthDate?: string }): Promise<ReceptionPatient[]> {
   const s = new URLSearchParams();
   if (q.identifier) s.set('identifier', q.identifier);

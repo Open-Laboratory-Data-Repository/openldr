@@ -15,8 +15,10 @@ const ORDER: ReceptionOrder = {
   priority: 'routine',
   clinician: 'Dr K',
   note: null,
-  tests: [{ serviceRequestId: 'sr1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active' }],
-  specimens: [{ id: 'sp1', type: { system: 'urn:t', code: 'BLD', display: 'Blood' }, condition: 'Good', receivedTime: '2026-11-23T08:00:00Z' }],
+  tests: [{ serviceRequestId: 'sr1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active', rejection: null }],
+  specimens: [{ id: 'sp1', type: { system: 'urn:t', code: 'BLD', display: 'Blood' }, condition: 'Good', receivedTime: '2026-11-23T08:00:00Z', status: 'available' }],
+  returned: null,
+  redraws: [],
 };
 const PATIENT = { id: 'p1', name: 'Ana Banda', birthDate: '1990-01-02', gender: 'female', identifiers: [{ system: 'urn:mpi', value: 'M1' }] };
 
@@ -34,6 +36,13 @@ function fakeCtx(over: Record<string, Impl> = {}) {
       registerPatient: spy('registerPatient', over.registerPatient ?? (async () => ({ id: 'p9', display: 'Ana Banda' }))),
       receiveSample: spy('receiveSample', over.receiveSample ?? (async () => ORDER)),
       sampleChoices: spy('sampleChoices', over.sampleChoices ?? (async () => ({ types: [{ system: 'urn:t', code: 'BLD', display: 'Blood' }] }))),
+    },
+    labRejection: {
+      returnOrder: spy('returnOrder', over.returnOrder ?? (async () => ORDER)),
+      markCorrected: spy('markCorrected', over.markCorrected ?? (async () => ORDER)),
+      rejectSample: spy('rejectSample', over.rejectSample ?? (async () => ORDER)),
+      rejectTest: spy('rejectTest', over.rejectTest ?? (async () => ORDER)),
+      linkRedraw: spy('linkRedraw', over.linkRedraw ?? (async () => ORDER)),
     },
     testCatalog: {
       list: spy('catalog.list', over['catalog.list'] ?? (async () => ({
@@ -85,7 +94,25 @@ const ROUTES: Array<{ method: 'GET' | 'POST'; url: string; payload?: unknown }> 
   { method: 'GET', url: '/api/lab/samples/choices?requisition=REQ-1&facility=F1' },
   { method: 'GET', url: '/api/lab/facilities?q=cl' },
   { method: 'GET', url: '/api/lab/tests?q=h' },
+  { method: 'POST', url: '/api/lab/orders/redraw', payload: { requisition: 'REQ-2', facilityCode: 'F1', replacesRequisition: 'REQ-1' } },
 ];
+
+const RETURN_BODY = { requisition: 'REQ-1', facilityCode: 'F1', reasonCode: 'MISSING-DOB', note: 'Ring Ana Banda' };
+const CORRECTED_BODY = { requisition: 'REQ-1', facilityCode: 'F1', changes: { priority: 'stat', clinician: null }, reason: 'site fixed it' };
+const SAMPLE_REJECT_BODY = {
+  requisition: 'REQ-1', facilityCode: 'F1', specimenTypeCode: 'BLD', conditionCode: 'HAEM', reasonCode: 'HAEMOLYSED', redraw: true,
+};
+const TEST_REJECT_BODY = { serviceRequestId: 'sr1', reasonCode: 'TOO-OLD', redraw: false };
+const REDRAW_BODY = { requisition: 'REQ-2', facilityCode: 'F1', replacesRequisition: 'REQ-1' };
+
+// The four routes lab.reject opens (lab slice 3). The redraw link is a receipt, so it is in ROUTES.
+const REJECT_ROUTES: Array<{ method: 'POST'; url: string; payload: unknown }> = [
+  { method: 'POST', url: '/api/lab/orders/return', payload: RETURN_BODY },
+  { method: 'POST', url: '/api/lab/orders/corrected', payload: CORRECTED_BODY },
+  { method: 'POST', url: '/api/lab/samples/reject', payload: SAMPLE_REJECT_BODY },
+  { method: 'POST', url: '/api/lab/tests/reject', payload: TEST_REJECT_BODY },
+];
+const REJECT = ['lab.reject'];
 
 describe('lab reception routes', () => {
   it.each(ROUTES)('$method $url refuses without lab.receive and calls nothing', async (r) => {
@@ -118,8 +145,10 @@ describe('lab reception routes', () => {
           priority: 'routine',
           clinician: 'Dr K',
           note: null,
-          tests: [{ serviceRequestId: 'sr1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active' }],
-          specimens: [{ id: 'sp1', type: { system: 'urn:t', code: 'BLD', display: 'Blood' }, condition: 'Good', receivedTime: '2026-11-23T08:00:00Z' }],
+          tests: [{ serviceRequestId: 'sr1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active', rejection: null }],
+          specimens: [{ id: 'sp1', type: { system: 'urn:t', code: 'BLD', display: 'Blood' }, condition: 'Good', receivedTime: '2026-11-23T08:00:00Z', status: 'available' }],
+          returned: null,
+          redraws: [],
         }],
       });
       expect(calls).toEqual([{ method: 'findOrders', args: ['REQ-1'] }]);
@@ -398,6 +427,174 @@ describe('lab reception routes', () => {
     });
   });
 
+  describe('lab.reject routes', () => {
+    it.each(REJECT_ROUTES)('$url refuses a user with lab.receive only and calls nothing', async (r) => {
+      const { ctx, calls, audit } = fakeCtx();
+      const res = await appWith(ctx, CAP).inject(r as never);
+      expect(res.statusCode).toBe(403);
+      expect(calls).toEqual([]);
+      expect(audit).toEqual([]);
+    });
+
+    it.each(REJECT_ROUTES)('$url refuses a request with no user', async (r) => {
+      const { ctx, calls } = fakeCtx();
+      const res = await appWith(ctx, REJECT, null).inject(r as never);
+      expect(res.statusCode).toBe(401);
+      expect(calls).toEqual([]);
+    });
+
+    it.each([...REJECT_ROUTES, { method: 'POST' as const, url: '/api/lab/orders/redraw', payload: REDRAW_BODY }])(
+      '$url refuses a body with an extra key with 400 before calling anything', async (r) => {
+        const { ctx, calls, audit } = fakeCtx();
+        const res = await appWith(ctx, ['lab.receive', 'lab.reject']).inject({ ...r, payload: { ...(r.payload as object), extra: 1 } } as never);
+        expect(res.statusCode).toBe(400);
+        expect(typeof res.json().error).toBe('string');
+        expect(calls).toEqual([]);
+        expect(audit).toEqual([]);
+      },
+    );
+  });
+
+  describe('POST /api/lab/orders/return', () => {
+    it('returns, and audits the order and reason code without the note', async () => {
+      const { ctx, calls, audit } = fakeCtx();
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/orders/return', payload: RETURN_BODY });
+      expect([res.statusCode, res.json()]).toEqual([200, ORDER]);
+      expect(calls).toEqual([{ method: 'returnOrder', args: [RETURN_BODY, 'Desk One'] }]);
+      expect(audit.map((a) => [a.action, a.entityType, a.entityId, a.metadata])).toEqual([
+        ['lab.order.return', 'lab_order', 'REQ-1', { facility: 'F1', reason: 'MISSING-DOB' }],
+      ]);
+      expect(JSON.stringify(audit)).not.toContain('Ring');
+    });
+
+    it('takes a return with no note', async () => {
+      const { ctx, calls } = fakeCtx();
+      const { note: _n, ...rest } = RETURN_BODY;
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/orders/return', payload: rest });
+      expect(res.statusCode).toBe(200);
+      expect(calls).toEqual([{ method: 'returnOrder', args: [rest, 'Desk One'] }]);
+    });
+
+    it('answers 409 with the conflict reason for a desk order and audits nothing', async () => {
+      const { ctx, audit } = fakeCtx({
+        returnOrder: async () => { throw new ReceptionError('conflict', 'Order REQ-1 was registered at the desk. A desk order is corrected here, not returned.'); },
+      });
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/orders/return', payload: RETURN_BODY });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({ error: 'Order REQ-1 was registered at the desk. A desk order is corrected here, not returned.', reason: 'conflict' });
+      expect(audit).toEqual([]);
+    });
+
+    it('refuses a return with no reason code with 400', async () => {
+      const { ctx, calls } = fakeCtx();
+      const { reasonCode: _r, ...rest } = RETURN_BODY;
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/orders/return', payload: rest });
+      expect(res.statusCode).toBe(400);
+      expect(calls).toEqual([]);
+    });
+  });
+
+  describe('POST /api/lab/orders/corrected', () => {
+    it('marks corrected, and audits the fields changed but not the values', async () => {
+      const { ctx, calls, audit } = fakeCtx();
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/orders/corrected', payload: CORRECTED_BODY });
+      expect([res.statusCode, res.json()]).toEqual([200, ORDER]);
+      expect(calls).toEqual([{ method: 'markCorrected', args: [CORRECTED_BODY, 'Desk One'] }]);
+      expect(audit.map((a) => [a.action, a.entityType, a.entityId, a.metadata])).toEqual([
+        ['lab.order.corrected', 'lab_order', 'REQ-1', { facility: 'F1', fields: ['priority', 'clinician'] }],
+      ]);
+      expect(JSON.stringify(audit)).not.toContain('site fixed');
+    });
+
+    it('passes a change the desk may not make through to the service, which refuses it', async () => {
+      const { ctx, calls } = fakeCtx({ markCorrected: async () => { throw new ReceptionError('invalid', 'not the tests'); } });
+      const res = await appWith(ctx, REJECT).inject({
+        method: 'POST', url: '/api/lab/orders/corrected', payload: { ...CORRECTED_BODY, changes: { tests: [] } },
+      });
+      expect([res.statusCode, res.json()]).toEqual([400, { error: 'not the tests', reason: 'invalid' }]);
+      expect((calls[0]!.args[0] as { changes: unknown }).changes).toEqual({ tests: [] });
+    });
+
+    it('maps an order that was not returned to 409', async () => {
+      const { ctx } = fakeCtx({ markCorrected: async () => { throw new ReceptionError('conflict', 'Order REQ-1 was not returned to its site.'); } });
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/orders/corrected', payload: CORRECTED_BODY });
+      expect([res.statusCode, res.json().reason]).toEqual([409, 'conflict']);
+    });
+  });
+
+  describe('POST /api/lab/samples/reject', () => {
+    it('rejects, and audits the specimen with codes only', async () => {
+      const { ctx, calls, audit } = fakeCtx();
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/samples/reject', payload: SAMPLE_REJECT_BODY });
+      expect([res.statusCode, res.json()]).toEqual([200, ORDER]);
+      expect(calls).toEqual([{ method: 'rejectSample', args: [SAMPLE_REJECT_BODY, 'Desk One'] }]);
+      expect(audit.map((a) => [a.action, a.entityType, a.entityId, a.metadata])).toEqual([
+        ['lab.sample.reject', 'specimen', 'sp1', {
+          requisition: 'REQ-1', facility: 'F1', type: 'BLD', condition: 'HAEM', reason: 'HAEMOLYSED', redraw: true,
+        }],
+      ]);
+    });
+
+    it('refuses a rejection that does not say whether to ask for a redraw with 400', async () => {
+      const { ctx, calls } = fakeCtx();
+      const { redraw: _r, ...rest } = SAMPLE_REJECT_BODY;
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/samples/reject', payload: rest });
+      expect(res.statusCode).toBe(400);
+      expect(calls).toEqual([]);
+    });
+
+    it('maps not-found to 404 and audits nothing', async () => {
+      const { ctx, audit } = fakeCtx({ rejectSample: async () => { throw new ReceptionError('not-found', 'No order REQ-1 was found.'); } });
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/samples/reject', payload: SAMPLE_REJECT_BODY });
+      expect([res.statusCode, res.json()]).toEqual([404, { error: 'No order REQ-1 was found.', reason: 'not-found' }]);
+      expect(audit).toEqual([]);
+    });
+  });
+
+  describe('POST /api/lab/tests/reject', () => {
+    it('rejects, and audits the request with codes only', async () => {
+      const { ctx, calls, audit } = fakeCtx();
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/tests/reject', payload: TEST_REJECT_BODY });
+      expect([res.statusCode, res.json()]).toEqual([200, ORDER]);
+      expect(calls).toEqual([{ method: 'rejectTest', args: [TEST_REJECT_BODY, 'Desk One'] }]);
+      expect(audit.map((a) => [a.action, a.entityType, a.entityId, a.metadata])).toEqual([
+        ['lab.test.reject', 'service_request', 'sr1', { requisition: 'REQ-1', facility: 'F1', test: 'HB', reason: 'TOO-OLD', redraw: false }],
+      ]);
+    });
+
+    it('refuses a rejection with no request id with 400', async () => {
+      const { ctx, calls } = fakeCtx();
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/tests/reject', payload: { reasonCode: 'TOO-OLD', redraw: false } });
+      expect(res.statusCode).toBe(400);
+      expect(calls).toEqual([]);
+    });
+
+    it('maps not-found to 404', async () => {
+      const { ctx } = fakeCtx({ rejectTest: async () => { throw new ReceptionError('not-found', 'Request sr9 was not found.'); } });
+      const res = await appWith(ctx, REJECT).inject({ method: 'POST', url: '/api/lab/tests/reject', payload: TEST_REJECT_BODY });
+      expect([res.statusCode, res.json()]).toEqual([404, { error: 'Request sr9 was not found.', reason: 'not-found' }]);
+    });
+  });
+
+  describe('POST /api/lab/orders/redraw', () => {
+    it('links the redraw with lab.receive, and audits both requisition numbers', async () => {
+      const { ctx, calls, audit } = fakeCtx({ linkRedraw: async () => ({ ...ORDER, requisition: 'REQ-2' }) });
+      const res = await appWith(ctx, CAP).inject({ method: 'POST', url: '/api/lab/orders/redraw', payload: REDRAW_BODY });
+      expect([res.statusCode, res.json()]).toEqual([200, { ...ORDER, requisition: 'REQ-2' }]);
+      expect(calls).toEqual([{ method: 'linkRedraw', args: [REDRAW_BODY, 'Desk One'] }]);
+      expect(audit.map((a) => [a.action, a.entityType, a.entityId, a.metadata])).toEqual([
+        ['lab.order.redraw', 'lab_order', 'REQ-2', { facility: 'F1', replaces: 'REQ-1' }],
+      ]);
+    });
+
+    it('maps the service refusal to 400', async () => {
+      const { ctx, audit } = fakeCtx({ linkRedraw: async () => { throw new ReceptionError('invalid', 'A redraw needs a new requisition number.'); } });
+      const res = await appWith(ctx, CAP).inject({ method: 'POST', url: '/api/lab/orders/redraw', payload: REDRAW_BODY });
+      expect([res.statusCode, res.json().reason]).toEqual([400, 'invalid']);
+      expect(audit).toEqual([]);
+    });
+  });
+
   describe('string caps and dates', () => {
     it.each([
       ['GET', '/api/lab/orders?requisition=' + 'R'.repeat(101), undefined],
@@ -414,6 +611,7 @@ describe('lab reception routes', () => {
       ['POST', '/api/lab/samples', { requisition: 'REQ-1', type: { system: 'urn:t', code: 'BLD' }, receivedTime: 'yesterday' }],
       ['POST', '/api/lab/samples', { requisition: 'REQ-1', type: { system: 'urn:t', code: 'B'.repeat(101) } }],
       ['GET', '/api/lab/facilities?q=' + 'q'.repeat(101), undefined],
+      ['POST', '/api/lab/orders/redraw', { ...REDRAW_BODY, replacesRequisition: 'R'.repeat(101) }],
     ] as const)('%s %s refuses with 400 before calling anything', async (method, url, payload) => {
       const { ctx, calls } = fakeCtx();
       const res = await appWith(ctx, CAP).inject({ method, url, ...(payload ? { payload } : {}) } as never);

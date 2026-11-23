@@ -2,7 +2,7 @@
 
 The lab module lets a laboratory receive samples, work through worklists and review results inside OpenLDR. This release has the first part, Reception. It also prepares the rest. You set the lab's sections, which tests need review, whether a person may authorise their own results, and critical limits on reference bands. You also give people the new lab roles.
 
-**Worklists, result review, returning a request to its site and rejecting a sample are not in this release.** They come in later releases. The settings below are stored now. Saving them changes nothing in how the lab works today.
+**Worklists and result review are not in this release.** They come in later releases. The review and self-authorisation settings below are stored now. Saving them changes nothing in how the lab works today.
 
 The in-app guide **Lab setup** shows each step on screen. This page gives the order and the commands, for an install run from the command line.
 
@@ -48,20 +48,38 @@ In a source checkout, put `pnpm` in front, for example `pnpm openldr lab section
 
 ## The roles
 
-- **Reception** can receive samples, view worklists and open the masked patient index. It also holds returning a request to its site and rejecting a sample, which come in a later release.
-- **Lab Technician** can fill and submit forms, enter results and view worklists.
+- **Reception** can receive samples, return a request to its site, reject a sample or a test, view worklists and open the masked patient index.
+- **Lab Technician** can fill and submit forms, return and reject, enter results and view worklists. It has no **Receive samples**, so it cannot open Reception.
 - **Lab Manager** has all seven lab capabilities.
 
 On an install that ran an older version, Reception appears the first time the server starts on this version. Lab Technician and Lab Manager gain their new capabilities at that start, once. A capability you remove later stays removed.
 
 ## Reception
 
-Reception is the lab's front desk in the studio. It finds an order by a scanned or typed requisition number, registers an order the lab has no record of, finds or registers the patient, receives the sample with its condition and corrects a typo in an order, and cancels an order registered at the desk so it can be registered again. The in-app guide **Reception** shows each step.
+Reception is the lab's front desk in the studio. It finds an order by a scanned or typed requisition number, registers an order the lab has no record of, finds or registers the patient, receives the sample with its condition and corrects a typo in an order, and cancels an order registered at the desk so it can be registered again. It also returns a request to its site, rejects a sample or a test, and links a redraw to the order it replaces. The in-app guide **Reception** shows each step.
 
 - Reception needs **Receive samples**. The Reception and Lab Manager roles hold it.
+- Returning and rejecting also need **Return and reject**. Reception, Lab Technician and Lab Manager hold it. Linking a redraw needs only **Receive samples**.
 - A user with a data limit loses **Receive samples** and **Return and reject**, so they have no Reception.
-- The Lab order form now orders tests only. It no longer has a **Results** field. Results will be entered and authorised in the lab in a later release. Its **Order rejection** field stays until then.
+- The Lab order form now orders tests only. It no longer has a **Results** field. Results will be entered and authorised in the lab in a later release. It no longer has an **Order rejection** field either. On an upgraded install, OpenLDR removes that field from a Lab order form nobody edited. A form your lab edited keeps it.
 - Each test on a new order is saved as its own request. Orders saved before this version stay as they were stored, and Reception lists all their tests.
+- A site cannot yet see a returned request or a redraw request on its own screen. The lab tells the site.
+- A redraw needs a new requisition number. The old number still names the rejected request.
+- On an upgraded install, Lab Technician gains **Return and reject** at the first start on this version, once. If you remove it later, it stays removed.
+- Returning, rejecting and linking a redraw are not `openldr` commands yet.
+
+## Return and reject reasons
+
+The lists Reception offers are value sets. A lab can add its own codes to each one in **Terminology** in the studio.
+
+| List | Value set |
+|------|-----------|
+| Why a request goes back to its site | `urn:openldr:valueset:order-return-reason` |
+| Why a sample is rejected | `urn:openldr:valueset:order-reject-reason` |
+| Why one test is rejected | `urn:openldr:valueset:test-reject-reason` |
+| The sample's condition | `urn:openldr:valueset:sample-condition` |
+
+OpenLDR seeds a few codes in each, such as `Form incomplete` for a return and `Clotted` for a sample.
 
 ## Troubleshooting
 

@@ -2,7 +2,7 @@
 
 Le module laboratoire permet à un laboratoire de réceptionner les échantillons, de suivre des listes de travail et de vérifier les résultats dans OpenLDR. Cette version en apporte la première partie, la réception. Elle prépare aussi le reste. Vous définissez les sections du laboratoire, les examens à vérifier, si une personne peut valider ses propres résultats, et des seuils critiques sur les intervalles de référence. Vous donnez aussi les nouveaux rôles du laboratoire.
 
-**Les listes de travail, la vérification des résultats, le renvoi d'une demande à son site et le rejet d'un échantillon ne font pas partie de cette version.** Ils arrivent dans des versions ultérieures. Les réglages ci-dessous sont enregistrés dès maintenant. Les enregistrer ne change rien au travail actuel du laboratoire.
+**Les listes de travail et la vérification des résultats ne font pas partie de cette version.** Elles arrivent dans des versions ultérieures. Les réglages de vérification et d'auto-validation ci-dessous sont enregistrés dès maintenant. Les enregistrer ne change rien au travail actuel du laboratoire.
 
 Le guide intégré **Configuration du laboratoire** montre chaque étape à l'écran. Cette page donne l'ordre et les commandes, pour une installation gérée en ligne de commande.
 
@@ -48,20 +48,38 @@ Dans une copie des sources, ajoutez `pnpm` devant, par exemple `pnpm openldr lab
 
 ## Les rôles
 
-- **Reception** peut réceptionner les échantillons, voir les listes de travail et ouvrir l'index des patients masqué. Le rôle porte aussi le renvoi d'une demande à son site et le rejet d'un échantillon, qui arrivent dans une version ultérieure.
-- **Lab Technician** peut remplir et soumettre des formulaires, saisir des résultats et voir les listes de travail.
+- **Reception** peut réceptionner les échantillons, renvoyer une demande à son site, rejeter un échantillon ou une analyse, voir les listes de travail et ouvrir l'index des patients masqué.
+- **Lab Technician** peut remplir et soumettre des formulaires, renvoyer et rejeter, saisir des résultats et voir les listes de travail. Il n'a pas **Receive samples**, il ne peut donc pas ouvrir la réception.
 - **Lab Manager** a les sept capacités du laboratoire.
 
 Sur une installation qui utilisait une version antérieure, Reception apparaît au premier démarrage du serveur sur cette version. Lab Technician et Lab Manager reçoivent leurs nouvelles capacités à ce démarrage, une seule fois. Une capacité retirée ensuite reste retirée.
 
 ## La réception
 
-La réception est le guichet du laboratoire dans le studio. Elle trouve une demande par un numéro de demande scanné ou saisi, enregistre une demande dont le laboratoire n'a aucune trace, trouve ou enregistre le patient, reçoit l'échantillon avec son état et corrige une faute de frappe dans une demande, et annule une demande enregistrée à la réception pour l'enregistrer de nouveau. Le guide intégré **Réception** montre chaque étape.
+La réception est le guichet du laboratoire dans le studio. Elle trouve une demande par un numéro de demande scanné ou saisi, enregistre une demande dont le laboratoire n'a aucune trace, trouve ou enregistre le patient, reçoit l'échantillon avec son état et corrige une faute de frappe dans une demande, et annule une demande enregistrée à la réception pour l'enregistrer de nouveau. Elle renvoie aussi une demande à son site, rejette un échantillon ou une analyse, et lie un nouveau prélèvement à la demande qu'il remplace. Le guide intégré **Réception** montre chaque étape.
 
 - La réception exige **Receive samples**. Les rôles Reception et Lab Manager l'ont.
+- Le renvoi et le rejet exigent aussi **Return and reject**. Reception, Lab Technician et Lab Manager l'ont. Lier un nouveau prélèvement exige seulement **Receive samples**.
 - Un utilisateur avec une limite de données perd **Receive samples** et **Return and reject**. Il n'a donc pas la réception.
-- Le formulaire Lab order demande désormais seulement des tests. Il n'a plus de champ **Results**. Les résultats seront saisis et validés au laboratoire dans une version ultérieure. Son champ **Order rejection** reste jusque-là.
+- Le formulaire Lab order demande désormais seulement des tests. Il n'a plus de champ **Results**. Les résultats seront saisis et validés au laboratoire dans une version ultérieure. Il n'a plus non plus de champ **Order rejection**. Sur une installation mise à jour, OpenLDR retire ce champ d'un formulaire Lab order que personne n'a modifié. Un formulaire modifié par votre laboratoire le garde.
 - Chaque test d'une nouvelle demande est enregistré comme sa propre demande d'examen. Les demandes enregistrées avant cette version restent telles quelles, et la réception liste tous leurs tests.
+- Un site ne peut pas encore voir une demande renvoyée ou une demande de nouveau prélèvement sur son propre écran. Le laboratoire prévient le site.
+- Un nouveau prélèvement exige un nouveau numéro de demande. L'ancien numéro désigne toujours la demande rejetée.
+- Sur une installation mise à jour, Lab Technician reçoit **Return and reject** au premier démarrage sur cette version, une seule fois. Si vous la retirez ensuite, elle reste retirée.
+- Le renvoi, le rejet et le lien d'un nouveau prélèvement ne sont pas encore des commandes `openldr`.
+
+## Motifs de renvoi et de rejet
+
+Les listes proposées par la réception sont des jeux de valeurs. Un laboratoire peut ajouter ses propres codes à chacune dans **Terminologie**, dans le studio.
+
+| Liste | Jeu de valeurs |
+|------|-----------|
+| Pourquoi une demande retourne à son site | `urn:openldr:valueset:order-return-reason` |
+| Pourquoi un échantillon est rejeté | `urn:openldr:valueset:order-reject-reason` |
+| Pourquoi une analyse est rejetée | `urn:openldr:valueset:test-reject-reason` |
+| L'état de l'échantillon | `urn:openldr:valueset:sample-condition` |
+
+OpenLDR fournit quelques codes dans chacune, comme `Form incomplete` pour un renvoi et `Clotted` pour un échantillon. Ces codes fournis s'affichent en anglais.
 
 ## Résolution des problèmes
 

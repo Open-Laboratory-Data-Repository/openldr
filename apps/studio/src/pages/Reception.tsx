@@ -15,6 +15,12 @@ import { PatientSheet, type PickedPatient } from '@/lab/PatientSheet';
 import { ReceiveSampleSheet } from '@/lab/ReceiveSampleSheet';
 import { CorrectOrderSheet } from '@/lab/CorrectOrderSheet';
 import { CancelOrderSheet } from '@/lab/CancelOrderSheet';
+import { ReturnOrderSheet } from '@/lab/ReturnOrderSheet';
+import { MarkCorrectedSheet } from '@/lab/MarkCorrectedSheet';
+import { RejectSampleSheet } from '@/lab/RejectSampleSheet';
+import { RejectTestSheet, type RejectTestTarget } from '@/lab/RejectTestSheet';
+import { LinkRedrawSheet } from '@/lab/LinkRedrawSheet';
+import { useAuth } from '@/auth/AuthProvider';
 import { PRIORITY_VALUE_SET, useValueSet } from '@/lab/useValueSet';
 
 /**
@@ -24,6 +30,8 @@ import { PRIORITY_VALUE_SET, useValueSet } from '@/lab/useValueSet';
  */
 export function Reception() {
   const { t } = useTranslation();
+  const { hasCapability } = useAuth();
+  const canReject = hasCapability('lab.reject');
   const box = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState('');
   const [searched, setSearched] = useState<string | null>(null);
@@ -34,6 +42,11 @@ export function Reception() {
   const [correcting, setCorrecting] = useState<ReceptionOrder | null>(null);
   const [cancelling, setCancelling] = useState<ReceptionOrder | null>(null);
   const [linking, setLinking] = useState<ReceptionOrder | null>(null);
+  const [returning, setReturning] = useState<ReceptionOrder | null>(null);
+  const [markingCorrected, setMarkingCorrected] = useState<ReceptionOrder | null>(null);
+  const [rejectingSample, setRejectingSample] = useState<ReceptionOrder | null>(null);
+  const [rejectingTest, setRejectingTest] = useState<RejectTestTarget | null>(null);
+  const [linkingRedraw, setLinkingRedraw] = useState<ReceptionOrder | null>(null);
   const seq = useRef(0);
   const priorities = useValueSet(PRIORITY_VALUE_SET);
 
@@ -142,6 +155,12 @@ export function Reception() {
                   onLinkPatient={() => setLinking(o)}
                   onCorrect={() => setCorrecting(o)}
                   onCancel={() => setCancelling(o)}
+                  canReject={canReject}
+                  onReturn={() => setReturning(o)}
+                  onMarkCorrected={() => setMarkingCorrected(o)}
+                  onRejectSample={() => setRejectingSample(o)}
+                  onRejectTest={(test) => setRejectingTest({ order: o, test })}
+                  onLinkRedraw={() => setLinkingRedraw(o)}
                 />
               ))}
             </div>
@@ -159,6 +178,11 @@ export function Reception() {
       <ReceiveSampleSheet order={receiving} onClose={() => setReceiving(null)} onReceived={(o) => { setReceiving(null); put(o); }} onCloseAutoFocus={refocus} />
       <CorrectOrderSheet order={correcting} onClose={() => setCorrecting(null)} onCorrected={(o) => { setCorrecting(null); put(o); }} onCloseAutoFocus={refocus} />
       <CancelOrderSheet order={cancelling} onClose={() => setCancelling(null)} onCancelled={(o) => { setCancelling(null); put(o); }} onCloseAutoFocus={refocus} />
+      <ReturnOrderSheet order={returning} onClose={() => setReturning(null)} onReturned={(o) => { setReturning(null); put(o); }} onCloseAutoFocus={refocus} />
+      <MarkCorrectedSheet order={markingCorrected} onClose={() => setMarkingCorrected(null)} onCorrected={(o) => { setMarkingCorrected(null); put(o); }} onCloseAutoFocus={refocus} />
+      <RejectSampleSheet order={rejectingSample} onClose={() => setRejectingSample(null)} onRejected={(o) => { setRejectingSample(null); put(o); }} onCloseAutoFocus={refocus} />
+      <RejectTestSheet target={rejectingTest} onClose={() => setRejectingTest(null)} onRejected={(o) => { setRejectingTest(null); put(o); }} onCloseAutoFocus={refocus} />
+      <LinkRedrawSheet order={linkingRedraw} onClose={() => setLinkingRedraw(null)} onLinked={(o) => { setLinkingRedraw(null); put(o); }} onCloseAutoFocus={refocus} />
       <PatientSheet
         open={linking !== null}
         onClose={() => setLinking(null)}

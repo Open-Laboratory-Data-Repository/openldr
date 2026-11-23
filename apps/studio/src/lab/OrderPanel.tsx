@@ -20,9 +20,16 @@ function localDateTime(value: string, language: string): string {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleString(language);
 }
 
+/** The request statuses nothing more is done to: a cancelled or a rejected test. */
+const NOT_LIVE: ReadonlySet<string> = new Set(['entered-in-error', 'revoked']);
+const isLive = (test: ReceptionOrder['tests'][number]): boolean => !NOT_LIVE.has(test.status);
+
 /** One found order on the Reception page: who sent it, for whom, its tests and its samples. Every
  *  action sits in the panel's ⋯ menu (AGENTS.md section 5). */
-export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorrect, onCancel }: {
+export function OrderPanel({
+  order, priorities, canReject, onReceive, onLinkPatient, onCorrect, onCancel,
+  onReturn, onMarkCorrected, onRejectSample, onRejectTest, onLinkRedraw,
+}: {
   order: ReceptionOrder;
   /** The priority value set, so the panel shows a priority by its name. */
   priorities: ReceptionCoding[];
@@ -31,12 +38,38 @@ export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorr
   onCorrect: () => void;
   /** Offered for an order registered at the desk only. A form order is voided from its form entry. */
   onCancel: () => void;
+  /** The user holds lab.reject: return, corrected by site, reject sample and reject test show. */
+  canReject: boolean;
+  /** Offered for an order from a site that is not already returned or on hold. */
+  onReturn: () => void;
+  /** Offered for a returned order only. */
+  onMarkCorrected: () => void;
+  onRejectSample: () => void;
+  onRejectTest: (test: ReceptionOrder['tests'][number]) => void;
+  onLinkRedraw: () => void;
 }): JSX.Element {
   const { t, i18n } = useTranslation();
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const key = orderKey(order);
   const tests = order.tests.slice(page * pageSize, (page + 1) * pageSize);
+  const returned = order.returned !== null;
+  // An order saved before slice 1b holds several tests on one request. Rejecting one of them would
+  // revoke the whole request, so its rows offer no Reject test. Reject sample still covers them.
+  const liveRows = new Map<string, number>();
+  for (const x of order.tests.filter(isLive)) liveRows.set(x.serviceRequestId, (liveRows.get(x.serviceRequestId) ?? 0) + 1);
+  const mayRejectTest = (x: ReceptionOrder['tests'][number]): boolean => isLive(x) && liveRows.get(x.serviceRequestId) === 1;
+  const hasLive = order.tests.some(isLive);
+  // The server refuses a desk order, one with no facility to return it to, and one already returned or on hold.
+  const mayReturn = canReject && hasLive && order.origin !== 'lab-desk' && order.facility !== null && !returned
+    && !order.tests.some((x) => x.status === 'on-hold');
+  const returnedText = order.returned
+    ? t(order.returned.by ? 'reception.panel.returnedBy' : 'reception.panel.returnedAt', {
+      reason: order.returned.reason.display ?? order.returned.reason.code,
+      by: order.returned.by,
+      at: localDateTime(order.returned.at, i18n.language),
+    })
+    : null;
 
   return (
     <section className="rounded-md border border-border" data-testid={`order-panel-${key}`}>
@@ -69,6 +102,12 @@ export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorr
                 <dd className="break-words">{order.note}</dd>
               </>
             )}
+            {returnedText && (
+              <>
+                <dt className="text-muted-foreground">{t('reception.panel.returned')}</dt>
+                <dd className="break-words" data-testid={`order-returned-${key}`}>{returnedText}</dd>
+              </>
+            )}
           </dl>
         </div>
         <DropdownMenu>
@@ -80,7 +119,22 @@ export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorr
           <DropdownMenuContent align="end">
             <DropdownMenuItem data-testid={`order-receive-${key}`} onSelect={onReceive}>{t('reception.panel.receive')}</DropdownMenuItem>
             <DropdownMenuItem data-testid={`order-link-${key}`} onSelect={onLinkPatient}>{t('reception.panel.linkPatient')}</DropdownMenuItem>
-            <DropdownMenuItem data-testid={`order-correct-${key}`} onSelect={onCorrect}>{t('reception.panel.correct')}</DropdownMenuItem>
+            {/* A returned order is corrected by its site, so the desk takes it back instead (ruling 8). */}
+            {!returned && (
+              <DropdownMenuItem data-testid={`order-correct-${key}`} onSelect={onCorrect}>{t('reception.panel.correct')}</DropdownMenuItem>
+            )}
+            {canReject && returned && (
+              <DropdownMenuItem data-testid={`order-corrected-${key}`} onSelect={onMarkCorrected}>{t('reception.panel.markCorrected')}</DropdownMenuItem>
+            )}
+            {mayReturn && (
+              <DropdownMenuItem data-testid={`order-return-${key}`} onSelect={onReturn}>{t('reception.panel.returnOrder')}</DropdownMenuItem>
+            )}
+            {canReject && hasLive && (
+              <DropdownMenuItem data-testid={`order-reject-sample-${key}`} onSelect={onRejectSample}>{t('reception.panel.rejectSample')}</DropdownMenuItem>
+            )}
+            {hasLive && (
+              <DropdownMenuItem data-testid={`order-redraw-${key}`} onSelect={onLinkRedraw}>{t('reception.panel.linkRedraw')}</DropdownMenuItem>
+            )}
             {order.origin === 'lab-desk' && (
               <DropdownMenuItem data-testid={`order-cancel-${key}`} onSelect={onCancel}>{t('reception.panel.cancel')}</DropdownMenuItem>
             )}
@@ -96,6 +150,7 @@ export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorr
             <TableHead>{t('reception.panel.test')}</TableHead>
             <TableHead>{t('reception.panel.code')}</TableHead>
             <TableHead>{t('reception.panel.status')}</TableHead>
+            {canReject && <TableHead className="w-10"><span className="sr-only">{t('reception.panel.testActions')}</span></TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody className="[&_tr:last-child]:border-b">
@@ -103,7 +158,30 @@ export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorr
             <TableRow key={`${test.serviceRequestId}|${test.system}|${test.code}`}>
               <TableCell>{test.display ?? test.code}</TableCell>
               <TableCell className="font-mono text-xs">{test.code}</TableCell>
-              <TableCell>{t(`reception.status.${test.status}`, { defaultValue: test.status })}</TableCell>
+              <TableCell>
+                <div>{t(`reception.status.${test.status}`, { defaultValue: test.status })}</div>
+                {test.rejection && (
+                  <div className="break-words text-xs text-muted-foreground">
+                    {t('reception.panel.rejected', { reason: test.rejection.display ?? test.rejection.code })}
+                  </div>
+                )}
+              </TableCell>
+              {canReject && (
+                <TableCell className="w-10 px-2 py-1">
+                  {mayRejectTest(test) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`test-actions-${test.serviceRequestId}-${test.code}`} aria-label={t('reception.panel.testActions')}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem data-testid={`test-reject-${test.serviceRequestId}-${test.code}`} onSelect={() => onRejectTest(test)}>{t('reception.panel.rejectTest')}</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
@@ -125,6 +203,7 @@ export function OrderPanel({ order, priorities, onReceive, onLinkPatient, onCorr
             {order.specimens.map((s) => (
               <li key={s.id} className="flex flex-wrap gap-x-3">
                 <span>{s.type ? (s.type.display ?? s.type.code) : t('reception.panel.noType')}</span>
+                {s.status === 'unsatisfactory' && <span data-testid={`sample-rejected-${s.id}`}>{t('reception.panel.sampleRejected')}</span>}
                 {s.condition && <span className="text-muted-foreground">{s.condition}</span>}
                 {s.receivedTime && <span className="text-muted-foreground">{localDateTime(s.receivedTime, i18n.language)}</span>}
               </li>

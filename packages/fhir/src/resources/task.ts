@@ -18,6 +18,7 @@ export const Task = z
       'filler-order', 'instance-order', 'option',
     ]),
     code: CodeableConcept.optional(),
+    basedOn: z.array(Reference).optional(),
     focus: Reference.optional(),
     for: Reference.optional(),
     owner: Reference.optional(),

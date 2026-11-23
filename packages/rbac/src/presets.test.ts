@@ -17,7 +17,9 @@ describe('system role presets', () => {
 
   it('technician enters data and results at the bench', () => {
     const tech = SYSTEM_ROLES.find((r) => r.slug === 'lab_technician')!;
-    expect(tech.capabilities).toEqual(['forms.view', 'forms.submit', 'lab.results.enter', 'lab.worklist.view']);
+    expect(tech.capabilities).toEqual(['forms.view', 'forms.submit', 'lab.reject', 'lab.results.enter', 'lab.worklist.view']);
+    // The role holds lab.reject, so its description says it can reject.
+    expect(tech.description).toMatch(/reject a sample or test/);
   });
 
   // forms.submit WRITES clinical records (POST /api/forms/:id/responses runs the submission
@@ -69,7 +71,7 @@ describe('system role presets', () => {
       'dashboards.view', 'reports.view', 'forms.view', 'terminology.view', 'facilities.view', 'patients.view',
       'activity.view', 'notifications.view', 'audit.view',
     ]);
-    expect(role('lab_technician')).toEqual(['forms.view', 'forms.submit', 'lab.results.enter', 'lab.worklist.view']);
+    expect(role('lab_technician')).toEqual(['forms.view', 'forms.submit', 'lab.reject', 'lab.results.enter', 'lab.worklist.view']);
   });
 
   // Marking a form entry as entered in error withdraws a saved record, so only the roles that
@@ -90,7 +92,7 @@ describe('system role presets', () => {
   it('grants each lab key to the roles the lab module names', () => {
     const holders = (key: string) => SYSTEM_ROLES.filter((r) => r.capabilities.includes(key)).map((r) => r.slug).sort();
     expect(holders('lab.receive')).toEqual(['lab_admin', 'lab_manager', 'reception']);
-    expect(holders('lab.reject')).toEqual(['lab_admin', 'lab_manager', 'reception']);
+    expect(holders('lab.reject')).toEqual(['lab_admin', 'lab_manager', 'lab_technician', 'reception']);
     expect(holders('lab.results.enter')).toEqual(['lab_admin', 'lab_manager', 'lab_technician']);
     expect(holders('lab.results.authorise')).toEqual(['lab_admin', 'lab_manager']);
     expect(holders('lab.results.amend')).toEqual(['lab_admin', 'lab_manager']);

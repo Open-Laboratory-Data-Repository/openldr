@@ -86,8 +86,8 @@ A rule is checked only when the band has both of its values. A refusal names the
 
 Three built-in roles cover the lab's work.
 
-- **Reception** can receive samples, view worklists and open the masked patient index. It also holds returning a request to its site and rejecting a sample, which come in a later release.
-- **Lab Technician** can fill and submit forms, enter results and view worklists.
+- **Reception** can receive samples, view worklists and open the masked patient index. It can also return a request to its site and reject a sample or a test.
+- **Lab Technician** can fill and submit forms, return and reject, enter results and view worklists. It has no **Receive samples**, so it cannot open **Reception**.
 - **Lab Manager** holds every lab capability, **Lab settings** included.
 
 The **Roles** page lists the seven lab capabilities in the **Lab** group: **Receive samples**, **Return and reject**, **Enter results**, **Authorise results**, **Amend results**, **View worklists** and **Lab settings**.
@@ -103,7 +103,7 @@ You need **Manage roles** to give a person a role.
 
 On an install that ran an older version, **Reception** appears the first time the server starts on this version. **Lab Technician** and **Lab Manager** gain their new capabilities at the same start, once. If you later take a capability away from one of them, it stays away.
 
-Today **Receive samples** opens **Reception**, and **Lab settings** changes the lab's setup. The other lab capabilities open screens that come in later releases. Returning a request to its site and rejecting a sample come later too.
+Today **Receive samples** opens **Reception**, **Return and reject** adds returning and rejecting there, and **Lab settings** changes the lab's setup. The other lab capabilities open screens that come in later releases. Read [Reception](/docs/reception).
 
 A user with a data limit loses **Receive samples** and **Return and reject**, whatever their role gives. Read [Users](/docs/users).
 

@@ -289,7 +289,7 @@ describe('RoleStore', () => {
       ['lab.receive', 'lab.reject', 'lab.worklist.view', 'patients.view'],
     );
     expect((await store.getBySlug('lab_technician'))!.capabilities.sort()).toEqual(
-      ['forms.view', 'lab.results.enter', 'lab.worklist.view'],
+      ['forms.view', 'lab.reject', 'lab.results.enter', 'lab.worklist.view'],
     );
     const manager = (await store.getBySlug('lab_manager'))!;
     expect(manager.capabilities).toEqual(expect.arrayContaining([
@@ -297,7 +297,7 @@ describe('RoleStore', () => {
       'lab.worklist.view', 'lab.settings',
     ]));
     const grantedTo = (slug: string) => result.granted.filter((g) => g.slug === slug).map((g) => g.capability).sort();
-    expect(grantedTo('lab_technician')).toEqual(['lab.results.enter', 'lab.worklist.view']);
+    expect(grantedTo('lab_technician')).toEqual(['lab.reject', 'lab.results.enter', 'lab.worklist.view']);
     expect(grantedTo('lab_manager')).toHaveLength(7);
     expect(grantedTo('data_analyst')).toEqual([]);
     expect(grantedTo('system_auditor')).toEqual([]);

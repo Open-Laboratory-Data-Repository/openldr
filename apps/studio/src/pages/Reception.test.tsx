@@ -19,6 +19,11 @@ vi.mock('@/api', async (orig) => {
     findReceptionOrders: vi.fn(),
     correctReceptionOrder: vi.fn(),
     cancelReceptionOrder: vi.fn(),
+    returnReceptionOrder: vi.fn(),
+    markReceptionOrderCorrected: vi.fn(),
+    rejectReceptionSample: vi.fn(),
+    rejectReceptionTest: vi.fn(),
+    linkReceptionRedraw: vi.fn(),
     registerReceptionPatient: vi.fn(),
     searchReceptionPatients: vi.fn(async () => []),
     searchReceptionFacilities: vi.fn(async () => []),
@@ -47,8 +52,10 @@ const ORDER: api.ReceptionOrder = {
   priority: null,
   clinician: null,
   note: null,
-  tests: [{ serviceRequestId: 'sr1', system: 'urn:test:catalog', code: 'T1', display: 'Test one', status: 'active' }],
+  tests: [{ serviceRequestId: 'sr1', system: 'urn:test:catalog', code: 'T1', display: 'Test one', status: 'active', rejection: null }],
   specimens: [],
+  returned: null,
+  redraws: [],
 };
 
 function renderPage() {
@@ -154,7 +161,8 @@ describe('Reception', () => {
     expect(names.filter((n) => /register|receive|correct|link|search|save/i.test(n))).toEqual([]);
     openMenu('order-actions-F1|REQ-1');
     const items = (await screen.findAllByRole('menuitem')).map((m) => m.textContent);
-    expect(items).toEqual(['Receive sample', 'Link patient', 'Correct order']);
+    // lab.receive alone: no item that needs lab.reject.
+    expect(items).toEqual(['Receive sample', 'Link patient', 'Correct order', 'Replaces a rejected order']);
   });
 
   it('offers Cancel registration for a desk order only, and shows the cancelled tests after', async () => {
@@ -166,7 +174,7 @@ describe('Reception', () => {
     await screen.findByTestId('order-panel-F1|REQ-1');
     openMenu('order-actions-F1|REQ-1');
     expect((await screen.findAllByRole('menuitem')).map((m) => m.textContent))
-      .toEqual(['Receive sample', 'Link patient', 'Correct order', 'Cancel registration']);
+      .toEqual(['Receive sample', 'Link patient', 'Correct order', 'Replaces a rejected order', 'Cancel registration']);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Cancel registration' }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'Wrong test list' } });
@@ -213,6 +221,155 @@ describe('Reception', () => {
     });
     expect(api.searchReceptionPatients).not.toHaveBeenCalled();
     expect(await screen.findByText('Ann Banda')).toBeInTheDocument();
+  });
+});
+
+describe('Reception return, reject and redraw', () => {
+  const RETURNED: api.ReceptionOrder = {
+    ...ORDER,
+    tests: [{ ...ORDER.tests[0]!, status: 'on-hold' }],
+    returned: { reason: { code: 'R1', display: 'Birth date missing' }, by: 'Desk clerk', at: '2026-11-23T10:00:00Z' },
+  };
+
+  async function menuItems(order: api.ReceptionOrder): Promise<Array<string | null>> {
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([order]);
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-F1|REQ-1');
+    openMenu('order-actions-F1|REQ-1');
+    return (await screen.findAllByRole('menuitem')).map((m) => m.textContent);
+  }
+
+  it('offers Return to site and Reject sample to a user who holds lab.reject', async () => {
+    caps.set = new Set(['lab.receive', 'lab.reject']);
+    expect(await menuItems(ORDER)).toEqual([
+      'Receive sample', 'Link patient', 'Correct order', 'Return to site', 'Reject sample', 'Replaces a rejected order',
+    ]);
+  });
+
+  it('never offers Return to site for a desk order', async () => {
+    caps.set = new Set(['lab.receive', 'lab.reject']);
+    expect(await menuItems({ ...ORDER, origin: 'lab-desk' })).toEqual([
+      'Receive sample', 'Link patient', 'Correct order', 'Reject sample', 'Replaces a rejected order', 'Cancel registration',
+    ]);
+  });
+
+  it('offers no Return to site for an order on hold', async () => {
+    caps.set = new Set(['lab.receive', 'lab.reject']);
+    expect(await menuItems({ ...ORDER, tests: [{ ...ORDER.tests[0]!, status: 'on-hold' }] })).not.toContain('Return to site');
+  });
+
+  it('offers no Return to site for an order with no facility', async () => {
+    caps.set = new Set(['lab.receive', 'lab.reject']);
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([{ ...ORDER, facility: null }]);
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-|REQ-1');
+    openMenu('order-actions-|REQ-1');
+    const items = (await screen.findAllByRole('menuitem')).map((m) => m.textContent);
+    expect(items).toContain('Reject sample');
+    expect(items).not.toContain('Return to site');
+  });
+
+  it('shows a rejected sample as rejected in the sample list', async () => {
+    const withSamples: api.ReceptionOrder = {
+      ...ORDER,
+      specimens: [
+        { id: 'sp1', type: { system: 'urn:test:specimen', code: 'S1', display: 'Sample one' }, condition: 'Clotted', receivedTime: null, status: 'unsatisfactory' },
+        { id: 'sp2', type: { system: 'urn:test:specimen', code: 'S2', display: 'Sample two' }, condition: null, receivedTime: null, status: 'available' },
+      ],
+    };
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([withSamples]);
+    renderPage();
+    await search('REQ-1');
+    const samples = await screen.findByTestId('order-samples-F1|REQ-1');
+    expect(within(samples).getByTestId('sample-rejected-sp1')).toHaveTextContent('Rejected');
+    expect(within(samples).queryByTestId('sample-rejected-sp2')).toBeNull();
+  });
+
+  it('offers Corrected by site, not Correct order, for a returned order, and shows why it was returned', async () => {
+    caps.set = new Set(['lab.receive', 'lab.reject']);
+    expect(await menuItems(RETURNED)).toEqual([
+      'Receive sample', 'Link patient', 'Corrected by site', 'Reject sample', 'Replaces a rejected order',
+    ]);
+    const panel = screen.getByTestId('order-panel-F1|REQ-1');
+    expect(within(panel).getByText('Returned to site')).toBeInTheDocument();
+    expect(within(panel).getByText(/Birth date missing, by Desk clerk/)).toBeInTheDocument();
+  });
+
+  it('hides Corrected by site from a user without lab.reject', async () => {
+    expect(await menuItems(RETURNED)).toEqual(['Receive sample', 'Link patient', 'Replaces a rejected order']);
+  });
+
+  it('gives each live test its own menu with Reject test, for lab.reject only', async () => {
+    caps.set = new Set(['lab.receive', 'lab.reject']);
+    const two: api.ReceptionOrder = {
+      ...ORDER,
+      tests: [
+        ORDER.tests[0]!,
+        { serviceRequestId: 'sr2', system: 'urn:test:catalog', code: 'T2', display: 'Test two', status: 'revoked', rejection: { code: 'Y1', display: 'Haemolysed' } },
+      ],
+    };
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([two]);
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-F1|REQ-1');
+    // A rejected test shows its reason as plain text, and has no menu.
+    expect(screen.getByText('Rejected: Haemolysed')).toBeInTheDocument();
+    expect(screen.queryByTestId('test-actions-sr2-T2')).toBeNull();
+    openMenu('test-actions-sr1-T1');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Reject test' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Test one')).toBeInTheDocument();
+  });
+
+  it('gives a test no menu for a user without lab.reject', async () => {
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([ORDER]);
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-F1|REQ-1');
+    expect(screen.queryByTestId('test-actions-sr1-T1')).toBeNull();
+  });
+
+  it('offers no Reject test on an old order whose tests share one request', async () => {
+    caps.set = new Set(['lab.receive', 'lab.reject']);
+    const shared: api.ReceptionOrder = {
+      ...ORDER,
+      tests: [ORDER.tests[0]!, { serviceRequestId: 'sr1', system: 'urn:test:catalog', code: 'T2', display: 'Test two', status: 'active', rejection: null }],
+    };
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([shared]);
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-F1|REQ-1');
+    expect(screen.getByText('Test two')).toBeInTheDocument();
+    expect(screen.queryByTestId('test-actions-sr1-T1')).toBeNull();
+    expect(screen.queryByTestId('test-actions-sr1-T2')).toBeNull();
+    // Reject sample still covers them.
+    openMenu('order-actions-F1|REQ-1');
+    expect(await screen.findByRole('menuitem', { name: 'Reject sample' })).toBeInTheDocument();
+  });
+
+  it('shows the returned order from the server after Return to site, and refocuses the scan box', async () => {
+    caps.set = new Set(['lab.receive', 'lab.reject']);
+    vi.mocked(api.expandValueSetByUrl).mockImplementation(async (url: string) => (url === 'urn:openldr:valueset:order-return-reason'
+      ? [{ system: 'urn:test:return', code: 'R1', display: 'Birth date missing' }]
+      : []));
+    vi.mocked(api.returnReceptionOrder).mockResolvedValue(RETURNED);
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([ORDER]);
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-F1|REQ-1');
+    openMenu('order-actions-F1|REQ-1');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Return to site' }));
+    await screen.findByRole('dialog');
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Reason' })).not.toBeDisabled());
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Reason' }), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Birth date missing' }));
+    openMenu('return-sheet-menu');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Return to site' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByText('Returned to site')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('reception-scan')).toHaveFocus());
   });
 });
 

@@ -34,3 +34,27 @@ export function labOrderId(facility: string | null, requisition: string, test: {
 export function labSpecimenId(facility: string | null, requisition: string, type: { system: string; code: string }): string {
   return hashed('sp-', facility, requisition, type)
 }
+
+/**
+ * The lab's task codes (lab module slice 3, ruling 3). HL7's task-code has no "recollect", so the
+ * codes are local. Migration 140 seeds this system with both. They are workflow constants, like the
+ * desk origin, not clinical vocabulary.
+ */
+export const LAB_TASK_SYSTEM = 'urn:openldr:cs:lab-task'
+
+export type LabTaskKind = 'correct-request' | 'recollect-sample'
+
+function digest(text: string): string {
+  return createHash('sha256').update(text).digest('hex').slice(0, HASH_LENGTH)
+}
+
+/** The id of a lab Task. The key is the order key for a return, and the focus id for a redraw, so
+ *  asking again for the same thing writes a new version of the same Task. */
+export function labTaskId(kind: LabTaskKind, key: string): string {
+  return `tk-${digest(`${kind}|${key}`)}`
+}
+
+/** The id of the Observation that records why one test's request was rejected. */
+export function labRejectionObservationId(serviceRequestId: string): string {
+  return `ob-rej-${digest(serviceRequestId)}`
+}

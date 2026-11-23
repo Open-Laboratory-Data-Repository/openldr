@@ -56,7 +56,7 @@ Selecione o teste pedido. Repita apenas quando o pedido precisar de outro teste.
 
 O formulário Lab order pede testes. Não tem o campo **Results**. A amostra é registada quando chega ao laboratório, na [Receção](/docs/reception). Os resultados vão ser introduzidos e validados no laboratório numa versão posterior. Cada teste escolhido é guardado como o seu próprio pedido de análise.
 
-O campo **Order rejection** fica no formulário Lab order até uma versão posterior. Se o seu laboratório alterou o seu próprio formulário Lab order, o OpenLDR deixa esse formulário como está.
+O formulário Lab order não tem o campo **Order rejection**. O laboratório rejeita uma amostra ou uma análise na [Receção](/docs/reception). Numa instalação atualizada, o OpenLDR retira o campo de um formulário Lab order que ninguém alterou. Se o seu laboratório alterou o seu próprio formulário Lab order, o OpenLDR deixa esse formulário como está, e o campo fica.
 
 ## Rever e enviar o pedido de laboratório
 
@@ -652,7 +652,7 @@ Leia a pré-visualização e desloque os campos. Preview actions continua nos po
 
 ## Limites
 
-Este percurso recolhe um pedido. O formulário Lab order não regista a amostra nem introduz resultados. A receção regista a amostra, e a introdução de resultados chega numa versão posterior. Este percurso não demonstra a rejeição de um pedido.
+Este percurso recolhe um pedido. O formulário Lab order não regista a amostra nem introduz resultados. A receção regista a amostra, e a introdução de resultados chega numa versão posterior. O laboratório rejeita uma amostra ou uma análise na receção, não no formulário.
 
 As listas de acesso nomeiam funções. Uma pessoa passa quando uma das suas funções está listada. Para submeter, a pessoa também tem de poder abrir o formulário. Quem gere funções abre sempre todos os formulários, e só os editores de formulários veem **Acesso**.
 

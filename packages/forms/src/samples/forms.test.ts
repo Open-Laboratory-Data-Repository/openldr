@@ -25,6 +25,7 @@ import {
   LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
   LAB_ORDER_FORM_MIGRATION_REQUESTER,
   LAB_ORDER_FORM_MIGRATION_ORDERS_ONLY,
+  LAB_ORDER_FORM_MIGRATION_NO_REJECTION,
 } from '@openldr/db';
 import { toQuestionnaireResponse } from '../response';
 import { ServiceRequestExtractor } from '../extract/extract';
@@ -300,8 +301,8 @@ describe('every shipped sample passes the FHIR path rules', () => {
 describe('migrations 102 and 103 on the Lab order form', () => {
   const order = () => sampleForms.find((f) => f.name === 'Lab order')!;
 
-  it("matches migration 138's frozen snapshot exactly", () => {
-    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_ORDERS_ONLY);
+  it("matches migration 140's frozen snapshot exactly", () => {
+    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_NO_REJECTION);
   });
 
   // The order asked for a specimen twice: once per test in the results sheet, once here. The
@@ -312,11 +313,12 @@ describe('migrations 102 and 103 on the Lab order form', () => {
   });
 
   // Lab slice 1b: the Lab order orders tests. Results come from the lab's result entry, so
-  // migration 138 dropped the Results field. The order rejection field stays until slice 3.
-  it('has no results field, and still carries the order rejection field', () => {
+  // migration 138 dropped the Results field. Slice 3: the lab rejects at Reception, so migration
+  // 140 dropped the order rejection field.
+  it('has no results field and no order rejection field', () => {
     expect(order().fields.find((f) => f.id === 'fld-ord-results')).toBeUndefined();
     expect(order().fields.some((f) => f.fieldType === 'testDetails')).toBe(false);
-    expect(order().fields.find((f) => f.id === 'fld-ord-rejection')).toBeDefined();
+    expect(order().fields.find((f) => f.id === 'fld-ord-rejection')).toBeUndefined();
   });
 
   it('tests trip no rule', () => {
@@ -333,7 +335,7 @@ describe('migrations 102 and 103 on the Lab order form', () => {
       LAB_ORDER_FORM_MIGRATION_PREV_FIELDS, LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
       LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS, LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS,
       LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS, LAB_ORDER_FORM_MIGRATION_ORDER_REJECTION,
-      LAB_ORDER_FORM_MIGRATION_REQUESTER,
+      LAB_ORDER_FORM_MIGRATION_REQUESTER, LAB_ORDER_FORM_MIGRATION_ORDERS_ONLY,
     ]) {
       const normalized = normalizeFormSchema({ ...order(), fields: prior as never });
       expect(normalized.fields).toEqual(prior);

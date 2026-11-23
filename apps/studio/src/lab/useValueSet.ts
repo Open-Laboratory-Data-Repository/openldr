@@ -6,6 +6,12 @@ import { expandValueSetByUrl, type ReceptionCoding } from '@/api';
 export const SEX_VALUE_SET = 'http://hl7.org/fhir/ValueSet/administrative-gender';
 export const PRIORITY_VALUE_SET = 'http://hl7.org/fhir/ValueSet/request-priority';
 export const SAMPLE_CONDITION_VALUE_SET = 'urn:openldr:valueset:sample-condition';
+/** Why the lab returns a request to its site (lab slice 3). */
+export const ORDER_RETURN_REASON_VALUE_SET = 'urn:openldr:valueset:order-return-reason';
+/** Why the lab rejects a sample (lab slice 3). */
+export const ORDER_REJECT_REASON_VALUE_SET = 'urn:openldr:valueset:order-reject-reason';
+/** Why the lab rejects one test (lab slice 3). */
+export const TEST_REJECT_REASON_VALUE_SET = 'urn:openldr:valueset:test-reject-reason';
 
 export interface ValueSetState {
   codes: ReceptionCoding[];
