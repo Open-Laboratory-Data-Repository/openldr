@@ -8,6 +8,12 @@ description = "Trivial sink plugin exercising the sink ABI (health_check + push_
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# Builds the host-function entrypoints. Their module imports db_select, db_write, ce_read and
+# fhir_emit, so it loads only where CE gives them. scripts/build-test-sink.mjs builds it as a
+# second plugin, test-sink-host, so the plain test-sink keeps loading with no host functions.
+host = []
+
 [dependencies]
 openldr-plugin-sdk = { path = "../openldr-plugin-sdk" }
 serde_json = "1"

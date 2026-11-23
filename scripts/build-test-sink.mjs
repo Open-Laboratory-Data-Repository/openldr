@@ -9,17 +9,66 @@ import { join } from 'node:path';
 const root = process.cwd();
 const wasmDir = join(root, 'wasm');
 
-execSync('cargo build -p test-sink --release --target wasm32-wasip1', { cwd: wasmDir, stdio: 'inherit', env: process.env });
-
 const built = join(wasmDir, 'target', 'wasm32-wasip1', 'release', 'test_sink.wasm');
-const dir = join(root, 'reference-plugins', 'test-sink');
-mkdirSync(dir, { recursive: true });
-const staged = join(dir, 'plugin.wasm');
-copyFileSync(built, staged);
-
-const sha = createHash('sha256').update(readFileSync(staged)).digest('hex');
 const workspaceToml = readFileSync(join(wasmDir, 'Cargo.toml'), 'utf8');
 const ver = (workspaceToml.match(/version\s*=\s*"([^"]+)"/) || [])[1] || '0.1.0';
+
+/** Builds test-sink with the given cargo features and copies it to reference-plugins/<name>/. */
+function buildInto(name, features) {
+  const flag = features ? ` --features ${features}` : '';
+  execSync(`cargo build -p test-sink --release --target wasm32-wasip1${flag}`, { cwd: wasmDir, stdio: 'inherit', env: process.env });
+  const dir = join(root, 'reference-plugins', name);
+  mkdirSync(dir, { recursive: true });
+  const staged = join(dir, 'plugin.wasm');
+  copyFileSync(built, staged);
+  return { dir, staged, sha: createHash('sha256').update(readFileSync(staged)).digest('hex') };
+}
+
+// The host build goes first, so the plain build is the last one left in target/.
+const hostBuild = buildInto('test-sink-host', 'host');
+// test-sink-host: the same crate with the host-function entrypoints. Its module imports db_select,
+// db_write, ce_read and fhir_emit, so it is a plugin of its own: the plain test-sink below must
+// still load where no host functions are given. Written as an artifact manifest, the form install
+// takes, because declared tables live in payload.tables.
+const hostManifest = {
+  schemaVersion: 1,
+  type: 'plugin',
+  id: 'test-sink-host',
+  version: ver,
+  description: 'Test plugin that calls the CE host functions',
+  license: 'Apache-2.0',
+  compatibility: { ceVersion: '*' },
+  capabilities: [
+    { kind: 'host:db' },
+    { kind: 'host:ce-read' },
+    { kind: 'emit-fhir', resourceTypes: ['Observation'] },
+  ],
+  payload: {
+    kind: 'plugin',
+    pluginKind: 'sink',
+    wasmSha256: hostBuild.sha,
+    entrypoints: ['health_check', 'host_db_select', 'host_db_write', 'host_db_roundtrip', 'host_ce_read', 'host_fhir_emit'],
+    wasi: true,
+    limits: { memoryMb: 256, timeoutMs: 30000 },
+    // A facility table: CE limits every read and write to the caller's facilities.
+    tables: [{
+      name: 'samples',
+      columns: [
+        { name: 'id', type: 'integer' },
+        { name: 'facility', type: 'uuid' },
+        { name: 'code', type: 'text' },
+        { name: 'note', type: 'text', nullable: true },
+      ],
+      primaryKey: ['id'],
+      indexes: [{ columns: ['facility', 'code'] }],
+      facilityColumn: 'facility',
+    }],
+  },
+};
+writeFileSync(join(hostBuild.dir, 'manifest.json'), JSON.stringify(hostManifest, null, 2) + '\n');
+process.stdout.write(`staged ${hostBuild.staged} (sha256 ${hostBuild.sha}) + manifest.json\n`);
+
+const { dir, staged, sha } = buildInto('test-sink', '');
 
 const manifest = {
   id: 'test-sink',

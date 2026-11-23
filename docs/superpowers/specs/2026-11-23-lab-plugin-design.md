@@ -107,13 +107,18 @@ Each is general: nothing in it names the lab.
 
 ### 5.1 A private schema per plugin
 
-- Name `plugin_<id>`, with the id made safe for SQL. CE creates it at first install, owned by a
-  Postgres role that can use only that schema. CE's database login needs the right to create
-  roles. If it lacks it, a `host:db` install refuses with a plain message saying what to grant.
-  Confinement is by that role, not by checking SQL text (my call).
-- The plugin bundle ships numbered SQL migration files. CE runs the new ones, in order, at install
-  and upgrade, inside a transaction, and records them in a table in that schema. A failed migration
-  stops the install and leaves the old version active.
+- Name `plugin_<id>`, with the id made safe for SQL. CE creates it at first install with its own
+  login. There is no separate Postgres role per plugin: the standalone's login cannot create roles
+  (`apps/standalone/src/postgres.ts:666`), and the operator chose on 2026-11-23 not to add one.
+- **A plugin never sends SQL.** The operator asked for "every precaution for a bug not to reach
+  other tables (for malicious intent)", with other tables read-only. So the plugin declares its
+  tables as data, not SQL: name, columns (name, type from a fixed list, nullable, default), primary
+  key, indexes, and whether the table holds facility data. CE turns that into DDL inside the
+  plugin's schema only, with every name quoted and checked against a safe pattern.
+- **Table shapes are versioned.** Each plugin version ships its full table list. At install and
+  upgrade CE compares it with what exists and makes only additive changes: new tables, new nullable
+  columns, new indexes. Anything else (drop, rename, type change) refuses the install with a plain
+  message. A refused or failed change leaves the old version active.
 - Removing the plugin drops the schema only after a typed confirmation, as removing plugin data
   does today. Disabling keeps it.
 - The signed manifest gains a capability `host:db`, so the install consent screen shows it.
@@ -122,9 +127,12 @@ Each is general: nothing in it names the lab.
 
 Added to the Extism runner. Each is available only if the manifest declares its capability.
 
-- `db_query(sql, params)` and `db_exec(sql, params)`: run against the plugin's own schema only, as
-  its role, with parameters bound. Several statements can run in one call as one transaction.
-  Capability `host:db`.
+- `db_select(request)` and `db_write(request)`: structured requests on the plugin's own tables
+  only. A select names one table, the columns, equality and range filters, order, and a limit and
+  offset (capped). A write is a list of insert, update-by-key and delete-by-key steps on its own
+  tables, run as one transaction. CE builds every statement with Kysely inside `plugin_<id>`,
+  checks every table and column name against the declared shape, binds every value, and sets a
+  statement timeout. Nothing else in the database is reachable. Capability `host:db`.
 - `ce_read(op, input)`: read CE resources. First ops: patient search and get (respecting the
   caller's data limit), patient register, value set expand and lookup, test catalog list and get
   (with the per-lab settings), facility search. Capability `host:ce-read`.
@@ -143,12 +151,12 @@ resource, not lab work in progress, so this is allowed (my call).
 `invoke` passes the caller to the plugin's code: user id, display name, capabilities, and data
 limit (facility ids). The plugin uses them for audit and to filter its own records by facility.
 
-The host also sets the caller's facility ids on the database connection for every `db_query` and
-`db_exec`, as a transaction-local setting (`set_config('openldr.facilities', ..., true)`, plus
-`openldr.user`). A plugin can then use Postgres row-level security on its own tables, so the
-database itself hides other facilities' rows even when the plugin's query forgets the filter
-(operator asked, 2026-11-23). A user with no limit gets an empty setting that the plugin's rules read
-as "all".
+For a table declared as holding facility data, CE adds the caller's facility filter to every
+select, update and delete itself, and refuses an insert for a facility outside the caller's limit.
+As a second guard, CE turns on forced row-level security on such tables, with a rule that reads a
+transaction-local setting CE sets before each request (`set_config('openldr.facilities', ..., true)`).
+`FORCE` matters because CE's login owns the tables. A user with no limit gets a setting the rule
+reads as "all". The operator asked about row-level security on 2026-11-23.
 
 ### 5.4 Plugin-declared capabilities and a gate per entrypoint
 
@@ -318,8 +326,8 @@ the changelog.
 
 ## 10. Calls I made, for the operator to check
 
-- Confinement of a plugin's tables is by its own Postgres role; an install without the right to
-  create roles refuses (5.1).
+- No per-plugin Postgres role (operator 2026-11-23). Instead no SQL from plugins: declared table
+  shapes, structured requests built by CE, additive-only upgrades (5.1, 5.2).
 - Database and CE reads from plugin code run on the worker path (5.2).
 - Patient register writes to CE before authorisation (5.2).
 - The plugin seeds and edits its own lists, so it needs no profile pack (7.3).
@@ -330,8 +338,9 @@ the changelog.
 
 ## 11. Left to the builder
 
-- The exact SQL tables and migrations of the plugin.
-- How `db_query` limits statement time and result size.
+- The plugin's table shapes.
+- The statement timeout and the row cap for `db_select`.
 - The worker or foreground choice for `invoke` (5.6).
 - How the page's tabs are laid out, copied from cdr-source's tabs.
 - Which CE tests and docs move with the code in 6.2.
+- The exact list of column types and filter operators the structured requests allow.

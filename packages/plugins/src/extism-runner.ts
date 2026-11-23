@@ -1,6 +1,6 @@
 import createPlugin from '@extism/extism';
 import type { CurrentPlugin } from '@extism/extism';
-import type { PluginRunner, RunOptions } from './runner';
+import { HOST_FN_MAX_BYTES, type HostFn, type PluginRunner, type RunOptions } from './runner';
 
 /**
  * Real Extism-backed runner (@extism/extism@1.0.3).
@@ -63,7 +63,69 @@ export function usesWorker(opts: Pick<RunOptions, 'allowedHosts' | 'offThread'>,
   return opts.offThread === true && canRunOffThread(execArgv);
 }
 
-export function createExtismRunner(): PluginRunner {
+/** The names log and progress already use. A host function may not take them. */
+const RESERVED_HOST_NAMES = new Set(['log', 'progress']);
+
+/** Said when a call needs host functions in a process that cannot start a worker (ruling 8). */
+export function hostFnsNeedAWorkerMessage(names: string[]): string {
+  return `this plugin calls CE host functions (${names.join(', ')}), which run only on a worker thread, `
+    + 'and this server was started with a loader (such as tsx) that cannot start one. '
+    + 'Start the server without a loader to use this plugin.';
+}
+
+type HostFailure = { ok: false; error: { code: string; message: string } };
+const failure = (code: string, message: string): HostFailure => ({ ok: false, error: { code, message } });
+
+/** The memory a host function bridge needs: read the plugin's input block, store the answer. */
+export interface HostFnMemory {
+  read(offset: bigint): { byteLength: number; text(): string } | null;
+  store(value: string): bigint;
+}
+
+/**
+ * Turns one CE host function into an Extism import: reads the plugin's JSON input, calls the
+ * function, stores its JSON answer and returns the offset. It never throws: on the worker path a
+ * thrown host function closes the plugin and fails the whole call, so every failure becomes a
+ * result the plugin reads. Input and output over HOST_FN_MAX_BYTES are refused. An unexpected
+ * error's own text is not passed on, since it can name tables or hosts.
+ */
+export function bridgeHostFn(name: string, fn: HostFn, onError?: (name: string, err: unknown) => void): (cp: HostFnMemory, offset: bigint) => Promise<bigint> {
+  const answer = (cp: HostFnMemory, value: unknown): bigint => {
+    let text: string;
+    try {
+      text = JSON.stringify(value === undefined ? null : value);
+    } catch {
+      text = JSON.stringify(failure('HOST_ERROR', `${name}: the answer could not be written as JSON`));
+    }
+    if (Buffer.byteLength(text, 'utf8') > HOST_FN_MAX_BYTES) {
+      text = JSON.stringify(failure('TOO_LARGE', `${name}: the answer is over ${HOST_FN_MAX_BYTES} bytes; ask for fewer rows`));
+    }
+    return cp.store(text);
+  };
+  return async (cp, offset) => {
+    const block = cp.read(offset);
+    // The size is checked on the block itself, before any of it is decoded.
+    if (block && block.byteLength > HOST_FN_MAX_BYTES) {
+      return answer(cp, failure('TOO_LARGE', `${name}: the request is over ${HOST_FN_MAX_BYTES} bytes`));
+    }
+    const raw = block ? block.text() : '';
+    let input: unknown;
+    try {
+      input = raw.trim() === '' ? null : JSON.parse(raw);
+    } catch {
+      return answer(cp, failure('INVALID_JSON', `${name}: the request is not valid JSON`));
+    }
+    try {
+      return answer(cp, await fn(input));
+    } catch (err) {
+      onError?.(name, err);
+      return answer(cp, failure('HOST_ERROR', `${name} failed inside CE`));
+    }
+  };
+}
+
+export function createExtismRunner(runnerOpts: { execArgv?: readonly string[] } = {}): PluginRunner {
+  const execArgv = runnerOpts.execArgv ?? process.execArgv;
   return {
     async run(wasm: Uint8Array, input: Uint8Array, opts: RunOptions): Promise<Uint8Array> {
       const readStr = (cp: CurrentPlugin, offset: bigint): string => {
@@ -71,10 +133,29 @@ export function createExtismRunner(): PluginRunner {
         return block ? block.text() : '';
       };
 
+      // CE host functions are async, and only the worker path awaits an async host function. So a
+      // call with any runs there, and fails plainly where no worker can start (ruling 8), rather
+      // than running without them.
+      const hostFns = opts.hostFns ?? {};
+      const hostNames = Object.keys(hostFns);
+      for (const n of hostNames) {
+        if (RESERVED_HOST_NAMES.has(n)) throw new Error(`host function name '${n}' is reserved`);
+      }
+      if (hostNames.length > 0 && !canRunOffThread(execArgv)) {
+        throw new Error(hostFnsNeedAWorkerMessage(hostNames));
+      }
+      const userFns: Record<string, (cp: CurrentPlugin, offset: bigint) => Promise<bigint>> = {};
+      for (const n of hostNames) {
+        // An unexpected error's details go to CE's own logger (onHostError), never to the plugin's
+        // log channel.
+        const bridged = bridgeHostFn(n, hostFns[n], opts.onHostError);
+        userFns[n] = (cp, offset) => bridged(cp as unknown as HostFnMemory, offset);
+      }
+
       // Egress requires the off-thread worker path — the only one that can perform HTTP.
       // No host pinned ⇒ stay in-process (ingest converters, sink dry-runs): faster, no egress.
       // A call that asks for `offThread` takes the worker too, where the process allows it.
-      const useWorker = usesWorker(opts);
+      const useWorker = hostNames.length > 0 || usesWorker(opts, execArgv);
 
       const plugin = await createPlugin(
         { wasm: [{ data: wasm }] },
@@ -103,6 +184,7 @@ export function createExtismRunner(): PluginRunner {
               progress(_cp: CurrentPlugin, done: bigint, total: bigint) {
                 opts.host.progress(Number(done), Number(total));
               },
+              ...userFns,
             },
           },
         },

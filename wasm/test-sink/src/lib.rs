@@ -62,6 +62,73 @@ mod plugin {
     }
 }
 
+/// Host-function entrypoints (feature `host`). Each passes its input to one CE host function
+/// through the SDK wrappers and answers `{ ok: true, result }` or `{ ok: false, error }`, so a test
+/// sees exactly what CE answered.
+#[cfg(all(target_arch = "wasm32", feature = "host"))]
+mod host_plugin {
+    use extism_pdk::*;
+    use openldr_plugin_sdk::host::{self, HostError};
+    use serde_json::{json, Value};
+
+    fn input_json(input: &[u8]) -> FnResult<Value> {
+        if input.is_empty() {
+            return Ok(json!({}));
+        }
+        serde_json::from_slice(input)
+            .map_err(|e| WithReturnCode::new(Error::msg(format!("invalid input JSON: {e}")), 1))
+    }
+
+    fn answer(r: Result<Value, HostError>) -> String {
+        match r {
+            Ok(result) => json!({ "ok": true, "result": result }),
+            Err(e) => json!({ "ok": false, "error": e.to_json() }),
+        }
+        .to_string()
+    }
+
+    /// Input: a db_select request.
+    #[plugin_fn]
+    pub fn host_db_select(input: Vec<u8>) -> FnResult<String> {
+        Ok(answer(host::db_select(&input_json(&input)?)))
+    }
+
+    /// Input: a db_write request.
+    #[plugin_fn]
+    pub fn host_db_write(input: Vec<u8>) -> FnResult<String> {
+        Ok(answer(host::db_write(&input_json(&input)?)))
+    }
+
+    /// Input: `{ table, values, select }`. Inserts one row, then reads with `select`, in one call.
+    /// Answers `{ write, select }`, each as CE answered it.
+    #[plugin_fn]
+    pub fn host_db_roundtrip(input: Vec<u8>) -> FnResult<String> {
+        let i = input_json(&input)?;
+        let table = i.get("table").cloned().unwrap_or(Value::Null);
+        let values = i.get("values").cloned().unwrap_or_else(|| json!({}));
+        let write = host::db_write(&json!({ "steps": [{ "op": "insert", "table": table, "values": values }] }));
+        let select = host::db_select(i.get("select").unwrap_or(&json!({})));
+        let parse = |s: String| serde_json::from_str::<Value>(&s).unwrap_or(Value::Null);
+        Ok(json!({ "write": parse(answer(write)), "select": parse(answer(select)) }).to_string())
+    }
+
+    /// Input: `{ op, input }`.
+    #[plugin_fn]
+    pub fn host_ce_read(input: Vec<u8>) -> FnResult<String> {
+        let i = input_json(&input)?;
+        let op = i.get("op").and_then(Value::as_str).unwrap_or("").to_string();
+        Ok(answer(host::ce_read(&op, i.get("input").cloned().unwrap_or_else(|| json!({})))))
+    }
+
+    /// Input: `{ resources: [...] }`.
+    #[plugin_fn]
+    pub fn host_fhir_emit(input: Vec<u8>) -> FnResult<String> {
+        let i = input_json(&input)?;
+        let resources = i.get("resources").and_then(Value::as_array).cloned().unwrap_or_default();
+        Ok(answer(host::fhir_emit(&resources)))
+    }
+}
+
 // The host (non-wasm) build needs at least one item so `cargo check`/`clippy` succeed.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn _host_placeholder() {}

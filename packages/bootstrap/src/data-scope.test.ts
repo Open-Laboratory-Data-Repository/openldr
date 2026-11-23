@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { DataScope, UserDataScopeStore } from '@openldr/db';
-import { DataScopeError, dataScopeChoices, MAX_SCOPE_PLACES, resolveDataScope, setUserDataScope } from './data-scope';
+import { DataScopeError, dataScopeChoices, facilityIdsInScope, MAX_SCOPE_PLACES, resolveDataScope, setUserDataScope } from './data-scope';
 
 // Design 2026-11-18-roles-scope, part 3: the one setter the route and the CLI call.
 function memStore(): UserDataScopeStore & { saved: Map<string, DataScope> } {
@@ -146,5 +146,33 @@ describe('the data limit stays within MSSQL\'s bound values', () => {
     expect(err).toBeInstanceOf(DataScopeError);
     expect(err.reason).toBe('too-many');
     expect(store.saved.size).toBe(0);
+  });
+});
+
+describe('facilityIdsInScope (plugin host ruling 5)', () => {
+  const rows = [
+    { id: 'FAC-1', name: 'One', facility_code: null, region: 'Dodoma', district: 'Kondoa' },
+    { id: 'fac-2', name: 'Two', facility_code: null, region: 'Dodoma', district: 'Chamwino' },
+    { id: 'fac-3', name: 'Three', facility_code: null, region: 'Arusha', district: 'Kondoa' },
+    { id: 'fac-4', name: 'Four', facility_code: null, region: null, district: null },
+  ];
+  const limited = (over: Partial<Extract<DataScope, { limited: true }>>): DataScope =>
+    ({ limited: true, facilities: [], districts: [], regions: [], ...over });
+
+  it('is * for Everything', () => {
+    expect(facilityIdsInScope(rows, { limited: false })).toBe('*');
+  });
+  it('gives a listed facility, lowercased, even one the register no longer holds', () => {
+    expect(facilityIdsInScope(rows, limited({ facilities: ['FAC-4', 'Gone'] }))).toEqual(['fac-4', 'gone']);
+  });
+  it('gives every facility in a listed district, matched with its region', () => {
+    expect(facilityIdsInScope(rows, limited({ districts: [{ region: 'Dodoma', district: 'Kondoa' }] }))).toEqual(['fac-1']);
+  });
+  it('gives every facility in a listed region, joined with the listed ones', () => {
+    expect(facilityIdsInScope(rows, limited({ regions: ['Dodoma'], facilities: ['fac-3'] }))).toEqual(['fac-1', 'fac-2', 'fac-3']);
+  });
+  it('is an empty list, never *, when the limit covers nothing', () => {
+    expect(facilityIdsInScope(rows, limited({}))).toEqual([]);
+    expect(facilityIdsInScope(rows, limited({ regions: ['Nowhere'] }))).toEqual([]);
   });
 });

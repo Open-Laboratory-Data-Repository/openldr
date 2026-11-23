@@ -51,7 +51,7 @@ export function newerAvailable(id: string, activeVersion: string, available: Ava
 const CAPABILITY_KEY: Record<string, string> = {
   'read-input': 'readInput', 'emit-fhir': 'emitFhir', 'net-egress': 'netEgress', 'data-scope': 'dataScope',
   'host:reports': 'hostReports', 'host:connectors': 'hostConnectors', 'host:schedule': 'hostSchedule',
-  'host:fhir': 'hostFhir', 'host:import': 'hostImport',
+  'host:fhir': 'hostFhir', 'host:import': 'hostImport', 'host:db': 'hostDb', 'host:ce-read': 'hostCeRead',
 };
 
 /** One capability as a plain sentence for the Permissions list and the install consent, with its

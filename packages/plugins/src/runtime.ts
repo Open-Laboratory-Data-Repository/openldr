@@ -14,6 +14,7 @@ import {
   type TrustStore,
   type Capability,
 } from '@openldr/marketplace';
+import { PluginShapeError, tableShapesSchema, type PluginSchemas, type TableShape } from '@openldr/db';
 import { parseManifest, type PluginManifest } from './manifest';
 import { sha256Hex } from './hash';
 import type { PluginStore, PluginRow } from './store';
@@ -40,6 +41,9 @@ export interface PluginRuntimeDeps {
   ceVersion: string;
   verifyConfig: { devAllowUnsigned: boolean };
   recordInstall?: (e: MarketplaceInstallAudit) => Promise<void>;
+  /** Builds the tables a plugin declares in payload.tables. Install only plans and applies them.
+   *  Removal drops them (plugin-removal.ts), never install, rollback or disable. */
+  schemas?: Pick<PluginSchemas, 'plan' | 'apply'>;
 }
 
 export interface InstallApproval {
@@ -147,6 +151,12 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     return converter;
   }
 
+  /** The tables the stored, signed manifest declares. A corrupt list throws, like a corrupt grant. */
+  function storedTables(row: PluginRow): TableShape[] {
+    const tables = (row.manifest as { payload?: { tables?: unknown } }).payload?.tables;
+    return tables === undefined ? [] : tableShapesSchema.parse(tables);
+  }
+
   async function loadSink(id: string, version?: string): Promise<WasmSink | undefined> {
     const row = await deps.store.get(id, version);
     if (!row) return undefined;
@@ -163,7 +173,7 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     }
     const wasm = await loadWasm(row);
     const grant = readGrant(row.manifest);
-    const sink = createWasmSink(manifest, wasm, deps.runner, deps.logger, grant.legacy ? undefined : grant.capabilities);
+    const sink = createWasmSink(manifest, wasm, deps.runner, deps.logger, grant.legacy ? undefined : grant.capabilities, storedTables(row));
     sinkCache.set(key, sink);
     return sink;
   }
@@ -253,6 +263,38 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
         const uiSha = sha256Hex(opts.ui);
         if (uiSha !== uiMeta.sha256) {
           throw new Error(`artifact ${artifact.id}: ui.html sha (${uiSha}) does not match manifest payload.ui.sha256 (${uiMeta.sha256})`);
+        }
+      }
+
+      // Declared tables, after every check above and before the version is made active, so a
+      // refused or failed shape change leaves the version that was active before still active.
+      const tables = artifact.payload.tables;
+      const active = (await deps.store.list()).find((r) => r.id === artifact.id && r.active);
+      const kept = active ? `${active.id}@${active.version} stays active` : 'nothing was installed';
+      const notInstalled = `${artifact.id}@${artifact.version} was not installed, and ${kept}`;
+      if (tables === undefined || tables.length === 0) {
+        const before = (active?.manifest as { payload?: { tables?: unknown[] } } | undefined)?.payload?.tables;
+        if (Array.isArray(before) && before.length > 0) {
+          deps.logger.warn(
+            { id: artifact.id, from: active!.version, to: artifact.version },
+            'plugin upgrade declares no tables; the tables of the version before and their data stay',
+          );
+        }
+      } else {
+        if (!deps.schemas) {
+          throw new Error(`artifact ${artifact.id}@${artifact.version} declares tables, but this OpenLDR cannot create plugin tables here`);
+        }
+        try {
+          await deps.schemas.plan(artifact.id, tables);
+          await deps.schemas.apply(artifact.id, tables);
+        } catch (err) {
+          if (err instanceof PluginShapeError) throw new PluginShapeError(err.reason, `${notInstalled}: ${err.message}`);
+          // A database error: the full error goes to the log, and the caller gets a short reason
+          // with no SQL text or stack.
+          deps.logger.error({ id: artifact.id, version: artifact.version, err }, 'plugin tables could not be built');
+          const code = (err as { code?: unknown } | null)?.code;
+          const short = typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? ` (database error ${code})` : '';
+          throw new Error(`${notInstalled}: the database refused the table change${short}`);
         }
       }
 

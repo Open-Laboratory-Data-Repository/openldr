@@ -15,7 +15,7 @@ describe('capabilityLine', () => {
   });
 
   it('every capability the marketplace knows has a plain name in en, fr and pt', () => {
-    const kinds = ['read-input', 'emit-fhir', 'net-egress', 'data-scope', 'host:reports', 'host:connectors', 'host:schedule', 'host:fhir', 'host:import'];
+    const kinds = ['read-input', 'emit-fhir', 'net-egress', 'data-scope', 'host:reports', 'host:connectors', 'host:schedule', 'host:fhir', 'host:import', 'host:db', 'host:ce-read'];
     for (const lng of ['en', 'fr', 'pt']) {
       const tl = i18n.getFixedT(lng);
       for (const kind of kinds) {

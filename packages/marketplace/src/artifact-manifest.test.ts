@@ -384,3 +384,74 @@ describe('ui sites', () => {
     expect(() => parseArtifactManifest(withUi({ ...web, sites: { widget: { title: 'T', height: 'huge' } } }))).toThrow();
   });
 });
+
+// Layer: the zod schema in parseArtifactManifest. No database, no DDL.
+describe('declared tables', () => {
+  const table = {
+    name: 'lab_orders',
+    columns: [
+      { name: 'id', type: 'uuid' },
+      { name: 'facility_id', type: 'text' },
+      { name: 'status', type: 'text', nullable: false, default: 'new' },
+      { name: 'details', type: 'jsonb', nullable: true },
+    ],
+    primaryKey: ['id'],
+    indexes: [{ columns: ['facility_id', 'status'] }, { columns: ['status'], unique: false }],
+    facilityColumn: 'facility_id',
+  };
+  const withTables = (tables: unknown, capabilities: unknown[] = [{ kind: 'host:db' }]) => ({
+    ...base, capabilities, payload: { ...base.payload, tables },
+  });
+
+  it('parses a manifest with tables and host:db', () => {
+    const m = parseArtifactManifest(withTables([table]));
+    expect(m.payload.kind === 'plugin' && m.payload.tables).toEqual([table]);
+  });
+  it('refuses tables without host:db', () => {
+    expect(() => parseArtifactManifest(withTables([table], [{ kind: 'host:ce-read' }]))).toThrow(/host:db/);
+  });
+  it('refuses a bad table or column name', () => {
+    for (const name of ['Orders', '1orders', 'orders;drop', 'a'.repeat(64), '']) {
+      expect(() => parseArtifactManifest(withTables([{ ...table, name }])), name).toThrow();
+      expect(() => parseArtifactManifest(withTables([{ ...table, columns: [...table.columns, { name, type: 'text' }] }])), name).toThrow();
+    }
+  });
+  it('refuses the two columns CE manages', () => {
+    for (const name of ['created_at', 'updated_at']) {
+      expect(() => parseArtifactManifest(withTables([{ ...table, columns: [...table.columns, { name, type: 'timestamptz' }] }]))).toThrow(/added by CE/);
+    }
+  });
+  it('refuses an unknown column type', () => {
+    for (const type of ['varchar', 'serial', 'text[]', 'TEXT']) {
+      expect(() => parseArtifactManifest(withTables([{ ...table, columns: [{ name: 'id', type }] }])), type).toThrow();
+    }
+  });
+  it('refuses a primary key, index or facility column that is not a declared column', () => {
+    expect(() => parseArtifactManifest(withTables([{ ...table, primaryKey: ['nope'] }]))).toThrow(/primary key column 'nope'/);
+    expect(() => parseArtifactManifest(withTables([{ ...table, primaryKey: [] }]))).toThrow();
+    expect(() => parseArtifactManifest(withTables([{ ...table, indexes: [{ columns: ['nope'] }] }]))).toThrow(/index column 'nope'/);
+    expect(() => parseArtifactManifest(withTables([{ ...table, facilityColumn: 'nope' }]))).toThrow(/facility column 'nope'/);
+  });
+  it('refuses a facility column that is not text or uuid', () => {
+    const t = { ...table, columns: [...table.columns, { name: 'site', type: 'integer' }], facilityColumn: 'site' };
+    expect(() => parseArtifactManifest(withTables([t]))).toThrow(/text or uuid/);
+  });
+  it('refuses a table or column declared twice', () => {
+    expect(() => parseArtifactManifest(withTables([table, table]))).toThrow(/declared twice/);
+    expect(() => parseArtifactManifest(withTables([{ ...table, columns: [...table.columns, { name: 'id', type: 'text' }] }]))).toThrow(/declared twice/);
+  });
+  it('refuses more than 50 tables or 100 columns, and unknown keys', () => {
+    const many = Array.from({ length: 51 }, (_, i) => ({ ...table, name: `t${i}` }));
+    expect(() => parseArtifactManifest(withTables(many))).toThrow();
+    expect(() => parseArtifactManifest(withTables(many.slice(0, 50)))).not.toThrow();
+    const cols = Array.from({ length: 101 }, (_, i) => ({ name: `c${i}`, type: 'text' }));
+    expect(() => parseArtifactManifest(withTables([{ name: 'wide', columns: cols, primaryKey: ['c0'] }]))).toThrow();
+    expect(() => parseArtifactManifest(withTables([{ ...table, sql: 'drop table x' }]))).toThrow();
+    expect(() => parseArtifactManifest(withTables([{ ...table, columns: [{ name: 'id', type: 'uuid', check: 'true' }] }]))).toThrow();
+  });
+  it('a manifest with no tables parses to the same object, with no tables key', () => {
+    const m = parseArtifactManifest(base);
+    expect(m.payload.kind === 'plugin' && 'tables' in m.payload).toBe(false);
+    expect(parseArtifactManifest(JSON.parse(JSON.stringify(m)))).toEqual(m);
+  });
+});

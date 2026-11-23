@@ -24,6 +24,11 @@ export const capabilitySchema = z.discriminatedUnion('kind', [
   // SELECT statements the plugin's signed wasm supplies, and save the mapped records into CE.
   // Enforced by the import service (packages/bootstrap import-run.ts) and the broker.
   z.object({ kind: z.literal('host:import') }),
+  // host:db: CE builds the tables the plugin declares in payload.tables, in the plugin's own
+  // schema, and the plugin reads and writes them through structured requests. It never sends SQL.
+  z.object({ kind: z.literal('host:db') }),
+  // host:ce-read: read CE's own records through structured requests the host checks.
+  z.object({ kind: z.literal('host:ce-read') }),
 ]);
 
 export type Capability = z.infer<typeof capabilitySchema>;

@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import type { Kysely } from 'kysely';
 import type { Logger } from '@openldr/core';
 import type { BlobStoragePort } from '@openldr/ports';
-import type { InternalSchema } from '@openldr/db';
+import { createPluginSchemas, type InternalSchema } from '@openldr/db';
 import type { AuditStore } from '@openldr/audit';
 import { safeRecord } from '@openldr/audit';
 import { createPluginStore, createPluginRuntime, createExtismRunner, type PluginRuntime } from '@openldr/plugins';
@@ -56,5 +56,6 @@ export function createPluginRegistry(deps: {
     ceVersion: CE_VERSION,
     verifyConfig: { devAllowUnsigned: deps.devAllowUnsigned },
     recordInstall: (e) => safeRecord(deps.audit, deps.logger, e),
+    schemas: createPluginSchemas(deps.internalDb as unknown as Kysely<any>),
   });
 }

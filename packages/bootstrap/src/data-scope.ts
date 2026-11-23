@@ -71,6 +71,18 @@ export function inDataScope(
     || scope.districts.some((d) => d.region === r.region && d.district === r.district);
 }
 
+/** The facility ids a data limit covers (plugin host ruling 5): the facilities it lists, plus every
+ *  register facility in a district or region it lists. Lowercased and sorted. '*' for Everything.
+ *  An empty list means the limit covers no facility, so the caller sees nothing. */
+export function facilityIdsInScope(rows: ScopeRegistryRow[], scope: DataScope): string[] | '*' {
+  if (!scope.limited) return '*';
+  const ids = new Set(scope.facilities.map((f) => f.toLowerCase()));
+  if (scope.districts.length > 0 || scope.regions.length > 0) {
+    for (const r of rows) if (inDataScope(r, scope)) ids.add(r.id.toLowerCase());
+  }
+  return [...ids].sort();
+}
+
 /** A data limit turned into what the warehouse can match (`ResolvedScope` in @openldr/dashboards).
  *  Undefined for Everything. Facilities, regions and districts are matched in facility_map. Studio
  *  orders are not in facility_map: they carry the register code the picker emitted, so the codes of

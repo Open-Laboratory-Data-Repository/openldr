@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { CE_VERSION, PluginStillStopping, ActiveVersionRemoval, PackRemovalError, createContentPackInstaller, type AppContext } from '@openldr/bootstrap';
 import { generatePublisherKeypair, packBundle, signManifest, keyFingerprint, parseContentPack, summarizeContentPack } from '@openldr/marketplace';
 import { createPluginRuntime } from '@openldr/plugins';
-import { createRegistryStore, createAppSettingsStore } from '@openldr/db';
+import { createRegistryStore, createAppSettingsStore, PluginShapeError } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { registerMarketplaceRoutes } from './marketplace-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
@@ -347,6 +347,16 @@ describe('marketplace routes', () => {
     const opts = calls.install[0] as { approval: { approvedBy: string; acknowledgedCapabilities: unknown } };
     expect(opts.approval.approvedBy).toBe('admin');
     expect(opts.approval.acknowledgedCapabilities).toEqual([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]);
+  });
+
+  it('an upgrade whose table change is refused is a 400 that says why and what stays active', async () => {
+    const { runtime } = fakePlugins();
+    const message = 'demo@1.0.0 was not installed, and demo@0.9.0 stays active: table orders: column status is gone; columns cannot be dropped';
+    const refusing = { ...runtime, install: async () => { throw new PluginShapeError('drop', message); } };
+    const { app } = await appWith({}, refusing, { seed: [localReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'reg-local::demo-1', acknowledgedCapabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }] } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: message });
   });
 
   it('install rejects a non-composite ref', async () => {

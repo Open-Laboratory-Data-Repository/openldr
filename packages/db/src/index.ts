@@ -37,6 +37,12 @@ export * from './custom-query-store';
 export * from './custom-query-group-store';
 export * from './registry-store';
 export * from './plugin-data-store';
+export {
+  createPluginSchemas, PluginShapeError, pluginSchemaName, columnDefault, indexName,
+  SHAPES_TABLE, FACILITY_POLICY, FACILITIES_SETTING,
+  type PluginSchemas, type ShapePlan, type PluginShapeErrorReason,
+} from './plugin-schema';
+export * from './plugin-data-requests';
 export * from './import-copy-store';
 export * from './import-check-held-store';
 export * from './import-check-correction-store';
@@ -157,3 +163,8 @@ export {
   findByRequisition, indexRequisitions, rebuildRequisitions, requisitionRowOf, type RequisitionRow,
 } from './lab-requisitions';
 export { requesterFacility, requesterPractitionerDisplay, type RequesterFacility } from './relational/requester';
+export {
+  COLUMN_TYPES, PLUGIN_IDENTIFIER, CE_MANAGED_COLUMNS, MAX_PLUGIN_TABLES, MAX_PLUGIN_COLUMNS, MAX_PLUGIN_INDEXES, MAX_INDEX_COLUMNS,
+  columnShapeSchema, tableShapeSchema, tableShapesSchema,
+  type ColumnType, type ColumnShape, type TableShape,
+} from './plugin-table-shape';

@@ -1,7 +1,9 @@
 import { beginOp, type Logger } from '@openldr/core';
 import type { Capability } from '@openldr/marketplace';
+import type { PluginCaller, TableShape } from '@openldr/db';
 import type { PluginManifest } from './manifest';
-import type { PluginRunner, RunnerHostFns } from './runner';
+import type { HostFn, PluginRunner, RunnerHostFns } from './runner';
+import { hasHostFnCapability, type PluginHost } from './plugin-host';
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -15,6 +17,11 @@ export interface SinkInvokeOptions {
   /** Run the call on a worker thread when the process allows it. For a long call only: a worker
    *  starts for each call, which costs more than a small call takes. */
   offThread?: boolean;
+  /** The signed-in person the call is made for, from CE's session. With `host`, it gives the
+   *  plugin the host functions its grant allows (db_select, db_write, ce_read, fhir_emit). */
+  caller?: PluginCaller;
+  /** Builds the host functions for this call. */
+  host?: PluginHost;
 }
 
 /** A loaded sink plugin: invoke one of its named entrypoints with a JSON request,
@@ -33,6 +40,8 @@ export function createWasmSink(
   runner: PluginRunner,
   logger: Logger,
   grant?: Capability[],
+  /** The tables the stored manifest declares (payload.tables). */
+  tables: TableShape[] = [],
 ): WasmSink {
   const host: RunnerHostFns = {
     log(level, msg) {
@@ -47,6 +56,22 @@ export function createWasmSink(
   // Any installed sink carries a grant array, so egress is gated on the net-egress capability.
   const enforced = grant !== undefined;
   const hasNetEgress = enforced && grant.some((c) => c.kind === 'net-egress');
+  // A plugin that reads CE or its own tables imports those host functions, so it cannot even load
+  // without them. Such a call needs a caller.
+  const needsCaller = enforced && grant.some((c) => c.kind === 'host:db' || c.kind === 'host:ce-read');
+
+  /** The host functions for this call. The plugin's id, version, grant and tables come from the
+   *  stored manifest, and the caller from CE, so nothing the plugin sends can change them. */
+  function hostFnsFor(opts: SinkInvokeOptions): Record<string, HostFn> | undefined {
+    if (enforced && opts.host && opts.caller && hasHostFnCapability(grant)) {
+      const fns = opts.host.forCall({ id: manifest.id, version: manifest.version, capabilities: grant, tables }, opts.caller);
+      return Object.keys(fns).length > 0 ? fns : undefined;
+    }
+    if (needsCaller) {
+      throw new Error(`sink ${manifest.id}: this plugin reads CE through host functions, which need a signed-in caller, and this call has none`);
+    }
+    return undefined;
+  }
 
   async function runEntrypoint(entrypoint: string, inputBytes: Uint8Array, opts: SinkInvokeOptions): Promise<unknown> {
     if (!manifest.entrypoints.includes(entrypoint)) {
@@ -71,6 +96,7 @@ export function createWasmSink(
     // handler (apps/server) reads this snapshot so the crash marker names the culprit. Every
     // wasm execution flows through here (broker invoke, connector egress, headless schedule
     // pushes, dry-runs), so this is the single authoritative stamp. Cleared in `finally`.
+    const hostFns = hostFnsFor(opts);
     const doneOp = beginOp({ pluginId: manifest.id, op: 'invoke', entrypoint });
     let out: Uint8Array;
     try {
@@ -83,6 +109,10 @@ export function createWasmSink(
         host,
         allowedHosts: opts.allowedHosts,
         offThread: opts.offThread,
+        ...(hostFns ? {
+          hostFns,
+          onHostError: (fn: string, err: unknown) => logger.error({ err, plugin: manifest.id, fn }, 'plugin host function failed'),
+        } : {}),
       });
     } finally {
       doneOp();

@@ -1,0 +1,159 @@
+# Plugin tables and host functions
+
+A plugin's server code can keep its own records, read some of CE's records and send FHIR records into CE. It does this through four host functions: `db_select`, `db_write`, `ce_read` and `fhir_emit`. A plugin never sends SQL. It sends a JSON request, and CE checks it and builds the statement.
+
+This page is for the person who writes the plugin. The administrator sees the capabilities on the install screen and approves them there.
+
+## Capabilities
+
+Each host function exists only when the plugin's manifest asks for its capability. A plugin without the capability does not get the function.
+
+| Host function | Capability it needs |
+|---|---|
+| `db_select`, `db_write` | `host:db` |
+| `ce_read` | `host:ce-read` |
+| `fhir_emit` | `emit-fhir` and `host:db` |
+
+The `emit-fhir` capability lists the record types the plugin may send, for example `{ "kind": "emit-fhir", "resourceTypes": ["Observation"] }`.
+
+A wasm module that imports a host function cannot load where CE does not give it. So import only the functions your capabilities give.
+
+Host functions run only on a worker thread. A server started with a loader such as `tsx` cannot start one. There a call fails with a message that says so, and the plugin does not run without its functions.
+
+Every call needs a signed-in person. CE passes that person to the host functions from its own session. The plugin cannot set or change it.
+
+## Declared tables
+
+A plugin lists its tables in `payload.tables` in its signed manifest. Tables need `host:db`. CE makes them at install, in a schema of the plugin's own, `plugin_<id>`. A plugin reaches no other table.
+
+```json
+{
+  "name": "samples",
+  "columns": [
+    { "name": "id", "type": "integer" },
+    { "name": "facility", "type": "uuid" },
+    { "name": "code", "type": "text" },
+    { "name": "note", "type": "text", "nullable": true }
+  ],
+  "primaryKey": ["id"],
+  "indexes": [{ "columns": ["facility", "code"] }],
+  "facilityColumn": "facility"
+}
+```
+
+- A table or column name matches `^[a-z][a-z0-9_]{0,62}$`.
+- A column type is one of `text`, `integer`, `bigint`, `numeric`, `boolean`, `timestamptz`, `date`, `jsonb` or `uuid`.
+- A column may be empty unless it sets `"nullable": false`. Primary key and facility columns are never empty.
+- A column may set a `default`: a string, number, true, false or null.
+- CE adds `created_at` and `updated_at` to every table and keeps them up to date. A plugin may read them but not declare or set them.
+- A plugin may declare up to 50 tables, 100 columns a table and 20 indexes a table.
+
+### Facility tables
+
+A table with a `facilityColumn` holds rows that belong to one facility. The column is `text` or `uuid` and holds the facility id.
+
+CE adds the caller's facilities to every select, update and delete on that table. A person limited to some facilities sees only their rows, even with no filter in the request. An insert or update that sets another facility is refused. CE also turns on row-level security for the table, as a second guard.
+
+### Upgrades
+
+A new version may only add to its tables. It may add tables, add columns that may be empty and add indexes.
+
+CE refuses a version that drops or renames a column, changes a type, changes whether a column may be empty, changes a default, the primary key or the facility column, or drops a table or index. The refusal names the table and column. The version installed before stays active.
+
+A version that declares no tables keeps the tables and rows of the version before. Disabling a plugin, rolling it back or removing one old version keeps them too. Only removing the plugin and choosing to keep nothing drops the schema and its rows.
+
+After a rollback, the older version keeps reading and writing its tables. It reads and writes only the columns it declares. A column a newer version added stays in the table, and rows the older version adds leave it empty.
+
+## db_select
+
+Reads rows from one declared table.
+
+```json
+{
+  "table": "samples",
+  "columns": ["id", "code"],
+  "where": [
+    { "column": "code", "op": "prefix", "value": "a" },
+    { "column": "id", "op": "in", "values": [1, 2, 3] }
+  ],
+  "orderBy": [{ "column": "id", "direction": "desc" }],
+  "limit": 100,
+  "offset": 0,
+  "count": true
+}
+```
+
+The filters are `eq`, `lt`, `lte`, `gt`, `gte`, `in` (up to 1000 values), `is_null` (with `"value": true` or `false`) and `prefix` (text columns only). All filters must hold. `limit` is 100 if you leave it out, and at most 1000. The answer is `{ "rows": [...] }`, with `count` when you ask for it. The count ignores `limit` and `offset`.
+
+## db_write
+
+Inserts, updates and deletes in one transaction. If one step fails, none is kept.
+
+```json
+{
+  "steps": [
+    { "op": "insert", "table": "samples", "values": { "id": 4, "facility": "aaaaaaaa-1111-4111-8111-111111111111", "code": "a4" } },
+    { "op": "update", "table": "samples", "key": { "id": 4 }, "set": { "note": "checked" } },
+    { "op": "delete", "table": "samples", "key": { "id": 2 } }
+  ]
+}
+```
+
+A `key` names exactly the primary key columns. A request has up to 500 steps. An insert into a facility table must set the facility column. The answer is `{ "results": [{ "rowCount": 1 }, ...] }`, one per step. A step on a row outside the caller's facilities changes nothing and gives `rowCount` 0.
+
+`db_select` and `db_write` each stop after 5 seconds.
+
+## ce_read
+
+Reads CE's own records through one op. The request is `{ "op": "<op>", "input": { ... } }`.
+
+| Op | Input |
+|---|---|
+| `patients.search` | `search`, `status`, `limit`, `offset` |
+| `patients.get` | `ref` |
+| `patients.register` | `patient`, a FHIR Patient with an `id` |
+| `valueset.expand` | `url`, `count`, `offset`, `filter` |
+| `valueset.lookup` | `system`, `code` |
+| `testCatalog.list` | the test catalog's list filters |
+| `testCatalog.get` | `code` |
+| `facilities.search` | `q`, `limit`, `offset` |
+
+Each op follows the same rules as the studio page that shows the same records. The patient ops need the caller to hold `patients.view`. Identifiers show only to a caller who holds `patients.view_identifiers`. A limited caller finds only patients and facilities inside their limit. `patients.register` also needs `Patient` in the plugin's `emit-fhir` list.
+
+## fhir_emit
+
+Sends finished FHIR records into CE. The request is `{ "resources": [ ... ] }`.
+
+CE checks every record before it saves any. If one record has a type not in the plugin's `emit-fhir` list, nothing is saved. CE runs its own validation on the records, as it does for an import. A plugin may change a record only if it wrote that record. Each save goes in the audit log with the plugin's id and version, and the record keeps `plugin:<id>` as its source.
+
+A caller limited to some facilities cannot send records. A Bundle, or a record with `contained` records, is refused.
+
+## Answers and errors
+
+Every host function answers `{ "ok": true, "result": ... }` or `{ "ok": false, "error": { "code": "...", "message": "..." } }`. A host function does not throw. Read the answer and decide what to do.
+
+CE refuses these before any SQL runs:
+
+- a table or column name with quotes or a dot, such as `pg_catalog.pg_roles` or `public.users`
+- a table or column the manifest does not declare
+- a limit over 1000, or more than 1000 values in `in`
+- a value of the wrong type for its column
+- an insert or update of `created_at` or `updated_at`
+- a field the request shape does not have, such as `pluginId` or `facilities`
+
+Common codes are `REQUEST_INVALID`, `REQUEST_TABLE`, `REQUEST_COLUMN`, `REQUEST_VALUE`, `REQUEST_KEY` and `REQUEST_FACILITY` for table requests. `ce_read` and `fhir_emit` use `INVALID_REQUEST`, `UNKNOWN_OP`, `FORBIDDEN`, `NOT_FOUND`, `OUTSIDE_DATA_LIMIT`, `RESOURCE_TYPE_NOT_ALLOWED` and `VALIDATION_FAILED`. A request or answer over 1 MB gives `TOO_LARGE`. An error inside CE gives `HOST_ERROR`, and the details go to CE's log, not to the plugin.
+
+## From Rust
+
+The `openldr-plugin-sdk` crate has a wrapper for each function in `openldr_plugin_sdk::host`. Each takes a `serde_json::Value` and returns `Result<Value, HostError>`.
+
+```rust
+use openldr_plugin_sdk::host;
+use serde_json::json;
+
+let rows = host::db_select(&json!({ "table": "samples", "limit": 10 }))?;
+let facilities = host::ce_read("facilities.search", json!({ "q": "clinic" }))?;
+host::fhir_emit(&[json!({ "resourceType": "Observation", "id": "obs-1", "status": "final", "code": { "text": "Test" } })])?;
+```
+
+`HostError` has CE's `code` and `message`. The test plugin in `wasm/test-sink`, built with the `host` feature, calls each function.
