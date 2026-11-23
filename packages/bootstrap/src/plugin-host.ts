@@ -38,7 +38,7 @@ export const MAX_PATIENT_SCOPE_FACILITIES = 2000;
 export interface PluginHostDeps {
   /** Structured requests on a plugin's own tables (Task 3), on the internal database. */
   requests: Pick<PluginRequests, 'select' | 'write'>;
-  patients: Pick<PatientIndex, 'list' | 'find' | 'get' | 'getById' | 'idForRef'>;
+  patients: Pick<PatientIndex, 'list' | 'find' | 'get' | 'getById' | 'idForRef' | 'rowsByIds'>;
   /** The lasting key behind `pluginRef` (plugin-patient-ref.ts), read once and kept. */
   pluginRefKey(): Promise<Buffer>;
   testCatalog: Pick<TestCatalog, 'list' | 'get'>;
@@ -217,11 +217,34 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         const id = ref === null ? null : deps.patients.idForRef(ref);
         return id === null ? null : refs.encode(id);
       };
-      /** Each row with its pluginRef, and replacedByPluginRef for a merged patient's survivor. The
-       *  row's id is hidden when masked, so it comes from its ref. */
+      /** The survivor ids, of those given, whose managing facility is inside the caller's limit. A
+       *  survivor outside it is not named, so the answer says nothing about whether it exists. */
+      const survivorsInScope = async (ids: string[]): Promise<Set<string>> => {
+        if (scope === '*' || ids.length === 0) return new Set(ids);
+        const rows = await deps.patients.rowsByIds([...new Set(ids)], { unmask: false });
+        const seen = new Set<string>();
+        for (const row of rows) {
+          const id = deps.patients.idForRef(row.ref);
+          if (id !== null && inScope(scope, row.managingFacility?.reference)) seen.add(id);
+        }
+        return seen;
+      };
+      /** Each row with its pluginRef, and for a merged patient replacedByRef and replacedByPluginRef,
+       *  both null when the survivor is outside the caller's limit. The row's id is hidden when
+       *  masked, so it comes from its ref. */
       const withPluginRefs = async <R extends { ref: string; replacedByRef: string | null }>(rows: R[]) => {
         const refs = await refsFor();
-        return rows.map((r) => ({ ...r, pluginRef: lasting(refs, r.ref), replacedByPluginRef: lasting(refs, r.replacedByRef) }));
+        const survivorIds = new Map(rows.map((r) => [r, r.replacedByRef === null ? null : deps.patients.idForRef(r.replacedByRef)]));
+        const shown = await survivorsInScope([...survivorIds.values()].filter((id): id is string => id !== null));
+        return rows.map((r) => {
+          const survivor = survivorIds.get(r) ?? null;
+          const named = survivor !== null && shown.has(survivor);
+          return {
+            ...r, pluginRef: lasting(refs, r.ref),
+            replacedByRef: named ? r.replacedByRef : null,
+            replacedByPluginRef: named ? refs.encode(survivor) : null,
+          };
+        });
       };
 
       const readOps: Record<CeReadOp, (input: unknown) => Promise<unknown>> = {
@@ -274,7 +297,8 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           // nothing about whether it exists.
           if (!inScope(scope, detail.managingFacility?.reference)) throw new PatientIndexError('patient not found', 'not-found');
           if (unmask) await deps.audit(actor, { action: 'patients.view', entityType: 'patient', entityId: detail.id ?? 'unknown', metadata: auditMeta });
-          return { ...detail, pluginRef: refs.encode(id), replacedByPluginRef: lasting(refs, detail.replacedByRef) };
+          const [withRefs] = await withPluginRefs([detail]);
+          return { ...withRefs, pluginRef: refs.encode(id) };
         },
 
         async 'patients.register'(raw) {

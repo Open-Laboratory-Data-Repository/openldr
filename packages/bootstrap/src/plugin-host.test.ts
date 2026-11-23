@@ -616,6 +616,35 @@ describe('plugin host: pluginRef, a lasting patient link', () => {
     expect((await (await boot(f))(EVERYONE, 'patients.get', { pluginRef: oldDetail.result.replacedByPluginRef })).result.id).toBe('p-1');
   });
 
+  it('names a survivor to a limited caller only when it is inside the caller limit', async () => {
+    const f = await seeded();
+    // p-in was merged into p-1 (fac-1, inside); p-out into p-2 (fac-2, outside). Both old rows sit at fac-1.
+    await seedPatient(f.externalDb, { id: 'p-in', surname: 'Banda', firstname: 'Ann', dob: '1970-02-02', org: 'Organization/fac-1', active: false, replacedBy: 'p-1' });
+    await seedPatient(f.externalDb, { id: 'p-out', surname: 'Banda', firstname: 'Bo', dob: '1971-03-03', org: 'Organization/fac-1', active: false, replacedBy: 'p-2' });
+    const call = await boot(f);
+    const viewer: PluginCaller = { ...SITE, capabilities: ['patients.view'] };
+    const rows = (await call(viewer, 'patients.search', { status: 'merged' })).result.rows;
+    expect(rows).toHaveLength(2);
+    const admin = (await call(EVERYONE, 'patients.search', { search: 'Banda', status: 'merged' })).result.rows;
+    const adminIn = admin.find((r: any) => r.id === 'p-in');
+    const adminOut = admin.find((r: any) => r.id === 'p-out');
+    // An unlimited caller sees both survivors.
+    expect(adminIn.replacedByRef).not.toBeNull();
+    expect(adminOut.replacedByRef).not.toBeNull();
+    expect(adminOut.replacedByPluginRef).not.toBeNull();
+    const inRow = rows.find((r: any) => r.pluginRef === adminIn.pluginRef);
+    const outRow = rows.find((r: any) => r.pluginRef === adminOut.pluginRef);
+    expect(inRow.replacedByRef).not.toBeNull();
+    expect(inRow.replacedByPluginRef).toBe(adminIn.replacedByPluginRef);
+    expect(outRow).toMatchObject({ replacedByRef: null, replacedByPluginRef: null });
+    // patients.get follows the same rule.
+    expect((await call(viewer, 'patients.get', { pluginRef: outRow.pluginRef })).result).toMatchObject({ replacedByRef: null, replacedByPluginRef: null });
+    const inGet = (await call(viewer, 'patients.get', { pluginRef: inRow.pluginRef })).result;
+    expect(inGet.replacedByPluginRef).toBe(adminIn.replacedByPluginRef);
+    expect(inGet.replacedByRef).not.toBeNull();
+    expect((await call(EVERYONE, 'patients.get', { pluginRef: adminOut.pluginRef })).result.replacedByPluginRef).toBe(adminOut.replacedByPluginRef);
+  });
+
   it('patients.register answers the pluginRef patients.get opens', async () => {
     const f = await seeded();
     const call = await boot(f);
