@@ -6,6 +6,90 @@
       "version": null,
       "entries": [
         {
+          "hash": "db8ef2911",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Layouts can list plugin pages"
+        },
+        {
+          "hash": "83ea86a0a",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A page gets only CE capabilities and its own keys"
+        },
+        {
+          "hash": "5ce53a66e",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "Ui.requiredCapabilities lists only own keys or CE capabilities"
+        },
+        {
+          "hash": "06e01b8b5",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "The consent screen names every CE capability an action accepts"
+        },
+        {
+          "hash": "ed1296090",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Saving a layout keeps its plugin pages"
+        },
+        {
+          "hash": "9827b7288",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Plugin pages know the user and follow permissions and layouts"
+        },
+        {
+          "hash": "7c77a5e09",
+          "type": "feat",
+          "scope": "patients",
+          "title": "Patients.find, a strong-match lookup limited users keep"
+        },
+        {
+          "hash": "7c541ba97",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "The broker reads the active version's manifest"
+        },
+        {
+          "hash": "c7e596da9",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A permission group stays with its plugin's publisher"
+        },
+        {
+          "hash": "5889d3407",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Every plugin action checks the caller's permission"
+        },
+        {
+          "hash": "426da37ef",
+          "type": "fix",
+          "scope": "rbac",
+          "title": "A plugin permission group belongs to the first plugin that claims it"
+        },
+        {
+          "hash": "b196f9e36",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "The install consent names actions that need only CE capabilities"
+        },
+        {
+          "hash": "20863df2b",
+          "type": "feat",
+          "scope": "rbac",
+          "title": "Plugin permissions join the capability catalog while installed"
+        },
+        {
+          "hash": "9c5577e88",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Plugins declare permissions and the permission each action needs"
+        },
+        {
           "hash": "b764c9894",
           "type": "fix",
           "scope": "plugins",
