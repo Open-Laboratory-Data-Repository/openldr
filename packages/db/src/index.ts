@@ -38,6 +38,7 @@ export * from './custom-query-group-store';
 export * from './registry-store';
 export * from './plugin-data-store';
 export * from './plugin-schema';
+export * from './plugin-data-requests';
 export * from './import-copy-store';
 export * from './import-check-held-store';
 export * from './import-check-correction-store';
