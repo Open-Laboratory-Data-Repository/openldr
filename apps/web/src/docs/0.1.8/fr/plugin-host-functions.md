@@ -111,6 +111,7 @@ Lit les enregistrements de CE par une opération. La requête est `{ "op": "<op>
 |---|---|
 | `patients.search` | `search`, ou `identifier`, ou `given`, `family` et `birthDate` ; puis `status`, `limit`, `offset` |
 | `patients.get` | `ref` ou `pluginRef`, l'un des deux |
+| `patients.getMany` | `pluginRefs`, une liste de 1 à 100 |
 | `patients.register` | `patient`, un Patient FHIR avec un `id` |
 | `valueset.expand` | `url`, `count`, `offset`, `filter` |
 | `valueset.lookup` | `system`, `code` |
@@ -129,6 +130,8 @@ Le `ref` d'un patient ne marche que jusqu'au redémarrage de CE. Une ligne masqu
 Gardez plutôt `pluginRef`. Chaque ligne de `patients.search`, la réponse de `patients.get` et celle de `patients.register` en portent un. Il reste le même pour le même patient à chaque appel et après un redémarrage. Il cache l'identifiant du patient. Il est fait pour votre plugin seul : un autre plugin reçoit un autre `pluginRef` pour le même patient et ne peut pas utiliser le vôtre.
 
 Pour rouvrir le patient plus tard, appelez `patients.get` avec `{ "pluginRef": "..." }`. Les mêmes règles s'appliquent qu'avec `ref`. Un patient hors de la limite de l'appelant, ou un `pluginRef` fait pour un autre plugin, donne `NOT_FOUND`.
+
+Pour ouvrir plusieurs patients à la fois, comme le demande une liste de demandes, appelez `patients.getMany` avec `{ "pluginRefs": ["...", "..."] }`. La réponse est `{ "rows": [...] }`, dans le même ordre. Chaque ligne est ce que `patients.get` donnerait, ou `null` là où `patients.get` donnerait `NOT_FOUND`. Une lecture non masquée écrit une seule ligne d'audit pour tout l'appel, avec le nombre.
 
 La ligne d'un patient fusionné a aussi `replacedByPluginRef`, le `pluginRef` de l'enregistrement qui l'a remplacé. Il est null pour un patient non fusionné. Suivez-le pour que le lien gardé pointe vers l'enregistrement restant.
 

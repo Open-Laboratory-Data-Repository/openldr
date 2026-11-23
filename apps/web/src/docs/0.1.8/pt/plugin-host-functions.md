@@ -111,6 +111,7 @@ Lê os registos do próprio CE através de uma operação. O pedido é `{ "op": 
 |---|---|
 | `patients.search` | `search`, ou `identifier`, ou `given`, `family` e `birthDate`; depois `status`, `limit`, `offset` |
 | `patients.get` | `ref` ou `pluginRef`, um dos dois |
+| `patients.getMany` | `pluginRefs`, uma lista de 1 a 100 |
 | `patients.register` | `patient`, um Patient FHIR com um `id` |
 | `valueset.expand` | `url`, `count`, `offset`, `filter` |
 | `valueset.lookup` | `system`, `code` |
@@ -129,6 +130,8 @@ O `ref` de um paciente só funciona até o CE reiniciar. Uma linha mascarada tam
 Guarde antes o `pluginRef`. Cada linha de `patients.search`, a resposta de `patients.get` e a de `patients.register` trazem um. Fica igual para o mesmo paciente em cada chamada e depois de reiniciar. Esconde o identificador do paciente. É feito só para o seu plugin: outro plugin recebe um `pluginRef` diferente para o mesmo paciente e não pode usar o seu.
 
 Para abrir o paciente mais tarde, chame `patients.get` com `{ "pluginRef": "..." }`. Aplicam-se as mesmas regras que com `ref`. Um paciente fora do limite de quem chama, ou um `pluginRef` feito para outro plugin, dá `NOT_FOUND`.
+
+Para abrir vários pacientes de uma vez, como pede uma lista de pedidos, chame `patients.getMany` com `{ "pluginRefs": ["...", "..."] }`. A resposta é `{ "rows": [...] }`, pela mesma ordem. Cada linha é o que `patients.get` daria, ou `null` onde `patients.get` daria `NOT_FOUND`. Uma leitura sem máscara escreve uma só linha de auditoria para toda a chamada, com o número.
 
 A linha de um paciente fundido também tem `replacedByPluginRef`, o `pluginRef` do registo que o substituiu. É null para um paciente que não foi fundido. Siga-o para que a ligação guardada aponte para o registo que ficou.
 

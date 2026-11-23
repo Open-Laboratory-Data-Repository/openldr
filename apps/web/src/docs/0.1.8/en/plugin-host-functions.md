@@ -111,6 +111,7 @@ Reads CE's own records through one op. The request is `{ "op": "<op>", "input": 
 |---|---|
 | `patients.search` | `search`, or `identifier`, or `given`, `family` and `birthDate`; then `status`, `limit`, `offset` |
 | `patients.get` | `ref` or `pluginRef`, one of them |
+| `patients.getMany` | `pluginRefs`, a list of 1 to 100 |
 | `patients.register` | `patient`, a FHIR Patient with an `id` |
 | `valueset.expand` | `url`, `count`, `offset`, `filter` |
 | `valueset.lookup` | `system`, `code` |
@@ -129,6 +130,8 @@ A patient's `ref` works only until CE restarts. A masked row also has no `id`. S
 Store `pluginRef` instead. Each `patients.search` row, the `patients.get` answer and the `patients.register` answer carry one. It stays the same for the same patient on every call and after a restart. It hides the patient id. It is made for your plugin only, so another plugin gets a different `pluginRef` for the same patient and cannot use yours.
 
 To open the patient later, call `patients.get` with `{ "pluginRef": "..." }`. The same rules apply as with `ref`. A patient outside the caller's limit, or a `pluginRef` made for another plugin, gives `NOT_FOUND`.
+
+To open several patients at once, as a list of orders needs, call `patients.getMany` with `{ "pluginRefs": ["...", "..."] }`. It answers `{ "rows": [...] }` in the same order. Each row is what `patients.get` would give, or `null` where `patients.get` would give `NOT_FOUND`. An unmasked read writes one audit row for the whole call, with the count.
 
 A merged patient's row also has `replacedByPluginRef`, the `pluginRef` of the record that replaced it. It is null for a patient that was not merged. Follow it to keep a stored link pointing at the surviving record.
 

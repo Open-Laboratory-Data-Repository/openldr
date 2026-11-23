@@ -7,7 +7,7 @@ import type { FacilityRegistryStore } from '@openldr/db';
 import { TerminologyError, type Operations } from '@openldr/terminology';
 import type { HostFn, HostPlugin, PluginHost } from '@openldr/plugins';
 import { checkResources } from './import-run';
-import { parsePatientFindQuery, parsePatientListQuery, type PatientIndex } from './patient-index';
+import { parsePatientFindQuery, parsePatientListQuery, type PatientDetail, type PatientIndex } from './patient-index';
 import { PatientIndexError } from './patient-identifier-systems';
 import { parseCatalogListQuery, type TestCatalog } from './test-catalog';
 import type { AuditActor, AuditDetails } from './record-audit';
@@ -68,6 +68,9 @@ const patientSearchInput = z.object({
 }).strict();
 const patientGetInput = z.object({ ref: z.string().min(1).max(500).optional(), pluginRef: z.string().min(1).max(500).optional() })
   .strict().refine((i) => (i.ref === undefined) !== (i.pluginRef === undefined), 'give ref or pluginRef, one of them');
+/** The most patients one patients.getMany reads. */
+export const MAX_GET_MANY = 100;
+const patientGetManyInput = z.object({ pluginRefs: z.array(z.string().min(1).max(500)).min(1).max(MAX_GET_MANY) }).strict();
 const patientRegisterInput = z.object({ patient: z.record(z.unknown()) }).strict();
 const expandInput = z.object({
   url: z.string().min(1).max(2000),
@@ -93,7 +96,7 @@ export const MAX_AUDITED_IDS = 200;
 
 /** The ops `ce_read` answers (ruling 6). */
 export const CE_READ_OPS = [
-  'patients.search', 'patients.get', 'patients.register', 'valueset.expand', 'valueset.lookup',
+  'patients.search', 'patients.get', 'patients.getMany', 'patients.register', 'valueset.expand', 'valueset.lookup',
   'testCatalog.list', 'testCatalog.get', 'facilities.search', 'facilities.get', 'caller.get',
 ] as const;
 type CeReadOp = typeof CE_READ_OPS[number];
@@ -299,6 +302,35 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           if (unmask) await deps.audit(actor, { action: 'patients.view', entityType: 'patient', entityId: detail.id ?? 'unknown', metadata: auditMeta });
           const [withRefs] = await withPluginRefs([detail]);
           return { ...withRefs, pluginRef: refs.encode(id) };
+        },
+
+        // Several patients by pluginRef in one call, as an order list needs them. Each answer is
+        // what patients.get gives, or null where patients.get would answer not found: a ref that
+        // is not valid or not this plugin's, no such patient, or one outside the caller's limit.
+        async 'patients.getMany'(raw) {
+          needPatientsAccess('patients.getMany');
+          const { pluginRefs } = parse(patientGetManyInput, raw, 'patients.getMany');
+          const refs = await refsFor();
+          const byId = new Map<string, PatientDetail | null>();
+          const ids = pluginRefs.map((r) => refs.decode(r));
+          for (const id of ids) {
+            if (id === null || byId.has(id)) continue;
+            let detail: PatientDetail | null = null;
+            try {
+              detail = await deps.patients.getById(id, { unmask });
+            } catch (err) {
+              if (!(err instanceof PatientIndexError && err.kind === 'not-found')) throw err;
+            }
+            byId.set(id, detail && inScope(scope, detail.managingFacility?.reference) ? detail : null);
+          }
+          const foundIds = [...byId].filter(([, d]) => d !== null).map(([id]) => id);
+          // As patients.get, but one row for the call, with the count and the ids read.
+          if (unmask && foundIds.length > 0) {
+            await deps.audit(actor, { action: 'patients.view', entityType: 'patient', entityId: 'many', metadata: { ...auditMeta, count: foundIds.length, ids: foundIds } });
+          }
+          const shown = await withPluginRefs(foundIds.map((id) => byId.get(id) as PatientDetail));
+          const answer = new Map(foundIds.map((id, n) => [id, { ...shown[n], pluginRef: refs.encode(id) }]));
+          return { rows: ids.map((id) => (id === null ? null : answer.get(id) ?? null)) };
         },
 
         async 'patients.register'(raw) {

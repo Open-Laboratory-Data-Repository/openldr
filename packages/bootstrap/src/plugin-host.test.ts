@@ -106,7 +106,7 @@ describe('plugin host: ce_read', () => {
 
   it('knows the first set of ops', () => {
     expect([...CE_READ_OPS]).toEqual([
-      'patients.search', 'patients.get', 'patients.register', 'valueset.expand', 'valueset.lookup',
+      'patients.search', 'patients.get', 'patients.getMany', 'patients.register', 'valueset.expand', 'valueset.lookup',
       'testCatalog.list', 'testCatalog.get', 'facilities.search', 'facilities.get', 'caller.get',
     ]);
   });
@@ -183,7 +183,7 @@ describe('plugin host: ce_read', () => {
     const deps = fakeDeps();
     const fns = createPluginHost(deps).forCall(plugin([{ kind: 'host:ce-read' }]), { ...EVERYONE, capabilities: [] });
     for (const [op, input] of [
-      ['patients.search', {}], ['patients.get', { ref: 'r' }],
+      ['patients.search', {}], ['patients.get', { ref: 'r' }], ['patients.getMany', { pluginRefs: ['r'] }],
       ['patients.register', { patient: { resourceType: 'Patient', id: 'x' } }],
     ] as const) {
       expect(await fns.ce_read({ op, input })).toEqual({ ok: false, error: { code: 'FORBIDDEN', message: `${op}: the caller holds neither patients.view nor patients.find` } });
@@ -651,6 +651,83 @@ describe('plugin host: pluginRef, a lasting patient link', () => {
     const reg = await call(FINDER, 'patients.register', { patient: { resourceType: 'Patient', id: 'p-1', managingOrganization: { reference: 'Organization/fac-1' } } });
     const found = await call(FINDER, 'patients.search', { identifier: { value: 'MPI-0001' } });
     expect(reg.result.pluginRef).toBe(found.result.rows[0].pluginRef);
+  });
+});
+
+describe('plugin host: patients.getMany', () => {
+  const MPI = 'urn:zm:mpi';
+  const LIMITED = { limited: true as const, facilities: ['fac-1'], districts: [], regions: [] };
+  const FINDER: PluginCaller = {
+    userId: 'u-find', displayName: 'Finder', facilities: ['fac-1'],
+    capabilities: capabilitiesUnderScope(['patients.view', 'patients.view_identifiers', 'patients.find'], LIMITED),
+  };
+
+  async function fixture() {
+    const f = await buildPatientIndexFixture();
+    await seedPatient(f.externalDb, { id: 'p-1', surname: 'Mwanza', firstname: 'John', dob: '1990-01-05', org: 'Organization/FAC-1' });
+    await seedPatient(f.externalDb, { id: 'p-2', surname: 'Mwale', firstname: 'Ruth', dob: '1985-03-04', org: 'Organization/fac-2' });
+    await seedPatient(f.externalDb, { id: 'p-old', surname: 'Mwanza', firstname: 'Jon', org: 'Organization/fac-1', active: false, replacedBy: 'p-2' });
+    await seedIdentifier(f.externalDb, 'p-1', MPI, 'MPI-0001');
+    const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, engine: 'postgres', refKey: randomBytes(32) });
+    const deps = fakeDeps({ patients: index });
+    const host = createPluginHost(deps);
+    const call = (caller: PluginCaller, op: string, input: unknown) =>
+      host.forCall(plugin(REGISTERS), caller).ce_read({ op, input }) as Promise<any>;
+    const refs = pluginPatientRefs(KEY, 'lab');
+    return { deps, call, john: refs.encode('p-1'), ruth: refs.encode('p-2'), old: refs.encode('p-old') };
+  }
+
+  it('answers each ref as patients.get does, in input order, with null where patients.get finds nothing', async () => {
+    const { call, john, ruth } = await fixture();
+    const missing = pluginPatientRefs(KEY, 'lab').encode('p-none');
+    const otherPlugin = pluginPatientRefs(KEY, 'other').encode('p-1');
+    const out = await call(EVERYONE, 'patients.getMany', { pluginRefs: [ruth, 'nope', john, missing, otherPlugin, john] });
+    expect(out.ok).toBe(true);
+    const rows = out.result.rows;
+    expect(rows).toHaveLength(6);
+    // `ref` is CE's boot-time ref, written fresh on every answer; the rest is patients.get's answer.
+    const same = (r: any) => ({ ...r, ref: expect.any(String) });
+    expect(rows[0]).toEqual(same((await call(EVERYONE, 'patients.get', { pluginRef: ruth })).result));
+    expect(rows[2]).toEqual(same((await call(EVERYONE, 'patients.get', { pluginRef: john })).result));
+    expect(rows[5]).toEqual(same(rows[2]));
+    expect([rows[1], rows[3], rows[4]]).toEqual([null, null, null]);
+  });
+
+  it('masks unless the caller holds view_identifiers, and leaves out a patient outside the data limit', async () => {
+    const { call, deps, john, ruth } = await fixture();
+    const out = await call(FINDER, 'patients.getMany', { pluginRefs: [john, ruth] });
+    expect(out.result.rows[0]).toMatchObject({ masked: true, id: null, name: 'J*** M***', pluginRef: john });
+    expect(out.result.rows[1]).toBeNull();
+    expect(JSON.stringify(out.result)).not.toMatch(/Mwanza|Mwale|p-1|p-2/);
+    expect(deps.audit).not.toHaveBeenCalled();
+  });
+
+  it('does not name a merged patient survivor outside the caller limit', async () => {
+    const { call, old } = await fixture();
+    const site: PluginCaller = { ...SITE, capabilities: ['patients.view'] };
+    expect((await call(site, 'patients.getMany', { pluginRefs: [old] })).result.rows[0]).toMatchObject({ replacedByRef: null, replacedByPluginRef: null });
+    expect((await call(EVERYONE, 'patients.getMany', { pluginRefs: [old] })).result.rows[0].replacedByPluginRef).not.toBeNull();
+  });
+
+  it('audits an unmasked read once per call, with the count', async () => {
+    const { call, deps, john, ruth } = await fixture();
+    await call(EVERYONE, 'patients.getMany', { pluginRefs: [john, ruth, john, 'nope'] });
+    expect(deps.audit).toHaveBeenCalledTimes(1);
+    expect(deps.audit).toHaveBeenCalledWith(
+      { actorType: 'user', actorId: 'u-admin', actorName: 'Admin' },
+      { action: 'patients.view', entityType: 'patient', entityId: 'many', metadata: { pluginId: 'lab', pluginVersion: '0.2.0', count: 2, ids: ['p-1', 'p-2'] } },
+    );
+    vi.mocked(deps.audit).mockClear();
+    await call(EVERYONE, 'patients.getMany', { pluginRefs: ['nope'] });
+    expect(deps.audit).not.toHaveBeenCalled();
+  });
+
+  it('takes 1 to 100 refs and nothing else', async () => {
+    const { call, john } = await fixture();
+    for (const input of [{}, { pluginRefs: [] }, { pluginRefs: Array(101).fill(john) }, { pluginRefs: [''] }, { pluginRefs: [john], extra: 1 }, { pluginRefs: john }]) {
+      expect((await call(EVERYONE, 'patients.getMany', input)).error?.code, JSON.stringify(input).slice(0, 60)).toBe('INVALID_REQUEST');
+    }
+    expect((await call(EVERYONE, 'patients.getMany', { pluginRefs: Array(100).fill(john) })).result.rows).toHaveLength(100);
   });
 });
 

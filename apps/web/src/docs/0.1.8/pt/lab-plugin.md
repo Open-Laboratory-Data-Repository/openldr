@@ -25,9 +25,15 @@ O plugin acrescenta quatro permissões. A função Administrador recebe as quatr
 
 - `lab.receive`, **Receber amostras**: o separador **Receção**.
 - `lab.reject`, **Rejeitar e devolver**: devolver um pedido ao seu local, e rejeitar amostras e análises.
-- `lab.orders.enter`, **Registar pedidos**: novos pedidos no separador **Pedidos**.
+- `lab.orders.enter`, **Registar pedidos**: o separador **Pedidos**, e novos pedidos nele.
 - `lab.worklist.view`, **Ver os pedidos do laboratório**: o separador **Pedidos**.
 
-A receção e os locais precisam também de `patients.find` para encontrar e registar pacientes. Limite cada utilizador de local à sua unidade com `openldr users scope <user> --facility <facility-id> --force`. Esse utilizador vê então apenas os pedidos dessa unidade. Um pedido de outra unidade é tratado como não encontrado.
+`lab.reject` sozinho não abre nenhum separador. Dê-o com `lab.receive` ou `lab.worklist.view`.
+
+A receção e os locais precisam também de `patients.find` (**Encontrar um paciente**) para encontrar e registar pacientes.
+
+Um pedido guarda só uma ligação ao paciente, nunca o nome. O nome é lido no CE cada vez que um pedido é mostrado, com os direitos de quem olha. Um perfil com `patients.find` ou `patients.view`, e também `patients.view_identifiers` (**Ver identificadores de pacientes**), vê o nome completo. Sem `patients.view_identifiers`, o nome aparece oculto, como nas páginas do CE. Um perfil sem nenhuma permissão de pacientes, por exemplo só com `lab.worklist.view`, vê **não disponível** no lugar do nome. Um utilizador de local limitado a uma unidade vê sempre os nomes ocultos, porque o limite retira `patients.view_identifiers`.
+
+Limite cada utilizador de local à sua unidade com `openldr users scope <user> --facility <facility-id> --force`. Esse utilizador vê então apenas os pedidos dessa unidade. Um pedido de outra unidade é tratado como não encontrado.
 
 O separador **Guia** da página **Lab** mostra cada tarefa passo a passo.
