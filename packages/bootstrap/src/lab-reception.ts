@@ -848,13 +848,28 @@ export function createReceptionCore(deps: LabReceptionDeps) {
     if (tests.length === 0) throw invalid(`Order ${order.requisition} was cancelled. No sample can be received for it.`);
     const typeSystem = text(input.type?.system);
     const typeCode = text(input.type?.code);
+    // A rejected sample stays rejected: a new sample comes in on a redraw order. This runs before the
+    // type check, since the rejection revoked the tests that took the type.
+    if (typeSystem && typeCode) {
+      const stored = (await fhirStore.get('Specimen', labSpecimenId(facility, order.requisition, { system: typeSystem, code: typeCode }))) as Json | null;
+      if (stored && stored['status'] === 'unsatisfactory') {
+        const named = text(input.type?.display) ?? typeCode;
+        throw new ReceptionError('conflict', `This ${named} sample was rejected. Register a redraw order for the new sample.`);
+      }
+    }
     const choices = await choicesOf(tests);
     const choice = choices.types.find((t) => t.system === typeSystem && t.code === typeCode);
     if (!choice) throw invalid(`Sample type ${typeCode ?? ''} is not one this order's tests take.`);
     const condition = input.condition !== undefined ? await conditionCoding(input.condition) : null;
     const allRequests = new Set(order.tests.map((t) => t.serviceRequestId));
     const liveRequests = [...new Set(tests.map((t) => t.serviceRequestId))];
-    let requests = liveRequests;
+    // By default the sample serves only the live requests whose tests take its type, by the same
+    // catalog read choicesOf uses. A test with no catalog sample type offers no type, so it is not linked.
+    let requests: string[] = [];
+    for (const r of liveRequests) {
+      const types = await orderSpecimenTypes(catalog, tests.filter((t) => t.serviceRequestId === r));
+      if (types.some((t) => t.system === choice.system && t.code === choice.code)) requests.push(r);
+    }
     if (input.serviceRequestIds !== undefined) {
       const chosen = [...new Set((input.serviceRequestIds ?? []).map((i) => String(i).trim()))];
       const stranger = chosen.find((i) => !allRequests.has(i));
@@ -868,10 +883,6 @@ export function createReceptionCore(deps: LabReceptionDeps) {
 
     const id = labSpecimenId(facility, order.requisition, choice);
     const existing = (await fhirStore.get('Specimen', id)) as Json | null;
-    // A rejected sample stays rejected: a new sample comes in on a redraw order.
-    if (existing && existing['status'] === 'unsatisfactory') {
-      throw new ReceptionError('conflict', `This ${choice.display ?? choice.code} sample was rejected. Register a redraw order for the new sample.`);
-    }
     const display = text(input.type.display) ?? choice.display;
     const recorded = now().toISOString();
     const specimen: Json = {

@@ -371,6 +371,37 @@ describe('lab rejection, reject a sample', () => {
     expect((await get(w, 'Specimen', labSpecimenId('FAC-1', 'R-27', BLD)))['status']).toBe('unsatisfactory');
   });
 
+  it('a received sample links only the tests that take its type, so its rejection leaves the others', async () => {
+    await save(w, formOrder('FAC-1', 'R-28', [{ code: 'HB', display: 'Haemoglobin' }, { code: 'UA', display: 'Urinalysis' }]));
+    const hb = srId('FAC-1', 'R-28', 'HB');
+    const ua = srId('FAC-1', 'R-28', 'UA');
+    await w.reception.receiveSample({ requisition: 'R-28', facilityCode: 'FAC-1', type: BLD }, 'Neema');
+    const spId = labSpecimenId('FAC-1', 'R-28', BLD);
+    expect((await get(w, 'Specimen', spId))['request']).toEqual([{ reference: `ServiceRequest/${hb}` }]);
+    await w.rejection.returnOrder({ requisition: 'R-28', facilityCode: 'FAC-1', reasonCode: 'form-incomplete' }, 'Neema');
+    const o = await w.rejection.rejectSample({
+      requisition: 'R-28', facilityCode: 'FAC-1', specimenTypeCode: 'BLD', conditionCode: 'CLOT', reasonCode: 'WRONGPT', redraw: false,
+    }, 'Neema');
+    expect((await get(w, 'ServiceRequest', hb))['status']).toBe('revoked');
+    expect((await get(w, 'ServiceRequest', ua))['status']).toBe('on-hold');
+    expect(Object.fromEntries(o.tests.map((t) => [t.code, t.status]))).toEqual({ HB: 'revoked', UA: 'on-hold' });
+    expect((await get(w, 'Task', labTaskId('correct-request', orderKey('FAC-1', 'R-28'))))['status']).toBe('requested');
+  });
+
+  it('a received sample, rejected, cannot be received again while another test is live', async () => {
+    await save(w, formOrder('FAC-1', 'R-29', [{ code: 'HB', display: 'Haemoglobin' }, { code: 'UA', display: 'Urinalysis' }]));
+    await w.reception.receiveSample({ requisition: 'R-29', facilityCode: 'FAC-1', type: BLD }, 'Neema');
+    await w.rejection.rejectSample({
+      requisition: 'R-29', facilityCode: 'FAC-1', specimenTypeCode: 'BLD', conditionCode: 'CLOT', reasonCode: 'WRONGPT', redraw: false,
+    }, 'Neema');
+    const ua = await get(w, 'ServiceRequest', srId('FAC-1', 'R-29', 'UA'));
+    expect(ua['status']).toBe('active');
+    const before = await historyCount(w);
+    await expect(w.reception.receiveSample({ requisition: 'R-29', facilityCode: 'FAC-1', type: BLD }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'conflict', message: expect.stringMatching(/was rejected\. Register a redraw/) });
+    expect(await historyCount(w)).toBe(before);
+  });
+
   it('a retried sample reject writes nothing more (focus 5)', async () => {
     await save(w, formOrder('FAC-1', 'R-24', HB_GLU));
     const input = { requisition: 'R-24', facilityCode: 'FAC-1', specimenTypeCode: 'BLD', conditionCode: 'HEM', reasonCode: 'WRONGPT', redraw: true };
