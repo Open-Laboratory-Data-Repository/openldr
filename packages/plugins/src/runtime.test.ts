@@ -646,6 +646,30 @@ describe('install builds the plugin tables', () => {
     expect(await db.withSchema('plugin_lab').selectFrom('orders').selectAll().execute()).toEqual([]);
   });
 
+  it('a database error in the table step gets the same plain wording, with no SQL or stack', async () => {
+    const { store, rt, schemas } = await setup();
+    await rt.install(wasmBytes, artifact('0.1.0', [orders]));
+    const dbErr = Object.assign(new Error('relation "plugin_lab"."orders" already exists at CREATE TABLE ...'), { code: '42P07' });
+    schemas.apply.mockRejectedValueOnce(dbErr);
+    const err = await rt.install(wasmBytes, artifact('0.2.0', [orders])).catch((e: unknown) => e) as Error;
+    expect(err.message).toBe('lab@0.2.0 was not installed, and lab@0.1.0 stays active: the database refused the table change (database error 42P07)');
+    expect(err.message).not.toMatch(/CREATE|relation/);
+    expect(err.stack).not.toMatch(/CREATE TABLE/);
+    expect((await store.list()).map((r) => [r.version, r.active])).toEqual([['0.1.0', true]]);
+  });
+
+  it('an upgrade that omits the tables of the version before says so in the log, and keeps them', async () => {
+    const { db, rt, schemas } = await setup();
+    await rt.install(wasmBytes, artifact('0.1.0', [orders]));
+    (logger as { warn: ReturnType<typeof vi.fn> }).warn.mockClear();
+    await rt.install(wasmBytes, artifact('0.2.0'));
+    expect((logger as { warn: ReturnType<typeof vi.fn> }).warn).toHaveBeenCalledWith(
+      { id: 'lab', from: '0.1.0', to: '0.2.0' }, expect.stringMatching(/declares no tables/),
+    );
+    expect(schemas.drop).not.toHaveBeenCalled();
+    expect(await db.withSchema('plugin_lab').selectFrom('orders').selectAll().execute()).toEqual([]);
+  });
+
   it('a plugin with tables is refused where no schema manager is wired', async () => {
     const store = fakeStore();
     const rt = createPluginRuntime({ blob: fakeBlob(new Map()), store, runner: okRunner, logger, ...defaultNewDeps() });

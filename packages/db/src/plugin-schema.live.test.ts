@@ -117,7 +117,7 @@ describe.skipIf(!url)('plugin schemas on disposable PostgreSQL', () => {
 
   it('drop removes the schema', async () => {
     await schemas.apply(pluginId, [samples]);
-    await schemas.drop(pluginId);
+    expect(await schemas.drop(pluginId)).toEqual({ dropped: true });
     const ns = await sql`select 1 from pg_namespace where nspname = ${schema}`.execute(db);
     expect(ns.rows).toEqual([]);
     await schemas.drop(pluginId);

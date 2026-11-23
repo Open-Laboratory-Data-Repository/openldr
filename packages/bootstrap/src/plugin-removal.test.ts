@@ -52,13 +52,14 @@ function setup(o: { copies?: Run[]; checks?: Run[]; imports?: Run[]; settleAfter
     list: vi.fn(async () => [{ id: 'cdr-source', version: '0.1.4', active: false }, { id: 'cdr-source', version: '0.1.5', active: true }]),
   };
   const pluginData = { purgeExcept: vi.fn(async (_p: string, keep: string[]) => { log.push(`purge except ${keep.join(',')}`); }) };
-  const pluginSchemas = { drop: vi.fn(async (p: string) => { log.push(`drop tables ${p}`); }) };
+  const pluginSchemas = { drop: vi.fn(async (p: string): Promise<{ dropped: boolean; reason?: string }> => { log.push(`drop tables ${p}`); return { dropped: true }; }) };
+  const logger = { warn: vi.fn() };
   const audit = vi.fn(async () => {});
   const removal = createPluginRemoval({
     plugins: plugins as never, importCopies: importCopies as never, importChecks: importChecks as never, imports: imports as never,
-    pluginData: pluginData as never, pluginSchemas, audit, sleep: async () => {},
+    pluginData: pluginData as never, pluginSchemas, logger, audit, sleep: async () => {},
   });
-  return { removal, log, copies, checks, plugins, pluginData, pluginSchemas, audit };
+  return { removal, log, copies, checks, plugins, pluginData, pluginSchemas, logger, audit };
 }
 
 describe('plugin removal', () => {
@@ -116,6 +117,16 @@ describe('plugin removal', () => {
     }
   });
 
+  it('a schema that is another plugin\'s is kept, logged, and the plugin is still removed', async () => {
+    const { removal, plugins, pluginSchemas, logger } = setup();
+    pluginSchemas.drop.mockResolvedValueOnce({ dropped: false, reason: "schema plugin_cdr_source belongs to plugin 'cdr.source'" });
+    await removal.remove('cdr-source', { keep: 'nothing', actor });
+    expect(plugins.remove).toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      { pluginId: 'cdr-source', reason: "schema plugin_cdr_source belongs to plugin 'cdr.source'" }, expect.stringMatching(/kept a schema/),
+    );
+  });
+
   it('a failed drop of the tables leaves the plugin installed, so the removal can be tried again', async () => {
     const { removal, plugins, pluginSchemas } = setup();
     pluginSchemas.drop.mockRejectedValueOnce(new Error('drop failed'));
@@ -163,7 +174,7 @@ describe('plugin removal', () => {
     const removal = createPluginRemoval({
       plugins: { remove: vi.fn(), list: vi.fn(async () => []) } as never, importCopies: svc as never,
       importChecks: fakeService('check', [], log) as never, imports: fakeService('import', [], log) as never,
-      pluginData: { purgeExcept: vi.fn() } as never, pluginSchemas: { drop: vi.fn() }, audit: vi.fn(async () => {}), sleep: async (ms) => { sleeps.push(ms); },
+      pluginData: { purgeExcept: vi.fn() } as never, pluginSchemas: { drop: vi.fn(async () => ({ dropped: true })) }, audit: vi.fn(async () => {}), sleep: async (ms) => { sleeps.push(ms); },
     });
     await removal.remove('cdr-source', { keep: 'all', actor }).catch(() => {});
     expect(sleeps.reduce((a, b) => a + b, 0)).toBeGreaterThan(120_000);

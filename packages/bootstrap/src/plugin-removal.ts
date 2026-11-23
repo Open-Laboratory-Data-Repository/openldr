@@ -1,3 +1,4 @@
+import type { Logger } from '@openldr/core';
 import type { PluginRuntime } from '@openldr/plugins';
 import type { PluginDataStore, PluginSchemas } from '@openldr/db';
 import type { ImportCopyService } from './import-copy';
@@ -45,6 +46,7 @@ export interface PluginRemovalDeps {
   pluginData: Pick<PluginDataStore, 'purgeExcept'>;
   /** Drops the plugin's own tables. Only `keep: 'nothing'` calls it. */
   pluginSchemas: Pick<PluginSchemas, 'drop'>;
+  logger?: Pick<Logger, 'warn'>;
   audit: ImportServiceDeps['audit'];
   sleep?: (ms: number) => Promise<void>;
 }
@@ -120,7 +122,10 @@ export function createPluginRemoval(deps: PluginRemovalDeps): PluginRemoval {
     if (o.keep === 'nothing') {
       await deps.pluginData.purgeExcept(pluginId, [COPY_RECORDS]);
       // The plugin's own tables go too, before the plugin row, so a failed drop can be tried again.
-      await deps.pluginSchemas.drop(pluginId);
+      const tables = await deps.pluginSchemas.drop(pluginId);
+      if (!tables.dropped && tables.reason) {
+        deps.logger?.warn({ pluginId, reason: tables.reason }, 'plugin removal kept a schema that is not this plugin\'s own');
+      }
     }
     await deps.plugins.remove(pluginId, undefined, { actor: { id: o.actor.id, name: o.actor.name } });
 

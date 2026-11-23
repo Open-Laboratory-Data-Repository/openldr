@@ -269,7 +269,18 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
       // Declared tables, after every check above and before the version is made active, so a
       // refused or failed shape change leaves the version that was active before still active.
       const tables = artifact.payload.tables;
-      if (tables !== undefined && tables.length > 0) {
+      const active = (await deps.store.list()).find((r) => r.id === artifact.id && r.active);
+      const kept = active ? `${active.id}@${active.version} stays active` : 'nothing was installed';
+      const notInstalled = `${artifact.id}@${artifact.version} was not installed, and ${kept}`;
+      if (tables === undefined || tables.length === 0) {
+        const before = (active?.manifest as { payload?: { tables?: unknown[] } } | undefined)?.payload?.tables;
+        if (Array.isArray(before) && before.length > 0) {
+          deps.logger.warn(
+            { id: artifact.id, from: active!.version, to: artifact.version },
+            'plugin upgrade declares no tables; the tables of the version before and their data stay',
+          );
+        }
+      } else {
         if (!deps.schemas) {
           throw new Error(`artifact ${artifact.id}@${artifact.version} declares tables, but this OpenLDR cannot create plugin tables here`);
         }
@@ -277,10 +288,13 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
           await deps.schemas.plan(artifact.id, tables);
           await deps.schemas.apply(artifact.id, tables);
         } catch (err) {
-          if (!(err instanceof PluginShapeError)) throw err;
-          const active = (await deps.store.list()).find((r) => r.id === artifact.id && r.active);
-          const kept = active ? `${active.id}@${active.version} stays active` : 'nothing was installed';
-          throw new PluginShapeError(err.reason, `${artifact.id}@${artifact.version} was not installed, and ${kept}: ${err.message}`);
+          if (err instanceof PluginShapeError) throw new PluginShapeError(err.reason, `${notInstalled}: ${err.message}`);
+          // A database error: the full error goes to the log, and the caller gets a short reason
+          // with no SQL text or stack.
+          deps.logger.error({ id: artifact.id, version: artifact.version, err }, 'plugin tables could not be built');
+          const code = (err as { code?: unknown } | null)?.code;
+          const short = typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? ` (database error ${code})` : '';
+          throw new Error(`${notInstalled}: the database refused the table change${short}`);
         }
       }
 

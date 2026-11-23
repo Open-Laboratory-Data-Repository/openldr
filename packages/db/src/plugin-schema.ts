@@ -43,7 +43,9 @@ export interface PluginSchemas {
   /** `created` lists new tables. `added` lists new columns as `table.column` and new indexes as
    *  `table(index name)`. */
   apply(pluginId: string, shapes: TableShape[]): Promise<{ created: string[]; added: string[] }>;
-  drop(pluginId: string): Promise<void>;
+  /** Drops the plugin's schema. Never drops a schema CE did not make for this plugin id: it returns
+   *  `dropped: false` with the reason, and the caller goes on removing the plugin. */
+  drop(pluginId: string): Promise<{ dropped: boolean; reason?: string }>;
 }
 
 /** The table inside each plugin schema that records the shapes CE applied, and for which plugin id.
@@ -389,11 +391,20 @@ export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHO
 
     async drop(pluginId) {
       const schema = pluginSchemaName(pluginId);
-      const before = await applied(pluginId, schema);
-      if (!before.exists) return;
+      let before: { exists: boolean };
+      try {
+        before = await applied(pluginId, schema);
+      } catch (e) {
+        // Another plugin id maps to the same schema name, or CE did not make the schema. Either way
+        // it is not this plugin's to drop, and a plugin without tables must still be removable.
+        if (e instanceof PluginShapeError && e.reason === 'name') return { dropped: false, reason: e.message };
+        throw e;
+      }
+      if (!before.exists) return { dropped: false };
       // CASCADE would also drop any CE object that depends on a plugin table (a view, a foreign
       // key). None may exist: CE never builds on a plugin's tables.
       await sql`drop schema ${sql.id(schema)} cascade`.execute(db);
+      return { dropped: true };
     },
   };
 }

@@ -2098,7 +2098,7 @@ const reporting: ReportingApi = {
   });
   const pluginRemoval = createPluginRemoval({
     plugins, importCopies, importChecks, imports, pluginData, audit: importAudit,
-    pluginSchemas: createPluginSchemas(internal.db as unknown as Kysely<any>),
+    pluginSchemas: createPluginSchemas(internal.db as unknown as Kysely<any>), logger,
   });
   const pluginHost = createPluginHost({
     // Plugin tables live in the internal database, where install made them (plugin-registry.ts).

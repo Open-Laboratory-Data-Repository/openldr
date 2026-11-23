@@ -123,7 +123,15 @@ describe('plugin schemas (pg-mem)', () => {
     await schemas.apply('org.lab', [orders]);
     expect(await refusal(schemas.apply('org_lab', [orders]))).toBe('name');
     expect(await refusal(schemas.plan('ORG.LAB', [orders]))).toBe('name');
-    expect(await refusal(schemas.drop('org-lab'))).toBe('name');
+  });
+
+  it('drop of a second plugin id that maps to the same schema name keeps the schema and does not throw', async () => {
+    await schemas.apply('org.lab', [orders]);
+    const out = await schemas.drop('org-lab');
+    expect(out.dropped).toBe(false);
+    expect(out.reason).toMatch(/belongs to plugin 'org\.lab'/);
+    await db.withSchema('plugin_org_lab').insertInto('orders').values({ id: '6b9d0c1e-0f0a-4c39-9a55-1e2f3a4b5c6d', facility: 'f1' }).execute();
+    expect(await schemas.drop('nothing-here')).toEqual({ dropped: false });
   });
 
   it('refuses hostile names even when the manifest parse was skipped', async () => {
