@@ -140,6 +140,8 @@ Open the sheet dots and select **Save**.
 
 Use this only when people should lose the permissions this role grants. System roles cannot be deleted.
 
+An install that ran an earlier version may list a **Reception** role. It is now an ordinary role, so you can delete it here once nobody needs it.
+
 ### 1. Choose Delete
 
 Find the role and open its row dots. Select **Delete**.
@@ -172,20 +174,6 @@ Select the role row. Scroll the sheet to read its description and capabilities. 
 
 ![The role sheet uses the phone width. Scroll to inspect its capabilities.](roles-guide-phone-sheet.png)
 
-## The lab roles and capabilities
-
-The **Lab** group holds seven capabilities for the lab module: **Receive samples**, **Return and reject**, **Enter results**, **Authorise results**, **Amend results**, **View worklists** and **Lab settings**. Read the description beside each switch.
-
-Three system roles use them.
-
-- **Reception** has **Receive samples**, **Return and reject**, **View worklists** and **View patient index**.
-- **Lab Technician** has **Use forms**, **Submit forms**, **Return and reject**, **Enter results** and **View worklists**.
-- **Lab Manager** has all seven lab capabilities, as well as what it had before.
-
-Today three lab capabilities do something. **Receive samples** opens **Reception**. Read [Reception](/docs/reception). **Return and reject** lets a person on Reception return a request to its site, reject a sample or a test, and mark a returned request corrected. It works only with **Receive samples**, because Reception needs that to open. **Lab settings** opens the self-authorisation switch and the sections on Laboratory, and a test's section and review setting. The other four take effect in later releases, with worklists and result review.
-
-On an install that ran an older version, Reception appears the first time the server starts on this version. Lab Technician and Lab Manager gain their new capabilities at that start, once. If you remove one of them later, it stays removed. Reception can be edited, but not deleted.
-
 ## Optional practice
 
 In a test installation, follow Create a role using `Documentation reader`. Select only View dashboards. Add View reports in the edit task, then delete the practice role when finished. Do not assign the practice role to real staff.
@@ -204,4 +192,4 @@ Creating a role does not assign it to anyone. Role assignments are managed on Us
 
 ## Related guides
 
-[Start here](/docs/start-here) explains the installed and development CLI. Users covers assigning roles to people. [Lab setup](/docs/lab-setup) shows which lab role to give each person.
+[Start here](/docs/start-here) explains the installed and development CLI. Users covers assigning roles to people.

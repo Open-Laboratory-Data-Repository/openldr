@@ -134,7 +134,7 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see **Facilities** in the studio's Docs). |
 | `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog. |
-| `lab` | This lab's own setup: `sections list`, `add` or `remove` (`--force`) the lab's sections, `tests set` a test's section and **Needs review** switch, `settings set allow-self-authorise`, and `requisitions rebuild --force` to rebuild the requisition index. Needs **Lab settings**. |
+| `lab` | `requisitions rebuild --force` rebuilds the index that finds an order by its requisition number. Needs **Danger zone**. |
 | `query` | Custom queries: `export` them to a JSON file, `import` them from one (`--force` replaces existing names and needs **Manage saved queries**; without it, an import adds new queries with no group). |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
 | `queue` | Inspect the event queue. |
@@ -565,7 +565,7 @@ openldr dashboards share default --clear
 
 It needs `roles.manage`. One limit lists at most 300 places. Every place must be in the facility register, or the command is refused and nothing changes. Run locally on the server, the actor is recorded as `cli`. Each change is audited as `user.data_scope.set`.
 
-A limited user loses reports, patients, queries, exports, workflows, connectors, audit, activity, held corrections, the facility register, sync and the Reception desk (`lab.receive` and `lab.reject`), and cannot create or edit dashboards. They never run SQL widgets. They keep forms, including patient search inside a form, which the limit does not cover. A new facility code counts only after the facility map is rebuilt.
+A limited user loses reports, patients, queries, exports, workflows, connectors, audit, activity, held corrections, the facility register and sync, and cannot create or edit dashboards. They never run SQL widgets. They keep forms, including patient search inside a form, which the limit does not cover. A new facility code counts only after the facility map is rebuilt.
 
 ```
 openldr users scope 3f2a9c1e
@@ -575,10 +575,10 @@ openldr users scope 3f2a9c1e --all
 
 ## Rebuild the requisition index
 
-Reception finds an order through an index of requisition numbers. OpenLDR keeps it current as orders arrive, from forms, from the desk and from other systems. Rebuild it only when an order you know is stored does not appear in Reception, or after orders were deleted from the store.
+OpenLDR keeps an index that finds an order by its requisition number. It keeps the index current as orders arrive, from forms and from other systems. Rebuild it only if an error kept an order out of the index, or after orders were deleted from the store. A lab plugin is planned that will use this index for reception.
 
 ```
 openldr lab requisitions rebuild --force
 ```
 
-It empties the index and indexes every current order again. It prints `Indexed <n> orders by requisition number.`, and `--json` prints `{"indexed":<n>}`. It refuses without `--force`, with `Refusing to rebuild the requisition index without --force.`, because it rewrites the whole index. Signed in, the account needs **Lab settings**. Each rebuild is audited as `lab.requisitions.rebuild`.
+It empties the index and indexes every current order again. It prints `Indexed <n> orders by requisition number.`, and `--json` prints `{"indexed":<n>}`. It refuses without `--force`, with `Refusing to rebuild the requisition index without --force.`, because it rewrites the whole index. Signed in, the account needs **Danger zone**. Each rebuild is audited as `lab.requisitions.rebuild`.

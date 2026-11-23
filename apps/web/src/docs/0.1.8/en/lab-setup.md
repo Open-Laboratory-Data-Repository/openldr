@@ -1,88 +1,34 @@
 # Set up a lab
 
-The lab module lets a laboratory receive samples, work through worklists and review results inside OpenLDR. This release has the first part, Reception. It also prepares the rest. You set the lab's sections, which tests need review, whether a person may authorise their own results, and critical limits on reference bands. You also give people the new lab roles.
+This page says what OpenLDR offers a laboratory in this release, and what to check after an upgrade. The in-app guide **Lab setup** shows the steps on screen.
 
-**Worklists and result review are not in this release.** They come in later releases. The review and self-authorisation settings below are stored now. Saving them changes nothing in how the lab works today.
+A lab plugin is planned for reception and result review. It is not part of this release.
 
-The in-app guide **Lab setup** shows each step on screen. This page gives the order and the commands, for an install run from the command line.
+## What a lab has in this release
 
-## What you need
+- The **Lab order** form orders tests and enters their results. It can also record an **Order rejection**. The in-app guide **Forms** shows each step.
+- A test's reference bands can hold critical limits, in **Critical low** and **Critical high**. OpenLDR stores them. Nothing in this release flags a result against them yet. Setting them needs **Manage terminology**.
+- An index finds an order by its requisition number. OpenLDR keeps it current by itself. The `openldr lab requisitions rebuild` command repairs it.
 
-- A running OpenLDR server of this version or later.
-- An account with **Lab settings** for the sections, review and self-authorisation.
-- **Manage terminology** for critical limits, because they are part of a test's reference bands.
-- **Manage roles** to give people the lab roles.
+## Rebuild the requisition index
 
-## The order of the steps
-
-1. Add the lab's sections, such as haematology. A test can only be filed under a section that exists. A lab with no sections can skip this step.
-2. File each test under its section, and say whether it needs review. A test needs review until you turn that off.
-3. Decide on self-authorisation. It is off by default, so the person who entered a result cannot authorise it.
-4. Add critical limits to the reference bands of the tests that have them. Use the limits your lab has approved.
-5. Give people the **Reception**, **Lab Technician** and **Lab Manager** roles.
-
-Steps 1 to 3 are on the Laboratory settings page and in the test catalog. Step 4 is in the test catalog. Step 5 is in Users. Steps 1 to 3 are also `openldr` commands.
-
-## The commands
-
-Each command goes through the running OpenLDR server, as a person who holds **Lab settings**. On Linux and macOS, sign in first with `./openldr login`, or set an access key in `OPENLDR_KEY`. On Windows, `.\openldr.ps1` signs in with an access key only, so set `OPENLDR_KEY` first. The commands were not run on Windows. [CLI sign-in and access keys](/docs/cli-access) explains signing in. Each command is recorded in the audit log under your account.
+The command goes through the running OpenLDR server, as a person who holds **Danger zone**. On Linux and macOS, sign in first with `./openldr login`, or set an access key in `OPENLDR_KEY`. On Windows, `.\openldr.ps1` signs in with an access key only, so set `OPENLDR_KEY` first. The command was not run on Windows. [CLI sign-in and access keys](/docs/cli-access) explains signing in.
 
 ```sh
-openldr lab sections add haem Haematology
-openldr lab sections list
-openldr lab tests set HGB --section haem --needs-review true
-openldr lab tests set HGB --no-section
-openldr lab settings set allow-self-authorise false
-openldr lab sections remove haem --force
 openldr lab requisitions rebuild --force
 ```
 
-- `lab sections add <code> <name>` adds a section. The code is lowercase letters, digits and dashes, starting with a letter. It cannot change later.
-- `lab sections list` prints each section's code and name.
-- `lab tests set <code>` sets a test's section with `--section <code>`, clears it with `--no-section`, and sets review with `--needs-review true` or `false`. A field you leave out keeps what is stored.
-- `lab settings set allow-self-authorise true|false` turns self-authorisation on or off.
-- `lab sections remove <code> --force` removes a section. It refuses without `--force`, because a removal cannot be undone. It also refuses while a test still uses the section, with `section <code> is used by <n> tests`.
-- `lab requisitions rebuild --force` rebuilds the index Reception uses to find an order by its requisition number. OpenLDR keeps that index current by itself, so run this only when an order you know is stored does not appear in Reception. It prints `Indexed <n> orders by requisition number.` It refuses without `--force`, because it rewrites the whole index.
+Rebuild it only if an error kept an order out of the index, or after orders were deleted from the store. It prints `Indexed <n> orders by requisition number.` It refuses without `--force`, because it rewrites the whole index. Each rebuild is recorded in the audit log under your account. In a source checkout, put `pnpm` in front: `pnpm openldr lab requisitions rebuild --force`.
 
-In a source checkout, put `pnpm` in front, for example `pnpm openldr lab sections list`.
+## After an upgrade from an earlier lab release
 
-## The roles
+An earlier release had a Reception page, lab sections, a self-authorisation switch and seven lab permissions. This release does not.
 
-- **Reception** can receive samples, return a request to its site, reject a sample or a test, view worklists and open the masked patient index.
-- **Lab Technician** can fill and submit forms, return and reject, enter results and view worklists. It has no **Receive samples**, so it cannot open Reception.
-- **Lab Manager** has all seven lab capabilities.
-
-On an install that ran an older version, Reception appears the first time the server starts on this version. Lab Technician and Lab Manager gain their new capabilities at that start, once. A capability you remove later stays removed.
-
-## Reception
-
-Reception is the lab's front desk in the studio. It finds an order by a scanned or typed requisition number, registers an order the lab has no record of, finds or registers the patient, receives the sample with its condition and corrects a typo in an order, and cancels an order registered at the desk so it can be registered again. It also returns a request to its site, rejects a sample or a test, and links a redraw to the order it replaces. The in-app guide **Reception** shows each step.
-
-- Reception needs **Receive samples**. The Reception and Lab Manager roles hold it.
-- Returning and rejecting also need **Return and reject**. Reception, Lab Technician and Lab Manager hold it. Linking a redraw needs only **Receive samples**.
-- A user with a data limit loses **Receive samples** and **Return and reject**, so they have no Reception.
-- The Lab order form now orders tests only. It no longer has a **Results** field. Results will be entered and authorised in the lab in a later release. It no longer has an **Order rejection** field either. On an upgraded install, OpenLDR removes that field from a Lab order form nobody edited. A form your lab edited keeps it.
-- Each test on a new order is saved as its own request. Orders saved before this version stay as they were stored, and Reception lists all their tests.
-- A site cannot yet see a returned request or a redraw request on its own screen. The lab tells the site.
-- A redraw needs a new requisition number. The old number still names the rejected request.
-- On an upgraded install, Lab Technician gains **Return and reject** at the first start on this version, once. If you remove it later, it stays removed.
-- Returning, rejecting and linking a redraw are not `openldr` commands yet.
-
-## Return and reject reasons
-
-The lists Reception offers are value sets. A lab can add its own codes to each one in **Terminology** in the studio.
-
-| List | Value set |
-|------|-----------|
-| Why a request goes back to its site | `urn:openldr:valueset:order-return-reason` |
-| Why a sample is rejected | `urn:openldr:valueset:order-reject-reason` |
-| Why one test is rejected | `urn:openldr:valueset:test-reject-reason` |
-| The sample's condition | `urn:openldr:valueset:sample-condition` |
-
-OpenLDR seeds a few codes in each, such as `Form incomplete` for a return and `Clotted` for a sample.
+- A **Reception** role made by that release stays. It is now an ordinary role. An administrator can delete it on the **Roles** page once nobody needs it.
+- A role keeps any old lab permission it holds. CE does not list it and cannot grant or revoke it. `openldr roles doctor` lists such permissions under `kept` and exits 0.
+- A **Lab order** form nobody edited gets its **Results** and **Order rejection** fields back at the first start. A form your lab edited stays as it is.
 
 ## Troubleshooting
 
-- **`lab sections remove` says the section is used by some tests.** Move those tests with `lab tests set <code> --section <other>` or `--no-section`, then remove it again.
-- **`lab tests set` says `no section <code>`.** Add the section first with `lab sections add`.
-- **A command says the account lacks the capability.** The account does not hold **Lab settings**. Give it the Lab Manager role, or a role with that capability.
+- **The rebuild says the account lacks the capability.** The account does not hold **Danger zone**. Use an account whose role has it.
+- **The Lab order form has no Results field.** Your lab edited the form, so the upgrade left it alone. Add the field again in the form builder.

@@ -10,7 +10,7 @@ Os formulários Draft e Archived continuam a abrir com View/Run. Submit está de
 
 Os números de versão nas imagens são exemplos. Cada publicação guarda um instantâneo e recebe o número seguinte. Os seus números dependem do histórico de publicação. Leia [Começar aqui](/docs/start-here) para a instalação e a CLI.
 
-## Escolher o paciente e os testes de um pedido
+## Escolher o paciente, teste e amostra de um pedido
 
 Use esta tarefa para registar um pedido pretendido no formulário publicado Lab order. Use o paciente e os testes adequados ao pedido.
 
@@ -52,29 +52,43 @@ Selecione o teste pedido. Repita apenas quando o pedido precisar de outro teste.
 
 ![Escolha o teste do catálogo pedido para este paciente.](forms-guide-order-test-choice.png)
 
-**Resultado esperado:** o pedido contém o paciente e os testes escolhidos. O pedido ainda não foi enviado.
+### 7. Abrir os detalhes
 
-O formulário Lab order pede testes. Não tem o campo **Results**. A amostra é registada quando chega ao laboratório, na [Receção](/docs/reception). Os resultados vão ser introduzidos e validados no laboratório numa versão posterior. Cada teste escolhido é guardado como o seu próprio pedido de análise.
+Em **Results**, selecione a linha do teste escolhido para abrir os detalhes.
 
-O formulário Lab order não tem o campo **Order rejection**. O laboratório rejeita uma amostra ou uma análise na [Receção](/docs/reception). Numa instalação atualizada, o OpenLDR retira o campo de um formulário Lab order que ninguém alterou. Se o seu laboratório alterou o seu próprio formulário Lab order, o OpenLDR deixa esse formulário como está, e o campo fica.
+![Abra a linha do teste em Results para completar a amostra e os detalhes do resultado.](forms-guide-order-test-details.png)
+
+### 8. Escolher a amostra
+
+Selecione o tipo de amostra registado para este teste na lista configurada.
+
+![Selecione o tipo de amostra usado neste teste.](forms-guide-order-specimen.png)
+
+**Resultado esperado:** os detalhes do teste contêm a amostra escolhida. O pedido ainda não foi enviado.
 
 ## Rever e enviar o pedido de laboratório
 
-Continue após escolher o paciente e os testes pedidos. Preencha os outros campos obrigatórios antes de enviar.
+Continue após escolher o paciente, testes e detalhes da amostra. Preencha os outros campos obrigatórios antes de enviar.
 
-### 1. Escolher a prioridade
+### 1. Fechar os detalhes do teste
+
+Selecione **Close** no canto superior direito do painel de detalhes.
+
+![Close regressa ao pedido com a amostra escolhida.](forms-guide-order-details-close.png)
+
+### 2. Escolher a prioridade
 
 Escolha a **Priority** registada. A imagem usa **Routine**.
 
 ![Escolha a prioridade deste pedido. O exemplo usa Routine.](forms-guide-order-priority.png)
 
-### 2. Rever o pedido e abrir as ações
+### 3. Rever o pedido e abrir as ações
 
-Confira o paciente e os testes e abra os pontos no canto superior direito.
+Confira o paciente, testes e amostras e abra os pontos no canto superior direito.
 
 ![Reveja o pedido e abra o menu de pontos.](forms-guide-order-submit-actions.png)
 
-### 3. Enviar o pedido pretendido
+### 4. Enviar o pedido pretendido
 
 Selecione **Submit** uma vez. Aguarde o resultado. Não envie novamente apenas para confirmar o sucesso.
 
@@ -198,7 +212,7 @@ Abra **Resource Type**, encontre **ServiceRequest** e selecione-o para este exem
 
 ## Escolher campos do pacote inicial e guardar um rascunho
 
-Mantenha no pacote inicial os campos necessários. Este exemplo mantém Patient, Tests, Priority e Reference Number. O seu workflow pode precisar de mais campos.
+Mantenha no pacote inicial os campos necessários. Este exemplo mantém Patient, Tests, Results, Priority e Reference Number. O seu workflow pode precisar de mais campos.
 
 ### 1. Desmarcar Requesting Clinician neste exemplo
 
@@ -214,7 +228,7 @@ Desmarque **Clinical Notes**. Mantenha-o no seu formulário se o workflow precis
 
 ### 3. Desmarcar Referring Facility neste exemplo
 
-Desmarque **Referring Facility** para o exemplo de quatro campos.
+Desmarque **Referring Facility** para o exemplo de cinco campos.
 
 ![Desmarque Referring Facility se o formulário de exemplo não precisar dele.](forms-guide-pack-facility.png)
 
@@ -226,13 +240,19 @@ Desmarque **Order rejection** neste exemplo.
 
 ### 5. Verificar a seleção restante
 
-Confira que **Patient**, **Tests**, **Priority** e **Reference Number** continuam selecionados. O pacote indica **4 of 8 selected**.
+Confira que **Patient**, **Tests**, **Results**, **Priority** e **Reference Number** continuam selecionados. O pacote ilustrado indica **5 of 9 selected**.
+
+![Mantenha os campos necessários. Este exemplo mantém Patient, Tests, Results, Priority e Reference Number.](forms-guide-pack-choices.png)
+
+![Cinco campos continuam selecionados neste exemplo.](forms-guide-pack-selected-count.png)
 
 ### 6. Acrescentar os campos
 
-Abra os pontos do pacote e selecione **Add 4 fields**.
+Abra os pontos do pacote e selecione **Add 5 fields**.
 
 ![O pacote inicial tem o próprio menu de pontos.](forms-guide-pack-actions.png)
+
+![Acrescente os cinco campos escolhidos ao novo formulário.](forms-guide-pack-add.png)
 
 ### 7. Guardar o rascunho
 
@@ -652,7 +672,7 @@ Leia a pré-visualização e desloque os campos. Preview actions continua nos po
 
 ## Limites
 
-Este percurso recolhe um pedido. O formulário Lab order não regista a amostra nem introduz resultados. A receção regista a amostra, e a introdução de resultados chega numa versão posterior. O laboratório rejeita uma amostra ou uma análise na receção, não no formulário.
+Este percurso recolhe um pedido e uma escolha de amostra. Não demonstra a introdução de valores de resultados laboratoriais nem a rejeição de um pedido.
 
 As listas de acesso nomeiam funções. Uma pessoa passa quando uma das suas funções está listada. Para submeter, a pessoa também tem de poder abrir o formulário. Quem gere funções abre sempre todos os formulários, e só os editores de formulários veem **Acesso**.
 
@@ -698,6 +718,6 @@ Leia [Pacientes](/docs/patients) para registos recebidos e [Catálogo de testes]
 
 Use uma instalação de teste com pacientes fictícios e testes ativos no laboratório. As tarefas de recolha usam os seus registos recebidos. Não precisa de ficheiros de exemplo.
 
-Para praticar o desenho, use um nome separado e o exemplo ServiceRequest de quatro campos. Experimente Preview, Save draft, Publish, Compare e Versions. Duplique a definição antes de praticar Archive ou Delete.
+Para praticar o desenho, use um nome separado e o exemplo ServiceRequest de cinco campos. Experimente Preview, Save draft, Publish, Compare e Versions. Duplique a definição antes de praticar Archive ou Delete.
 
 Envie um Lab order de teste apenas quando pretender escrever esse pedido. O exemplo documentado enviou uma resposta. As capturas seguintes não enviaram outra resposta.
