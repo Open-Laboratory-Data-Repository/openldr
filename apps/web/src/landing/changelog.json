@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "d8758079d",
+          "type": "fix",
+          "scope": "docs",
+          "title": "Translated Danger zone label, and say a development build had Reception"
+        },
+        {
+          "hash": "ba52f2b69",
+          "type": "fix",
+          "scope": "docs",
+          "title": "Quote fr and pt capability labels as the studio shows them in lab setup"
+        },
+        {
+          "hash": "7fcea5b79",
+          "type": "feat",
+          "scope": "forms",
+          "title": "The Lab order form enters results and rejections again"
+        },
+        {
+          "hash": "bb53307ef",
+          "type": "fix",
+          "scope": "rbac",
+          "title": "Save a role's keys in one transaction, and name a kept key in roles revoke"
+        },
+        {
+          "hash": "d542bae50",
+          "type": "fix",
+          "scope": "rbac",
+          "title": "Keep stored grants the catalog no longer lists"
+        },
+        {
           "hash": "17b4726c8",
           "type": "fix",
           "scope": "lab",
