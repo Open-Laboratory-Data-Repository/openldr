@@ -214,6 +214,7 @@ const WHEN = 'a date, time, year or sync cursor';
 const PERSON = 'a name written into a record as is; refusing it through the app is a later task';
 const REASON: Record<string, string> = {
   '--seconds': 'a number of seconds',
+  '--expected-tat': 'a number of hours, or none', '--critical-tat': 'a number of hours, or none', '--requires-verification': CHOICE,
   '--group': 'the name of a Query page group',
   newName: 'the name of a Query page group',
   item: 'a connector id or a dataset name',
@@ -245,6 +246,7 @@ const REASON: Record<string, string> = {
   '--version': 'a version number', '--where': FILTER, '--year': WHEN,
   '--field': 'a correctable field name, not a file',
   '--finding': FILTER,
+  '--display': TEXT, '--unit': 'a UCUM unit code, stored as text',
   '--facility': 'register facility ids, comma separated', '--district': 'Region/District names, comma separated', '--region': 'region names, comma separated',
 };
 // Per command, so a new option is reviewed for that command and not let through by its name alone.
@@ -300,6 +302,7 @@ const NOT_A_PATH: Record<string, string[]> = {
   'test-catalog retire': ['code'],
   'test-catalog restore': ['code'],
   'test-catalog params': ['code'],
+  'test-catalog set': ['code', '--expected-tat', '--critical-tat', '--requires-verification'],
   'test-catalog map list': ['--status', '--search', '--limit', '--offset', '--level'],
   'test-catalog map set': ['system', 'code', 'target-code', '--level'],
   'test-catalog map clear': ['system', 'code', '--level'],
@@ -309,6 +312,9 @@ const NOT_A_PATH: Record<string, string[]> = {
   'test-catalog result-fields list': ['--search', '--loinc', '--role', '--limit', '--offset'],
   'test-catalog result-fields link': ['code', 'loinc'],
   'test-catalog result-fields unlink': ['code'],
+  'test-catalog result-fields from-loinc': ['code'],
+  'test-catalog result-fields add': ['--display', '--code', '--unit'],
+  'test-catalog loinc-hints': ['code'],
   'patients list': ['--search', '--status', '--limit', '--offset'],
   'patients show': ['id'],
   'patients identifier-systems set': ['system', '--label', '--list-column', '--searchable'],

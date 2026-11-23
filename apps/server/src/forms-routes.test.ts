@@ -1202,7 +1202,11 @@ describe('forms routes', () => {
     expect(res.statusCode).toBe(201);
     const observation = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'Observation');
     expect(observation.valueQuantity).toEqual({ value: 11.2, unit: 'g/dL' });
-    expect(observation.referenceRange).toEqual([{ low: { value: 12, unit: 'g/dL' }, high: { value: 15, unit: 'g/dL' } }]);
+    expect(observation.referenceRange).toEqual([{
+      low: { value: 12, unit: 'g/dL' }, high: { value: 15, unit: 'g/dL' },
+      // The catalog range is 18+ with no age unit, which is years: UCUM "a".
+      age: { low: { value: 18, unit: 'a', system: 'http://unitsofmeasure.org', code: 'a' } },
+    }]);
   });
 
   it('points every Observation at the order it was submitted with', async () => {
@@ -1343,6 +1347,43 @@ describe('forms routes', () => {
     expect(res.statusCode).toBe(201);
     const observation = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'Observation');
     expect(observation.referenceRange[0].text).toBe('Highland women');
+  });
+
+  it('matches a range by its age unit too, and writes the age window in UCUM days', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    const neonatal = { name: null, low: 14, high: 22, unit: 'g/dL', sex: null, ageLow: 0, ageHigh: 28, ageUnit: 'd' };
+    (ctx as any).testCatalog = {
+      loincCodingsFor: async () => new Map(),
+      resultParamsFor: async () => [{
+        test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
+        params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [], bands: [neonatal] }],
+      }],
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: resultOrderSchema, targetPages: ['forms'] } });
+    const submit = (band: object) => app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }],
+        details: { 'urn:openldr:codesystem:test-catalog|FBC': { specimen: null, rejection: null, results: [
+          { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 18, unit: 'g/dL', band },
+        ] } },
+      } },
+    });
+    // The same range in years is not the catalog's range in days.
+    expect((await submit({ ...neonatal, ageUnit: undefined })).statusCode).toBe(400);
+    expect(runs).toEqual([]);
+    expect((await submit(neonatal)).statusCode).toBe(201);
+    const observation = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'Observation');
+    expect(observation.referenceRange[0].age).toEqual({
+      low: { value: 0, unit: 'd', system: 'http://unitsofmeasure.org', code: 'd' },
+      high: { value: 28, unit: 'd', system: 'http://unitsofmeasure.org', code: 'd' },
+    });
   });
 
   // Fix 1 of the named-reference-ranges review: `low` in the catalog band is null, so a coerce-first
@@ -1849,7 +1890,8 @@ describe('form entries on submit', () => {
   } = {}) {
     const { makeMigratedDb } = await import('@openldr/db/testing');
     const { createFormEntryStore } = await import('@openldr/db');
-    const { createFormEntriesService, readScopeRegistryRows } = await import('@openldr/bootstrap');
+    const { createFormEntriesService, createLabIdentity, readScopeRegistryRows } = await import('@openldr/bootstrap');
+    const { createAppSettingsStore } = await import('@openldr/db');
     const db = await makeMigratedDb();
     for (const [id, code, name] of [['reg-a', 'A1', 'Site A'], ['reg-b', 'B1', 'Site B']]) {
       await db.insertInto('facility_registry').values({
@@ -1869,7 +1911,11 @@ describe('form entries on submit', () => {
       logger: { warn: () => {}, error: () => {} } as never,
       users: { getMany: async () => [] },
     });
-    (ctx as any).labIdentity = { tokens: async () => ({ 'lab.timezone': 'Africa/Dar_es_Salaam' }) };
+    // The real lab identity service over the real settings store, so the zone is read under the key
+    // the service actually answers it by.
+    const labIdentity = createLabIdentity(createAppSettingsStore(db as never));
+    expect(await labIdentity.set({ 'lab.timezone': 'Africa/Dar_es_Salaam' }, 'test')).toEqual([]);
+    (ctx as any).labIdentity = labIdentity;
     (ctx as any).workflows = {
       runner: {
         runAndRecord: async (_w: string, _s: string, input: any) => {

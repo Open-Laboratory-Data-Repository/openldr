@@ -566,6 +566,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     testCatalog: {} as never,
     testMapping: {} as never,
     resultFields: {} as never,
+    loincHints: {} as never,
     patientIdentifierSystems: {} as never,
     patientIndex: {} as never,
     patientDuplicates: {} as never,

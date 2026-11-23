@@ -12,12 +12,27 @@ import type { QuestionnaireResponseItem } from 'fhir/r4'
 
 export interface ResultCoding { system: string; code: string; display?: string | null }
 
+/** The unit of a band's age window. Absent means years. */
+export type BandAgeUnit = 'd' | 'mo' | 'y'
+
+/** A reference band as the server chose it. Mirrors @openldr/bootstrap's ResultBand. */
+export interface ResultBandRef {
+  name?: string | null
+  low: number | null
+  high: number | null
+  unit: string | null
+  sex: string | null
+  ageLow: number | null
+  ageHigh: number | null
+  ageUnit?: BandAgeUnit
+}
+
 export interface TypedResult {
   param: { system: string; code: string }
   resultType: 'numeric' | 'coded' | 'text'
   value: number | string | ResultCoding | null
   unit?: string | null
-  band?: { name?: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null } | null
+  band?: ResultBandRef | null
 }
 
 export interface TestDetail {

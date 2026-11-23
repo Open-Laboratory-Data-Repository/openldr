@@ -101,6 +101,18 @@
     "unix": "./openldr market install data/BUNDLE_DIR --dry-run\n./openldr market install data/BUNDLE_DIR",
     "windows": ".\\openldr.ps1 market install data/BUNDLE_DIR --dry-run\n.\\openldr.ps1 market install data/BUNDLE_DIR"
   },
+  "cli-en-19": {
+    "unix": "./openldr test-catalog set YOUR_TEST_CODE --expected-tat 4 --critical-tat 8 --requires-verification true\n./openldr test-catalog set YOUR_TEST_CODE --critical-tat none",
+    "windows": ".\\openldr.ps1 test-catalog set YOUR_TEST_CODE --expected-tat 4 --critical-tat 8 --requires-verification true\n.\\openldr.ps1 test-catalog set YOUR_TEST_CODE --critical-tat none"
+  },
+  "cli-en-20": {
+    "unix": "./openldr terminology import loinc data/loinc --accept-license\n./openldr terminology ontology build cs-url-LOINC data/loinc",
+    "windows": ".\\openldr.ps1 terminology import loinc data/loinc --accept-license\n.\\openldr.ps1 terminology ontology build cs-url-LOINC data/loinc"
+  },
+  "cli-en-21": {
+    "unix": "./openldr test-catalog loinc-hints 2093-3\n./openldr test-catalog loinc-hints 24331-1 --json\n./openldr test-catalog result-fields from-loinc 2093-3\n./openldr test-catalog result-fields from-loinc 24331-1 --panel\n./openldr test-catalog result-fields add --display \"Haemoglobin A1c\" --unit %",
+    "windows": ".\\openldr.ps1 test-catalog loinc-hints 2093-3\n.\\openldr.ps1 test-catalog loinc-hints 24331-1 --json\n.\\openldr.ps1 test-catalog result-fields from-loinc 2093-3\n.\\openldr.ps1 test-catalog result-fields from-loinc 24331-1 --panel\n.\\openldr.ps1 test-catalog result-fields add --display \"Haemoglobin A1c\" --unit %"
+  },
   "cli-fr-1": {
     "unix": "./openldr db migrate",
     "windows": ".\\openldr.ps1 db migrate"
@@ -172,6 +184,18 @@
     "unix": "./openldr market install data/BUNDLE_DIR --dry-run\n./openldr market install data/BUNDLE_DIR",
     "windows": ".\\openldr.ps1 market install data/BUNDLE_DIR --dry-run\n.\\openldr.ps1 market install data/BUNDLE_DIR"
   },
+  "cli-fr-19": {
+    "unix": "./openldr test-catalog set YOUR_TEST_CODE --expected-tat 4 --critical-tat 8 --requires-verification true\n./openldr test-catalog set YOUR_TEST_CODE --critical-tat none",
+    "windows": ".\\openldr.ps1 test-catalog set YOUR_TEST_CODE --expected-tat 4 --critical-tat 8 --requires-verification true\n.\\openldr.ps1 test-catalog set YOUR_TEST_CODE --critical-tat none"
+  },
+  "cli-fr-20": {
+    "unix": "./openldr terminology import loinc data/loinc --accept-license\n./openldr terminology ontology build cs-url-LOINC data/loinc",
+    "windows": ".\\openldr.ps1 terminology import loinc data/loinc --accept-license\n.\\openldr.ps1 terminology ontology build cs-url-LOINC data/loinc"
+  },
+  "cli-fr-21": {
+    "unix": "./openldr test-catalog loinc-hints 2093-3\n./openldr test-catalog loinc-hints 24331-1 --json\n./openldr test-catalog result-fields from-loinc 2093-3\n./openldr test-catalog result-fields from-loinc 24331-1 --panel\n./openldr test-catalog result-fields add --display \"Haemoglobin A1c\" --unit %",
+    "windows": ".\\openldr.ps1 test-catalog loinc-hints 2093-3\n.\\openldr.ps1 test-catalog loinc-hints 24331-1 --json\n.\\openldr.ps1 test-catalog result-fields from-loinc 2093-3\n.\\openldr.ps1 test-catalog result-fields from-loinc 24331-1 --panel\n.\\openldr.ps1 test-catalog result-fields add --display \"Haemoglobin A1c\" --unit %"
+  },
   "cli-pt-1": {
     "unix": "./openldr db migrate",
     "windows": ".\\openldr.ps1 db migrate"
@@ -242,5 +266,17 @@
   "cli-pt-18": {
     "unix": "./openldr market install data/BUNDLE_DIR --dry-run\n./openldr market install data/BUNDLE_DIR",
     "windows": ".\\openldr.ps1 market install data/BUNDLE_DIR --dry-run\n.\\openldr.ps1 market install data/BUNDLE_DIR"
+  },
+  "cli-pt-19": {
+    "unix": "./openldr test-catalog set YOUR_TEST_CODE --expected-tat 4 --critical-tat 8 --requires-verification true\n./openldr test-catalog set YOUR_TEST_CODE --critical-tat none",
+    "windows": ".\\openldr.ps1 test-catalog set YOUR_TEST_CODE --expected-tat 4 --critical-tat 8 --requires-verification true\n.\\openldr.ps1 test-catalog set YOUR_TEST_CODE --critical-tat none"
+  },
+  "cli-pt-20": {
+    "unix": "./openldr terminology import loinc data/loinc --accept-license\n./openldr terminology ontology build cs-url-LOINC data/loinc",
+    "windows": ".\\openldr.ps1 terminology import loinc data/loinc --accept-license\n.\\openldr.ps1 terminology ontology build cs-url-LOINC data/loinc"
+  },
+  "cli-pt-21": {
+    "unix": "./openldr test-catalog loinc-hints 2093-3\n./openldr test-catalog loinc-hints 24331-1 --json\n./openldr test-catalog result-fields from-loinc 2093-3\n./openldr test-catalog result-fields from-loinc 24331-1 --panel\n./openldr test-catalog result-fields add --display \"Haemoglobin A1c\" --unit %",
+    "windows": ".\\openldr.ps1 test-catalog loinc-hints 2093-3\n.\\openldr.ps1 test-catalog loinc-hints 24331-1 --json\n.\\openldr.ps1 test-catalog result-fields from-loinc 2093-3\n.\\openldr.ps1 test-catalog result-fields from-loinc 24331-1 --panel\n.\\openldr.ps1 test-catalog result-fields add --display \"Haemoglobin A1c\" --unit %"
   }
 }

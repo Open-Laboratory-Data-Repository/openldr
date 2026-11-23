@@ -133,7 +133,7 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 | `forms` | Lista definições de formulários; extrai respostas de um QuestionnaireResponse; escolhe as funções que podem abrir e submeter um formulário. |
 | `ingest` | Carrega um ficheiro através do pipeline (opcionalmente com um plugin). |
 | `facilities` | Importa um registo nacional de unidades: `suggest-map`, `suggest-values`, `import` (mapeamento de colunas e valores; consulte **Unidades** na Documentação do estúdio). |
-| `test-catalog` | O catálogo nacional de exames: `list` dos testes, `import` de uma lista a partir de CSV ou Excel, `export` em CSV, `enable` ou `disable` de um teste neste laboratório, e `retire` ou `restore` de um teste quando esta instalação é dona do catálogo. |
+| `test-catalog` | O catálogo nacional de exames: `list` dos testes, `import` de uma lista a partir de CSV ou Excel, `export` em CSV, `enable` ou `disable` de um teste neste laboratório, e `retire` ou `restore` de um teste quando esta instalação é dona do catálogo, `set` dos tempos de resposta e da verificação de um teste, `loinc-hints` de um código LOINC, e `result-fields` para ligar, adicionar ou criar a partir do LOINC campos de resultado. |
 | `lab` | `requisitions rebuild --force` reconstrói o índice que encontra um pedido pelo seu número de requisição. Exige **Zona de perigo**. |
 | `query` | Consultas personalizadas: `export` para um ficheiro JSON, `import` a partir de um (`--force` substitui os nomes existentes e exige **Gerir consultas guardadas**; sem essa permissão, uma importação acrescenta as novas consultas sem grupo). |
 | `pipeline` | Inspeciona lotes de ingestão: `status`, `retry`, `logs`. |
@@ -474,9 +474,51 @@ Ligar campos de resultado ao LOINC:
 
 Cada alteração fica no registo de auditoria com a conta com sessão iniciada.
 
+Definir os tempos de resposta e a verificação de um teste:
+
+### 18. Definir o tempo de resposta e a verificação de um teste
+
+```sh
+{{operator:cli-pt-19}}
+```
+
+![Definir o tempo de resposta e a verificação de um teste.](guide:operator-cli-pt-19)
+
+- `--expected-tat` são as horas da receção à libertação que o laboratório pretende. `--critical-tat` são as horas após as quais o teste está atrasado. Cada um aceita um número acima de 0, ou `none` para o limpar.
+- `--requires-verification` aceita `true` ou `false`. Um teste sem valor lê `true`.
+- `set` só altera as opções dadas. Só funciona quando esta instalação é dona do catálogo. O CE guarda estes valores. O plugin de laboratório ainda não os usa.
+- `export` e `import` levam os mesmos valores nas colunas `expected_tat_hours`, `critical_tat_hours` e `requires_verification`. A verificação escreve-se `yes` ou `no`. Uma importação lê yes, no, true ou false.
+
+As sugestões LOINC e os campos de resultado criados a partir do LOINC precisam do LOINC carregado, com a sua ontologia construída. Carregue-o a partir de uma pasta com a versão LOINC descompactada:
+
+### 19. Carregar o LOINC e construir a sua ontologia
+
+```sh
+{{operator:cli-pt-20}}
+```
+
+![Carregar o LOINC e construir a sua ontologia.](guide:operator-cli-pt-20)
+
+Uma instalação que carregou o LOINC antes de existirem as sugestões LOINC tem de o importar de novo. Até lá, as sugestões não dão nenhuma unidade.
+
+Ler as sugestões de um código LOINC, e criar campos de resultado a partir do LOINC:
+
+### 20. Ler as sugestões LOINC e criar campos de resultado
+
+```sh
+{{operator:cli-pt-21}}
+```
+
+![Ler as sugestões LOINC e criar campos de resultado.](guide:operator-cli-pt-21)
+
+- `loinc-hints <code>` mostra o nome LOINC, a classe e a categoria que lhe corresponde, o tipo de resultado e a unidade, as amostras, as respostas e, para um painel, os seus testes membros. `--json` mostra o mesmo em JSON. Sem o LOINC e a sua ontologia, o comando diz que não há sugestões.
+- `result-fields from-loinc <code...>` cria um campo de resultado para cada código. Com `--panel`, cria um para cada teste membro de cada painel. Um campo ou conjunto de respostas que já existe é reutilizado, por isso repetir não cria nada de novo.
+- `result-fields add --display <texto>` adiciona um campo ao dicionário de resultados. `--code` define o código. Sem ele, o código é feito a partir do nome, por exemplo `HAEMOGLOBIN_A1C`. `--unit` define a unidade UCUM. Um código que já existe é recusado.
+- Nenhum dos comandos marca o campo num teste. Marque-o no painel do exame, ou com `test-catalog params --set`. Um laboratório que recebe o dicionário do central não pode adicionar campos.
+
 ## Instalar um pacote de conteúdo
 
-### 18. Pré-visualizar um pacote aprovado antes de instalar
+### 21. Pré-visualizar um pacote aprovado antes de instalar
 
 ```sh
 {{operator:cli-pt-18}}

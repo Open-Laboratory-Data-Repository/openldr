@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import AdmZip from 'adm-zip';
-import { EntrySiteError, FormAccessError, OrderExists, TEST_CATALOG_SYSTEM, drivesAppPage, findCatalogBand, formOpenRule, repeatMessage, setFormAccess, type AppContext, type ResultBand } from '@openldr/bootstrap';
+import { EntrySiteError, FormAccessError, OrderExists, TEST_CATALOG_SYSTEM, drivesAppPage, findCatalogBand, labTimeZone, formOpenRule, repeatMessage, setFormAccess, type AppContext, type ResultBand } from '@openldr/bootstrap';
 import { FormEntryRepeat, type FormEntry, type FormEntrySaved } from '@openldr/db';
 import { EVERYTHING } from '@openldr/rbac';
 import { redact } from '@openldr/core';
@@ -473,13 +473,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
   });
 
   /** The lab's time zone for the repeat message, or undefined when none is set or it cannot be read. */
-  const labTimeZone = async (): Promise<string | undefined> => {
-    try {
-      return (await ctx.labIdentity?.tokens())?.['lab.timezone'] || undefined;
-    } catch {
-      return undefined;
-    }
-  };
+  const labZone = (): Promise<string | undefined> => labTimeZone(ctx.labIdentity);
 
   app.post('/api/forms/:id/responses', SUBMIT, async (req, reply) => {
     const formId = (req.params as { id: string }).id;
@@ -614,7 +608,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
         reply.code(409);
         return {
           error: 'entry-repeat',
-          message: repeatMessage(held, await labTimeZone()),
+          message: repeatMessage(held, await labZone()),
           entry: { id: held.id, entryKey: held.entryKey, enteredAt: held.enteredAt, enteredByName: held.enteredByName },
         };
       }

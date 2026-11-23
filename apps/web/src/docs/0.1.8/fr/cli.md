@@ -133,7 +133,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `forms` | Liste les définitions de formulaires ; extrait les réponses d'une QuestionnaireResponse ; choisit les rôles qui peuvent ouvrir et soumettre un formulaire. |
 | `ingest` | Ingère un fichier par le pipeline (en option via un plugin). |
 | `facilities` | Importe un registre national d'établissements : `suggest-map`, `suggest-values`, `import` (correspondance des colonnes et des valeurs, voir **Établissements** dans la documentation du studio). |
-| `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue. |
+| `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue, `set` règle les délais et la vérification d'un examen, `loinc-hints` lit les suggestions d'un code LOINC, et `result-fields` relie, ajoute ou crée depuis LOINC des champs de résultat. |
 | `lab` | `requisitions rebuild --force` reconstruit l'index qui trouve une demande par son numéro de demande. Exige **Zone de danger**. |
 | `query` | Requêtes personnalisées : `export` les exporte dans un fichier JSON, `import` les importe depuis un fichier (`--force` remplace les noms existants et exige **Gérer les requêtes enregistrées** ; sans cette permission, un import ajoute les nouvelles requêtes sans groupe). |
 | `pipeline` | Examine les lots d'ingestion : `status`, `retry`, `logs`. |
@@ -449,9 +449,51 @@ Lier les champs de résultat à LOINC :
 
 Chaque changement est enregistré dans le journal d'audit au nom du compte connecté.
 
+Régler les délais et la vérification d'un examen :
+
+### 18. Régler le délai et la vérification d'un examen
+
+```sh
+{{operator:cli-fr-19}}
+```
+
+![Régler le délai et la vérification d'un examen.](guide:operator-cli-fr-19)
+
+- `--expected-tat` donne les heures visées entre la réception et la validation. `--critical-tat` donne les heures après lesquelles l'examen est en retard. Chacun prend un nombre supérieur à 0, ou `none` pour l'effacer.
+- `--requires-verification` prend `true` ou `false`. Un examen sans valeur lit `true`.
+- `set` ne change que les options données. Il ne fonctionne que là où cette installation possède le catalogue. CE enregistre ces valeurs. Le plugin de laboratoire ne les utilise pas encore.
+- `export` et `import` portent les mêmes valeurs dans les colonnes `expected_tat_hours`, `critical_tat_hours` et `requires_verification`. La vérification s'écrit `yes` ou `no`. Une importation lit yes, no, true ou false.
+
+Les suggestions LOINC et les champs de résultat créés depuis LOINC exigent LOINC chargé, avec son ontologie construite. Chargez-le depuis un dossier qui contient la version LOINC décompressée :
+
+### 19. Charger LOINC et construire son ontologie
+
+```sh
+{{operator:cli-fr-20}}
+```
+
+![Charger LOINC et construire son ontologie.](guide:operator-cli-fr-20)
+
+Une installation qui a chargé LOINC avant l'ajout des suggestions LOINC doit l'importer de nouveau. Sinon, les suggestions ne donnent aucune unité.
+
+Lire les suggestions d'un code LOINC, et créer des champs de résultat depuis LOINC :
+
+### 20. Lire les suggestions LOINC et créer des champs de résultat
+
+```sh
+{{operator:cli-fr-21}}
+```
+
+![Lire les suggestions LOINC et créer des champs de résultat.](guide:operator-cli-fr-21)
+
+- `loinc-hints <code>` affiche le nom LOINC, la classe et la catégorie qui lui correspond, le type de résultat et l'unité, les prélèvements, les réponses et, pour un panel, ses examens membres. `--json` affiche la même chose en JSON. Sans LOINC et son ontologie, la commande indique qu'il n'y a aucune suggestion.
+- `result-fields from-loinc <code...>` crée un champ de résultat pour chaque code. Avec `--panel`, il en crée un pour chaque examen membre de chaque panel. Un champ ou un jeu de réponses déjà présent est réutilisé, donc une nouvelle exécution ne crée rien de nouveau.
+- `result-fields add --display <texte>` ajoute un champ au dictionnaire des résultats. `--code` fixe son code. Sans lui, le code est fait à partir du nom, par exemple `HAEMOGLOBIN_A1C`. `--unit` fixe son unité UCUM. Un code déjà présent est refusé.
+- Aucune de ces commandes ne coche le champ sur un examen. Cochez-le dans le panneau de l'examen, ou avec `test-catalog params --set`. Un laboratoire qui reçoit son dictionnaire du central ne peut pas ajouter de champ.
+
 ## Installer un pack de contenu
 
-### 18. Prévisualiser un pack approuvé avant installation
+### 21. Prévisualiser un pack approuvé avant installation
 
 ```sh
 {{operator:cli-fr-18}}

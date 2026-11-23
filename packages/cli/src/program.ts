@@ -46,8 +46,8 @@ import {
   runFacilitiesDelete, runFacilitiesAddType, runFacilitiesLinkMatching,
 } from './facilities';
 import {
-  runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport, runTestCatalogParams,
-  type TestCatalogListOpts, type TestCatalogImportOpts,
+  runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport, runTestCatalogParams, runTestCatalogSet,
+  type TestCatalogListOpts, type TestCatalogImportOpts, type TestCatalogSetOpts,
 } from './test-catalog';
 import { runLabRequisitionsRebuild } from './requisitions';
 import {
@@ -56,8 +56,9 @@ import {
 } from './test-mapping';
 import {
   runResultFieldsList, runResultFieldsLink, runResultFieldsUnlink, runResultFieldsExport, runResultFieldsImport,
-  type ResultFieldsListOpts,
+  runResultFieldsAdd, type ResultFieldsAddOpts, type ResultFieldsListOpts,
 } from './result-fields';
+import { runLoincHints, runResultFieldsFromLoinc } from './loinc-hints';
 import {
   runDuplicatesDismiss, runDuplicatesExport, runDuplicatesList, runDuplicatesRestore, type DuplicatesListOpts,
   runIdentifierSystemsList, runIdentifierSystemsSet, runPatientsList, runPatientsShow,
@@ -690,6 +691,23 @@ export function buildProgram(): Command {
     .action(async (code: string, opts: { set?: string; json: boolean }) => {
       process.exitCode = await runTestCatalogParams(code, opts);
     });
+  testCatalog
+    .command('loinc-hints <code>')
+    .description('What a LOINC code suggests for a test: category, unit, specimens, answers and panel members')
+    .option('--json', 'emit JSON', false)
+    .action(async (code: string, opts: { json: boolean }) => {
+      process.exitCode = await runLoincHints(code, opts);
+    });
+  testCatalog
+    .command('set <code>')
+    .description("Set a test's turnaround times and whether its results need verification (only where this install owns the catalog)")
+    .option('--expected-tat <hours>', 'hours from receipt to release the lab aims for, or none to clear')
+    .option('--critical-tat <hours>', 'hours after which the test is overdue, or none to clear')
+    .option('--requires-verification <true|false>', 'whether a result needs a second person to verify it')
+    .option('--json', 'emit JSON', false)
+    .action(async (code: string, opts: TestCatalogSetOpts) => {
+      process.exitCode = await runTestCatalogSet(code, opts);
+    });
 
   // The index that finds an order by its requisition number (migration 139). Repair only, so it
   // needs settings.danger_zone in served mode.
@@ -775,6 +793,18 @@ export function buildProgram(): Command {
     .option('--force', 'confirm the removal', false)
     .option('--json', 'emit JSON', false)
     .action(async (code: string, opts: { force: boolean; json: boolean }) => { process.exitCode = await runResultFieldsUnlink(code, opts); });
+  resultFields.command('add')
+    .description('Add one result field by hand. Without --code, the code is made from the name (HAEMOGLOBIN_A1C for "Haemoglobin A1c").')
+    .requiredOption('--display <text>', 'the field\'s name')
+    .option('--code <code>', 'the field\'s code: letters, digits, dot, dash or underscore, up to 64 characters')
+    .option('--unit <ucum>', 'the field\'s unit, as a UCUM code')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: ResultFieldsAddOpts) => { process.exitCode = await runResultFieldsAdd(opts); });
+  resultFields.command('from-loinc <code...>')
+    .description('Make result fields from LOINC codes, or with --panel from each panel\'s members. Fields and answer sets already there are used as they are.')
+    .option('--panel', 'treat each code as a panel and make a field for each member test', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (codes: string[], opts: { panel: boolean; json: boolean }) => { process.exitCode = await runResultFieldsFromLoinc(codes, opts); });
   resultFields.command('export')
     .description('Write every result field and its LOINC link as CSV, in the layout import reads')
     .option('--out <file>', 'write to this file instead of standard output')

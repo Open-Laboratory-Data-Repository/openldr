@@ -6,7 +6,7 @@ import '@/i18n';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, createCatalogTest: vi.fn(), updateCatalogTest: vi.fn(), setCatalogLabSettings: vi.fn() };
+  return { ...actual, createCatalogTest: vi.fn(), updateCatalogTest: vi.fn(), setCatalogLabSettings: vi.fn(), searchTerms: vi.fn(), termExists: vi.fn() };
 });
 
 import * as api from '@/api';
@@ -25,7 +25,8 @@ const OPTIONS: api.TestCatalogOptions = {
 };
 const HIVVL: api.CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR],
-  resultParams: [], loinc: '25836-8', active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null },
+  resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+  lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
 function renderSheet(props: { target?: TestSheetTarget; options?: api.TestCatalogOptions; ownedHere?: boolean } = {}) {
@@ -92,7 +93,7 @@ describe('TestSheet', () => {
     await save();
     expect(api.createCatalogTest).toHaveBeenCalledWith({
       code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD],
-      resultParams: [], loinc: '25836-8', active: true,
+      resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('HIVVL saved.');
@@ -144,7 +145,7 @@ describe('TestSheet', () => {
     await save();
     expect(api.updateCatalogTest).toHaveBeenCalledWith('HIVVL', {
       display: 'HIV-1 viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR], resultParams: [],
-      loinc: '25836-8', active: false,
+      loinc: '25836-8', active: false, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
   });
@@ -160,6 +161,28 @@ describe('TestSheet', () => {
     await save();
     expect(api.updateCatalogTest).not.toHaveBeenCalled();
     expect(api.setCatalogLabSettings).toHaveBeenCalledWith('HIVVL', { enabled: false, specimenTypes: [BLD], localDisplay: null });
+  });
+
+  it('saves the turnaround times and the verification switch the operator set', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(HIVVL);
+    renderSheet({ target: { kind: 'edit', test: { ...HIVVL, expectedTatHours: 48 } } });
+    expect(screen.getByRole('textbox', { name: 'Expected TAT (hours)' })).toHaveValue('48');
+    type('Expected TAT (hours)', '');
+    type('Critical TAT (hours)', '0.5');
+    fireEvent.click(screen.getByRole('switch', { name: 'Requires verification' }));
+    await save();
+    expect(api.updateCatalogTest).toHaveBeenCalledWith('HIVVL', expect.objectContaining({
+      expectedTatHours: null, criticalTatHours: 0.5, requiresVerification: false,
+    }));
+  });
+
+  it('shows central turnaround times and verification as text at a lab that receives central catalog', () => {
+    renderSheet({ target: { kind: 'edit', test: { ...HIVVL, expectedTatHours: 1, criticalTatHours: 72, requiresVerification: false } }, ownedHere: false });
+    expect(screen.queryByRole('textbox', { name: 'Expected TAT (hours)' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Requires verification' })).toBeNull();
+    expect(screen.getByText('1 hour')).toBeInTheDocument();
+    expect(screen.getByText('72 hours')).toBeInTheDocument();
+    expect(screen.getByText('No')).toBeInTheDocument();
   });
 
   it('lays the catalog and lab fields in one grid, so their labels share one column', () => {
@@ -258,7 +281,7 @@ describe('TestSheet: result parameters', () => {
     const block = screen.getByTestId('band-HGB-1');
     const pairs: Array<[string, RegExp]> = [
       ['Name', /name for HGB band 1/i], ['Low', /low for HGB band 1/i], ['High', /high for HGB band 1/i],
-      ['Unit', /unit for HGB band 1/i], ['Age from', /age from for HGB band 1/i], ['Age to', /age to for HGB band 1/i],
+      ['Unit', /^unit for HGB band 1/i], ['Age from', /age from for HGB band 1/i], ['Age to', /age to for HGB band 1/i],
     ];
     for (const [word, control] of pairs) {
       const label = within(block).getByText(word, { selector: 'label' });
@@ -334,6 +357,35 @@ describe('TestSheet: result parameters', () => {
     ]);
   });
 
+  it('saves the age unit the operator picked, and shows an unnamed range by it', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    renderSheet({ target: { kind: 'edit', test: withParam } });
+    await addBand('HGB');
+    const unit = screen.getByRole('combobox', { name: /age unit for HGB band 1/i });
+    // A new range is in years until the operator picks another unit.
+    expect(unit).toHaveTextContent('Years');
+    expect(within(screen.getByTestId('band-HGB-1')).getByText('Age in', { selector: 'label' }).getAttribute('for')).toBe(unit.id);
+    fireEvent.keyDown(unit, { key: 'ArrowDown' });
+    await act(async () => { fireEvent.click(await screen.findByRole('option', { name: 'Days' })); });
+    fireEvent.change(screen.getByLabelText(/age to for HGB band 1/i), { target: { value: '28' } });
+    expect(screen.getByLabelText(/name for HGB band 1/i)).toHaveAttribute('placeholder', 'up to 28 days');
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands).toEqual([
+      { name: null, low: null, high: null, unit: null, sex: null, ageLow: null, ageHigh: 28, ageUnit: 'd' },
+    ]);
+  });
+
+  it('keeps a range saved before units without a unit when the operator does not touch it', async () => {
+    const old: api.CatalogTest = { ...withParam, resultParams: [{ ...withParam.resultParams[0], bands: [
+      { name: null, low: 11, high: 14, unit: null, sex: null, ageLow: 2, ageHigh: 17 },
+    ] }] };
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(old);
+    renderSheet({ target: { kind: 'edit', test: old } });
+    expect(screen.getByRole('combobox', { name: /age unit for HGB band 1/i })).toHaveTextContent('Years');
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands[0]).not.toHaveProperty('ageUnit');
+  });
+
   it('moves a range up, and removes one, from the range menu', async () => {
     const twoBands: api.CatalogTest = { ...withParam, resultParams: [{ ...withParam.resultParams[0], bands: [
       { name: 'Lowland', low: 11, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null },
@@ -355,5 +407,136 @@ describe('TestSheet: result parameters', () => {
     fireEvent.click(screen.getByTestId('param-HGB'));
     await save();
     expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams).toEqual([]);
+  });
+});
+
+describe('TestSheet: a range unit from UCUM', () => {
+  const UCUM = 'http://unitsofmeasure.org';
+  const WITH_UCUM: api.TestCatalogOptions = {
+    ...OPTIONS,
+    resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin', units: 'g/dL' }],
+    ucum: { systemId: 'cs-ucum-seed', system: UCUM },
+  };
+  const withParam: api.CatalogTest = {
+    ...HIVVL,
+    resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null, bands: [] }],
+  };
+  const term = (code: string, display: string | null): api.Term => ({
+    system: UCUM, code, display, status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null, mappingCount: 0,
+  });
+  const bandsSaved = () => vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands ?? [];
+
+  async function clearUnit() {
+    await act(async () => { fireEvent.click(within(screen.getByTestId('band-HGB-1')).getByRole('button', { name: 'Clear' })); });
+  }
+  async function typeUnit(text: string) {
+    const box = screen.getByRole('combobox', { name: /^unit for HGB band 1/i });
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: text } });
+  }
+
+  it('starts a new range with the result field unit', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    expect(within(screen.getByTestId('band-HGB-1')).getByText('g/dL')).toBeInTheDocument();
+    await save();
+    expect(bandsSaved()[0].unit).toBe('g/dL');
+  });
+
+  it('saves the code of a UCUM unit the operator picked', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    vi.mocked(api.searchTerms).mockResolvedValue({ rows: [term('mg/dL', 'milligram per deciliter')], total: 1 });
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    await clearUnit();
+    await typeUnit('mg');
+    fireEvent.click(await screen.findByRole('option', { name: /mg\/dL/ }));
+    expect(vi.mocked(api.searchTerms).mock.calls[0][0]).toBe('cs-ucum-seed');
+    expect(screen.queryByText('Not a UCUM unit')).toBeNull();
+    await save();
+    expect(bandsSaved()[0].unit).toBe('mg/dL');
+  });
+
+  it('keeps a typed unit UCUM does not hold, and says so', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    vi.mocked(api.searchTerms).mockResolvedValue({ rows: [], total: 0 });
+    vi.mocked(api.termExists).mockResolvedValue(false);
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    await clearUnit();
+    await typeUnit('cells');
+    // Found outside act. Awaiting this findBy inside act hung the test past its 5s limit.
+    const use = await screen.findByRole('button', { name: 'Use "cells"' });
+    await act(async () => { fireEvent.click(use); });
+    expect(await screen.findByText('Not a UCUM unit')).toBeInTheDocument();
+    await save();
+    expect(bandsSaved()[0].unit).toBe('cells');
+  });
+
+  // The search matches substrings and sorts by code, so "g" can have hundreds of rows before its own.
+  // The check looks the exact code up instead.
+  it('does not call a short UCUM code typed by hand a non-UCUM unit, even past 500 search rows', async () => {
+    const many = Array.from({ length: 500 }, (_, i) => term(`${i}.g`, null));
+    vi.mocked(api.searchTerms).mockResolvedValue({ rows: many, total: 501 });
+    vi.mocked(api.termExists).mockResolvedValue(true);
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    await clearUnit();
+    await typeUnit('g');
+    // Found outside act. Awaiting this findBy inside act hung the test past its 5s limit.
+    const use = await screen.findByRole('button', { name: 'Use "g"' });
+    await act(async () => { fireEvent.click(use); });
+    expect(vi.mocked(api.termExists)).toHaveBeenLastCalledWith(UCUM, 'g');
+    expect(screen.queryByText('Not a UCUM unit')).toBeNull();
+  });
+
+  it('drops the note once the same unit is picked from UCUM', async () => {
+    vi.mocked(api.searchTerms).mockResolvedValueOnce({ rows: [], total: 0 })
+      .mockResolvedValue({ rows: [term('mmol/L', 'millimole per liter')], total: 1 });
+    vi.mocked(api.termExists).mockResolvedValue(false);
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    await clearUnit();
+    await typeUnit('mmol/L');
+    const use = await screen.findByRole('button', { name: 'Use "mmol/L"' });
+    await act(async () => { fireEvent.click(use); });
+    expect(await screen.findByText('Not a UCUM unit')).toBeInTheDocument();
+    await clearUnit();
+    await typeUnit('mmol/L');
+    fireEvent.click(await screen.findByRole('option', { name: /mmol\/L/ }));
+    expect(screen.queryByText('Not a UCUM unit')).toBeNull();
+  });
+
+  it('opens a saved unit that is not UCUM unchanged, and saves it as it was', async () => {
+    const saved: api.CatalogTest = { ...withParam, resultParams: [{ ...withParam.resultParams[0], bands: [
+      { name: null, low: 1, high: 2, unit: 'cells/hpf', sex: null, ageLow: null, ageHigh: null },
+    ] }] };
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(saved);
+    renderSheet({ target: { kind: 'edit', test: saved }, options: WITH_UCUM });
+    expect(within(screen.getByTestId('band-HGB-1')).getByText('cells/hpf')).toBeInTheDocument();
+    expect(screen.queryByText('Not a UCUM unit')).toBeNull();
+    await save();
+    expect(bandsSaved()[0].unit).toBe('cells/hpf');
+    expect(api.searchTerms).not.toHaveBeenCalled();
+    expect(api.termExists).not.toHaveBeenCalled();
+  });
+
+  it('keeps the plain unit box when this install has no UCUM, prefilled from the result field', async () => {
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: { ...WITH_UCUM, ucum: null } });
+    await addBand('HGB');
+    expect(screen.getByRole('textbox', { name: /unit for HGB band 1/i })).toHaveValue('g/dL');
+  });
+
+  // jsdom has no layout, so this pins the classes that let the range wrap at 375px: one label and
+  // field per line below sm, and a unit box that may shrink. A browser at 375px must still confirm it.
+  it('keeps the range one field per line on a phone with the unit picker in it', async () => {
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    await clearUnit();
+    const box = screen.getByRole('combobox', { name: /^unit for HGB band 1/i });
+    const grid = box.closest('.grid') as HTMLElement;
+    expect(grid.className).toMatch(/(^| )grid-cols-\[auto_minmax\(0,1fr\)\]( |$)/);
+    expect(box.closest('.min-w-0')).not.toBeNull();
   });
 });

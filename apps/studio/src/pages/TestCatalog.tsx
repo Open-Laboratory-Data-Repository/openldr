@@ -342,6 +342,7 @@ export function TestCatalog() {
               ownedHere={ownedHere}
               onClose={() => setSheet(null)}
               onSaved={() => { void load(); }}
+              onOptionsChanged={loadOptions}
             />
             <ImportCatalogSheet
               open={importing}

@@ -61,7 +61,7 @@ function liveStatus(state: SearchState, minQueryLength: number): string {
   }
 }
 
-export function TermPicker({ value, onChange, systemId, statuses, minQueryLength = DEFAULT_MIN_QUERY_LENGTH }: {
+export function TermPicker({ value, onChange, systemId, statuses, minQueryLength = DEFAULT_MIN_QUERY_LENGTH, id, ariaLabel, typed }: {
   value: PickedTerm | null;
   onChange: (v: PickedTerm | null) => void;
   systemId: string;
@@ -69,6 +69,13 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
   statuses?: TermStatus[];
   /** Shortest query that issues a request. See `DEFAULT_MIN_QUERY_LENGTH`. */
   minQueryLength?: number;
+  /** The search box's id, so a Label beside it can name it. */
+  id?: string;
+  /** The search box's name. Defaults to "Search terms". */
+  ariaLabel?: string;
+  /** Lets the typed text be used as it is, for a field that may hold a value outside the system (a
+   *  range's unit). Offered when no result's code equals the text. Enter with no row highlighted uses it. */
+  typed?: { label: (text: string) => string; onUse: (text: string) => void };
 }): JSX.Element {
   const [query, setQuery] = useState('');
   const [state, setState] = useState<SearchState>({ kind: 'below-minimum' });
@@ -151,6 +158,20 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
    *  below every call site — including `TermMappingDialog`'s own hint paragraph, which sits
    *  directly beneath the picker. Gate on the operator having typed something. */
   const panelOpen = open && query.trim().length > 0;
+  const trimmedQuery = query.trim();
+  // Only once the search for this text has answered (or failed), so the offer never shows over rows still on their way.
+  const offerTyped = !!typed && trimmedQuery !== '' && (state.kind === 'ready' || state.kind === 'error') && !rows.some((r) => r.code === trimmedQuery);
+
+  const takeTyped = (): void => {
+    if (!typed) return;
+    setPickedNotice(L.livePicked(trimmedQuery, null));
+    setPickCount((n) => n + 1);
+    typed.onUse(trimmedQuery);
+    setOpen(false);
+    setQuery('');
+    setActive(-1);
+    setState({ kind: 'below-minimum' });
+  };
 
   const pick = (r: Term): void => {
     setPickedNotice(L.livePicked(r.code, r.display));
@@ -219,6 +240,7 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
     // route back to the results is editing the text, which is a dead end for someone who dismissed
     // the panel to read what was underneath it.
     if (e.key === 'ArrowDown' && !panelOpen && query.trim().length > 0) { e.preventDefault(); setOpen(true); return; }
+    if (e.key === 'Enter' && panelOpen && active < 0 && offerTyped) { e.preventDefault(); takeTyped(); return; }
     if (!panelOpen || rows.length === 0) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, rows.length - 1)); return; }
     if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); return; }
@@ -276,7 +298,8 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
           <Input
             ref={inputRef}
             role="combobox"
-            aria-label={L.searchLabel}
+            id={id}
+            aria-label={ariaLabel ?? L.searchLabel}
             aria-expanded={panelOpen}
             aria-controls={listboxId}
             aria-autocomplete="list"
@@ -339,6 +362,16 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
                   </div>
                 ))}
               </div>
+              {offerTyped && typed && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-9 w-full justify-start rounded-none border-t border-border px-3 text-sm font-normal"
+                  onClick={takeTyped}
+                >
+                  {typed.label(trimmedQuery)}
+                </Button>
+              )}
             </div>
           )}
         </>

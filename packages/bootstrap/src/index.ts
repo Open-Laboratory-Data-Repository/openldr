@@ -75,7 +75,7 @@ import { checkForActivity, copyForActivity, createActivityService, type Activity
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createValidationStrictness, type ValidationStrictness } from './validation-settings';
-import { createLabIdentity, type LabIdentityService } from './lab-identity';
+import { createLabIdentity, labTimeZone, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createUpdateCheck, type UpdateCheck } from './update-check';
 export * from './update-check';
@@ -91,6 +91,7 @@ import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-ca
 import { catalogStoredExpansion } from './register-fhir-catalog';
 import { createTestMapping, isTestMapRelevantRecord, type TestMapping } from './test-mapping';
 import { createResultFields, type ResultFields } from './result-fields';
+import { createLoincHints, type LoincHintsService } from './loinc-hints';
 import { createPatientIdentifierSystems, type PatientIdentifierSystems } from './patient-identifier-systems';
 import { createPatientIndex, type PatientIndex } from './patient-index';
 import { createPatientDuplicates, type PatientDuplicates } from './patient-duplicates';
@@ -617,6 +618,8 @@ export interface AppContext {
   testMapping: TestMapping;
   /** The result dictionary and its LOINC links (result field mapping spec 4.5). */
   resultFields: ResultFields;
+  /** Hints from a LOINC code for the test sheet, and result fields made from LOINC (test catalog hints spec). */
+  loincHints: LoincHintsService;
   /** Labels and flags for patient identifier systems (patient index spec, section 1). */
   patientIdentifierSystems: PatientIdentifierSystems;
   /** The read-only patient index and its masking (patient index spec, section 2). */
@@ -1273,6 +1276,7 @@ const reporting: ReportingApi = {
   });
   // A changed LOINC link changes the loinc column of test_map's result rows.
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
+  const loincHints = createLoincHints({ db: termDb, admin: termAdmin, ops: terminology.ops, ontology: termOntologyStore, resultFields });
   const patientIdentifierSystems = createPatientIdentifierSystems({ internalDb: termDb, externalDb, admin: termAdmin });
   const patientIndex = createPatientIndex({ externalDb, systems: patientIdentifierSystems, engine });
   const patientDuplicates = createPatientDuplicates({ internalDb: termDb, externalDb, index: patientIndex, systems: patientIdentifierSystems });
@@ -2138,6 +2142,8 @@ const reporting: ReportingApi = {
     terminology: terminology.ops,
     facilityRegistry,
     fhirGetWithProvenance: (resourceType, id) => canonicalFhirStore.getWithProvenance(resourceType, id),
+    // A patient's age in days is counted from the lab's date, not UTC's.
+    labTimeZone: () => labTimeZone(labIdentity),
     persist: workflowPersist,
     audit: (actor, details) => recordAuditEvent({ audit, logger }, actor, details),
     logger,
@@ -2293,6 +2299,7 @@ const reporting: ReportingApi = {
     testCatalog,
     testMapping,
     resultFields,
+    loincHints,
     patientIdentifierSystems,
     patientIndex,
     patientDuplicates,
@@ -2343,7 +2350,7 @@ export { createFeatureFlags } from './feature-flags';
 export { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog, type CatalogGroup, type PluginCapabilityMeta } from './capability-catalog';
 export { createConnectorDialectLookup, dialectFor } from './connector-sql-service';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
-export { createLabIdentity, type LabIdentityService } from './lab-identity';
+export { createLabIdentity, labTimeZone, type LabIdentityService } from './lab-identity';
 export { createNumberSettings } from './number-settings';
 export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
@@ -2383,12 +2390,13 @@ export {
   LAB_TESTS_VALUE_SET, labTestsCompose, withLabTestsList,
   type TestCatalog, type CatalogTest, type CatalogTestInput, type CatalogListQuery, type CatalogListResult,
   type LabSettingsInput, type SpecimenCoding,
-  type CatalogOptions, type CatalogCategoryOption, type CatalogSpecimenOption,
+  type CatalogOptions, type CatalogCategoryOption, type CatalogSpecimenOption, type CatalogResultParamOption,
   type CatalogImportFile, type CatalogImportInput, type CatalogImportReport, type CatalogImportRefusal,
   type CatalogUnmatchedValue,
 } from './test-catalog';
 export * from './test-mapping';
 export * from './result-fields';
+export * from './loinc-hints';
 export * from './job-continue';
 export * from './form-access';
 export * from './form-entries';
@@ -2400,12 +2408,12 @@ export * from './patient-index';
 export * from './patient-duplicates';
 export * from './patient-mask';
 export {
-  RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey,
-  type BandFit, type SexOption, type TestResultParam, type ResultBand, type ResultType,
+  AGE_UNITS, BIRTHDATE_ESTIMATED_EXTENSION, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, ageIn, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey,
+  type AgeUnit, type BandFit, type BandPatient, type SexOption, type TestResultParam, type ResultBand, type ResultType,
 } from './result-params';
 export {
   CATALOG_IMPORT_FIELDS, CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS,
-  catalogColumnMapSchema, catalogValueMapSchema, catalogImportInputSchema,
+  catalogColumnMapSchema, catalogValueMapSchema, catalogImportInputSchema, readHoursCell,
   type CatalogImportField, type CatalogColumnMap, type CatalogValueMap, type CategoryAnswer, type SpecimenAnswer,
 } from './test-catalog-import';
 export type { TableFileFormat } from './table-file';

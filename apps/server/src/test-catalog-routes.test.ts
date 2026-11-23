@@ -1,22 +1,34 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import {
-  TestCatalogError, type AppContext, type CatalogImportReport, type CatalogOptions, type CatalogTest, SEX_OPTIONS,
+  TestCatalogError, createLabIdentity, type AppContext, type CatalogImportReport, type CatalogOptions, type CatalogTest, type LoincHints, SEX_OPTIONS,
 } from '@openldr/bootstrap';
 import { registerTestCatalogRoutes } from './test-catalog-routes';
 import './auth-plugin';
+/** A settings store held in memory, for the real lab identity service. */
+function memorySettings() {
+  const rows = new Map<string, string>();
+  return {
+    get: async (key: string) => (rows.has(key) ? { key, value: rows.get(key)!, updatedAt: new Date(0), updatedBy: null } : null),
+    getAll: async () => [...rows].map(([key, value]) => ({ key, value, updatedAt: new Date(0), updatedBy: null })),
+    set: async (key: string, value: string) => { rows.set(key, value); },
+  };
+}
+
 
 const TEST: CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
   specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD' }], resultParams: [], loinc: '25836-8', active: true,
+  expectedTatHours: 48, criticalTatHours: 72, requiresVerification: true,
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
 const OPTIONS: CatalogOptions = {
   categories: [{ code: 'MOL', display: 'Molecular' }],
   specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }],
-  resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin' }],
+  resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin', units: 'g/dL' }],
   loinc: null,
+  ucum: { systemId: 'cs-ucum-seed', system: 'http://unitsofmeasure.org' },
   sexes: [{ code: 'female', labels: { en: 'Female', fr: 'Femme', pt: 'Feminino' } }],
 };
 
@@ -401,6 +413,45 @@ describe('test catalog routes', () => {
     expect(Object.keys(bands[1] as object)).not.toContain('criticalLow');
   });
 
+  it('carries the age unit of a range through a create, refuses one it does not know, and adds no key when left out', async () => {
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    await app.inject({
+      method: 'POST', url: '/api/test-catalog',
+      payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [
+        { low: 12, high: 15, ageLow: 0, ageHigh: 28, ageUnit: 'd' }, { low: 12, high: 15, ageLow: 1, ageHigh: 12, ageUnit: 'mo' }, { low: 12, high: 15, ageLow: 18 },
+      ] }] },
+    });
+    const created = calls.find((c) => c.method === 'create');
+    const bands = (created?.args[0] as { resultParams: Array<{ bands: Array<Record<string, unknown>> }> }).resultParams[0].bands;
+    expect(bands.map((b) => b.ageUnit)).toEqual(['d', 'mo', undefined]);
+    expect(Object.keys(bands[2])).not.toContain('ageUnit');
+    const bad = await app.inject({
+      method: 'POST', url: '/api/test-catalog',
+      payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 1, ageUnit: 'w' }] }] },
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it('carries the turnaround times and the verification switch through a create and an update', async () => {
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    const body = { code: 'HIVVL', display: 'HIV viral load', expectedTatHours: 0.5, criticalTatHours: null, requiresVerification: false };
+    expect((await app.inject({ method: 'POST', url: '/api/test-catalog', payload: body })).statusCode).toBe(201);
+    expect((await app.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL', payload: body })).statusCode).toBe(200);
+    expect(calls.filter((c) => c.method !== 'get').map((c) => c.args.at(-1))).toEqual([body, body]);
+  });
+
+  it('refuses a turnaround time that is not a number, and a verification switch that is not a boolean, before the store', async () => {
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    for (const bad of [{ expectedTatHours: '48' }, { criticalTatHours: 'soon' }, { requiresVerification: 'yes' }]) {
+      const res = await app.inject({ method: 'POST', url: '/api/test-catalog', payload: { display: 'X', ...bad } });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(calls).toEqual([]);
+  });
+
   it('POST /result-params answers the sex choices with their labels, so the studio names no code', async () => {
     const { ctx } = fakeCtx();
     const res = await appWith(ctx, ['forms.view']).inject({
@@ -423,15 +474,37 @@ describe('test catalog routes', () => {
     expect(calls[0].args[0]).toEqual(tests);
   });
 
-  it('resolves the patient itself, and passes sex and age to the catalog', async () => {
+  it('resolves the patient itself, and passes sex and birth date to the catalog', async () => {
     const { ctx, calls } = fakeCtx();
     await appWith(ctx, ['forms.view']).inject({
       method: 'POST', url: '/api/test-catalog/result-params',
       payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }], patient: { reference: 'Patient/p1' } },
     });
-    const patient = calls[0].args[1] as { sex: string | null; ageYears: number | null };
+    const patient = calls[0].args[1] as { sex: string | null; birthDate: string | null; at: number };
     expect(patient.sex).toBe('female');
-    expect(patient.ageYears).toBeGreaterThan(30);
+    // The birth date, not whole years, so each range reads the age in its own unit.
+    expect(patient.birthDate).toBe('1990-01-01');
+    expect(typeof patient.at).toBe('number');
+  });
+
+  it('passes the lab time zone, so a patient age counts from the lab date', async () => {
+    const { ctx, calls } = fakeCtx();
+    // The real lab identity service, so the zone is read under the key the service answers it by.
+    const labIdentity = createLabIdentity(memorySettings());
+    expect(await labIdentity.set({ 'lab.timezone': 'Africa/Nairobi' }, 'test')).toEqual([]);
+    (ctx as any).labIdentity = labIdentity;
+    await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params',
+      payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }], patient: { reference: 'Patient/p1' } },
+    });
+    expect(calls[0].args[1]).toMatchObject({ birthDate: '1990-01-01', timeZone: 'Africa/Nairobi' });
+    // A lab with no zone, or one whose settings cannot be read, counts in UTC.
+    (ctx as any).labIdentity = { tokens: async () => { throw new Error('down'); } };
+    await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params',
+      payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }], patient: { reference: 'Patient/p1' } },
+    });
+    expect(calls[1].args[1]).toMatchObject({ timeZone: null });
   });
 
   it('asks with no patient when the order names none, rather than refusing', async () => {
@@ -441,7 +514,7 @@ describe('test catalog routes', () => {
       payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }] },
     });
     expect(res.statusCode).toBe(200);
-    expect(calls[0].args[1]).toEqual({ sex: null, ageYears: null });
+    expect(calls[0].args[1]).toMatchObject({ sex: null, birthDate: null });
   });
 
   it('answers the rejection reasons for both levels, so the studio names no value set', async () => {
@@ -522,5 +595,39 @@ describe('test catalog routes', () => {
     const res = await appWith(ctx, ['terminology.view', 'terminology.manage']).inject({ method: 'GET', url: '/api/test-catalog/browse/categories' });
     expect(res.statusCode).toBe(403);
     expect(calls).toEqual([]);
+  });
+});
+
+describe('GET /api/test-catalog/loinc-hints/:code', () => {
+  const HINTS: LoincHints = {
+    code: '6429-5', display: 'HIV culture of Blood', class: 'MICRO', categorySuggestion: { code: 'MICRO', display: 'Microbiology' },
+    unit: null, resultType: 'text',
+    specimens: [{ snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }, tick: true }],
+    answers: [], panelMembers: [],
+  };
+  function hintsApp(impl: (code: string) => Promise<LoincHints | null>, capabilities?: string[]) {
+    const { ctx } = fakeCtx();
+    const asked: string[] = [];
+    (ctx as unknown as { loincHints: unknown }).loincHints = { hints: async (code: string) => { asked.push(code); return impl(code); } };
+    return { app: appWith(ctx, capabilities), asked };
+  }
+
+  it('answers the hints as the service gives them', async () => {
+    const { app, asked } = hintsApp(async () => HINTS, ['terminology.view']);
+    const res = await app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/6429-5' });
+    expect([res.statusCode, res.json()]).toEqual([200, HINTS]);
+    expect(asked).toEqual(['6429-5']);
+  });
+
+  it('answers JSON null when LOINC is not loaded', async () => {
+    const res = await hintsApp(async () => null).app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/6429-5' });
+    expect([res.statusCode, res.headers['content-type'], res.body]).toEqual([200, 'application/json; charset=utf-8', 'null']);
+  });
+
+  it('maps a refusal to its status, and needs terminology.view', async () => {
+    const bad = await hintsApp(async () => { throw new TestCatalogError('no', 'invalid'); }).app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/x' });
+    const missing = await hintsApp(async () => { throw new TestCatalogError('no', 'not-found'); }).app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/1-1' });
+    expect([bad.statusCode, missing.statusCode]).toEqual([400, 404]);
+    expect((await hintsApp(async () => HINTS, []).app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/6429-5' })).statusCode).toBe(403);
   });
 });

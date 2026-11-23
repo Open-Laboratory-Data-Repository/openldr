@@ -2509,6 +2509,14 @@ export const searchTerms = (systemId: string, p: { q?: string; status?: string |
 };
 export const createTerm = (systemId: string, i: TermInput) => authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms`, jbody(i, 'POST')).then((r) => okJson<Term>(r, 'create term'));
 export const updateTerm = (systemId: string, code: string, i: TermInput) => authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms/${encodeURIComponent(code)}`, jbody(i, 'PUT')).then((r) => okJson<Term>(r, 'update term'));
+/** Whether `system` holds `code` exactly (FHIR CodeSystem $lookup). False on 404; any other failure throws. */
+export async function termExists(system: string, code: string): Promise<boolean> {
+  const qs = new URLSearchParams({ system, code });
+  const r = await authFetch(`/api/terminology/CodeSystem/$lookup?${qs}`);
+  if (r.status === 404) return false;
+  if (!r.ok) throw new Error(`look up term failed: ${r.status}`);
+  return true;
+}
 export async function deleteTerm(systemId: string, code: string): Promise<void> {
   const r = await authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms/${encodeURIComponent(code)}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete term failed: ${r.status}`);
@@ -2643,6 +2651,12 @@ export interface CatalogTest {
   loinc: string | null;
   /** false when the test is retired. */
   active: boolean;
+  /** Hours from receipt to release the lab aims for, or null. */
+  expectedTatHours: number | null;
+  /** Hours after which the test is overdue, or null. */
+  criticalTatHours: number | null;
+  /** Whether a result needs a second person to verify it. True when not set. */
+  requiresVerification: boolean;
   /** This install's own settings. specimenTypes null means "use the catalog's list". */
   lab: { enabled: boolean; specimenTypes: CatalogSpecimenCoding[] | null; localDisplay: string | null };
 }
@@ -2666,6 +2680,10 @@ export interface CatalogTestInput {
   resultParams?: CatalogTestResultParam[];
   loinc?: string | null;
   active?: boolean;
+  /** Left out keeps what is stored. null clears it. */
+  expectedTatHours?: number | null;
+  criticalTatHours?: number | null;
+  requiresVerification?: boolean;
 }
 export interface CatalogLabSettingsInput {
   enabled: boolean;
@@ -2676,9 +2694,11 @@ export interface TestCatalogOptions {
   categories: { code: string; display: string | null }[];
   specimenTypes: { system: string; code: string; display: string | null }[];
   /** The result parameters a test may name (bench result entry). */
-  resultParams: { system: string; code: string; display: string | null }[];
+  resultParams: { system: string; code: string; display: string | null; units?: string | null }[];
   /** The loaded LOINC code system, or null when LOINC is not loaded here. */
   loinc: { systemId: string; system: string } | null;
+  /** The UCUM code system a range's unit is picked from, or null when this install has none. */
+  ucum?: { systemId: string; system: string } | null;
   /** The sexes a range may name, with labels by language, so the studio names no code. */
   sexes: CatalogSexOption[];
 }
@@ -2706,7 +2726,9 @@ export const setCatalogTestActive = (code: string, active: boolean): Promise<Cat
 
 // ── Test catalog import and export (test catalog S3) ──────────────────────────
 // Mirrors of @openldr/bootstrap's test-catalog-import.ts and test-catalog.ts import types.
-export type CatalogImportField = 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes';
+export type CatalogImportField =
+  | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
+  | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification';
 /** Which file column feeds each field, by header text. A field left out is not changed on existing tests. */
 export type CatalogColumnMap = Partial<Record<CatalogImportField, string>>;
 export type CatalogCategoryAnswer =
@@ -2851,6 +2873,34 @@ export const linkResultField = (code: string, loinc: string): Promise<ResultFiel
   authFetch(resultFieldLoincUrl(code), jbody({ loinc }, 'PUT')).then((r) => okJson<ResultFieldLinkChange>(r, 'link LOINC'));
 export const unlinkResultField = (code: string): Promise<ResultFieldLinkChange> =>
   authFetch(resultFieldLoincUrl(code), { method: 'DELETE' }).then((r) => okJson<ResultFieldLinkChange>(r, 'clear LOINC link'));
+/** A field added by hand (POST /api/test-catalog/result-fields), with the dictionary's system. */
+export interface CreatedResultField extends ResultField { system: string }
+export const createResultField = (i: { code?: string | null; display: string; units?: string | null }): Promise<CreatedResultField> =>
+  authFetch('/api/test-catalog/result-fields', jbody(i, 'POST')).then((r) => okJson<CreatedResultField>(r, 'add result field'));
+// Mirrors of @openldr/bootstrap's loinc-hints.ts (test catalog hints spec, calls 4 to 7).
+export interface LoincSpecimenHint {
+  snomed: string; display: string | null; equivalence: string;
+  specimenType: { system: string; code: string; display: string | null } | null;
+  /** true only when this is the one exact match, so the sheet may tick it by itself. */
+  tick: boolean;
+}
+export interface LoincHints {
+  code: string; display: string | null; class: string | null;
+  categorySuggestion: { code: string; display: string | null } | null;
+  unit: string | null; resultType: CatalogTestResultParam['resultType'];
+  specimens: LoincSpecimenHint[];
+  answers: Array<{ code: string; display: string }>;
+  panelMembers: Array<{ code: string; display: string | null; required: boolean }>;
+}
+export interface ResultFieldsFromLoincAnswer {
+  params: CatalogTestResultParam[]; created: string[]; reused: string[]; valueSetsCreated: string[];
+}
+/** null when LOINC or its ontology is not loaded here, so the sheet offers no hints. */
+export const getLoincHints = (code: string): Promise<LoincHints | null> =>
+  apiGet<LoincHints | null>(`/api/test-catalog/loinc-hints/${encodeURIComponent(code)}`, 'read LOINC hints');
+export const resultFieldsFromLoinc = (codes: string[], panel = false): Promise<ResultFieldsFromLoincAnswer> =>
+  authFetch('/api/test-catalog/result-fields/from-loinc', jbody({ codes, panel }, 'POST'))
+    .then((r) => okJson<ResultFieldsFromLoincAnswer>(r, 'add result fields from LOINC'));
 export const downloadResultFieldsCsv = (): Promise<void> =>
   downloadCsv('/api/test-catalog/result-fields/export', 'result-fields.csv', 'export result fields');
 export const previewResultFieldsImport = (file: File): Promise<ImportReportLike> =>
@@ -2866,8 +2916,11 @@ export const catalogSpecimensFor = (
     .then((r) => okJson<{ specimens: { system: string; code: string; display: string | null }[] }>(r, 'narrow specimens'))
     .then((b) => b.specimens);
 
+export type CatalogAgeUnit = 'd' | 'mo' | 'y';
 export interface CatalogResultBand {
   name: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null;
+  /** The unit of ageLow and ageHigh: days, months or years. Absent means years. */
+  ageUnit?: CatalogAgeUnit;
   /** Absent when the band sets none. The editor sends null for a limit it cleared, which the server drops. */
   criticalLow?: number | null; criticalHigh?: number | null;
 }

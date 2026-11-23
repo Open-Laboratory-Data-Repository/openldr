@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   createAppContext: vi.fn(),
   list: vi.fn(),
   close: vi.fn(),
+  recordAuditEvent: vi.fn(),
 }));
 
 vi.mock('@openldr/config', () => ({ loadConfig: vi.fn(() => ({ config: true })) }));
@@ -15,10 +16,15 @@ vi.mock('@openldr/bootstrap', async () => {
     createAppContext: mocks.createAppContext,
     parseCatalogListQuery: actual.parseCatalogListQuery,
     parseResultParams: actual.parseResultParams,
+    readHoursCell: actual.readHoursCell,
+    recordAuditEvent: mocks.recordAuditEvent,
   };
 });
 
-import { formatResultParams, readResultParamsFile, runTestCatalogList } from './test-catalog';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { formatResultParams, readResultParamsFile, runTestCatalogList, runTestCatalogParams, runTestCatalogSet } from './test-catalog';
 
 const TEST = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
@@ -104,7 +110,104 @@ describe('test-catalog params', () => {
     expect(param.bands[0].name).toBe('Highland women');
   });
 
+  it('keeps a range age unit from a set file', () => {
+    const [param] = readResultParamsFile(JSON.stringify([
+      { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 14, high: 22, ageLow: 0, ageHigh: 28, ageUnit: 'd' }] },
+    ]));
+    expect(param.bands[0].ageUnit).toBe('d');
+  });
+
   it('refuses a set file that is not a list', () => {
     expect(() => readResultParamsFile('{"code":"HGB"}')).toThrow(/list of result parameters/);
+  });
+});
+
+describe('openldr test-catalog params --set', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    mocks.createAppContext.mockReset();
+  });
+
+  // The parser drops an age unit it does not know, which would save the range as years. The CLI
+  // hands the service the file as written, and the service refuses it as the route does.
+  it('sends an unknown age unit to the service as written, and reports its refusal', async () => {
+    const err: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((s) => { err.push(String(s)); return true; });
+    const update = vi.fn().mockRejectedValue(new Error('FBC: HGB range 1 has the age unit "days". Use d (days), mo (months) or y (years).'));
+    const close = vi.fn().mockResolvedValue(undefined);
+    mocks.createAppContext.mockResolvedValue({
+      testCatalog: { get: vi.fn().mockResolvedValue({ ...TEST, code: 'FBC', resultParams: [] }), update }, close,
+    });
+    const file = join(mkdtempSync(join(tmpdir(), 'tc-params-')), 'params.json');
+    writeFileSync(file, JSON.stringify([
+      { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 14, high: 22, ageLow: 0, ageHigh: 28, ageUnit: 'days' }] },
+    ]));
+    expect(await runTestCatalogParams('FBC', { set: file, json: false })).toBe(1);
+    expect(update.mock.calls[0][1].resultParams[0].bands[0].ageUnit).toBe('days');
+    expect(err.join('')).toContain('HGB range 1 has the age unit "days"');
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('openldr test-catalog set', () => {
+  let out: string[];
+  let err: string[];
+  const stored = { ...TEST, resultParams: [], expectedTatHours: 48, criticalTatHours: null, requiresVerification: true };
+
+  beforeEach(() => {
+    out = [];
+    err = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((s) => { out.push(String(s)); return true; });
+    vi.spyOn(process.stderr, 'write').mockImplementation((s) => { err.push(String(s)); return true; });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    mocks.createAppContext.mockReset();
+    mocks.recordAuditEvent.mockReset();
+  });
+
+  function withTest() {
+    const update = vi.fn(async (_code: string, input: Record<string, unknown>) => ({ ...stored, ...input }));
+    const close = vi.fn().mockResolvedValue(undefined);
+    mocks.createAppContext.mockResolvedValue({ testCatalog: { get: vi.fn().mockResolvedValue(stored), update }, close });
+    return { update, close };
+  }
+
+  it('sends the stored test with only the given fields changed, leaves result parameters out, and audits', async () => {
+    const { update, close } = withTest();
+    expect(await runTestCatalogSet('HIVVL', { criticalTat: '0.5', requiresVerification: 'false', json: false })).toBe(0);
+    const sent = update.mock.calls[0][1];
+    expect(sent).toMatchObject({ display: 'HIV viral load', criticalTatHours: 0.5, requiresVerification: false });
+    expect(sent).not.toHaveProperty('expectedTatHours');
+    expect(sent).not.toHaveProperty('resultParams');
+    expect(out.join('')).toBe('expected TAT\t48 h\ncritical TAT\t0.5 h\nrequires verification\tno\n');
+    expect(mocks.recordAuditEvent.mock.calls[0][2]).toMatchObject({ action: 'test_catalog.update', entityId: 'HIVVL' });
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a TAT given as none', async () => {
+    const { update } = withTest();
+    expect(await runTestCatalogSet('HIVVL', { expectedTat: 'none', json: true })).toBe(0);
+    expect(update.mock.calls[0][1].expectedTatHours).toBeNull();
+  });
+
+  it('refuses a TAT that is not a number, a switch that is not true or false, and no flag at all, before opening a context', async () => {
+    expect(await runTestCatalogSet('HIVVL', { expectedTat: 'two days', json: false })).toBe(1);
+    expect(await runTestCatalogSet('HIVVL', { requiresVerification: 'maybe', json: false })).toBe(1);
+    expect(await runTestCatalogSet('HIVVL', { json: false })).toBe(1);
+    expect(err.join('')).toContain('--expected-tat must be a number of hours');
+    expect(err.join('')).toContain('--requires-verification must be true or false');
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+
+  it('hands a negative TAT to the service and reports its refusal', async () => {
+    const update = vi.fn().mockRejectedValue(new Error('The expected turnaround time must be a positive number of hours, not -2.'));
+    const close = vi.fn().mockResolvedValue(undefined);
+    mocks.createAppContext.mockResolvedValue({ testCatalog: { get: vi.fn().mockResolvedValue(stored), update }, close });
+    expect(await runTestCatalogSet('HIVVL', { expectedTat: '-2', json: false })).toBe(1);
+    expect(update.mock.calls[0][1].expectedTatHours).toBe(-2);
+    expect(err.join('')).toContain('must be a positive number of hours');
+    expect(close).toHaveBeenCalledTimes(1);
   });
 });

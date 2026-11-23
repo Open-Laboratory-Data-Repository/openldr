@@ -241,7 +241,7 @@ describe('TestResultsExtractor (bench result entry)', () => {
         subject: { reference: 'Patient/p1' },
         effectiveDateTime: '2026-06-04T00:00:00Z',
         valueQuantity: { value: 11.2, unit: 'g/dL' },
-        referenceRange: [{ low: { value: 12, unit: 'g/dL' }, high: { value: 15, unit: 'g/dL' } }],
+        referenceRange: [{ low: { value: 12, unit: 'g/dL' }, high: { value: 15, unit: 'g/dL' }, age: { low: { value: 18, unit: 'a', system: 'http://unitsofmeasure.org', code: 'a' } } }],
       },
     ])
   })
@@ -253,7 +253,30 @@ describe('TestResultsExtractor (bench result entry)', () => {
         { param: { system: PARAM, code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL', band: named },
       ] },
     }, { testBands: new Map([[`${CATALOG}|FBC#${PARAM}|HGB`, named]]) }) as any[]
-    expect(out[0].referenceRange).toEqual([{ low: { value: 12, unit: 'g/dL' }, high: { value: 16, unit: 'g/dL' }, text: 'Highland women' }])
+    expect(out[0].referenceRange).toEqual([{
+      low: { value: 12, unit: 'g/dL' }, high: { value: 16, unit: 'g/dL' },
+      // A range saved with no age unit is in years, which UCUM writes "a".
+      age: { low: { value: 15, unit: 'a', system: 'http://unitsofmeasure.org', code: 'a' } },
+      text: 'Highland women',
+    }])
+  })
+
+  it('writes the age window in the range own UCUM unit, and no age when the range has none', () => {
+    const UCUM = 'http://unitsofmeasure.org'
+    const run = (band: object) => (extract({
+      [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+        { param: { system: PARAM, code: 'HGB' }, resultType: 'numeric', value: 15, unit: 'g/dL', band },
+      ] },
+    }, { testBands: new Map([[`${CATALOG}|FBC#${PARAM}|HGB`, band as never]]) }) as any[])[0].referenceRange[0]
+    const base = { name: null, low: 14, high: 22, unit: 'g/dL', sex: null }
+    expect(run({ ...base, ageLow: 0, ageHigh: 28, ageUnit: 'd' }).age).toEqual({
+      low: { value: 0, unit: 'd', system: UCUM, code: 'd' }, high: { value: 28, unit: 'd', system: UCUM, code: 'd' },
+    })
+    expect(run({ ...base, ageLow: null, ageHigh: 12, ageUnit: 'mo' }).age).toEqual({ high: { value: 12, unit: 'mo', system: UCUM, code: 'mo' } })
+    expect(run({ ...base, ageLow: 1, ageHigh: 5, ageUnit: 'y' }).age).toEqual({
+      low: { value: 1, unit: 'a', system: UCUM, code: 'a' }, high: { value: 5, unit: 'a', system: UCUM, code: 'a' },
+    })
+    expect('age' in run({ ...base, ageLow: null, ageHigh: null, ageUnit: 'd' })).toBe(false)
   })
 
   it('writes a coded result and a text result under the right value', () => {

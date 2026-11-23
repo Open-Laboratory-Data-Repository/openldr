@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   suggestCatalogColumns, checkColumnMap, readCatalogRows, splitSpecimens, valueKey,
   matchCategory, matchSpecimen, catalogExportRow, CATALOG_EXPORT_HEADERS,
-  catalogColumnMapSchema, catalogValueMapSchema,
+  catalogColumnMapSchema, catalogValueMapSchema, readHoursCell, readYesNoCell,
 } from './test-catalog-import';
 import type { CatalogTest } from './test-catalog';
 
@@ -27,6 +27,7 @@ describe('suggestCatalogColumns', () => {
   it('suggests every column of an export, so an export imports back with no mapping', () => {
     expect(suggestCatalogColumns([...CATALOG_EXPORT_HEADERS])).toEqual({
       code: 'code', name: 'name', shortName: 'short_name', loinc: 'loinc', category: 'category', specimenTypes: 'specimen_types',
+      expectedTatHours: 'expected_tat_hours', criticalTatHours: 'critical_tat_hours', requiresVerification: 'requires_verification',
     });
   });
 
@@ -81,11 +82,12 @@ describe('catalogExportRow', () => {
     const test: CatalogTest = {
       code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL',
       specimenTypes: [{ system: LOCAL, code: 'BLD' }, { system: LOCAL, code: 'UR' }], resultParams: [],
-      loinc: '25836-8', active: true,
+      loinc: '25836-8', active: true, expectedTatHours: 0.5, criticalTatHours: null, requiresVerification: false,
       lab: { enabled: true, specimenTypes: null, localDisplay: 'VL' },
     };
     expect(catalogExportRow(test)).toEqual({
       code: 'HIVVL', name: 'HIV viral load', short_name: '', loinc: '25836-8', category: 'MOL', specimen_types: 'BLD;UR',
+      expected_tat_hours: '0.5', critical_tat_hours: '', requires_verification: 'no',
     });
   });
 });
@@ -104,5 +106,15 @@ describe('the shapes the route and the CLI accept', () => {
     expect(catalogValueMapSchema.safeParse(ok).success).toBe(true);
     expect(catalogValueMapSchema.safeParse({ categories: [{ text: 'Virology', kind: 'new', code: 'VIRO' }], specimens: [] }).success)
       .toBe(false);
+  });
+});
+
+describe('turnaround and verification cells', () => {
+  it('reads hours, decimals included, and calls anything else bad', () => {
+    expect(['', '48', '0.5', '.5', '-2', 'two', '1e3', '0x10'].map(readHoursCell)).toEqual([null, 48, 0.5, 0.5, -2, 'bad', 'bad', 'bad']);
+  });
+
+  it('reads yes, no, true and false in any case, empty as the default yes', () => {
+    expect(['', 'Yes', 'NO', 'true', 'False', 'maybe'].map(readYesNoCell)).toEqual([true, true, false, true, false, 'bad']);
   });
 });

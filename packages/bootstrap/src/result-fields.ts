@@ -5,6 +5,7 @@ import { toCsv } from '@openldr/reporting';
 import { isLoincLoaded, LOINC_CODE, TestCatalogError } from './test-catalog';
 import { TEST_MAPPING_IMPORT_MAX_BYTES, TEST_MAPPING_IMPORT_MAX_ROWS } from './test-mapping';
 import { readTableFile, TableFileError } from './table-file';
+import { reexpandValueSetsForSystem } from './reexpand-value-sets';
 
 // Result fields (docs/superpowers/specs/2026-10-11-result-field-mapping-design.md, 4.2 and 4.5): the
 // site's result dictionary, urn:openldr:default_result, with each field's optional LOINC link. A link is
@@ -28,6 +29,27 @@ export interface ResultFieldList {
   ownedHere: boolean;
   /** false when no dictionary is loaded here at all. */
   loaded: boolean;
+}
+
+/** A result field typed in by hand, from the test sheet's Add field or `result-fields add`. */
+/** A field just added, with the dictionary's system, so a caller can put it on a test as it is. */
+export interface CreatedResultField extends ResultField { system: string }
+
+export interface ResultFieldInput { code?: string | null; display: string; units?: string | null }
+
+/** A code a person may give a field: letters, digits, dot, dash and underscore, up to 64 characters. */
+const FIELD_CODE = /^[A-Za-z0-9._-]{1,64}$/;
+const GENERATED_CODE_MAX = 40;
+
+/**
+ * The code a field gets when none is given, from its name: accents dropped, upper case, each run of
+ * other characters one underscore, at most 40 characters. The same name always gives the same code,
+ * so "Haemoglobin A1c" is HAEMOGLOBIN_A1C. Null when the name has no Latin letter or digit.
+ */
+export function resultFieldCodeFrom(display: string): string | null {
+  const code = display.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, GENERATED_CODE_MAX).replace(/_+$/, '');
+  return code === '' ? null : code;
 }
 
 export interface ResultFieldLinkChange { code: string; before: string | null; after: string | null }
@@ -159,6 +181,42 @@ export function createResultFields(deps: { db: Kysely<InternalSchema>; admin: Te
     return { code, before: current.toCode, after: null };
   }
 
+  /**
+   * Add one result field to the dictionary by hand, with result_role result and its unit as parm_units,
+   * the same concept an import or `from-loinc` writes. A code already in the dictionary is refused, so
+   * nothing typed here replaces a field. The reportable-result set is expanded again, so the test
+   * sheet's picker offers the new field at once.
+   */
+  async function create(input: ResultFieldInput): Promise<CreatedResultField> {
+    await refuseUnlessOwned();
+    const display = input.display.trim();
+    if (display === '') throw invalid('a result field needs a name');
+    const given = input.code?.trim() || null;
+    if (given !== null && !FIELD_CODE.test(given)) {
+      throw invalid(`"${given}" cannot be a result field code. Use letters, digits, dot, dash or underscore, up to 64 characters.`);
+    }
+    const code = given ?? resultFieldCodeFrom(display);
+    if (code === null) throw invalid(`a code cannot be made from the name "${display}". Give a code.`);
+    const taken = await db.selectFrom('terminology_concepts').select('code')
+      .where('system', '=', RESULT_PARAM_SYSTEM).where('code', '=', code).executeTakeFirst();
+    if (taken) {
+      throw new TestCatalogError(
+        given === null
+          ? `a result field with code ${code} already exists (the code made from its name). Give another code, or tick ${code} on the test.`
+          : `a result field with code ${code} already exists. Give another code, or tick ${code} on the test.`,
+        'conflict',
+      );
+    }
+    const units = input.units?.trim() || null;
+    await deps.admin.terms.importRows([{
+      system: RESULT_PARAM_SYSTEM, code, display, status: 'ACTIVE',
+      properties: { result_role: 'result', ...(units ? { parm_units: units } : {}) },
+    }]);
+    await reexpandValueSetsForSystem(deps.admin, RESULT_PARAM_SYSTEM);
+    deps.onChanged?.();
+    return { system: RESULT_PARAM_SYSTEM, code, display, role: 'result', units, loinc: null };
+  }
+
   async function exportCsv(): Promise<string> {
     return toCsv(CSV_COLUMNS, (await readAll()).map((f) => ({ ...f })));
   }
@@ -222,7 +280,7 @@ export function createResultFields(deps: { db: Kysely<InternalSchema>; admin: Te
     return report;
   }
 
-  return { list, link, unlink, exportCsv, importPreview, importApply, ownedHere };
+  return { list, link, unlink, create, exportCsv, importPreview, importApply, ownedHere };
 }
 
 export type ResultFields = ReturnType<typeof createResultFields>;

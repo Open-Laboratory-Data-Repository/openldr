@@ -44,6 +44,24 @@ export async function runResultFieldsLink(code: string, loinc: string, opts: { j
   } catch (err) { return fail('link', err, opts.json); } finally { await ctx.close(); }
 }
 
+export interface ResultFieldsAddOpts { display: string; code?: string; unit?: string; json: boolean }
+
+/** `openldr test-catalog result-fields add`: POST /api/test-catalog/result-fields from the CLI. */
+export async function runResultFieldsAdd(opts: ResultFieldsAddOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const field = await ctx.resultFields.create({ code: opts.code ?? null, display: opts.display, units: opts.unit ?? null });
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'result_field.create', entityType: 'result_field', entityId: field.code,
+      before: null, after: { display: field.display, units: field.units },
+    });
+    process.stdout.write(opts.json
+      ? JSON.stringify(field, null, 2) + '\n'
+      : `Added result field ${field.code}  ${field.display ?? ''}${field.units ? `  ${field.units}` : ''}.\n`);
+    return 0;
+  } catch (err) { return fail('add', err, opts.json); } finally { await ctx.close(); }
+}
+
 export async function runResultFieldsUnlink(code: string, opts: { force: boolean; json: boolean }): Promise<number> {
   if (!opts.force) { process.stderr.write('test-catalog result-fields unlink removes a LOINC link; pass --force to do it.\n'); return 1; }
   const ctx = await createAppContext(loadConfig());

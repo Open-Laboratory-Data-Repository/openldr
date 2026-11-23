@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
-import { TestCatalogError, type AppContext } from '@openldr/bootstrap';
+import { TestCatalogError, type AppContext, type ResultFieldsFromLoincAnswer } from '@openldr/bootstrap';
 import { registerResultFieldsRoutes } from './result-fields-routes';
 import './auth-plugin';
 
 const LIST = { rows: [{ code: 'VLC', display: 'HIV VL copies', role: 'result', units: null, loinc: '20447-9' }], total: 1, ownedHere: true, loaded: true };
 const REPORT = { counts: { new: 1, changed: 0, unchanged: 0, refused: 0 }, refused: [] };
+
+const FROM_LOINC: ResultFieldsFromLoincAnswer = {
+  params: [
+    { system: 'urn:openldr:default_result', code: '2093-3', resultType: 'numeric', valueSetUrl: null, bands: [] },
+    { system: 'urn:openldr:default_result', code: '32789-0', resultType: 'coded', valueSetUrl: 'urn:openldr:valueset:loinc-answers:32789-0', bands: [] },
+  ],
+  created: ['32789-0'], reused: ['2093-3'], valueSetsCreated: ['urn:openldr:valueset:loinc-answers:32789-0'],
+};
 
 type Impl = (...args: any[]) => Promise<unknown>;
 
@@ -20,9 +28,14 @@ function fakeCtx(over: Record<string, Impl> = {}) {
     exportCsv: spy('exportCsv', over.exportCsv ?? (async () => 'code,display,role,units,loinc\n')),
     importPreview: spy('importPreview', over.importPreview ?? (async () => REPORT)),
     importApply: spy('importApply', over.importApply ?? (async () => REPORT)),
+    create: spy('create', over.create ?? (async () => ({ system: 'urn:openldr:default_result', code: 'HBA1C', display: 'Haemoglobin A1c', role: 'result', units: 'mmol/mol', loinc: null }))),
+  };
+  const loincHints = {
+    resultFieldsFromLoinc: spy('resultFieldsFromLoinc', over.resultFieldsFromLoinc ?? (async () => FROM_LOINC)),
   };
   const ctx = {
     resultFields,
+    loincHints,
     audit: { record: async (e: Record<string, unknown>) => { audit.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
   } as unknown as AppContext;
@@ -88,5 +101,61 @@ describe('result fields routes', () => {
     expect((await app.inject({ method: 'POST', url: '/api/test-catalog/result-fields/import/preview', ...upload })).json()).toEqual(REPORT);
     expect((await app.inject({ method: 'POST', url: '/api/test-catalog/result-fields/import/apply', ...upload })).json()).toEqual(REPORT);
     expect(audit.map((a) => a.action)).toEqual(['result_field.import']);
+  });
+
+  it('POST from-loinc passes the codes and panel flag, answers the params and audits what it made', async () => {
+    const { ctx, calls, audit } = fakeCtx();
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: ['24331-1'], panel: true } });
+    expect([res.statusCode, res.json()]).toEqual([200, FROM_LOINC]);
+    expect(calls).toEqual([{ method: 'resultFieldsFromLoinc', args: [['24331-1'], { panel: true }] }]);
+    expect(audit).toEqual([expect.objectContaining({
+      action: 'result_field.from_loinc', entityType: 'result_field', entityId: '24331-1',
+      after: { created: ['32789-0'], valueSetsCreated: ['urn:openldr:valueset:loinc-answers:32789-0'] },
+    })]);
+  });
+
+  it('POST from-loinc writes no audit row when it only reused fields', async () => {
+    const reusedOnly = { params: FROM_LOINC.params, created: [], reused: ['CHOL'], valueSetsCreated: [] };
+    const { ctx, audit } = fakeCtx({ resultFieldsFromLoinc: async () => reusedOnly });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: ['2093-3'] } });
+    expect([res.statusCode, res.json()]).toEqual([200, reusedOnly]);
+    expect(audit).toEqual([]);
+  });
+
+  it('POST from-loinc refuses an empty list before the service, a viewer with 403, and maps refusals', async () => {
+    const { ctx, calls } = fakeCtx();
+    const empty = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: [] } });
+    expect(empty.statusCode).toBe(400);
+    expect(calls).toEqual([]);
+    const viewer = await appWith(ctx, ['terminology.view']).inject({ method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: ['2093-3'] } });
+    expect(viewer.statusCode).toBe(403);
+    const central = fakeCtx({ resultFieldsFromLoinc: async () => { throw new TestCatalogError('no', 'central-managed'); } });
+    const res = await appWith(central.ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: ['2093-3'] } });
+    expect([res.statusCode, res.json().kind, central.audit]).toEqual([409, 'central-managed', []]);
+  });
+
+  it('POST adds a field by hand with 201, passes code, name and unit, and audits it', async () => {
+    const { ctx, calls, audit } = fakeCtx();
+    const res = await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog/result-fields', payload: { code: 'HBA1C', display: 'Haemoglobin A1c', units: 'mmol/mol' },
+    });
+    expect([res.statusCode, res.json()]).toEqual([201, { system: 'urn:openldr:default_result', code: 'HBA1C', display: 'Haemoglobin A1c', role: 'result', units: 'mmol/mol', loinc: null }]);
+    expect(calls).toEqual([{ method: 'create', args: [{ code: 'HBA1C', display: 'Haemoglobin A1c', units: 'mmol/mol' }] }]);
+    expect(audit).toEqual([expect.objectContaining({
+      action: 'result_field.create', entityType: 'result_field', entityId: 'HBA1C', before: null,
+      after: { display: 'Haemoglobin A1c', units: 'mmol/mol' },
+    })]);
+  });
+
+  it('POST add refuses no name before the service, a viewer with 403, and a taken code with 409', async () => {
+    const { ctx, calls } = fakeCtx();
+    const bad = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields', payload: { code: 'X' } });
+    expect(bad.statusCode).toBe(400);
+    expect(calls).toEqual([]);
+    const viewer = await appWith(ctx, ['terminology.view']).inject({ method: 'POST', url: '/api/test-catalog/result-fields', payload: { display: 'X' } });
+    expect(viewer.statusCode).toBe(403);
+    const taken = fakeCtx({ create: async () => { throw new TestCatalogError('a result field with code HB already exists.', 'conflict'); } });
+    const res = await appWith(taken.ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields', payload: { display: 'HB' } });
+    expect([res.statusCode, res.json(), taken.audit]).toEqual([409, { error: 'a result field with code HB already exists.', kind: 'conflict' }, []]);
   });
 });

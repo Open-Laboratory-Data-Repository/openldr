@@ -3,7 +3,7 @@ import { extname } from 'node:path';
 import { loadConfig } from '@openldr/config';
 import {
   catalogChangeAction, catalogColumnMapSchema, catalogImportAudit, catalogValueMapSchema, createAppContext,
-  parseCatalogListQuery, parseResultParams, readCatalogImportFile, recordAuditEvent,
+  parseCatalogListQuery, parseResultParams, readCatalogImportFile, readHoursCell, recordAuditEvent, type CatalogTestInput,
   type CatalogColumnMap, type CatalogImportFile, type CatalogImportReport, type CatalogValueMap,
   type TestResultParam,
 } from '@openldr/bootstrap';
@@ -78,7 +78,11 @@ export async function runTestCatalogParams(code: string, opts: { set?: string; j
   const ctx = await createAppContext(loadConfig());
   try {
     if (opts.set) {
-      const params = readResultParamsFile(readFileSync(opts.set, 'utf8'));
+      const text = readFileSync(opts.set, 'utf8');
+      const params = readResultParamsFile(text);
+      // The service gets the file as written, so it refuses what the route refuses (an unknown age
+      // unit, say) rather than seeing the parser's copy with that unit already dropped.
+      const sent = JSON.parse(text) as TestResultParam[];
       const before = await ctx.testCatalog.get(code);
       if (!before) {
         process.stderr.write(`test-catalog params failed: no such test: ${code}\n`);
@@ -87,7 +91,7 @@ export async function runTestCatalogParams(code: string, opts: { set?: string; j
       await ctx.testCatalog.update(code, {
         display: before.display, shortName: before.shortName, category: before.category,
         specimenTypes: before.specimenTypes, loinc: before.loinc, active: before.active,
-        resultParams: params,
+        resultParams: sent,
       });
       await recordAuditEvent(ctx, cliActor(), {
         action: 'test_catalog.result_params_set', entityType: 'test_catalog', entityId: code,
@@ -109,6 +113,75 @@ export async function runTestCatalogParams(code: string, opts: { set?: string; j
     if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
     else process.stderr.write(`test-catalog params failed: ${msg}\n`);
     return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export interface TestCatalogSetOpts {
+  expectedTat?: string;
+  criticalTat?: string;
+  requiresVerification?: string;
+  json: boolean;
+}
+
+/** A --expected-tat or --critical-tat value: hours, or "none" to clear. The service checks it is positive. */
+function readTatFlag(flag: string, text: string): { ok: true; value: number | null } | { ok: false; error: string } {
+  if (text.trim().toLowerCase() === 'none') return { ok: true, value: null };
+  const read = readHoursCell(text.trim());
+  if (read === 'bad' || read === null) return { ok: false, error: `${flag} must be a number of hours, or none to clear it, not "${text}"` };
+  return { ok: true, value: read };
+}
+
+/** `openldr test-catalog set <code>`: the CLI door to the sheet's turnaround and verification fields.
+ *  It sends the test as stored with only the given fields changed, through the same update the route
+ *  calls, so both doors refuse the same values. A lab whose catalog comes from central is refused. */
+export async function runTestCatalogSet(code: string, opts: TestCatalogSetOpts): Promise<number> {
+  const fail = (msg: string): number => {
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`test-catalog set failed: ${msg}\n`);
+    return 1;
+  };
+  const change: Pick<CatalogTestInput, 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification'> = {};
+  if (opts.expectedTat !== undefined) {
+    const read = readTatFlag('--expected-tat', opts.expectedTat);
+    if (!read.ok) return fail(read.error);
+    change.expectedTatHours = read.value;
+  }
+  if (opts.criticalTat !== undefined) {
+    const read = readTatFlag('--critical-tat', opts.criticalTat);
+    if (!read.ok) return fail(read.error);
+    change.criticalTatHours = read.value;
+  }
+  if (opts.requiresVerification !== undefined) {
+    const key = opts.requiresVerification.trim().toLowerCase();
+    if (key !== 'true' && key !== 'false') return fail(`--requires-verification must be true or false, not "${opts.requiresVerification}"`);
+    change.requiresVerification = key === 'true';
+  }
+  if (Object.keys(change).length === 0) return fail('give at least one of --expected-tat, --critical-tat or --requires-verification');
+
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const before = await ctx.testCatalog.get(code);
+    if (!before) return fail(`no such test: ${code}`);
+    // Result parameters are left out, so the service keeps them.
+    const after = await ctx.testCatalog.update(code, {
+      display: before.display, shortName: before.shortName, category: before.category,
+      specimenTypes: before.specimenTypes, loinc: before.loinc, active: before.active, ...change,
+    });
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'test_catalog.update', entityType: 'test_catalog', entityId: code, before, after,
+    });
+    process.stdout.write(opts.json
+      ? JSON.stringify(after, null, 2) + '\n'
+      : [
+        `expected TAT\t${after.expectedTatHours === null ? 'none' : `${after.expectedTatHours} h`}`,
+        `critical TAT\t${after.criticalTatHours === null ? 'none' : `${after.criticalTatHours} h`}`,
+        `requires verification\t${after.requiresVerification ? 'yes' : 'no'}`,
+      ].join('\n') + '\n');
+    return 0;
+  } catch (err) {
+    return fail(redactError(err));
   } finally {
     await ctx.close();
   }

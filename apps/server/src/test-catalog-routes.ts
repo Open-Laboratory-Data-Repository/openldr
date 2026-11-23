@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   catalogChangeAction, catalogImportAudit, catalogImportInputSchema, parseCatalogListQuery, readCatalogImportFile,
-  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, patientBandKey, type AppContext,
+  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, labTimeZone, patientBandKey, type AppContext, type BandPatient,
 } from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
@@ -29,6 +29,8 @@ const band = z.object({
   name: z.string().nullish(),
   low: z.number().nullish(), high: z.number().nullish(), unit: z.string().nullish(),
   sex: z.string().nullish(), ageLow: z.number().nullish(), ageHigh: z.number().nullish(),
+  // The unit of the age window. Left out means years, so a range sent as before keeps its meaning.
+  ageUnit: z.enum(['d', 'mo', 'y']).nullish(),
   criticalLow: z.number().nullish(), criticalHigh: z.number().nullish(),
 });
 // zod strips what it does not declare, so a parameter list left out of this schema would vanish
@@ -48,6 +50,7 @@ const resultParam = z.object({
     name: b.name ?? null,
     low: b.low ?? null, high: b.high ?? null, unit: b.unit ?? null,
     sex: b.sex ?? null, ageLow: b.ageLow ?? null, ageHigh: b.ageHigh ?? null,
+    ...(b.ageUnit != null ? { ageUnit: b.ageUnit } : {}),
     // Optional on the band, so a limit not given adds no key.
     ...(b.criticalLow != null ? { criticalLow: b.criticalLow } : {}),
     ...(b.criticalHigh != null ? { criticalHigh: b.criticalHigh } : {}),
@@ -62,6 +65,11 @@ const testInput = z.object({
   resultParams: z.array(resultParam).optional(),
   loinc: z.string().nullish(),
   active: z.boolean().optional(),
+  // Hours. A number is required here; the service refuses one that is not positive, so the CLI and an
+  // import refuse the same values in the same words.
+  expectedTatHours: z.number().nullish(),
+  criticalTatHours: z.number().nullish(),
+  requiresVerification: z.boolean().optional(),
 });
 const labInput = z.object({
   enabled: z.boolean(),
@@ -77,16 +85,19 @@ const resultParamsInput = z.object({
 });
 
 /**
- * The patient's sex and whole years of age, read from the stored Patient. The studio sends a
- * reference only, so no date arithmetic happens in the browser and no birth date travels with a
- * picker answer. A patient that cannot be read gives nulls, and the catalog then answers the
- * catch-all band (bench result entry, spec 7).
+ * The patient's sex and birth date, read from the stored Patient, with the moment the age is taken
+ * at. The studio sends a reference only, so no date arithmetic happens in the browser and no birth
+ * date travels with a picker answer. Each band then reads the age in its own unit. A patient that
+ * cannot be read gives nulls, and the catalog then answers the catch-all band (bench result entry,
+ * spec 7).
  */
-async function patientBandKeyFor(ctx: AppContext, reference: string | undefined): Promise<{ sex: string | null; ageYears: number | null }> {
+async function patientBandKeyFor(ctx: AppContext, reference: string | undefined): Promise<BandPatient> {
   const id = reference?.split('/')[1];
-  if (!id) return { sex: null, ageYears: null };
-  const patient = (await ctx.fhirStore.get('Patient', id).catch(() => null)) as { gender?: string; birthDate?: string } | null;
-  return patientBandKey(patient);
+  // The lab's zone decides what date today is, so a baby born today is 0 days old in the lab.
+  const zone = await labTimeZone(ctx.labIdentity);
+  if (!id) return patientBandKey(null, Date.now(), zone);
+  const patient = (await ctx.fhirStore.get('Patient', id).catch(() => null)) as { gender?: string; birthDate?: string; extension?: unknown } | null;
+  return patientBandKey(patient, Date.now(), zone);
 }
 
 /** The reasons one value set offers, as plain codings. An unreadable set answers none, so a reject
@@ -137,6 +148,15 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
   // The page's pickers read this, not a ValueSet expansion, so they offer exactly what a save accepts.
   app.get('/api/test-catalog/options', VIEW, async (_req, reply) => {
     return reply.send(await ctx.testCatalog.options());
+  });
+
+  // What a LOINC code suggests for a test (test catalog hints spec, call 7). Answers null when LOINC or
+  // its ontology is not loaded here, so the sheet offers no hint controls.
+  app.get('/api/test-catalog/loinc-hints/:code', VIEW, async (req, reply) => {
+    const { code } = req.params as { code: string };
+    try {
+      return reply.send(await ctx.loincHints.hints(code));
+    } catch (err) { return replyCatalogError(err, reply); }
   });
 
   app.post('/api/test-catalog', MANAGE, async (req, reply) => {

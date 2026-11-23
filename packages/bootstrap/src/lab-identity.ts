@@ -16,6 +16,18 @@ export interface LabIdentityService {
   set(patch: Record<string, string>, actor: string | null): Promise<LabIdentityValidationError[]>;
 }
 
+/**
+ * The lab's time zone (`lab.timezone`), or undefined when none is set or the settings cannot be read.
+ * It is read from `tokens()`, which strips the `lab.` prefix, so the key there is `timezone`.
+ */
+export async function labTimeZone(identity: Pick<LabIdentityService, 'tokens'> | null | undefined): Promise<string | undefined> {
+  try {
+    return (await identity?.tokens())?.timezone?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function createLabIdentity(store: AppSettingStore): LabIdentityService {
   async function all(): Promise<Record<string, string>> {
     const out: Record<string, string> = {};

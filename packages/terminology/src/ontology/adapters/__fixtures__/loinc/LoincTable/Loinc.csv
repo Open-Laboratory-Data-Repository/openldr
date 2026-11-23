@@ -1,0 +1,6 @@
+"LOINC_NUM","COMPONENT","PROPERTY","TIME_ASPCT","SYSTEM","SCALE_TYP","METHOD_TYP","CLASS","STATUS","LONG_COMMON_NAME","SHORTNAME","EXAMPLE_UCUM_UNITS"
+"2093-3","Cholesterol","MCnc","Pt","Ser/Plas","Qn","","CHEM","ACTIVE","Cholesterol [Mass/volume] in Serum or Plasma","Cholest SerPl-mCnc","mg/dL"
+"2571-8","Triglyceride","MCnc","Pt","Ser/Plas","Qn","","CHEM","ACTIVE","Triglyceride [Mass/volume] in Serum or Plasma","Trigl SerPl-mCnc","mg/dL"
+"24331-1","Lipid 1996 panel","-","Pt","Ser/Plas","-","","PANEL.CHEM","ACTIVE","Lipid 1996 panel - Serum or Plasma","Lipid 1996 panel SerPl",""
+"32789-0","Viscosity","Imp","Pt","Semen","Ord","","SPEC","ACTIVE","Viscosity of Semen Qualitative","Visc Smn Ql",""
+"6429-5","Human immunodeficiency virus","Prid","Pt","Bld","Nom","Organism specific culture","MICRO","ACTIVE","Human immunodeficiency virus identified in Blood by Organism specific culture","HIV Bld Cult",""

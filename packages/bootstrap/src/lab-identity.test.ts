@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createLabIdentity } from './lab-identity';
+import { createLabIdentity, labTimeZone } from './lab-identity';
 
 function fakeStore() {
   const rows = new Map<string, string>();
@@ -54,5 +54,20 @@ describe('createLabIdentity', () => {
     const svc = createLabIdentity(store);
     expect(await svc.set({ 'sync.client_secret': 'nope' }, null)).toEqual([{ key: 'sync.client_secret', reason: 'unknown-key' }]);
     expect(rows.size).toBe(0);
+  });
+});
+
+describe('labTimeZone', () => {
+  it('reads lab.timezone from the service, under the name tokens() gives it', async () => {
+    const { store } = fakeStore();
+    const svc = createLabIdentity(store);
+    expect(await labTimeZone(svc)).toBeUndefined();
+    expect(await svc.set({ 'lab.timezone': 'Africa/Nairobi' }, 'tester')).toEqual([]);
+    expect(await labTimeZone(svc)).toBe('Africa/Nairobi');
+  });
+
+  it('answers undefined when there is no service or it cannot be read', async () => {
+    expect(await labTimeZone(undefined)).toBeUndefined();
+    expect(await labTimeZone({ tokens: async () => { throw new Error('down'); } })).toBeUndefined();
   });
 });

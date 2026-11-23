@@ -11,8 +11,12 @@ export const CATALOG_IMPORT_MAX_ROWS = 5000;
 /** Far above 5,000 rows of CSV. It bounds what reading an Excel file can cost. */
 export const CATALOG_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 
-export type CatalogImportField = 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes';
-export const CATALOG_IMPORT_FIELDS: readonly CatalogImportField[] = ['code', 'name', 'shortName', 'loinc', 'category', 'specimenTypes'];
+export type CatalogImportField =
+  | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
+  | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification';
+export const CATALOG_IMPORT_FIELDS: readonly CatalogImportField[] = [
+  'code', 'name', 'shortName', 'loinc', 'category', 'specimenTypes', 'expectedTatHours', 'criticalTatHours', 'requiresVerification',
+];
 
 /** Which file column feeds each field, by header text. A field left out is not read, so the import leaves it alone. */
 export type CatalogColumnMap = Partial<Record<CatalogImportField, string>>;
@@ -50,6 +54,9 @@ const HEADER_NAMES: Record<CatalogImportField, readonly string[]> = {
   loinc: ['loinc', 'loinccode'],
   category: ['category', 'testcategory'],
   specimenTypes: ['specimentypes', 'specimentype', 'specimens', 'specimen'],
+  expectedTatHours: ['expectedtathours', 'expectedtat', 'tathours', 'tat'],
+  criticalTatHours: ['criticaltathours', 'criticaltat'],
+  requiresVerification: ['requiresverification', 'verification', 'verify'],
 };
 
 function headerKey(header: string): string {
@@ -132,8 +139,25 @@ export function matchSpecimen(text: string, options: CatalogSpecimenOption[]): S
   return hits.size === 1 ? [...hits.values()][0] : null;
 }
 
+/** A TAT cell: null when empty, the number when it reads as one, else 'bad'. The service checks it is positive. */
+export function readHoursCell(text: string): number | null | 'bad' {
+  if (text === '') return null;
+  if (!/^[+-]?(\d+(\.\d*)?|\.\d+)$/.test(text)) return 'bad';
+  return Number(text);
+}
+
+/** A requires-verification cell: yes, no, true or false in any case. Empty means the default, true. */
+export function readYesNoCell(text: string): boolean | 'bad' {
+  const key = text.toLowerCase();
+  if (key === '' || key === 'yes' || key === 'true') return true;
+  if (key === 'no' || key === 'false') return false;
+  return 'bad';
+}
+
 /** The export's columns. suggestCatalogColumns maps every one, so an export imports back as it is. */
-export const CATALOG_EXPORT_HEADERS = ['code', 'name', 'short_name', 'loinc', 'category', 'specimen_types'] as const;
+export const CATALOG_EXPORT_HEADERS = [
+  'code', 'name', 'short_name', 'loinc', 'category', 'specimen_types', 'expected_tat_hours', 'critical_tat_hours', 'requires_verification',
+] as const;
 export const CATALOG_EXPORT_COLUMNS = CATALOG_EXPORT_HEADERS.map((h) => ({ key: h, label: h }));
 
 export function catalogExportRow(t: CatalogTest): Record<string, string> {
@@ -144,6 +168,9 @@ export function catalogExportRow(t: CatalogTest): Record<string, string> {
     loinc: t.loinc ?? '',
     category: t.category ?? '',
     specimen_types: t.specimenTypes.map((s) => s.code).join(';'),
+    expected_tat_hours: t.expectedTatHours === null ? '' : String(t.expectedTatHours),
+    critical_tat_hours: t.criticalTatHours === null ? '' : String(t.criticalTatHours),
+    requires_verification: t.requiresVerification ? 'yes' : 'no',
   };
 }
 
@@ -157,6 +184,9 @@ export const catalogColumnMapSchema = z.object({
   loinc: headerText.optional(),
   category: headerText.optional(),
   specimenTypes: headerText.optional(),
+  expectedTatHours: headerText.optional(),
+  criticalTatHours: headerText.optional(),
+  requiresVerification: headerText.optional(),
 }).strict();
 
 export const catalogValueMapSchema = z.object({

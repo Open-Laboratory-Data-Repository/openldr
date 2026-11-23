@@ -10,14 +10,23 @@ describe('range labels', () => {
   });
 
   it('labels an unnamed range from its sex and age', () => {
-    expect(rangeLabel(band({ sex: 'female', ageLow: 15 }), sexes, RANGE_EN)).toBe('Female 15+');
-    expect(rangeLabel(band({ ageHigh: 5 }), sexes, RANGE_EN)).toBe('up to 5');
-    expect(rangeLabel(band({ ageLow: 2, ageHigh: 17 }), sexes, RANGE_EN)).toBe('2 to 17');
+    expect(rangeLabel(band({ sex: 'female', ageLow: 15 }), sexes, RANGE_EN)).toBe('Female 15+ years');
+    expect(rangeLabel(band({ ageHigh: 5 }), sexes, RANGE_EN)).toBe('up to 5 years');
+    expect(rangeLabel(band({ ageLow: 2, ageHigh: 17 }), sexes, RANGE_EN)).toBe('2 to 17 years');
     expect(rangeLabel(band({}), sexes, RANGE_EN)).toBe('Default');
   });
 
+  it('labels an unnamed range in its own age unit, and a range with no unit in years', () => {
+    expect(rangeLabel(band({ ageHigh: 28, ageUnit: 'd' }), sexes, RANGE_EN)).toBe('up to 28 days');
+    expect(rangeLabel(band({ ageLow: 0, ageHigh: 28, ageUnit: 'd' }), sexes, RANGE_EN)).toBe('0 to 28 days');
+    expect(rangeLabel(band({ ageLow: 1, ageHigh: 12, ageUnit: 'mo' }), sexes, RANGE_EN)).toBe('1 to 12 months');
+    expect(rangeLabel(band({ sex: 'female', ageLow: 6, ageUnit: 'mo' }), sexes, RANGE_EN)).toBe('Female 6+ months');
+    expect(rangeLabel(band({ ageLow: 1, ageHigh: 5, ageUnit: 'y' }), sexes, RANGE_EN)).toBe('1 to 5 years');
+    expect(rangeLabel(band({ ageLow: 1, ageHigh: 5 }), sexes, RANGE_EN)).toBe('1 to 5 years');
+  });
+
   it('describes who a range is for without its name, for the warning', () => {
-    expect(criteriaLabel(band({ name: 'Highland women', sex: 'female', ageLow: 15 }), sexes, RANGE_EN)).toBe('Female 15+');
+    expect(criteriaLabel(band({ name: 'Highland women', sex: 'female', ageLow: 15 }), sexes, RANGE_EN)).toBe('Female 15+ years');
   });
 
   it('takes the sex label in the page language, then English, then the code', () => {
