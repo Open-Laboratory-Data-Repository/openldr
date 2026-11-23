@@ -53,7 +53,7 @@ export function App() {
       <Route path="/workflows/new" element={<RequireCapability cap="workflows.view"><Workflows /></RequireCapability>} />
       <Route path="/workflows/:id" element={<RequireCapability cap="workflows.view"><Workflows /></RequireCapability>} />
       <Route path="/query" element={<RequireCapability cap="query.run"><QueryPage /></RequireCapability>} />
-      <Route path="/terminology" element={<Terminology />} />
+      <Route path="/terminology" element={<RequireCapability cap="terminology.view"><Terminology /></RequireCapability>} />
       <Route path="/users" element={<RequireCapability cap="users.view"><Users /></RequireCapability>} />
       <Route path="/facilities" element={<RequireCapability cap="facilities.view"><Facilities /></RequireCapability>} />
       <Route path="/test-catalog" element={<RequireCapability cap="terminology.view"><TestCatalog /></RequireCapability>} />
@@ -89,12 +89,12 @@ export function App() {
       <Route path="/audit" element={<RequireCapability cap="audit.view"><Audit /></RequireCapability>} />
       <Route path="/activity" element={<RequireCapability cap="activity.view"><Activity /></RequireCapability>} />
       <Route path="/notifications" element={<Notifications />} />
-      <Route path="/forms" element={<Forms />} />
-      <Route path="/forms/new" element={<FormBuilderPage />} />
-      <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
+      <Route path="/forms" element={<RequireCapability cap="forms.view"><Forms /></RequireCapability>} />
+      <Route path="/forms/new" element={<RequireCapability cap="forms.edit"><FormBuilderPage /></RequireCapability>} />
+      <Route path="/forms/:id/builder" element={<RequireCapability cap="forms.view"><FormBuilderPage /></RequireCapability>} />
       <Route path="/report-designer" element={<RequireCapability cap="reports.edit_templates"><ReportDesignerPage /></RequireCapability>} />
       <Route path="/report-designer/:id" element={<RequireCapability cap="reports.edit_templates"><ReportDesignerPage /></RequireCapability>} />
-      <Route path="/forms/:id" element={<FormCapture />} />
+      <Route path="/forms/:id" element={<RequireCapability cap="forms.view"><FormCapture /></RequireCapability>} />
       <Route path="/x/:pluginId" element={<RequireCapability><PluginContainer /></RequireCapability>} />
       <Route path="/docs" element={<Docs />} />
       <Route path="/docs/:slug" element={<Docs />} />

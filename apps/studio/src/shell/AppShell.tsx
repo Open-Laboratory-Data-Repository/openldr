@@ -37,11 +37,11 @@ export const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon
   { to: '/report-designer', labelKey: 'nav.reportDesigner', end: false, icon: PencilRuler, caps: ['reports.edit_templates'] },
   { to: '/query', labelKey: 'nav.query', end: false, icon: Database, caps: ['query.run'] },
   { to: '/workflows', labelKey: 'nav.workflows', end: false, icon: Workflow, caps: ['workflows.view'] },
-  { to: '/terminology', labelKey: 'nav.terminology', end: false, icon: Library },
+  { to: '/terminology', labelKey: 'nav.terminology', end: false, icon: Library, caps: ['terminology.view'] },
   { to: '/facilities', labelKey: 'nav.facilities', end: false, icon: Building2, caps: ['facilities.view'] },
   { to: '/test-catalog', labelKey: 'nav.testCatalog', end: false, icon: FlaskConical, caps: ['terminology.view'] },
   { to: '/patients', labelKey: 'nav.patients', end: false, icon: Contact, caps: ['patients.view'] },
-  { to: '/forms', labelKey: 'nav.forms', end: false, icon: FileInput },
+  { to: '/forms', labelKey: 'nav.forms', end: false, icon: FileInput, caps: ['forms.view'] },
   { to: '/users', labelKey: 'nav.users', end: false, icon: Users, caps: ['users.view'] },
   // Sites lives under Settings → Sites (not a top-level nav item) so it isn't mistaken for a
   // Facilities / master facility list.
