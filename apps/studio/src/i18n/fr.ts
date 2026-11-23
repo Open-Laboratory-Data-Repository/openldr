@@ -2551,6 +2551,7 @@ export const fr: EnShape = {
   plugins: {
     notFound: "Extension introuvable ou non installée.",
     noUi: "Cette extension ne fournit aucune interface.",
+    loadFailed: "Impossible de charger la page de cette extension. Rechargez la page pour réessayer.",
     loadError: "Échec du chargement de l'interface de l'extension.",
     sites: {
       menu: 'Emplacements',

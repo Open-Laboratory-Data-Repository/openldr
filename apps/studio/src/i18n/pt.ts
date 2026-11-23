@@ -2551,6 +2551,7 @@ export const pt: EnShape = {
   plugins: {
     notFound: 'Plugin não encontrado ou não instalado.',
     noUi: 'Este plugin não fornece interface.',
+    loadFailed: 'Não foi possível carregar a página deste plugin. Recarregue a página para tentar novamente.',
     loadError: 'Falha ao carregar a interface do plugin.',
     sites: {
       menu: 'Locais',

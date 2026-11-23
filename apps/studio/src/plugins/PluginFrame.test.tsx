@@ -174,11 +174,37 @@ describe('PluginFrame', () => {
   });
 });
 
+describe('pluginFrameContext', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, text: async () => '<div>hi</div>' })));
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+  it("carries the user's capabilities, the plugin's own keys included, as a copy", () => {
+    const caps = ['lab.receive', 'patients.find', 'reports.view'];
+    const ctx = pluginFrameContext('lab', 'page', caps);
+    expect(ctx).toMatchObject({ pluginId: 'lab', site: 'page', capabilities: caps });
+    expect(ctx.capabilities).not.toBe(caps);
+  });
+  it('sends those capabilities to the page in the init message', async () => {
+    const context = pluginFrameContext('ui-demo', 'page', ['lab.receive']);
+    const { container } = render(<PluginFrame pluginId="ui-demo" context={context} />);
+    const iframe = await waitFor(() => {
+      const f = container.querySelector('iframe');
+      if (!f || !f.getAttribute('srcdoc')) throw new Error('not ready');
+      return f as HTMLIFrameElement;
+    });
+    const posted: unknown[] = [];
+    Object.defineProperty(iframe, 'contentWindow', { configurable: true, value: { postMessage: (m: unknown) => posted.push(m) } });
+    iframe.dispatchEvent(new Event('load'));
+    expect(posted[0]).toMatchObject({ type: 'openldr:init', context: { capabilities: ['lab.receive'] } });
+  });
+});
+
 describe('pluginFrameContext on a plain HTTP page', () => {
   afterEach(() => { vi.unstubAllGlobals(); });
   it('makes a sessionId when crypto.randomUUID is missing', () => {
     vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) });
-    const ctx = pluginFrameContext('p1', 'page');
+    const ctx = pluginFrameContext('p1', 'page', []);
     expect(ctx.sessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 });

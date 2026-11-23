@@ -2663,6 +2663,7 @@ export const en = {
   plugins: {
     notFound: 'Plugin not found or not installed.',
     noUi: 'This plugin contributes no UI.',
+    loadFailed: 'Could not load this plugin page. Reload the page to try again.',
     loadError: 'Failed to load plugin UI.',
     sites: {
       menu: 'Places',

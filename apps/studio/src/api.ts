@@ -3694,6 +3694,10 @@ export interface PluginUiEntry {
   declarative: unknown | null;
   /** Dashboard card and side panel, minus any an admin switched off. Older servers omit it. */
   sites?: PluginUiSites;
+  /** Who may open the page: any one of these roles or capabilities. Both empty means everyone.
+   *  Older servers omit them. */
+  requiredRoles?: string[];
+  requiredCapabilities?: string[];
 }
 
 /** Places outside its own page where a plugin draws its ui.html. Mirrors UiSites in @openldr/marketplace. */

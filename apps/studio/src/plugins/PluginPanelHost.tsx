@@ -10,7 +10,7 @@ import { closePluginPanel, usePluginPanel } from './pluginPanel';
  *  buttons stay reachable; full width on a phone. */
 export function PluginPanelHost() {
   const open = usePluginPanel();
-  const { user } = useAuth();
+  const { user, capabilities } = useAuth();
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   // A panel belongs to the signed-in user's session; never carry it over a sign-out.
@@ -37,7 +37,7 @@ export function PluginPanelHost() {
           <SheetTitle className="truncate pr-6 text-sm">{open.title}</SheetTitle>
         </SheetHeader>
         <div className="min-h-0 flex-1">
-          <PluginFrame key={open.id} pluginId={open.id} context={pluginFrameContext(open.id, 'panel')} />
+          <PluginFrame key={open.id} pluginId={open.id} context={pluginFrameContext(open.id, 'panel', capabilities ?? [])} />
         </div>
       </SheetContent>
     </Sheet>

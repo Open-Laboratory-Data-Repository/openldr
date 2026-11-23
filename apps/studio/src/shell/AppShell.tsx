@@ -23,6 +23,7 @@ import { cn } from '@/lib/cn';
 import { listPluginUis, type LayoutPreset, type PluginUiEntry } from '@/api';
 import { layoutInForce, useLayouts } from './layouts';
 import { pluginIcon } from '@/plugins/icons';
+import { pluginPagePath, visiblePluginEntries } from '@/plugins/pluginAccess';
 import { closePluginPanel, openPluginPanel, syncPluginPanel, usePluginPanel } from '@/plugins/pluginPanel';
 import { onPluginsChanged } from '@/plugins/pluginEvents';
 import { NotificationBell } from './NotificationBell';
@@ -108,6 +109,8 @@ export function AppShell({
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const panelPlugins = pluginUis.filter((p) => p.sites?.panel);
+  // Plugin pages in the sidebar: those this user may open, and under a layout only those it lists.
+  const pluginNav = visiblePluginEntries(pluginUis, user?.roles ?? [], hasCapability, layout);
   // An open plugin side panel is fixed to the right edge. Pad the page by its width on desktop so it
   // never covers page content or the ⋯ menus that sit at the right.
   const panelOpen = usePluginPanel() !== null;
@@ -196,7 +199,7 @@ export function AppShell({
         <SidebarNav
           items={[
             ...nav.map(({ to, labelKey, end, icon }) => ({ key: to, to, end, icon, label: t(labelKey) })),
-            ...pluginUis.map((p) => ({ key: p.id, to: `/x/${p.id}`, icon: pluginIcon(p.nav.icon), label: p.nav.label })),
+            ...pluginNav.map((p) => ({ key: p.id, to: pluginPagePath(p.id), icon: pluginIcon(p.nav.icon), label: p.nav.label })),
           ]}
           collapsed={collapsed}
           onNavigate={() => setMobileOpen(false)}

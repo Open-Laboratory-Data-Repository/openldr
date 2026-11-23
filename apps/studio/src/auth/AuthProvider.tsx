@@ -48,6 +48,9 @@ interface AuthState {
   loading: boolean;
   /** Capability-based authorization check. */
   hasCapability: (cap: string) => boolean;
+  /** The signed-in user's capabilities, plugin permission keys included. A plugin page gets these
+   *  in its init context to show or hide its own tabs; the server is the real gate. */
+  capabilities: string[];
   signOut: () => void;
   /** Whether the server enforces auth. False when AUTH_DEV_BYPASS is on (dev only). Defaults true (fail-safe). */
   authEnforced: boolean;
@@ -62,6 +65,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
   hasCapability: () => false,
+  capabilities: [],
   signOut: () => {},
   authEnforced: true,
   authMode: 'keycloak',
@@ -319,7 +323,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  const auth: AuthState = { authCapabilities, user, loading, hasCapability, signOut, authEnforced, authMode };
+  const auth: AuthState = { authCapabilities, user, loading, hasCapability, capabilities, signOut, authEnforced, authMode };
 
   // Straight after the first administrator is made, the first-run steps come before the app.
   if (firstRun && authMode === 'local' && user) {

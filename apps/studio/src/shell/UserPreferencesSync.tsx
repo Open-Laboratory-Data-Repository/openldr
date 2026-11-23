@@ -1,7 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { listPluginUis, type PluginUiEntry } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
+import { pluginPagePath, visiblePluginEntries } from '@/plugins/pluginAccess';
 import { LoadingState } from '@/components/ui/spinner';
 import { hasStoredLanguage, isSupported, setLanguage } from '@/i18n/language';
 import { visibleNav } from './AppShell';
@@ -93,18 +95,38 @@ export function StartPageGate({ children }: { children: ReactNode }) {
     if (decided) markStartPageUsed();
   }, [decided]);
 
+  const dashboard = hasCapability('dashboards.view');
+  const layout = loaded ? layoutInForce(prefs, list) : null;
+  const candidates = [prefs.startPage, layout?.startPage ?? undefined];
+  // A plugin page (/x/<id>) is a start page only while its sidebar entry shows, and the plugin
+  // entries come from the server. Read them only when a candidate is a plugin page.
+  const wantPlugins = Boolean(user) && loaded && (firstLanding || !dashboard)
+    && candidates.some((p) => !!p && p.startsWith('/x/'));
+  const [pluginEntries, setPluginEntries] = useState<PluginUiEntry[] | null>(null);
+  useEffect(() => {
+    if (!wantPlugins) return;
+    let cancelled = false;
+    listPluginUis()
+      .then((l) => { if (!cancelled) setPluginEntries(Array.isArray(l) ? l : []); })
+      // Unreadable: no plugin page counts as shown, so the start page falls back as for any other.
+      .catch(() => { if (!cancelled) setPluginEntries([]); });
+    return () => { cancelled = true; };
+  }, [wantPlugins]);
+
   // No user: nothing to read. The route's own guard handles it.
   if (!user) return <>{children}</>;
-  const dashboard = hasCapability('dashboards.view');
   if (!firstLanding && dashboard) return <>{children}</>;
-  if (!loaded) return <LoadingState className="h-dvh" />;
+  if (!loaded || (wantPlugins && pluginEntries === null)) return <LoadingState className="h-dvh" />;
   // The user's own first page, else their layout's: the first of those that is in their sidebar.
   // An explicit '/' (Dashboard picked under a layout) stops there, for a user who can open it.
-  const layout = layoutInForce(prefs, list);
   if (dashboard && prefs.startPage === '/') return <>{children}</>;
   const shown = visibleNav(hasCapability, layout);
-  const target = [prefs.startPage, layout?.startPage ?? undefined]
-    .find((p): p is string => !!p && p !== '/' && shown.some((n) => n.to === p))
+  const shownPaths = new Set([
+    ...shown.map((n) => n.to),
+    ...visiblePluginEntries(pluginEntries ?? [], user.roles ?? [], hasCapability, layout).map((e) => pluginPagePath(e.id)),
+  ]);
+  const target = candidates
+    .find((p): p is string => !!p && p !== '/' && shownPaths.has(p))
     ?? (dashboard ? undefined : shown.find((n) => n.to !== '/')?.to);
   return target ? <Navigate to={target} replace /> : <>{children}</>;
 }
