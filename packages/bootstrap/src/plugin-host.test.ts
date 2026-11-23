@@ -10,6 +10,17 @@ import { pluginPatientRefs } from './plugin-patient-ref';
 import { bandFit, matchBand, SEX_OPTIONS, type BandPatient, type ResultBand } from './result-params';
 import { capabilitiesUnderScope } from '@openldr/rbac';
 import { buildPatientIndexFixture, seedIdentifier, seedPatient } from './test-support/patient-index-fixture';
+import { createLabIdentity, labTimeZone } from './lab-identity';
+/** A settings store held in memory, for the real lab identity service. */
+function memorySettings() {
+  const rows = new Map<string, string>();
+  return {
+    get: async (key: string) => (rows.has(key) ? { key, value: rows.get(key)!, updatedAt: new Date(0), updatedBy: null } : null),
+    getAll: async () => [...rows].map(([key, value]) => ({ key, value, updatedAt: new Date(0), updatedBy: null })),
+    set: async (key: string, value: string) => { rows.set(key, value); },
+  };
+}
+
 
 /** The lasting pluginRef key, fixed so a test can stand in for a restart. */
 const KEY = Buffer.alloc(32, 9);
@@ -835,7 +846,10 @@ describe('plugin host: testCatalog.resultParams', () => {
 
   it('reads the patient age in the lab time zone', async () => {
     const { call, deps, ruth } = await fixture();
-    deps.labTimeZone = vi.fn(async () => 'Africa/Nairobi');
+    // Wired as index.ts wires it: the real lab identity service over a settings store.
+    const labIdentity = createLabIdentity(memorySettings());
+    expect(await labIdentity.set({ 'lab.timezone': 'Africa/Nairobi' }, 'test')).toEqual([]);
+    deps.labTimeZone = () => labTimeZone(labIdentity);
     await call(SITE, { tests: [T('FBC')], patientRef: ruth });
     expect(resultParamsFor.mock.calls[0][1]).toMatchObject({ birthDate: '1990-01-05', timeZone: 'Africa/Nairobi' });
   });

@@ -1,10 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import {
-  TestCatalogError, type AppContext, type CatalogImportReport, type CatalogOptions, type CatalogTest, SEX_OPTIONS,
+  TestCatalogError, createLabIdentity, type AppContext, type CatalogImportReport, type CatalogOptions, type CatalogTest, SEX_OPTIONS,
 } from '@openldr/bootstrap';
 import { registerTestCatalogRoutes } from './test-catalog-routes';
 import './auth-plugin';
+/** A settings store held in memory, for the real lab identity service. */
+function memorySettings() {
+  const rows = new Map<string, string>();
+  return {
+    get: async (key: string) => (rows.has(key) ? { key, value: rows.get(key)!, updatedAt: new Date(0), updatedBy: null } : null),
+    getAll: async () => [...rows].map(([key, value]) => ({ key, value, updatedAt: new Date(0), updatedBy: null })),
+    set: async (key: string, value: string) => { rows.set(key, value); },
+  };
+}
+
 
 const TEST: CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
@@ -459,7 +469,10 @@ describe('test catalog routes', () => {
 
   it('passes the lab time zone, so a patient age counts from the lab date', async () => {
     const { ctx, calls } = fakeCtx();
-    (ctx as any).labIdentity = { tokens: async () => ({ 'lab.timezone': 'Africa/Nairobi' }) };
+    // The real lab identity service, so the zone is read under the key the service answers it by.
+    const labIdentity = createLabIdentity(memorySettings());
+    expect(await labIdentity.set({ 'lab.timezone': 'Africa/Nairobi' }, 'test')).toEqual([]);
+    (ctx as any).labIdentity = labIdentity;
     await appWith(ctx, ['forms.view']).inject({
       method: 'POST', url: '/api/test-catalog/result-params',
       payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }], patient: { reference: 'Patient/p1' } },

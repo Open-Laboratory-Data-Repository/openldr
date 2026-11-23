@@ -75,7 +75,7 @@ import { checkForActivity, copyForActivity, createActivityService, type Activity
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createValidationStrictness, type ValidationStrictness } from './validation-settings';
-import { createLabIdentity, type LabIdentityService } from './lab-identity';
+import { createLabIdentity, labTimeZone, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createUpdateCheck, type UpdateCheck } from './update-check';
 export * from './update-check';
@@ -2139,7 +2139,7 @@ const reporting: ReportingApi = {
     facilityRegistry,
     fhirGetWithProvenance: (resourceType, id) => canonicalFhirStore.getWithProvenance(resourceType, id),
     // A patient's age in days is counted from the lab's date, not UTC's.
-    labTimeZone: async () => (await labIdentity.tokens())['lab.timezone'] || undefined,
+    labTimeZone: () => labTimeZone(labIdentity),
     persist: workflowPersist,
     audit: (actor, details) => recordAuditEvent({ audit, logger }, actor, details),
     logger,
@@ -2345,7 +2345,7 @@ export { createFeatureFlags } from './feature-flags';
 export { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog, type CatalogGroup, type PluginCapabilityMeta } from './capability-catalog';
 export { createConnectorDialectLookup, dialectFor } from './connector-sql-service';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
-export { createLabIdentity, type LabIdentityService } from './lab-identity';
+export { createLabIdentity, labTimeZone, type LabIdentityService } from './lab-identity';
 export { createNumberSettings } from './number-settings';
 export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';

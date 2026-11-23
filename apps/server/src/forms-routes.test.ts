@@ -1890,7 +1890,8 @@ describe('form entries on submit', () => {
   } = {}) {
     const { makeMigratedDb } = await import('@openldr/db/testing');
     const { createFormEntryStore } = await import('@openldr/db');
-    const { createFormEntriesService, readScopeRegistryRows } = await import('@openldr/bootstrap');
+    const { createFormEntriesService, createLabIdentity, readScopeRegistryRows } = await import('@openldr/bootstrap');
+    const { createAppSettingsStore } = await import('@openldr/db');
     const db = await makeMigratedDb();
     for (const [id, code, name] of [['reg-a', 'A1', 'Site A'], ['reg-b', 'B1', 'Site B']]) {
       await db.insertInto('facility_registry').values({
@@ -1910,7 +1911,11 @@ describe('form entries on submit', () => {
       logger: { warn: () => {}, error: () => {} } as never,
       users: { getMany: async () => [] },
     });
-    (ctx as any).labIdentity = { tokens: async () => ({ 'lab.timezone': 'Africa/Dar_es_Salaam' }) };
+    // The real lab identity service over the real settings store, so the zone is read under the key
+    // the service actually answers it by.
+    const labIdentity = createLabIdentity(createAppSettingsStore(db as never));
+    expect(await labIdentity.set({ 'lab.timezone': 'Africa/Dar_es_Salaam' }, 'test')).toEqual([]);
+    (ctx as any).labIdentity = labIdentity;
     (ctx as any).workflows = {
       runner: {
         runAndRecord: async (_w: string, _s: string, input: any) => {

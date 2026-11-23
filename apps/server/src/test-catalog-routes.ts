@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   catalogChangeAction, catalogImportAudit, catalogImportInputSchema, parseCatalogListQuery, readCatalogImportFile,
-  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, patientBandKey, type AppContext, type BandPatient,
+  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, labTimeZone, patientBandKey, type AppContext, type BandPatient,
 } from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
@@ -89,12 +89,7 @@ const resultParamsInput = z.object({
 async function patientBandKeyFor(ctx: AppContext, reference: string | undefined): Promise<BandPatient> {
   const id = reference?.split('/')[1];
   // The lab's zone decides what date today is, so a baby born today is 0 days old in the lab.
-  let zone: string | undefined;
-  try {
-    zone = (await ctx.labIdentity?.tokens())?.['lab.timezone'] || undefined;
-  } catch {
-    zone = undefined;
-  }
+  const zone = await labTimeZone(ctx.labIdentity);
   if (!id) return patientBandKey(null, Date.now(), zone);
   const patient = (await ctx.fhirStore.get('Patient', id).catch(() => null)) as { gender?: string; birthDate?: string } | null;
   return patientBandKey(patient, Date.now(), zone);
