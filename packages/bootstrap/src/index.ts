@@ -53,8 +53,9 @@ import { withRegisteredResourceId } from './content-pack-terminology';
 import { checkCustomQueryFile, importCustomQueries } from './custom-query-transfer';
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
-import { canRunOffThread, createPluginStore, type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, createPluginSchemas, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope, FACILITY_REGISTRY_SYSTEM, createFormEntryStore, type FormEntryStore } from '@openldr/db';
+import { canRunOffThread, createPluginStore, type PluginHost, type PluginRuntime } from '@openldr/plugins';
+import { createPluginHost } from './plugin-host';
+import { createConnectorStore, createPluginDataStore, createPluginRequests, createPluginSchemas, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope, FACILITY_REGISTRY_SYSTEM, createFormEntryStore, type FormEntryStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -581,6 +582,9 @@ export interface AppContext {
   plugins: PluginRuntime;
   pluginData: PluginDataStore;
   pluginBroker: PluginBroker;
+  /** CE host functions for a plugin's server code: its own tables, CE reads and FHIR emit
+   *  (plugin-host.ts). The broker passes it with the caller on each invoke. */
+  pluginHost: PluginHost;
   /** Plugin-driven imports from a host database connector (import-run.ts). */
   imports: ImportService;
   /** Copies of a source database's rows to CE's own disk (import-copy.ts). Only a context built
@@ -2096,6 +2100,18 @@ const reporting: ReportingApi = {
     plugins, importCopies, importChecks, imports, pluginData, audit: importAudit,
     pluginSchemas: createPluginSchemas(internal.db as unknown as Kysely<any>),
   });
+  const pluginHost = createPluginHost({
+    // Plugin tables live in the internal database, where install made them (plugin-registry.ts).
+    requests: createPluginRequests(internal.db as unknown as Kysely<any>),
+    patients: patientIndex,
+    testCatalog,
+    terminology: terminology.ops,
+    facilityRegistry,
+    fhirGet: (resourceType, id) => canonicalFhirStore.get(resourceType, id),
+    persist: workflowPersist,
+    audit: (actor, details) => recordAuditEvent({ audit, logger }, actor, details),
+    logger,
+  });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
@@ -2230,6 +2246,7 @@ const reporting: ReportingApi = {
     plugins,
     pluginData,
     pluginBroker,
+    pluginHost,
     imports,
     importCopies,
     importChecks,
@@ -2487,6 +2504,7 @@ export { recordAuditEvent } from './record-audit';
 export { checkReadOp, recordCheckRead } from './check-read-audit';
 export type { CheckReadKind } from './check-read-audit';
 export type { AuditActor, AuditDetails } from './record-audit';
+export { createPluginHost, CE_READ_OPS, MAX_PATIENT_SCOPE_FACILITIES, type PluginHostDeps, type HostResult } from './plugin-host';
 export { copyStorage } from './storage-copy';
 export type { StorageCopyReport } from './storage-copy';
 export {

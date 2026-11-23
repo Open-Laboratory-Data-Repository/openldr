@@ -37,7 +37,10 @@ export interface PatientRequestRow { authoredAt: string | null; panel: string | 
 export interface PatientRequestList { rows: PatientRequestRow[]; total: number }
 
 export interface PatientIndex {
-  list(q: PatientListQuery, opts: { unmask: boolean }): Promise<PatientList>;
+  /** `facilities`, when given, keeps only patients whose managing organization is one of these
+   *  facility ids (compared without case). An empty list matches no one. A plugin's caller with a
+   *  data limit passes it (plugin-host.ts); the studio route passes none. */
+  list(q: PatientListQuery, opts: { unmask: boolean; facilities?: string[] }): Promise<PatientList>;
   get(ref: string, opts: { unmask: boolean }): Promise<PatientDetail>;
   getById(id: string, opts: { unmask: boolean }): Promise<PatientDetail>;
   idForRef(ref: string): string | null;
@@ -180,8 +183,13 @@ export function createPatientIndex(deps: {
     });
   }
 
-  async function list(q: PatientListQuery, opts: { unmask: boolean }): Promise<PatientList> {
+  async function list(q: PatientListQuery, opts: { unmask: boolean; facilities?: string[] }): Promise<PatientList> {
     let base = db.selectFrom('patients');
+    if (opts.facilities) {
+      if (opts.facilities.length === 0) return { rows: [], total: 0, masked: !opts.unmask };
+      const orgs = [...new Set(opts.facilities.map((f) => `organization/${f.toLowerCase()}`))];
+      base = base.where(sql<boolean>`lower(${sql.ref('managing_organization')}) in (${sql.join(orgs)})`);
+    }
     if (q.status === 'active') base = base.where('active', '=', true).where('replaced_by_id', 'is', null);
     if (q.status === 'merged') base = base.where((eb) => eb.or([eb('active', '=', false), eb('replaced_by_id', 'is not', null)]));
     if (q.q) {

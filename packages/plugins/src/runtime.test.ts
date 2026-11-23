@@ -467,6 +467,24 @@ describe('loadSink', () => {
     expect(sink!.entrypoints).toContain('wf_convert');
   });
 
+  it('gives the host the tables and grant from the stored manifest row', async () => {
+    const orders = { name: 'orders', columns: [{ name: 'id', type: 'uuid' }], primaryKey: ['id'] };
+    const row: PluginRow = {
+      ...sinkRow,
+      manifest: { ...sinkRow.manifest, capabilities: [{ kind: 'host:db' }], payload: { tables: [orders] } },
+    };
+    const blobMap = new Map<string, Uint8Array>([['plugins/dhis2-sink/0.1.0/plugin.wasm', sinkWasm]]);
+    const rt = createPluginRuntime({ blob: fakeBlob(blobMap), store: fakeStore([row]), runner: okRunner, logger, ...defaultNewDeps() });
+    const sink = await rt.loadSink('dhis2-sink');
+    const host = { forCall: vi.fn(() => ({})) };
+    const caller = { userId: 'u', displayName: null, capabilities: [], facilities: '*' as const };
+    await sink!.invoke('health_check', {}, { caller, host });
+    expect(host.forCall).toHaveBeenCalledWith(
+      { id: 'dhis2-sink', version: '0.1.0', capabilities: [{ kind: 'host:db' }], tables: [expect.objectContaining({ name: 'orders' })] },
+      caller,
+    );
+  });
+
   it('caches the loaded sink (one blob fetch across two loads)', async () => {
     const blobMap = new Map<string, Uint8Array>([['plugins/dhis2-sink/0.1.0/plugin.wasm', sinkWasm]]);
     const blob = fakeBlob(blobMap);

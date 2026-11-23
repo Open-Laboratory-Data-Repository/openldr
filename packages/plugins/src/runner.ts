@@ -3,6 +3,13 @@ export interface RunnerHostFns {
   progress(done: number, total: number): void;
 }
 
+/** A CE host function a plugin can call: one JSON value in, one JSON value out. It never throws on
+ *  purpose; a failure is a result the plugin reads (`{ ok: false, error: { code, message } }`). */
+export type HostFn = (input: unknown) => Promise<unknown>;
+
+/** The largest JSON a host function takes in or gives back, in bytes. Larger is refused. */
+export const HOST_FN_MAX_BYTES = 1_000_000;
+
 export interface RunOptions {
   entrypoint: string;
   wasi: boolean;
@@ -13,6 +20,10 @@ export interface RunOptions {
   allowedHosts?: string[]; // net-egress allowlist; undefined/[] = default-deny (no egress)
   /** Runs the call on a worker thread when the process allows it (see `canRunOffThread`). */
   offThread?: boolean;
+  /** CE host functions for this call, by name, registered beside log and progress. Host functions
+   *  are async, so a call that has any runs on the worker path, and fails with a plain message
+   *  where the process cannot start a worker. */
+  hostFns?: Record<string, HostFn>;
 }
 
 /**

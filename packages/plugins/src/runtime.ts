@@ -14,7 +14,7 @@ import {
   type TrustStore,
   type Capability,
 } from '@openldr/marketplace';
-import { PluginShapeError, type PluginSchemas } from '@openldr/db';
+import { PluginShapeError, tableShapesSchema, type PluginSchemas, type TableShape } from '@openldr/db';
 import { parseManifest, type PluginManifest } from './manifest';
 import { sha256Hex } from './hash';
 import type { PluginStore, PluginRow } from './store';
@@ -151,6 +151,12 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     return converter;
   }
 
+  /** The tables the stored, signed manifest declares. A corrupt list throws, like a corrupt grant. */
+  function storedTables(row: PluginRow): TableShape[] {
+    const tables = (row.manifest as { payload?: { tables?: unknown } }).payload?.tables;
+    return tables === undefined ? [] : tableShapesSchema.parse(tables);
+  }
+
   async function loadSink(id: string, version?: string): Promise<WasmSink | undefined> {
     const row = await deps.store.get(id, version);
     if (!row) return undefined;
@@ -167,7 +173,7 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
     }
     const wasm = await loadWasm(row);
     const grant = readGrant(row.manifest);
-    const sink = createWasmSink(manifest, wasm, deps.runner, deps.logger, grant.legacy ? undefined : grant.capabilities);
+    const sink = createWasmSink(manifest, wasm, deps.runner, deps.logger, grant.legacy ? undefined : grant.capabilities, storedTables(row));
     sinkCache.set(key, sink);
     return sink;
   }
