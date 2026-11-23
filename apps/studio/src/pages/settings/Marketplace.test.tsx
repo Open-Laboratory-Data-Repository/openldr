@@ -411,16 +411,21 @@ describe('Marketplace', () => {
   // Marketplace.tsx put it in state as `loadError`, and this banner then rendered a translated
   // headline INSTEAD of it. The detail is deliberately NOT translated: it is a server message and a
   // filesystem path, and inventing an i18n key for it would ship two of the three locales broken.
-  it('shows the reason the registry failed, not just the generic headline', async () => {
+  it('toasts the reason the registry failed, not just the generic headline', async () => {
     (api.listAvailableArtifacts as any).mockResolvedValue({
       configured: true, source: 'local', host: 'Documentation samples', bundles: [],
       error: "Documentation samples: ENOENT: no such file or directory, scandir '/srv/.docs-marketplace/bundles'",
     });
     (api.listInstalledArtifacts as any).mockResolvedValue([]);
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
-    expect(await screen.findByText(/Registry unreachable/i)).toBeTruthy();
-    expect(screen.getByText(/ENOENT/), 'the actual reason must reach the screen').toBeTruthy();
-    expect(screen.getByText(/\.docs-marketplace/), 'including the path that did not resolve').toBeTruthy();
+    // The reason, with its path, is the toast's description. The browse area says the list failed.
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Registry unreachable.', {
+      description: "Documentation samples: ENOENT: no such file or directory, scandir '/srv/.docs-marketplace/bundles'",
+    }));
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeTruthy();
+    expect(screen.queryByText('No artifacts available.')).toBeNull();
+    expect(screen.queryByText(/ENOENT/), 'no red box repeats the toast').toBeNull();
+    expect(toast.error).toHaveBeenCalledTimes(1);
   });
 
   // ⛔ Same clipping defect as Settings ▸ Laboratory, found while fixing the Registries panel.

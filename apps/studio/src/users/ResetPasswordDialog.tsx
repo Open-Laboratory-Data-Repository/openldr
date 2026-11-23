@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Copy, Check, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,12 +37,11 @@ export function ResetPasswordDialog({ open, onOpenChange, user, onDone }: Props)
   const [confirm, setConfirm] = useState('');
   const [reveal, setReveal] = useState(false);
   const [requireChange, setRequireChange] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (open) { setPassword(''); setConfirm(''); setReveal(false); setRequireChange(true); setError(null); setCopied(false); }
+    if (open) { setPassword(''); setConfirm(''); setReveal(false); setRequireChange(true); setCopied(false); }
   }, [open]);
 
   const copy = async () => {
@@ -51,17 +51,17 @@ export function ResetPasswordDialog({ open, onOpenChange, user, onDone }: Props)
   const generate = () => { const p = generatePassword(); setPassword(p); setConfirm(p); setReveal(true); };
 
   const submit = async () => {
-    if (password.length < 1) { setError(t('users.passwordRequired')); return; }
-    if (password !== confirm) { setError(t('users.passwordMismatch')); return; }
+    if (password.length < 1) { toast.error(t('users.passwordRequired')); return; }
+    if (password !== confirm) { toast.error(t('users.passwordMismatch')); return; }
     if (!user) return;
-    setError(null); setSaving(true);
+    setSaving(true);
     try {
       await resetUserPassword(user.id, password, requireChange);
       onDone(user);
       onOpenChange(false);
     } catch (e) {
-      if (e instanceof PasswordRuleError) setError(t(PASSWORD_RULE_KEYS[e.rule]));
-      else setError(e instanceof Error ? e.message : String(e));
+      if (e instanceof PasswordRuleError) toast.error(t(PASSWORD_RULE_KEYS[e.rule]));
+      else toast.error(e instanceof Error ? e.message : String(e));
     } finally { setSaving(false); }
   };
 
@@ -73,7 +73,6 @@ export function ResetPasswordDialog({ open, onOpenChange, user, onDone }: Props)
           <DialogDescription>{user ? t('users.resetPasswordDescription', { username: user.username }) : ''}</DialogDescription>
         </div>
         <div className="space-y-3 py-2">
-          {error ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
           <div>
             <div className="flex items-center justify-between">
               <Label htmlFor="rp-new">{t('users.newPassword')}</Label>

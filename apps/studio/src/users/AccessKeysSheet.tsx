@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, MoreHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { LoadingState } from '@/components/ui/spinner';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { createAccessKey, listAccessKeys, revokeAccessKey, type AccessKey } from '@/api';
@@ -65,9 +67,7 @@ function AccessKeysBody({ user }: { user: { id: string; username: string } }) {
   const { t } = useTranslation();
   const [keys, setKeys] = useState<AccessKey[]>([]);
   const [loading, setLoading] = useState(true);
-  // A failed create or revoke. Kept apart from loadError, so the reload after a failed revoke
-  // does not wipe the revoke's message when the reload works.
-  const [error, setError] = useState<string | null>(null);
+  // A failed load. A failed create or revoke is a toast of its own.
   const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
@@ -97,10 +97,11 @@ function AccessKeysBody({ user }: { user: { id: string; username: string } }) {
     }
   }, [user.id, t]);
   useEffect(() => { void load(); return () => { request.current++; }; }, [load]);
+  useLoadErrorToast(loadError);
 
   const trimmed = name.trim();
 
-  const openForm = () => { setFormOpen(true); setError(null); };
+  const openForm = () => { setFormOpen(true); };
   const closeForm = () => { setFormOpen(false); setName(''); setExpiry(null); };
 
   const onCreate = async () => {
@@ -108,7 +109,6 @@ function AccessKeysBody({ user }: { user: { id: string; username: string } }) {
     if (!trimmed || createBusy.current) return;
     createBusy.current = true;
     setCreating(true);
-    setError(null);
     try {
       const { key } = await createAccessKey(user.id, { name: trimmed, expiresAt: expiry ? endOfDayIso(expiry) : null });
       setRevealed(key);
@@ -116,7 +116,7 @@ function AccessKeysBody({ user }: { user: { id: string; username: string } }) {
       closeForm();
       void load();
     } catch (e) {
-      setError(t('users.accessKeys.createError', { error: errorText(e) }));
+      toast.error(t('users.accessKeys.createError', { error: errorText(e) }));
     } finally {
       createBusy.current = false;
       setCreating(false);
@@ -154,11 +154,10 @@ function AccessKeysBody({ user }: { user: { id: string; username: string } }) {
     const k = pendingRevoke;
     if (!k) return;
     setPendingRevoke(null);
-    setError(null);
     try {
       await revokeAccessKey(user.id, k.id);
     } catch (e) {
-      setError(t('users.accessKeys.revokeError', { error: errorText(e) }));
+      toast.error(t('users.accessKeys.revokeError', { error: errorText(e) }));
     }
     // Read the list either way: a failed revoke may mean the key was revoked elsewhere.
     void load();
@@ -185,11 +184,6 @@ function AccessKeysBody({ user }: { user: { id: string; username: string } }) {
         </div>
         <SheetDescription>{t('users.accessKeys.description')}</SheetDescription>
       </SheetHeader>
-
-      {/* A failed reload over rows already shown goes here; with no rows it shows in the table area. */}
-      {[error, keys.length > 0 ? loadError : null].filter(Boolean).map((text) => (
-        <div key={text} className="mx-6 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive [overflow-wrap:anywhere]">{text}</div>
-      ))}
 
       {revealed && (
         <section className="border-b border-border px-6 py-4">
@@ -256,10 +250,8 @@ function AccessKeysBody({ user }: { user: { id: string; username: string } }) {
       {/* Fill only when rows exist: the loading and empty states fill on their own. */}
       <div className="flex min-h-[16rem] flex-1 flex-col">
         {loading && <LoadingState className="min-h-[16rem] flex-1" label={t('common.loading')} />}
-        {/* A failed load is not "no keys": show why, without the stripes that mean empty. */}
-        {!loading && keys.length === 0 && loadError && (
-          <div className="flex min-h-[16rem] flex-1 items-center justify-center px-6 text-center text-xs text-destructive [overflow-wrap:anywhere]">{loadError}</div>
-        )}
+        {/* A failed load is not "no keys": no stripes, which mean empty. The reason is a toast. */}
+        {!loading && keys.length === 0 && loadError && <LoadFailed />}
         {!loading && keys.length === 0 && !loadError && <StripedEmpty className="min-h-[16rem] flex-1">{t('users.accessKeys.empty')}</StripedEmpty>}
         {!loading && keys.length > 0 && (
           <Table wrapperClassName="min-h-0 flex-1">

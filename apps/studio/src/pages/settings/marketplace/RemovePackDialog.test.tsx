@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -79,5 +81,29 @@ describe('RemovePackDialog', () => {
     expect(onRemoved).not.toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
     expect(screen.getByTestId('remove-pack-confirm')).toBeDisabled();
+  });
+
+  it('a failed removal plan load shows a toast and the could-not-load text, not a spinner', async () => {
+    (api.getPackRemoval as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('pack removal failed: 500'));
+    render(<RemovePackDialog packId="collection-site" open onOpenChange={() => {}} onRemoved={() => {}} />);
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeTruthy();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('pack removal failed: 500');
+    expect(screen.queryByText('pack removal failed: 500')).toBeNull();
+    expect(screen.getByTestId('remove-pack-confirm')).toBeDisabled();
+  });
+
+  it('a failed remove shows a toast and keeps the prompt open', async () => {
+    (api.removePack as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('remove pack failed: 500'));
+    const onOpenChange = vi.fn();
+    const onRemoved = vi.fn();
+    render(<RemovePackDialog packId="collection-site" open onOpenChange={onOpenChange} onRemoved={onRemoved} />);
+    await screen.findByTestId('remove-pack-roles');
+    fireEvent.click(screen.getByTestId('remove-pack-confirm'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('remove pack failed: 500'));
+    expect(screen.queryByText('remove pack failed: 500')).toBeNull();
+    expect(onRemoved).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(screen.getByTestId('remove-pack-roles')).toBeTruthy();
   });
 });

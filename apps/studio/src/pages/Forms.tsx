@@ -6,6 +6,7 @@ import { ClipboardList, FileInput, MoreHorizontal } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
@@ -84,16 +85,16 @@ export function Forms() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<FormSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed load. Cleared only by a load that works, so a reload that fails the same way does not toast again.
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [deleting, setDeleting] = useState<FormSummary | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       setRows(await listForms());
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -102,6 +103,8 @@ export function Forms() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useLoadErrorToast(error);
+  const actionFailed = (err: unknown) => { toast.error(err instanceof Error ? err.message : String(err)); };
 
   const columns: ColumnDef<FormSummary>[] = useMemo(() => [
     {
@@ -165,12 +168,11 @@ export function Forms() {
 
   const importJson = async (file: File | undefined) => {
     if (!file) return;
-    setActionError(null);
     try {
       const parsed: unknown = JSON.parse(await file.text());
       const input = formCreateFromImport(parsed);
       if (!input) {
-        setActionError(t('forms.importNeedsName'));
+        toast.error(t('forms.importNeedsName'));
         return;
       }
       const created = await createForm(input);
@@ -178,63 +180,58 @@ export function Forms() {
       table.setPage(0);
       toast.success(t('forms.toastImported', { name: created.name }));
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      actionFailed(err);
     }
   };
 
   const changeStatus = async (form: FormSummary, status: FormStatus) => {
-    setActionError(null);
     try {
       const updated = await setFormStatus(form.id, status);
       setRows((prev) => upsertForm(prev, toSummary(updated)));
       toast.success(t(STATUS_TOAST_KEY[status], { name: updated.name }));
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      actionFailed(err);
     }
   };
 
   const publish = async (form: FormSummary) => {
-    setActionError(null);
     try {
       const updated = await publishForm(form.id, { versionLabel: form.versionLabel ?? null });
       setRows((prev) => upsertForm(prev, toSummary(updated)));
       toast.success(t('forms.toastPublished', { name: updated.name }));
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      actionFailed(err);
     }
   };
 
   const duplicate = async (form: FormSummary) => {
-    setActionError(null);
     try {
       const copy = await duplicateForm(form.id);
       setRows((prev) => upsertForm(prev, toSummary(copy)));
       table.setPage(0);
       toast.success(t('forms.toastDuplicated', { name: form.name, copy: copy.name }));
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      actionFailed(err);
     }
   };
 
   const exportBundle = async (form: FormSummary) => {
-    setActionError(null);
     try {
       await exportFormBundle(form.id);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      actionFailed(err);
     }
   };
 
   const confirmDelete = async () => {
     if (!deleting) return;
-    setActionError(null);
     try {
       await deleteForm(deleting.id);
       setRows((prev) => prev.filter((row) => row.id !== deleting.id));
       toast.success(t('forms.toastDeleted', { name: deleting.name }));
       setDeleting(null);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      actionFailed(err);
     }
   };
 
@@ -283,8 +280,6 @@ export function Forms() {
               void importJson(file);
             }}
           />
-          {actionError ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{actionError}</div> : null}
-          {error ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -335,7 +330,8 @@ export function Forms() {
             )}
           </Table>
           {loading && <LoadingState className="flex-1" label="Loading…" />}
-          {!loading && view.rows.length === 0 && (
+          {!loading && error && rows.length === 0 && <LoadFailed />}
+          {!loading && !(error && rows.length === 0) && view.rows.length === 0 && (
             rows.length === 0 ? (
               <EmptyState icon={<ClipboardList className="h-6 w-6" />} title={t('forms.emptyTitle')} />
             ) : (

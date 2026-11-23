@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -19,7 +21,8 @@ describe('ResetPasswordDialog', () => {
     fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'abc' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'xyz' } });
     fireEvent.click(screen.getByRole('button', { name: /reset password/i }));
-    await waitFor(() => expect(screen.getByText('Passwords do not match.')).toBeTruthy());
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Passwords do not match.'));
+    expect(screen.queryByText('Passwords do not match.')).toBeNull();
     expect(resetUserPassword).not.toHaveBeenCalled();
   });
 
@@ -37,7 +40,8 @@ describe('ResetPasswordDialog', () => {
   it('rejects an empty password without calling the api', async () => {
     render(<ResetPasswordDialog open user={user} onOpenChange={() => {}} onDone={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /reset password/i }));
-    await waitFor(() => expect(screen.getByText('Password is required.')).toBeTruthy());
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Password is required.'));
+    expect(screen.queryByText('Password is required.')).toBeNull();
     expect(resetUserPassword).not.toHaveBeenCalled();
   });
 
@@ -74,7 +78,8 @@ describe('ResetPasswordDialog', () => {
     fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'abc' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'abc' } });
     fireEvent.click(screen.getByRole('button', { name: /reset password/i }));
-    expect(await screen.findByText(text)).toBeTruthy();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(text));
+    expect(screen.queryByText(text)).toBeNull();
     expect(onDone).not.toHaveBeenCalled();
   });
 

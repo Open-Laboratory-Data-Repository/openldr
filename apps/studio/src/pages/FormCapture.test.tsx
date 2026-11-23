@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 import { FormCapture } from './FormCapture';
 import * as api from '../api';
 import i18n from '@/i18n';
@@ -116,6 +118,8 @@ const referenceForm: api.FormDefinition = {
 
 // Every page load reads the site rules. No limit unless a test says otherwise.
 beforeEach(() => {
+  vi.mocked(toast.success).mockClear();
+  vi.mocked(toast.error).mockClear();
   vi.spyOn(api, 'getFormEntryContext').mockResolvedValue({ facility: null, locked: false, choices: null });
   vi.spyOn(api, 'listFormEntries').mockResolvedValue({ entries: [], total: 0 });
 });
@@ -229,7 +233,7 @@ describe('FormCapture page', () => {
         expect.objectContaining({ patientId: 'P-100', hasNotes: true, notes: 'Follow up' }),
       ),
     );
-    expect(await screen.findByText('Response captured.')).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Response captured.'));
   });
 
   // Regression: `formId` is the DOM id of the <form> element ("form-capture"). Threading it into
@@ -334,7 +338,7 @@ describe('FormCapture order rejection (2026-10-11 spec)', () => {
     ));
     // The rejection stays after submit. The form keeps its answers, so clearing it would reopen the
     // rows and a second Submit would write an accepted duplicate with the typed results.
-    expect(await screen.findByText('Response captured.')).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Response captured.'));
     expect(screen.getByText('Order rejected: Wrong patient')).toBeInTheDocument();
   });
 
@@ -450,7 +454,7 @@ describe('FormCapture entries (design 2026-11-22-form-entries)', () => {
     await waitFor(() => expect(api.submitFormResponse).toHaveBeenCalledWith('form-1', expect.objectContaining({
       fac: { system: REGISTER, code: 'FAC-1', display: 'Hill Clinic' },
     })));
-    expect(await screen.findByText('Response captured.')).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Response captured.'));
     // The system comes from the server, so no search is made to learn it.
     expect(search).not.toHaveBeenCalled();
   });
@@ -523,7 +527,7 @@ describe('FormCapture entries (design 2026-11-22-form-entries)', () => {
     const note = await screen.findByText(message);
     expect(num.closest('.grid')).toContainElement(note);
     expect(screen.getByLabelText('Requisition number')).toHaveValue('CS-0001');
-    expect(screen.queryByText('Response captured.')).not.toBeInTheDocument();
+    expect(toast.success).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'View that entry' }));
     await waitFor(() => expect(getEntry).toHaveBeenCalledWith('e-9'));
@@ -533,12 +537,23 @@ describe('FormCapture entries (design 2026-11-22-form-entries)', () => {
     await waitFor(() => expect(screen.queryByText(message)).not.toBeInTheDocument());
   });
 
-  it('shows a site refusal at the top of the form', async () => {
+  it('shows a site refusal as a toast and keeps the answers', async () => {
     vi.spyOn(api, 'submitFormResponse').mockRejectedValue(new Error('submit form response failed: this entry names a facility outside your limit'));
     renderAt();
     fireEvent.change(await screen.findByLabelText('Requisition number'), { target: { value: 'CS-0005' } });
     clickActionsMenuItem('Submit');
-    expect(await screen.findByText(/this entry names a facility outside your limit/)).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('submit form response failed: this entry names a facility outside your limit'));
+    expect(screen.queryByText(/this entry names a facility outside your limit/)).not.toBeInTheDocument();
+    // The answers stay, so the clerk can fix and submit again.
+    expect(screen.getByLabelText('Requisition number')).toHaveValue('CS-0005');
+  });
+
+  it('shows a failed form load as one toast, not a box in the page', async () => {
+    vi.spyOn(api, 'getForm').mockRejectedValue(new Error('get form failed: 404'));
+    renderAt();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('get form failed: 404'));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('get form failed: 404')).not.toBeInTheDocument();
   });
 
   it('opens the Entries tab from the link, and keeps the typed answers across tabs', async () => {
@@ -562,7 +577,7 @@ describe('FormCapture entries (design 2026-11-22-form-entries)', () => {
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'New entry' }), { button: 0 });
     fireEvent.change(await screen.findByLabelText('Requisition number'), { target: { value: 'CS-0007' } });
     clickActionsMenuItem('Submit');
-    expect(await screen.findByText('Response captured.')).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Response captured.'));
     await waitFor(() => expect(api.listFormEntries).toHaveBeenCalledTimes(2));
   });
 });

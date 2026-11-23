@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as api from '@/api';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 import { EntriesTab } from './EntriesTab';
 
 const caps = { void: true };
@@ -31,6 +33,7 @@ function openRowMenu(name: string) {
 describe('EntriesTab', () => {
   beforeEach(() => {
     caps.void = true;
+    vi.mocked(toast.error).mockClear();
     vi.spyOn(api, 'listFormEntries').mockResolvedValue({ entries: rows, total: 3 });
   });
 
@@ -47,6 +50,23 @@ describe('EntriesTab', () => {
     render(<EntriesTab formId="form-1" refreshKey={0} />);
     expect(await screen.findByText('No entries yet.')).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('shows a failed load as one toast and the could-not-load text, not the stripes or a red box', async () => {
+    vi.spyOn(api, 'listFormEntries').mockRejectedValue(new Error('list form entries failed: 403'));
+    render(<EntriesTab formId="form-1" refreshKey={0} />);
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    expect(screen.queryByText('No entries yet.')).not.toBeInTheDocument();
+    expect(screen.queryByText('list form entries failed: 403')).not.toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('list form entries failed: 403');
+
+    // A reload that fails the same way does not toast again.
+    openRowMenu('Entries actions');
+    fireEvent.click(await screen.findByText('Refresh'));
+    await waitFor(() => expect(api.listFormEntries).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledTimes(1);
   });
 
   it('lists the entries, strikes a voided one through and marks an incomplete one', async () => {

@@ -141,6 +141,7 @@ export const en = {
     previous: 'Previous',
     next: 'Next',
     close: 'Close',
+    loadFailed: 'Could not load this list. Reload the page to try again.',
   },
   table: {
     unknownTotalRange: "{{from}}–{{to}} (total unknown)",
@@ -666,6 +667,7 @@ export const en = {
     toastDeleted: 'Deleted {{name}}',
     toastDuplicated: 'Duplicated {{name}} as {{copy}}',
     toastImported: 'Imported {{name}}',
+    toastCaptured: 'Response captured.',
   },
   settings: {
     title: 'Settings',

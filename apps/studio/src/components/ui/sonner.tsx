@@ -22,6 +22,9 @@ export function Toaster(props: ToasterProps) {
       position="bottom-right"
       richColors
       closeButton
+      // Load and save errors carry the server's message, which can hold a path or id with no space
+      // to wrap on. Without this it runs off a phone screen.
+      toastOptions={{ classNames: { title: '[overflow-wrap:anywhere]', description: '[overflow-wrap:anywhere]' } }}
       {...props}
     />
   );

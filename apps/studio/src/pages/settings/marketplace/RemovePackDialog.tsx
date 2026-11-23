@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { getPackRemoval, removePack, type PackRemoval, type PackRoleHolders } from '@/api';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/spinner';
+import { LoadFailed } from '@/components/ui/load-failed';
 
 // Remove an installed content pack (profile packs design 5.3 and 5.4). It deletes the roles and
 // layouts the pack made and keeps its forms. A user who still holds one of its roles blocks it.
@@ -38,28 +40,29 @@ export function RemovePackDialog({ packId, open, onOpenChange, onRemoved }: {
   const [removal, setRemoval] = useState<PackRemoval | null>(null);
   const [holders, setHolders] = useState<PackRoleHolders[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // The removal plan could not be read. The reason is a toast.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setRemoval(null); setHolders([]); setError(null);
+    setRemoval(null); setHolders([]); setLoadFailed(false);
     let live = true;
     void getPackRemoval(packId).then(
       (r) => { if (live) { setRemoval(r); setHolders(r.holders); } },
-      (e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)); },
+      (e: unknown) => { if (live) { setLoadFailed(true); toast.error(e instanceof Error ? e.message : String(e)); } },
     );
     return () => { live = false; };
   }, [open, packId]);
 
   const doRemove = async () => {
-    setBusy(true); setError(null);
+    setBusy(true);
     try {
       const out = await removePack(packId);
       // A refusal removed nothing. Show who holds the roles and keep the prompt open.
       if (out.ok) onRemoved();
       else setHolders(out.holders);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -75,7 +78,7 @@ export function RemovePackDialog({ packId, open, onOpenChange, onRemoved }: {
           <DialogDescription>{t(`${P}.intro`)}</DialogDescription>
         </DialogHeader>
 
-        {!removal && !error ? (
+        {!removal && !loadFailed ? (
           <div className="min-h-[8rem]"><LoadingState /></div>
         ) : (
           <div className="flex min-h-0 flex-col gap-4 overflow-y-auto text-sm">
@@ -99,7 +102,7 @@ export function RemovePackDialog({ packId, open, onOpenChange, onRemoved }: {
                 </ul>
               </div>
             ) : null}
-            {error ? <p className="m-0 text-destructive" role="alert">{error}</p> : null}
+            {loadFailed ? <LoadFailed className="min-h-[8rem]" /> : null}
           </div>
         )}
 

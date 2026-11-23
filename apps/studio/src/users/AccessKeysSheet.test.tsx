@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vites
 import { useState } from 'react';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 // Pin a zone west of UTC with no daylight saving, before any import reads a date. Node applies a
 // change to process.env.TZ at once. Vitest's default pool is child processes, and afterAll puts
@@ -128,15 +130,18 @@ describe('AccessKeysSheet', () => {
     expect(stackedPrefix.className).toContain('[overflow-wrap:anywhere]');
   });
 
-  it('shows a failed load as an error, not as an empty list, and clears it once a load works', async () => {
+  it('shows a failed load as one toast and the could-not-load text, not as an empty list, and clears it once a load works', async () => {
     vi.mocked(listAccessKeys).mockRejectedValueOnce(new Error('list access keys failed: 500'));
     render(<Harness />);
-    expect(await screen.findByText('Could not load the keys: list access keys failed: 500')).toBeTruthy();
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeTruthy();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('Could not load the keys: list access keys failed: 500');
+    expect(screen.queryByText('Could not load the keys: list access keys failed: 500')).toBeNull();
     expect(screen.queryByText('No access keys yet.')).toBeNull();
     // A create reads the list again, and this time it works.
     await createKey('new-bot');
     expect(await screen.findByText('ci-bot')).toBeTruthy();
-    expect(screen.queryByText(/Could not load the keys/)).toBeNull();
+    expect(screen.queryByText('Could not load this list. Reload the page to try again.')).toBeNull();
   });
 
   it('shows a dash for no expiry and for never used', async () => {
@@ -316,12 +321,13 @@ describe('AccessKeysSheet', () => {
     expect(createAccessKey).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the server\'s refusal and keeps the form', async () => {
+  it('shows the server\'s refusal as a toast and keeps the form', async () => {
     vi.mocked(createAccessKey).mockRejectedValue(new Error('create access key failed: name is over 80 characters'));
     render(<Harness />);
     await createKey('x');
-    expect(await screen.findByText(/name is over 80 characters/)).toBeTruthy();
-    expect(screen.getByLabelText('Name')).toBeTruthy();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/name is over 80 characters/)));
+    expect(screen.queryByText(/name is over 80 characters/)).toBeNull();
+    expect(screen.getByLabelText('Name')).toHaveValue('x');
   });
 });
 

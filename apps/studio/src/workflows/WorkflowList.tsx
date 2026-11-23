@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { LoadingState } from '@/components/ui/spinner';
 import { fetchWorkflows, createWorkflow, deleteWorkflow, duplicateWorkflow, resetWorkflow, setWorkflowEnabled, type Workflow } from '@/api';
 import { workflowCreateFromImport } from './workflow-import';
@@ -32,7 +33,8 @@ export function WorkflowList() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionError, setActionError] = useState<string | null>(null);
+  // A failed load. Cleared only by a load that works, so a reload that fails the same way does not toast again.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
@@ -44,11 +46,12 @@ export function WorkflowList() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setRows(await fetchWorkflows()); }
-    catch (e) { toast.error(`Failed to load workflows: ${e instanceof Error ? e.message : String(e)}`); }
+    try { setRows(await fetchWorkflows()); setLoadError(null); }
+    catch (e) { setLoadError(`Failed to load workflows: ${e instanceof Error ? e.message : String(e)}`); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useLoadErrorToast(loadError);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -59,19 +62,18 @@ export function WorkflowList() {
 
   const importJson = async (file: File | undefined) => {
     if (!file) return;
-    setActionError(null);
     try {
       const parsed: unknown = JSON.parse(await file.text());
       const input = workflowCreateFromImport(parsed, newWorkflowId());
       if (!input) {
-        setActionError('Import JSON must include a name and a definition with nodes/edges arrays.');
+        toast.error('Import JSON must include a name and a definition with nodes/edges arrays.');
         return;
       }
       await createWorkflow(input);
       await load();
       setPage(0);
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -171,7 +173,6 @@ export function WorkflowList() {
               }}
             />
           </div>
-          {actionError ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{actionError}</div> : null}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -225,7 +226,8 @@ export function WorkflowList() {
             )}
           </Table>
           {loading && <LoadingState className="flex-1" label="Loading…" />}
-          {!loading && pageRows.length === 0 && (
+          {!loading && loadError && rows.length === 0 && <LoadFailed />}
+          {!loading && !(loadError && rows.length === 0) && pageRows.length === 0 && (
             search ? (
               <StripedEmpty className="flex-1">No workflows match.</StripedEmpty>
             ) : (

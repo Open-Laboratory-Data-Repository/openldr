@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { useLoadErrorToast } from '@/components/ui/load-failed';
 import { LoadingState } from '@/components/ui/spinner';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -46,7 +47,6 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
   // Replacing saved queries needs query.manage (demo.4 item 13). Without it, existing names are skipped.
   const canReplace = useAuth().hasCapability('query.manage');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Read t through a ref so a language change cannot re-run the load effect and reset the preview.
   const tRef = useRef(t);
@@ -57,7 +57,7 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setFile(null); setFileName(''); setFileError(null); setError(null); setLoadError(null); setReplace(false); setPage(0);
+    setFile(null); setFileName(''); setFileError(null); setLoadError(null); setReplace(false); setPage(0);
     void queryApi.list().then((rows) => { if (!cancelled) setExisting(new Set(rows.map((q) => q.name))); })
       .catch((e: Error) => { if (!cancelled) setLoadError(tRef.current('query.transfer.loadFailed', { error: e.message })); });
     void queryApi.connectors().then((rows) => {
@@ -67,6 +67,8 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
     }).catch((e: Error) => { if (!cancelled) setLoadError(tRef.current('query.transfer.loadFailed', { error: e.message })); });
     return () => { cancelled = true; };
   }, [open]);
+  // Both reads can fail with one message. The toast shows it once.
+  useLoadErrorToast(loadError);
 
   const rows = useMemo(() => (file?.queries ?? []).map((q) => ({
     name: q.name,
@@ -77,7 +79,6 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
 
   const onFile = async (f: File | undefined) => {
     if (!f) return;
-    setError(null);
     setFileName(f.name);
     setPage(0);
     const parsed = parseFile(await f.text());
@@ -88,7 +89,6 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
   const doImport = async () => {
     if (!file) return;
     setBusy(true);
-    setError(null);
     try {
       const { results } = await queryApi.importQueries({ file, connectorName: connectorName || undefined, replace });
       const count = (o: string) => results.filter((r) => r.outcome === o).length;
@@ -98,7 +98,7 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
       refreshSavedQueries();
       onOpenChange(false);
     } catch (e) {
-      setError(t('query.transfer.importFailed', { error: (e as Error).message }));
+      toast.error(t('query.transfer.importFailed', { error: (e as Error).message }));
     } finally {
       setBusy(false);
     }
@@ -164,8 +164,6 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
         </div>
 
         {fileError && <div className="mx-6 mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{fileError}</div>}
-        {loadError && <div className="mx-6 mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{loadError}</div>}
-        {error && <div className="mx-6 mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>}
 
         <div className="flex min-h-[16rem] flex-col border-t border-border">
           {busy ? (

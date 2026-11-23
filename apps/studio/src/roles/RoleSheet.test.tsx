@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 let mockCanManage = true;
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: () => ({ hasCapability: (cap: string) => (cap === 'roles.manage' ? mockCanManage : true) }) }));
@@ -146,16 +148,22 @@ describe('RoleSheet', () => {
     expect(screen.queryByTestId('role-save')).toBeNull();
   });
 
-  it('surfaces a server error inline instead of throwing', async () => {
+  it('shows a failed save as a toast and keeps the sheet open with the input', async () => {
     (api.createRole as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('create role failed: the built-in Administrator role is locked'));
-    render(<RoleSheet open role={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+    const onOpenChange = vi.fn();
+    const onSaved = vi.fn();
+    render(<RoleSheet open role={null} onOpenChange={onOpenChange} onSaved={onSaved} />);
 
     await screen.findByTestId('capability-group-users');
     fireEvent.change(screen.getByTestId('role-name'), { target: { value: 'Reviewer' } });
     openActionsMenu('Create');
     fireEvent.click(screen.getByTestId('role-save'));
 
-    expect(await screen.findByTestId('role-sheet-error')).toHaveTextContent(/locked/i);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('create role failed: the built-in Administrator role is locked'));
+    expect(screen.queryByTestId('role-sheet-error')).toBeNull();
+    expect(screen.getByTestId('role-name')).toHaveValue('Reviewer');
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it('⋯ menu Cancel closes without saving', async () => {

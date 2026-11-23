@@ -75,6 +75,31 @@ describe('Forms page', () => {
     }
   });
 
+  it('a failed list load shows one toast and the could-not-load text, not the empty state or a red box', async () => {
+    vi.spyOn(api, 'listForms').mockRejectedValue(new Error('list forms failed: insufficient capability'));
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('list forms failed: insufficient capability');
+    expect(screen.queryByText('No forms yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('list forms failed: insufficient capability')).not.toBeInTheDocument();
+  });
+
+  it('a failed publish shows a toast, not a box in the page', async () => {
+    vi.spyOn(api, 'publishForm').mockRejectedValue(new Error('publish form: forms.publish required'));
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: /actions for specimen intake/i });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Publish')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Publish'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('publish form: forms.publish required'));
+    expect(screen.queryByText('publish form: forms.publish required')).not.toBeInTheDocument();
+  });
+
   it('publishing from a row reports which form was published', async () => {
     render(<MemoryRouter><Forms /></MemoryRouter>);
     expect(await screen.findByText('Specimen intake')).toBeInTheDocument();

@@ -41,6 +41,23 @@ describe('WorkflowList', () => {
     render(<MemoryRouter><WorkflowList /></MemoryRouter>);
     expect(await screen.findByText('AMR sync')).toBeTruthy();
   });
+  it('shows a failed load as one toast and the could-not-load text, not the empty state', async () => {
+    (api.fetchWorkflows as any).mockRejectedValue(new Error('list workflows failed: 403'));
+    render(<MemoryRouter><WorkflowList /></MemoryRouter>);
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeTruthy();
+    expect(screen.queryByText('No workflows yet')).toBeNull();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('Failed to load workflows: list workflows failed: 403');
+  });
+  it('shows a refused import as a toast, not a box in the page', async () => {
+    render(<MemoryRouter><WorkflowList /></MemoryRouter>);
+    await screen.findByText('AMR sync');
+    const file = new File([JSON.stringify({ name: 'x' })], 'x.json', { type: 'application/json' });
+    fireEvent.change(screen.getByLabelText('Import workflow JSON'), { target: { files: [file] } });
+    const message = 'Import JSON must include a name and a definition with nodes/edges arrays.';
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(message));
+    expect(screen.queryByText(message)).toBeNull();
+  });
   it('navigates to the builder for a new workflow', async () => {
     render(<MemoryRouter><WorkflowList /></MemoryRouter>);
     await screen.findByText('AMR sync');

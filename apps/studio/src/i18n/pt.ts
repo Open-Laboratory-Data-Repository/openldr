@@ -143,6 +143,7 @@ export const pt: EnShape = {
     previous: 'Anterior',
     next: 'Próximo',
     close: 'Fechar',
+    loadFailed: 'Não foi possível carregar esta lista. Recarregue a página para tentar novamente.',
   },
   table: {
     unknownTotalRange: "{{from}}–{{to}} (total desconhecido)",
@@ -662,6 +663,7 @@ export const pt: EnShape = {
     toastDeleted: '{{name}} eliminado',
     toastDuplicated: '{{name}} duplicado como {{copy}}',
     toastImported: '{{name}} importado',
+    toastCaptured: 'Resposta registada.',
   },
   settings: {
     title: 'Definições',

@@ -143,6 +143,7 @@ export const fr: EnShape = {
     previous: 'Précédent',
     next: 'Suivant',
     close: 'Fermer',
+    loadFailed: 'Impossible de charger cette liste. Rechargez la page pour réessayer.',
   },
   table: {
     unknownTotalRange: "{{from}}–{{to}} (total inconnu)",
@@ -662,6 +663,7 @@ export const fr: EnShape = {
     toastDeleted: '{{name}} supprimé',
     toastDuplicated: '{{name}} dupliqué en {{copy}}',
     toastImported: '{{name}} importé',
+    toastCaptured: 'Réponse enregistrée.',
   },
   settings: {
     title: 'Paramètres',

@@ -8,6 +8,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Divider } from '@/components/ui/bleed';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AvailableArtifact, InstalledArtifact } from '@/api';
 import { PackageCard } from './PackageCard';
@@ -108,6 +109,12 @@ function FilterBar({ filter, setFilter, typeFilter, setTypeFilter }: {
 
 export function MarketplaceTabs(props: MarketplaceTabsProps) {
   const { t } = useTranslation();
+  // ⛔ The server's own message is the toast's description, verbatim. It carries the registry name
+  // and, for a local registry, the RESOLVED absolute path: the only thing that reveals a relative
+  // location landing somewhere the operator did not expect. The headline alone is not a diagnosis.
+  // NOT translated: it is a server string and a filesystem path. The list reloads after every
+  // install or toggle, and the same message does not toast again.
+  useLoadErrorToast(props.loadError, t('settings.marketplace.registryUnreachable'));
   const [filter, setFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   // `followActive`: the active version's card was opened. The detail then shows whichever version is
@@ -241,21 +248,10 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
             ⚠ The Divider stays ABOVE this box. It bleeds edge-to-edge with negative margins and an
             `overflow-auto` ancestor would clip it (AGENTS.md section 5). */}
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {props.loadError ? (
-            <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">
-              <p className="text-sm">{t('settings.marketplace.registryUnreachable')}</p>
-              {/* ⛔ The server's own message, verbatim. It carries the registry name and, for a local
-                  registry, the RESOLVED absolute path — the only thing that reveals a relative location
-                  landing somewhere the operator did not expect. Rendering the translated headline alone
-                  is what left "Registry unreachable." as the entire diagnosis.
-                  ⚠ NOT translated, and no i18n key: it is a server string and a filesystem path.
-                  Inventing a key would ship fr and pt with a literal-braces gap. `break-all` because a
-                  Windows path has no spaces to wrap on and would otherwise bleed off a phone. */}
-              <p className="mt-1 break-all font-mono text-[11px] leading-snug opacity-80">{props.loadError}</p>
-            </div>
-          ) : null}
           {!props.configured ? (
             <div className="px-1 py-6 text-sm text-muted-foreground">{t('settings.marketplace.notConfigured')}</div>
+          ) : browseEntries.length === 0 && props.loadError ? (
+            <LoadFailed />
           ) : browseEntries.length === 0 ? (
             <div className="px-1 py-6 text-center text-sm text-muted-foreground">{t('settings.marketplace.emptyBrowse')}</div>
           ) : (
