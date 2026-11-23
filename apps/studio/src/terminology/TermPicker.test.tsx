@@ -632,3 +632,39 @@ describe('TermPicker — Escape inside a Sheet', () => {
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 });
+
+describe('TermPicker: keeping typed text', () => {
+  beforeEach(() => vi.restoreAllMocks());
+  const typed = (onUse: (text: string) => void) => ({ label: (text: string) => `Use "${text}"`, onUse });
+
+  it('keeps the typed text on Enter when no result has that code', async () => {
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [term('mg', 'milligram')], total: 1 } as never);
+    const onUse = vi.fn();
+    const onChange = vi.fn();
+    render(<TermPicker value={null} onChange={onChange} systemId="sys1" minQueryLength={1} typed={typed(onUse)} />);
+    const box = screen.getByRole('combobox');
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: ' cells ' } });
+    await screen.findByRole('button', { name: 'Use "cells"' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onUse).toHaveBeenCalledWith('cells');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('offers no typed text when a result has exactly that code, and Enter on a row picks the row', async () => {
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [term('g', 'gram')], total: 1 } as never);
+    const onUse = vi.fn();
+    const onChange = vi.fn();
+    render(<TermPicker value={null} onChange={onChange} systemId="sys1" minQueryLength={1} typed={typed(onUse)} />);
+    const box = screen.getByRole('combobox');
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: 'g' } });
+    await screen.findByText(/gram/);
+    expect(screen.queryByRole('button', { name: 'Use "g"' })).toBeNull();
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onUse).not.toHaveBeenCalled();
+    fireEvent.keyDown(box, { key: 'ArrowDown' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ code: 'g' }));
+  });
+});

@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { TermPicker } from '@/terminology/TermPicker';
 import {
-  createCatalogTest, searchTerms, setCatalogLabSettings, updateCatalogTest,
+  createCatalogTest, setCatalogLabSettings, termExists, updateCatalogTest,
   type CatalogLabSettingsInput, type CatalogTestResultParam, type CatalogSpecimenCoding, type CatalogTest, type CatalogTestInput,
   type CatalogAgeUnit, type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
@@ -131,13 +131,18 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
   // Units typed in this sheet that UCUM does not hold, so the range can say so. A saved unit is not
   // checked: it opens as it was saved (spec 3, call 3).
   const [notUcum, setNotUcum] = useState<ReadonlySet<string>>(() => new Set());
+  const markUcum = (unit: string, isUcum: boolean): void => setNotUcum((prev) => {
+    if (prev.has(unit) !== isUcum) return prev;
+    const next = new Set(prev);
+    if (isUcum) next.delete(unit); else next.add(unit);
+    return next;
+  });
   // The picker shows UCUM's first 20 matches by code, so a short code such as "g" can miss the list.
-  // Ask for its exact code before saying it is not UCUM. A failed check says nothing.
+  // Look the exact code up before saying it is not UCUM. A failed lookup says nothing.
   const checkUcum = async (unit: string): Promise<void> => {
     if (!options.ucum) return;
     try {
-      const res = await searchTerms(options.ucum.systemId, { q: unit, limit: 500 });
-      if (!res.rows.some((r) => r.code === unit)) setNotUcum((prev) => new Set(prev).add(unit));
+      markUcum(unit, await termExists(options.ucum.system, unit));
     } catch { /* unknown, so no note */ }
   };
 
@@ -436,7 +441,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                           // UCUM has one-letter units: g, L, m.
                                           minQueryLength={1}
                                           value={band.unit ? { system: options.ucum.system, code: band.unit, display: null } : null}
-                                          onChange={(v) => setBand({ unit: v?.code ?? null })}
+                                          onChange={(v) => { if (v) markUcum(v.code, true); setBand({ unit: v?.code ?? null }); }}
                                           typed={{
                                             label: (unit) => t('testCatalog.sheet.unitUseTyped', { unit }),
                                             onUse: (unit) => { setBand({ unit }); void checkUcum(unit); },

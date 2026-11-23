@@ -6,7 +6,7 @@ import '@/i18n';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, createCatalogTest: vi.fn(), updateCatalogTest: vi.fn(), setCatalogLabSettings: vi.fn(), searchTerms: vi.fn() };
+  return { ...actual, createCatalogTest: vi.fn(), updateCatalogTest: vi.fn(), setCatalogLabSettings: vi.fn(), searchTerms: vi.fn(), termExists: vi.fn() };
 });
 
 import * as api from '@/api';
@@ -438,6 +438,7 @@ describe('TestSheet: a range unit from UCUM', () => {
   it('keeps a typed unit UCUM does not hold, and says so', async () => {
     vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
     vi.mocked(api.searchTerms).mockResolvedValue({ rows: [], total: 0 });
+    vi.mocked(api.termExists).mockResolvedValue(false);
     renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
     await addBand('HGB');
     await clearUnit();
@@ -450,11 +451,12 @@ describe('TestSheet: a range unit from UCUM', () => {
     expect(bandsSaved()[0].unit).toBe('cells');
   });
 
-  // The picker lists UCUM's first 20 matches by code, so a one-letter code can miss the list.
-  it('does not call a short UCUM code typed by hand a non-UCUM unit', async () => {
-    vi.mocked(api.searchTerms)
-      .mockResolvedValueOnce({ rows: [term('%', 'percent')], total: 400 })
-      .mockResolvedValue({ rows: [term('%', 'percent'), term('g', 'gram')], total: 400 });
+  // The search matches substrings and sorts by code, so "g" can have hundreds of rows before its own.
+  // The check looks the exact code up instead.
+  it('does not call a short UCUM code typed by hand a non-UCUM unit, even past 500 search rows', async () => {
+    const many = Array.from({ length: 500 }, (_, i) => term(`${i}.g`, null));
+    vi.mocked(api.searchTerms).mockResolvedValue({ rows: many, total: 501 });
+    vi.mocked(api.termExists).mockResolvedValue(true);
     renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
     await addBand('HGB');
     await clearUnit();
@@ -462,7 +464,24 @@ describe('TestSheet: a range unit from UCUM', () => {
     // Found outside act. Awaiting this findBy inside act hung the test past its 5s limit.
     const use = await screen.findByRole('button', { name: 'Use "g"' });
     await act(async () => { fireEvent.click(use); });
-    expect(vi.mocked(api.searchTerms)).toHaveBeenLastCalledWith('cs-ucum-seed', { q: 'g', limit: 500 });
+    expect(vi.mocked(api.termExists)).toHaveBeenLastCalledWith(UCUM, 'g');
+    expect(screen.queryByText('Not a UCUM unit')).toBeNull();
+  });
+
+  it('drops the note once the same unit is picked from UCUM', async () => {
+    vi.mocked(api.searchTerms).mockResolvedValueOnce({ rows: [], total: 0 })
+      .mockResolvedValue({ rows: [term('mmol/L', 'millimole per liter')], total: 1 });
+    vi.mocked(api.termExists).mockResolvedValue(false);
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    await clearUnit();
+    await typeUnit('mmol/L');
+    const use = await screen.findByRole('button', { name: 'Use "mmol/L"' });
+    await act(async () => { fireEvent.click(use); });
+    expect(await screen.findByText('Not a UCUM unit')).toBeInTheDocument();
+    await clearUnit();
+    await typeUnit('mmol/L');
+    fireEvent.click(await screen.findByRole('option', { name: /mmol\/L/ }));
     expect(screen.queryByText('Not a UCUM unit')).toBeNull();
   });
 
@@ -477,6 +496,7 @@ describe('TestSheet: a range unit from UCUM', () => {
     await save();
     expect(bandsSaved()[0].unit).toBe('cells/hpf');
     expect(api.searchTerms).not.toHaveBeenCalled();
+    expect(api.termExists).not.toHaveBeenCalled();
   });
 
   it('keeps the plain unit box when this install has no UCUM, prefilled from the result field', async () => {

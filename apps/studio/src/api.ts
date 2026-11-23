@@ -2509,6 +2509,14 @@ export const searchTerms = (systemId: string, p: { q?: string; status?: string |
 };
 export const createTerm = (systemId: string, i: TermInput) => authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms`, jbody(i, 'POST')).then((r) => okJson<Term>(r, 'create term'));
 export const updateTerm = (systemId: string, code: string, i: TermInput) => authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms/${encodeURIComponent(code)}`, jbody(i, 'PUT')).then((r) => okJson<Term>(r, 'update term'));
+/** Whether `system` holds `code` exactly (FHIR CodeSystem $lookup). False on 404; any other failure throws. */
+export async function termExists(system: string, code: string): Promise<boolean> {
+  const qs = new URLSearchParams({ system, code });
+  const r = await authFetch(`/api/terminology/CodeSystem/$lookup?${qs}`);
+  if (r.status === 404) return false;
+  if (!r.ok) throw new Error(`look up term failed: ${r.status}`);
+  return true;
+}
 export async function deleteTerm(systemId: string, code: string): Promise<void> {
   const r = await authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms/${encodeURIComponent(code)}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete term failed: ${r.status}`);
