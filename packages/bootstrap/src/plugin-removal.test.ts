@@ -52,12 +52,13 @@ function setup(o: { copies?: Run[]; checks?: Run[]; imports?: Run[]; settleAfter
     list: vi.fn(async () => [{ id: 'cdr-source', version: '0.1.4', active: false }, { id: 'cdr-source', version: '0.1.5', active: true }]),
   };
   const pluginData = { purgeExcept: vi.fn(async (_p: string, keep: string[]) => { log.push(`purge except ${keep.join(',')}`); }) };
+  const pluginSchemas = { drop: vi.fn(async (p: string) => { log.push(`drop tables ${p}`); }) };
   const audit = vi.fn(async () => {});
   const removal = createPluginRemoval({
     plugins: plugins as never, importCopies: importCopies as never, importChecks: importChecks as never, imports: imports as never,
-    pluginData: pluginData as never, audit, sleep: async () => {},
+    pluginData: pluginData as never, pluginSchemas, audit, sleep: async () => {},
   });
-  return { removal, log, copies, checks, plugins, pluginData, audit };
+  return { removal, log, copies, checks, plugins, pluginData, pluginSchemas, audit };
 }
 
 describe('plugin removal', () => {
@@ -104,7 +105,22 @@ describe('plugin removal', () => {
   it('keep nothing: deletes every copy and the plugin\'s other data, leaving copy records to their drives', async () => {
     const { removal, log } = setup();
     await removal.remove('cdr-source', { keep: 'nothing', actor });
-    expect(log).toEqual(['stop check ck1', 'stop copy cp1', 'delete copy cp1', 'purge except __import-copies', 'remove plugin']);
+    expect(log).toEqual(['stop check ck1', 'stop copy cp1', 'delete copy cp1', 'purge except __import-copies', 'drop tables cdr-source', 'remove plugin']);
+  });
+
+  it('keep all and keep settings leave the plugin\'s own tables', async () => {
+    for (const keep of ['all', 'settings'] as const) {
+      const { removal, pluginSchemas } = setup();
+      await removal.remove('cdr-source', { keep, actor });
+      expect(pluginSchemas.drop).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a failed drop of the tables leaves the plugin installed, so the removal can be tried again', async () => {
+    const { removal, plugins, pluginSchemas } = setup();
+    pluginSchemas.drop.mockRejectedValueOnce(new Error('drop failed'));
+    await expect(removal.remove('cdr-source', { keep: 'nothing', actor })).rejects.toThrow('drop failed');
+    expect(plugins.remove).not.toHaveBeenCalled();
   });
 
   it('a read that will not stop: says which, and removes and deletes nothing', async () => {
@@ -125,9 +141,10 @@ describe('plugin removal', () => {
   });
 
   it('removing one older version removes that row only and stops nothing', async () => {
-    const { removal, log } = setup();
+    const { removal, log, pluginSchemas } = setup();
     await removal.removeVersion('cdr-source', '0.1.4', actor);
     expect(log).toEqual(['remove version 0.1.4']);
+    expect(pluginSchemas.drop).not.toHaveBeenCalled();
   });
 
   it('removing the active version by version is refused: it would remove the plugin with its work running', async () => {
@@ -146,7 +163,7 @@ describe('plugin removal', () => {
     const removal = createPluginRemoval({
       plugins: { remove: vi.fn(), list: vi.fn(async () => []) } as never, importCopies: svc as never,
       importChecks: fakeService('check', [], log) as never, imports: fakeService('import', [], log) as never,
-      pluginData: { purgeExcept: vi.fn() } as never, audit: vi.fn(async () => {}), sleep: async (ms) => { sleeps.push(ms); },
+      pluginData: { purgeExcept: vi.fn() } as never, pluginSchemas: { drop: vi.fn() }, audit: vi.fn(async () => {}), sleep: async (ms) => { sleeps.push(ms); },
     });
     await removal.remove('cdr-source', { keep: 'all', actor }).catch(() => {});
     expect(sleeps.reduce((a, b) => a + b, 0)).toBeGreaterThan(120_000);

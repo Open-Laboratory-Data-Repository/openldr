@@ -14,6 +14,7 @@ import {
   type TrustStore,
   type Capability,
 } from '@openldr/marketplace';
+import { PluginShapeError, type PluginSchemas } from '@openldr/db';
 import { parseManifest, type PluginManifest } from './manifest';
 import { sha256Hex } from './hash';
 import type { PluginStore, PluginRow } from './store';
@@ -40,6 +41,9 @@ export interface PluginRuntimeDeps {
   ceVersion: string;
   verifyConfig: { devAllowUnsigned: boolean };
   recordInstall?: (e: MarketplaceInstallAudit) => Promise<void>;
+  /** Builds the tables a plugin declares in payload.tables. Install only plans and applies them.
+   *  Removal drops them (plugin-removal.ts), never install, rollback or disable. */
+  schemas?: Pick<PluginSchemas, 'plan' | 'apply'>;
 }
 
 export interface InstallApproval {
@@ -253,6 +257,24 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
         const uiSha = sha256Hex(opts.ui);
         if (uiSha !== uiMeta.sha256) {
           throw new Error(`artifact ${artifact.id}: ui.html sha (${uiSha}) does not match manifest payload.ui.sha256 (${uiMeta.sha256})`);
+        }
+      }
+
+      // Declared tables, after every check above and before the version is made active, so a
+      // refused or failed shape change leaves the version that was active before still active.
+      const tables = artifact.payload.tables;
+      if (tables !== undefined && tables.length > 0) {
+        if (!deps.schemas) {
+          throw new Error(`artifact ${artifact.id}@${artifact.version} declares tables, but this OpenLDR cannot create plugin tables here`);
+        }
+        try {
+          await deps.schemas.plan(artifact.id, tables);
+          await deps.schemas.apply(artifact.id, tables);
+        } catch (err) {
+          if (!(err instanceof PluginShapeError)) throw err;
+          const active = (await deps.store.list()).find((r) => r.id === artifact.id && r.active);
+          const kept = active ? `${active.id}@${active.version} stays active` : 'nothing was installed';
+          throw new PluginShapeError(err.reason, `${artifact.id}@${artifact.version} was not installed, and ${kept}: ${err.message}`);
         }
       }
 

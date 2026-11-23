@@ -545,3 +545,93 @@ describe('runtime ui install', () => {
     expect((logger as unknown as { warn: ReturnType<typeof vi.fn> }).warn).toHaveBeenCalled();
   });
 });
+
+// Layer: install over a real plugin schema manager on pg-mem, with a fake plugin store. The tables
+// here have no facility column, so no row-level security runs (pg-mem cannot run it). Rollback of
+// a failed DDL step and DROP SCHEMA are live-only facts (packages/db/src/plugin-schema.live.test.ts).
+describe('install builds the plugin tables', () => {
+  const wasmBytes = new Uint8Array([9, 8, 7]);
+  const wasmSha = sha256Hex(wasmBytes);
+  const orders = {
+    name: 'orders',
+    columns: [{ name: 'id', type: 'uuid' as const }, { name: 'status', type: 'text' as const }],
+    primaryKey: ['id'],
+  };
+  const artifact = (version: string, tables?: unknown[]) => ({
+    schemaVersion: 1 as const, type: 'plugin' as const, id: 'lab', version,
+    compatibility: { ceVersion: '*' },
+    capabilities: tables ? [{ kind: 'host:db' as const }] : [],
+    payload: {
+      kind: 'plugin' as const, wasmSha256: wasmSha, entrypoint: 'convert', wasi: false,
+      limits: { memoryMb: 256, timeoutMs: 30000 }, ...(tables ? { tables } : {}),
+    },
+  });
+
+  async function setup() {
+    const { newDb } = await import('pg-mem');
+    const { createPluginSchemas } = await import('@openldr/db');
+    const db = newDb().adapters.createKysely() as never;
+    const real = createPluginSchemas(db);
+    const schemas = { plan: vi.fn(real.plan), apply: vi.fn(real.apply), drop: vi.fn(real.drop) };
+    const store = fakeStore();
+    const rt = createPluginRuntime({ blob: fakeBlob(new Map()), store, runner: okRunner, logger, ...defaultNewDeps(), schemas });
+    return { db: db as import('kysely').Kysely<any>, schemas, store, rt };
+  }
+
+  it('installing a plugin with tables creates them, then makes the version active', async () => {
+    const { db, store, rt } = await setup();
+    await rt.install(wasmBytes, artifact('0.1.0', [orders]));
+    await db.withSchema('plugin_lab').insertInto('orders').values({ id: '6b9d0c1e-0f0a-4c39-9a55-1e2f3a4b5c6d', status: 'new' }).execute();
+    expect(await db.withSchema('plugin_lab').selectFrom('orders').select('status').execute()).toEqual([{ status: 'new' }]);
+    expect((await store.list()).map((r) => [r.version, r.active])).toEqual([['0.1.0', true]]);
+  });
+
+  it('an upgrade that adds a nullable column adds it and installs the new version', async () => {
+    const { db, store, rt } = await setup();
+    await rt.install(wasmBytes, artifact('0.1.0', [orders]));
+    const wider = { ...orders, columns: [...orders.columns, { name: 'note', type: 'text' as const }] };
+    await rt.install(wasmBytes, artifact('0.2.0', [wider]));
+    await db.withSchema('plugin_lab').insertInto('orders').values({ id: '6b9d0c1e-0f0a-4c39-9a55-1e2f3a4b5c6d', note: 'x' }).execute();
+    expect((await store.list()).map((r) => r.version)).toEqual(['0.1.0', '0.2.0']);
+  });
+
+  it.each([
+    ['drop', { ...orders, columns: [orders.columns[0]!] }],
+    ['type', { ...orders, columns: [orders.columns[0]!, { name: 'status', type: 'integer' as const }] }],
+  ])('an upgrade with a refused change (%s) keeps the old version active and says why', async (reason, changed) => {
+    const { store, rt, schemas } = await setup();
+    await rt.install(wasmBytes, artifact('0.1.0', [orders]));
+    const err = await rt.install(wasmBytes, artifact('0.2.0', [changed])).catch((e: unknown) => e);
+    expect((err as { reason?: string }).reason).toBe(reason);
+    expect((err as Error).message).toMatch(/^lab@0\.2\.0 was not installed, and lab@0\.1\.0 stays active: table orders: column status/);
+    expect(schemas.apply).toHaveBeenCalledTimes(1);
+    expect(store.install).toHaveBeenCalledTimes(1);
+    expect((await store.list()).map((r) => [r.version, r.active])).toEqual([['0.1.0', true]]);
+  });
+
+  it('a plugin without tables installs as before and touches no schema', async () => {
+    const { store, rt, schemas } = await setup();
+    await rt.install(wasmBytes, artifact('0.1.0'));
+    expect(schemas.plan).not.toHaveBeenCalled();
+    expect(schemas.apply).not.toHaveBeenCalled();
+    expect(store.install).toHaveBeenCalledTimes(1);
+  });
+
+  it('rollback, disable and removal through the runtime never drop the tables', async () => {
+    const { db, rt, schemas } = await setup();
+    await rt.install(wasmBytes, artifact('0.1.0', [orders]));
+    await rt.install(wasmBytes, artifact('0.2.0', [orders]));
+    await rt.rollback('lab', '0.1.0');
+    await rt.setEnabled('lab', false);
+    await rt.remove('lab', '0.2.0');
+    expect(schemas.drop).not.toHaveBeenCalled();
+    expect(await db.withSchema('plugin_lab').selectFrom('orders').selectAll().execute()).toEqual([]);
+  });
+
+  it('a plugin with tables is refused where no schema manager is wired', async () => {
+    const store = fakeStore();
+    const rt = createPluginRuntime({ blob: fakeBlob(new Map()), store, runner: okRunner, logger, ...defaultNewDeps() });
+    await expect(rt.install(wasmBytes, artifact('0.1.0', [orders]))).rejects.toThrow(/declares tables/);
+    expect(store.install).not.toHaveBeenCalled();
+  });
+});
