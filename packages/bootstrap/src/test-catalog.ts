@@ -125,14 +125,24 @@ export interface CatalogSpecimenOption {
   display: string | null;
 }
 
+/** UCUM's canonical url. CE seeds the system under it (migration 017, seed.ts). */
+const UCUM_SYSTEM = 'http://unitsofmeasure.org';
+
+/** A result parameter the sheet can offer, with its default unit (`parm_units`) so a new range starts with it. */
+export interface CatalogResultParamOption extends CatalogSpecimenOption {
+  units: string | null;
+}
+
 /** Everything the page's pickers offer, taken from the same ValueSets the save checks against. */
 export interface CatalogOptions {
   categories: CatalogCategoryOption[];
   specimenTypes: CatalogSpecimenOption[];
   /** The result parameters a test may name, from the ValueSet migration 069 seeds. */
-  resultParams: CatalogSpecimenOption[];
+  resultParams: CatalogResultParamOption[];
   /** The LOINC code system when LOINC is loaded here, so the sheet can search it. Null otherwise. */
   loinc: { systemId: string; system: string } | null;
+  /** The UCUM code system, so the sheet can search a range's unit. Null when this install has none. */
+  ucum: { systemId: string; system: string } | null;
   /** The sexes a range may name, with labels, so the studio names no code (named reference ranges). */
   sexes: SexOption[];
 }
@@ -763,6 +773,19 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return saved(code);
   }
 
+  /** Each result parameter's default unit, its `parm_units` property, or null. */
+  async function withUnits(params: CatalogSpecimenOption[]): Promise<CatalogResultParamOption[]> {
+    const systems = [...new Set(params.map((p) => p.system))].filter((s) => s !== '');
+    const rows = systems.length === 0 ? [] : await db.selectFrom('terminology_concepts').select(['system', 'code', 'properties'])
+      .where('system', 'in', systems).execute();
+    const units = new Map<string, string>();
+    for (const r of rows) {
+      const value = ((parseJson(r.properties) ?? {}) as Record<string, unknown>).parm_units;
+      if (typeof value === 'string' && value !== '') units.set(`${r.system}|${r.code}`, value);
+    }
+    return params.map((p) => ({ ...p, units: units.get(`${p.system}|${p.code}`) ?? null }));
+  }
+
   async function options(): Promise<CatalogOptions> {
     const [categories, specimenTypes, resultParams] = await Promise.all([
       expandEntries(TEST_CATEGORY_VALUE_SET),
@@ -774,11 +797,13 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       const row = await db.selectFrom('coding_systems').select('id').where('url', '=', LOINC_SYSTEM).executeTakeFirst();
       if (row) loinc = { systemId: row.id, system: LOINC_SYSTEM };
     }
+    const ucumRow = await db.selectFrom('coding_systems').select('id').where('url', '=', UCUM_SYSTEM).executeTakeFirst();
     return {
       categories: categories.map(({ code, display }) => ({ code, display })).sort(byLabel),
       specimenTypes: specimenTypes.sort(byLabel),
-      resultParams: resultParams.sort(byLabel),
+      resultParams: (await withUnits(resultParams)).sort(byLabel),
       loinc,
+      ucum: ucumRow ? { systemId: ucumRow.id, system: UCUM_SYSTEM } : null,
       sexes: SEX_OPTIONS,
     };
   }

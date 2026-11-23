@@ -2385,7 +2385,7 @@ export {
   LAB_TESTS_VALUE_SET, labTestsCompose, withLabTestsList,
   type TestCatalog, type CatalogTest, type CatalogTestInput, type CatalogListQuery, type CatalogListResult,
   type LabSettingsInput, type SpecimenCoding,
-  type CatalogOptions, type CatalogCategoryOption, type CatalogSpecimenOption,
+  type CatalogOptions, type CatalogCategoryOption, type CatalogSpecimenOption, type CatalogResultParamOption,
   type CatalogImportFile, type CatalogImportInput, type CatalogImportReport, type CatalogImportRefusal,
   type CatalogUnmatchedValue,
 } from './test-catalog';

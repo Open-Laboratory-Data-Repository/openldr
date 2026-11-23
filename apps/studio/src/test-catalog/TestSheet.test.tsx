@@ -6,7 +6,7 @@ import '@/i18n';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, createCatalogTest: vi.fn(), updateCatalogTest: vi.fn(), setCatalogLabSettings: vi.fn() };
+  return { ...actual, createCatalogTest: vi.fn(), updateCatalogTest: vi.fn(), setCatalogLabSettings: vi.fn(), searchTerms: vi.fn() };
 });
 
 import * as api from '@/api';
@@ -384,5 +384,116 @@ describe('TestSheet: result parameters', () => {
     fireEvent.click(screen.getByTestId('param-HGB'));
     await save();
     expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams).toEqual([]);
+  });
+});
+
+describe('TestSheet: a range unit from UCUM', () => {
+  const UCUM = 'http://unitsofmeasure.org';
+  const WITH_UCUM: api.TestCatalogOptions = {
+    ...OPTIONS,
+    resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin', units: 'g/dL' }],
+    ucum: { systemId: 'cs-ucum-seed', system: UCUM },
+  };
+  const withParam: api.CatalogTest = {
+    ...HIVVL,
+    resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null, bands: [] }],
+  };
+  const term = (code: string, display: string | null): api.Term => ({
+    system: UCUM, code, display, status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null, mappingCount: 0,
+  });
+  const bandsSaved = () => vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands ?? [];
+
+  async function clearUnit() {
+    await act(async () => { fireEvent.click(within(screen.getByTestId('band-HGB-1')).getByRole('button', { name: 'Clear' })); });
+  }
+  async function typeUnit(text: string) {
+    const box = screen.getByRole('combobox', { name: /^unit for HGB band 1/i });
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: text } });
+  }
+
+  it('starts a new range with the result field unit', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    expect(within(screen.getByTestId('band-HGB-1')).getByText('g/dL')).toBeInTheDocument();
+    await save();
+    expect(bandsSaved()[0].unit).toBe('g/dL');
+  });
+
+  it('saves the code of a UCUM unit the operator picked', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    vi.mocked(api.searchTerms).mockResolvedValue({ rows: [term('mg/dL', 'milligram per deciliter')], total: 1 });
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    await clearUnit();
+    await typeUnit('mg');
+    fireEvent.click(await screen.findByRole('option', { name: /mg\/dL/ }));
+    expect(vi.mocked(api.searchTerms).mock.calls[0][0]).toBe('cs-ucum-seed');
+    expect(screen.queryByText('Not a UCUM unit')).toBeNull();
+    await save();
+    expect(bandsSaved()[0].unit).toBe('mg/dL');
+  });
+
+  it('keeps a typed unit UCUM does not hold, and says so', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    vi.mocked(api.searchTerms).mockResolvedValue({ rows: [], total: 0 });
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    await clearUnit();
+    await typeUnit('cells');
+    // Found outside act. Awaiting this findBy inside act hung the test past its 5s limit.
+    const use = await screen.findByRole('button', { name: 'Use "cells"' });
+    await act(async () => { fireEvent.click(use); });
+    expect(await screen.findByText('Not a UCUM unit')).toBeInTheDocument();
+    await save();
+    expect(bandsSaved()[0].unit).toBe('cells');
+  });
+
+  // The picker lists UCUM's first 20 matches by code, so a one-letter code can miss the list.
+  it('does not call a short UCUM code typed by hand a non-UCUM unit', async () => {
+    vi.mocked(api.searchTerms)
+      .mockResolvedValueOnce({ rows: [term('%', 'percent')], total: 400 })
+      .mockResolvedValue({ rows: [term('%', 'percent'), term('g', 'gram')], total: 400 });
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    await clearUnit();
+    await typeUnit('g');
+    // Found outside act. Awaiting this findBy inside act hung the test past its 5s limit.
+    const use = await screen.findByRole('button', { name: 'Use "g"' });
+    await act(async () => { fireEvent.click(use); });
+    expect(vi.mocked(api.searchTerms)).toHaveBeenLastCalledWith('cs-ucum-seed', { q: 'g', limit: 500 });
+    expect(screen.queryByText('Not a UCUM unit')).toBeNull();
+  });
+
+  it('opens a saved unit that is not UCUM unchanged, and saves it as it was', async () => {
+    const saved: api.CatalogTest = { ...withParam, resultParams: [{ ...withParam.resultParams[0], bands: [
+      { name: null, low: 1, high: 2, unit: 'cells/hpf', sex: null, ageLow: null, ageHigh: null },
+    ] }] };
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(saved);
+    renderSheet({ target: { kind: 'edit', test: saved }, options: WITH_UCUM });
+    expect(within(screen.getByTestId('band-HGB-1')).getByText('cells/hpf')).toBeInTheDocument();
+    expect(screen.queryByText('Not a UCUM unit')).toBeNull();
+    await save();
+    expect(bandsSaved()[0].unit).toBe('cells/hpf');
+    expect(api.searchTerms).not.toHaveBeenCalled();
+  });
+
+  it('keeps the plain unit box when this install has no UCUM, prefilled from the result field', async () => {
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: { ...WITH_UCUM, ucum: null } });
+    await addBand('HGB');
+    expect(screen.getByRole('textbox', { name: /unit for HGB band 1/i })).toHaveValue('g/dL');
+  });
+
+  // jsdom has no layout, so this pins the classes that let the range wrap at 375px: one label and
+  // field per line below sm, and a unit box that may shrink. A browser at 375px must still confirm it.
+  it('keeps the range one field per line on a phone with the unit picker in it', async () => {
+    renderSheet({ target: { kind: 'edit', test: withParam }, options: WITH_UCUM });
+    await addBand('HGB');
+    await clearUnit();
+    const box = screen.getByRole('combobox', { name: /^unit for HGB band 1/i });
+    const grid = box.closest('.grid') as HTMLElement;
+    expect(grid.className).toMatch(/(^| )grid-cols-\[auto_minmax\(0,1fr\)\]( |$)/);
+    expect(box.closest('.min-w-0')).not.toBeNull();
   });
 });

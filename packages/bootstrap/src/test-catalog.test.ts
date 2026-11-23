@@ -895,6 +895,25 @@ describe('test catalog: result parameters on a test', () => {
     expect((await catalog.get('FBC'))?.resultParams).toEqual([HGB]);
   });
 
+  it('offers each parameter with its default unit, and null for one with none', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await db.insertInto('terminology_concepts').values({
+      system: 'urn:openldr:default_result', code: 'WBC', display: 'WBC', status: 'ACTIVE',
+      properties: JSON.stringify({ result_role: 'result' }) as never,
+    }).execute();
+    const params = (await catalog.options()).resultParams;
+    expect(params.find((p) => p.code === 'HGB')?.units).toBe('g/dL');
+    expect(params.find((p) => p.code === 'WBC')).toMatchObject({ units: null });
+  });
+
+  it('names the UCUM system migration 017 seeds, and null without it', async () => {
+    const { db, catalog } = await buildCatalog();
+    expect((await catalog.options()).ucum).toEqual({ systemId: 'cs-ucum-seed', system: 'http://unitsofmeasure.org' });
+    await db.deleteFrom('coding_systems').where('url', '=', 'http://unitsofmeasure.org').execute();
+    expect((await catalog.options()).ucum).toBeNull();
+  });
+
   it('answers an empty list for a test that names none', async () => {
     const { catalog } = await buildCatalog();
     await catalog.create({ code: 'CD4', display: 'CD4 count' });

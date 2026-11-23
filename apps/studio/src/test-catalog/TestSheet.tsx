@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { TermPicker } from '@/terminology/TermPicker';
 import {
-  createCatalogTest, setCatalogLabSettings, updateCatalogTest,
+  createCatalogTest, searchTerms, setCatalogLabSettings, updateCatalogTest,
   type CatalogLabSettingsInput, type CatalogTestResultParam, type CatalogSpecimenCoding, type CatalogTest, type CatalogTestInput,
   type CatalogAgeUnit, type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
@@ -128,6 +128,18 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
   // adding the test twice.
   const [saved, setSaved] = useState<CatalogTest | null>(null);
   const [busy, setBusy] = useState(false);
+  // Units typed in this sheet that UCUM does not hold, so the range can say so. A saved unit is not
+  // checked: it opens as it was saved (spec 3, call 3).
+  const [notUcum, setNotUcum] = useState<ReadonlySet<string>>(() => new Set());
+  // The picker shows UCUM's first 20 matches by code, so a short code such as "g" can miss the list.
+  // Ask for its exact code before saying it is not UCUM. A failed check says nothing.
+  const checkUcum = async (unit: string): Promise<void> => {
+    if (!options.ucum) return;
+    try {
+      const res = await searchTerms(options.ucum.systemId, { q: unit, limit: 500 });
+      if (!res.rows.some((r) => r.code === unit)) setNotUcum((prev) => new Set(prev).add(unit));
+    } catch { /* unknown, so no note */ }
+  };
 
   useEffect(() => {
     const test = target?.kind === 'edit' ? target.test : null;
@@ -333,7 +345,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem
                                       data-testid={`add-band-${p.code}`}
-                                      onSelect={() => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands: [...chosen.bands, EMPTY_BAND] }) })}
+                                      // A new range starts with the result field's own unit (parm_units).
+                                      onSelect={() => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands: [...chosen.bands, { ...EMPTY_BAND, unit: p.units ?? null }] }) })}
                                     >
                                       {t('testCatalog.sheet.addBand')}
                                     </DropdownMenuItem>
@@ -414,13 +427,34 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                       </Fragment>
                                     ))}
                                     {label('unit', 'testCatalog.sheet.bandUnit')}
-                                    <Input
-                                      id={id('unit')}
-                                      className="h-8"
-                                      aria-label={`unit for ${p.code} band ${n}`}
-                                      value={band.unit ?? ''}
-                                      onChange={(e) => setBand({ unit: e.target.value || null })}
-                                    />
+                                    {options.ucum ? (
+                                      <div className="flex min-w-0 flex-col gap-1">
+                                        <TermPicker
+                                          id={id('unit')}
+                                          ariaLabel={t('testCatalog.sheet.bandUnitFor', { code: p.code, n })}
+                                          systemId={options.ucum.systemId}
+                                          // UCUM has one-letter units: g, L, m.
+                                          minQueryLength={1}
+                                          value={band.unit ? { system: options.ucum.system, code: band.unit, display: null } : null}
+                                          onChange={(v) => setBand({ unit: v?.code ?? null })}
+                                          typed={{
+                                            label: (unit) => t('testCatalog.sheet.unitUseTyped', { unit }),
+                                            onUse: (unit) => { setBand({ unit }); void checkUcum(unit); },
+                                          }}
+                                        />
+                                        {band.unit && notUcum.has(band.unit) ? (
+                                          <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.notUcumUnit')}</span>
+                                        ) : null}
+                                      </div>
+                                    ) : (
+                                      <Input
+                                        id={id('unit')}
+                                        className="h-8"
+                                        aria-label={t('testCatalog.sheet.bandUnitFor', { code: p.code, n })}
+                                        value={band.unit ?? ''}
+                                        onChange={(e) => setBand({ unit: e.target.value || null })}
+                                      />
+                                    )}
                                     {label('sex', 'testCatalog.sheet.bandSex')}
                                     <Select value={band.sex ?? ANY_SEX} onValueChange={(v) => setBand({ sex: v === ANY_SEX ? null : v })}>
                                       <SelectTrigger id={id('sex')} className="h-8" aria-label={t('testCatalog.sheet.bandSexFor', { code: p.code, n })}><SelectValue /></SelectTrigger>

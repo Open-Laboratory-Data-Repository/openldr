@@ -2676,9 +2676,11 @@ export interface TestCatalogOptions {
   categories: { code: string; display: string | null }[];
   specimenTypes: { system: string; code: string; display: string | null }[];
   /** The result parameters a test may name (bench result entry). */
-  resultParams: { system: string; code: string; display: string | null }[];
+  resultParams: { system: string; code: string; display: string | null; units?: string | null }[];
   /** The loaded LOINC code system, or null when LOINC is not loaded here. */
   loinc: { systemId: string; system: string } | null;
+  /** The UCUM code system a range's unit is picked from, or null when this install has none. */
+  ucum?: { systemId: string; system: string } | null;
   /** The sexes a range may name, with labels by language, so the studio names no code. */
   sexes: CatalogSexOption[];
 }
