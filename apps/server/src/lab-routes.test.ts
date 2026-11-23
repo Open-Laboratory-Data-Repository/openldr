@@ -15,8 +15,10 @@ const ORDER: ReceptionOrder = {
   priority: 'routine',
   clinician: 'Dr K',
   note: null,
-  tests: [{ serviceRequestId: 'sr1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active' }],
+  tests: [{ serviceRequestId: 'sr1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active', rejection: null }],
   specimens: [{ id: 'sp1', type: { system: 'urn:t', code: 'BLD', display: 'Blood' }, condition: 'Good', receivedTime: '2026-11-23T08:00:00Z' }],
+  returned: null,
+  redraws: [],
 };
 const PATIENT = { id: 'p1', name: 'Ana Banda', birthDate: '1990-01-02', gender: 'female', identifiers: [{ system: 'urn:mpi', value: 'M1' }] };
 
@@ -118,8 +120,10 @@ describe('lab reception routes', () => {
           priority: 'routine',
           clinician: 'Dr K',
           note: null,
-          tests: [{ serviceRequestId: 'sr1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active' }],
+          tests: [{ serviceRequestId: 'sr1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active', rejection: null }],
           specimens: [{ id: 'sp1', type: { system: 'urn:t', code: 'BLD', display: 'Blood' }, condition: 'Good', receivedTime: '2026-11-23T08:00:00Z' }],
+          returned: null,
+          redraws: [],
         }],
       });
       expect(calls).toEqual([{ method: 'findOrders', args: ['REQ-1'] }]);

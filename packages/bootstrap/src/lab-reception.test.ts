@@ -118,8 +118,8 @@ describe('lab reception, orders', () => {
     expect(o!.facility).toBeNull();
     expect(o!.patient).toBeNull();
     expect(o!.tests).toEqual([
-      { serviceRequestId: 'old-1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active' },
-      { serviceRequestId: 'old-1', system: TEST_CATALOG_SYSTEM, code: 'GLU', display: 'Glucose', status: 'active' },
+      { serviceRequestId: 'old-1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active', rejection: null },
+      { serviceRequestId: 'old-1', system: TEST_CATALOG_SYSTEM, code: 'GLU', display: 'Glucose', status: 'active', rejection: null },
     ]);
   });
 

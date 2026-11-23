@@ -7,7 +7,8 @@ import {
 } from '@openldr/db';
 import { Patient, validateResource } from '@openldr/fhir';
 import {
-  ORDER_ORIGIN_SYSTEM, ORDER_REQUISITION_SYSTEM, facilityReference, labOrderId, labSpecimenId, orderRequester,
+  ORDER_ORIGIN_SYSTEM, ORDER_REJECTION_EXTENSION, ORDER_REQUISITION_SYSTEM, facilityReference, labOrderId, labSpecimenId,
+  labTaskId, orderKey, orderRequester,
 } from '@openldr/forms';
 import type { Operations } from '@openldr/terminology';
 import type { PatientIndex } from './patient-index';
@@ -34,7 +35,7 @@ const NAME_SEARCH_MAX_WORDS = 6;
 /** A request the desk has voided: it no longer holds the order's number for a new registration. */
 const VOIDED = 'entered-in-error';
 /** The statuses of a request no sample may be received for and no correction touches. */
-const NOT_LIVE: ReadonlySet<string> = new Set([VOIDED, 'revoked']);
+export const NOT_LIVE: ReadonlySet<string> = new Set([VOIDED, 'revoked']);
 /** The sexes a Patient may have, from the Patient schema itself (ruling 11). */
 const GENDERS: readonly string[] = Patient.shape.gender.unwrap().options;
 
@@ -50,13 +51,21 @@ export interface ReceptionOrder {
   priority: string | null;
   clinician: string | null;
   note: string | null;
-  tests: Array<{ serviceRequestId: string; system: string; code: string; display: string | null; status: string }>;
+  tests: Array<{
+    serviceRequestId: string; system: string; code: string; display: string | null; status: string;
+    /** Why the request was rejected, from its rejection extension. */
+    rejection: { code: string; display: string | null } | null;
+  }>;
   specimens: Array<{
     id: string;
     type: { system: string; code: string; display: string | null } | null;
     condition: string | null;
     receivedTime: string | null;
   }>;
+  /** The open return Task (lab slice 3, ruling 2): why the lab returned the order, who did and when. */
+  returned: { reason: { code: string; display: string | null }; by: string | null; at: string } | null;
+  /** The redraw Tasks of the order's samples and requests (ruling 7), read at their fixed ids. */
+  redraws: Array<{ taskId: string; status: 'requested' | 'completed'; focus: string; replacedBy: string | null }>;
 }
 
 export interface RegisterOrderInput {
@@ -168,19 +177,19 @@ export interface LabReceptionDeps {
 
 type Json = Record<string, unknown>;
 
-const CHANGE_KEYS: ReadonlySet<string> = new Set(['priority', 'clinician', 'note', 'patientId']);
+export const CHANGE_KEYS: ReadonlySet<string> = new Set(['priority', 'clinician', 'note', 'patientId']);
 
-function isObject(v: unknown): v is Json {
+export function isObject(v: unknown): v is Json {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-function text(v: unknown): string | null {
+export function text(v: unknown): string | null {
   if (typeof v !== 'string') return null;
   const t = v.trim();
   return t ? t : null;
 }
 
-function invalid(message: string): ReceptionError {
+export function invalid(message: string): ReceptionError {
   return new ReceptionError('invalid', message);
 }
 
@@ -207,17 +216,19 @@ export function dateInZone(at: Date, zone: string | null | undefined): string {
   return at.toISOString().slice(0, 10);
 }
 
-function statusOf(sr: Json): string {
+export function statusOf(sr: Json): string {
   return typeof sr['status'] === 'string' ? sr['status'] : 'unknown';
 }
 
-function isLive(sr: Json): boolean {
+export function isLive(sr: Json): boolean {
   return !NOT_LIVE.has(statusOf(sr));
 }
 
 /** The Provenance of a desk write: what it wrote, how, and who did it. Every desk save carries one,
  *  saved in the same call, so all of them have this one shape. */
-function deskProvenance(targets: string[], activity: 'CREATE' | 'UPDATE', actor: string, recorded: string): Json {
+export function deskProvenance(
+  targets: string[], activity: 'CREATE' | 'UPDATE', actor: string, recorded: string, reason?: string,
+): Json {
   return {
     resourceType: 'Provenance',
     id: randomUUID(),
@@ -225,6 +236,7 @@ function deskProvenance(targets: string[], activity: 'CREATE' | 'UPDATE', actor:
     recorded,
     activity: { coding: [{ system: DATA_OPERATION, code: activity }] },
     agent: [{ who: { display: actor } }],
+    ...(reason ? { reason: [{ text: reason }] } : {}),
   };
 }
 
@@ -246,7 +258,7 @@ function patientIdOf(sr: Json): string | null {
   return ref && ref.startsWith('Patient/') ? ref.slice('Patient/'.length) : null;
 }
 
-function isDeskOrder(sr: Json): boolean {
+export function isDeskOrder(sr: Json): boolean {
   const meta = sr['meta'];
   const tags = isObject(meta) && Array.isArray(meta['tag']) ? meta['tag'] : [];
   return tags.some((t) => isObject(t) && t['system'] === ORDER_ORIGIN_SYSTEM && t['code'] === LAB_DESK_ORIGIN);
@@ -262,8 +274,18 @@ function noteOf(sr: Json): string | null {
  * (ruling 2), so each catalog coding is a test of its own. A request with no catalog coding (one sent
  * by sync or ingest, coded by its source) counts its first coding as its test.
  */
+/** The rejection a request carries in its rejection extension, the shape the warehouse reads. */
+function rejectionOf(sr: Json): { code: string; display: string | null } | null {
+  const ext = (Array.isArray(sr['extension']) ? sr['extension'] : [])
+    .find((e): e is Json => isObject(e) && e['url'] === ORDER_REJECTION_EXTENSION);
+  const parts = ext && Array.isArray(ext['extension']) ? ext['extension'].filter(isObject) : [];
+  const code = text(parts.find((p) => p['url'] === 'code')?.['valueCode']);
+  return code ? { code, display: text(parts.find((p) => p['url'] === 'reason')?.['valueString']) } : null;
+}
+
 function testsOf(sr: Json): ReceptionOrder['tests'] {
   const id = String(sr['id']);
+  const rejection = rejectionOf(sr);
   const status = typeof sr['status'] === 'string' ? sr['status'] : 'unknown';
   const code = sr['code'];
   const codings = (isObject(code) && Array.isArray(code['coding']) ? code['coding'] : [])
@@ -276,6 +298,7 @@ function testsOf(sr: Json): ReceptionOrder['tests'] {
     code: c['code'] as string,
     display: text(c['display']),
     status,
+    rejection,
   }));
 }
 
@@ -318,7 +341,30 @@ export async function orderSpecimenTypes(
   return [...types.values()];
 }
 
+/** The id of an order's return Task (lab slice 3, ruling 2): one per order, not per test. */
+export function returnTaskId(facility: string | null, requisition: string): string {
+  return labTaskId('correct-request', orderKey(facility, requisition));
+}
+
+/** The id of a redraw Task (ruling 7). The focus is a Specimen id or a ServiceRequest id. */
+export function redrawTaskId(focusId: string): string {
+  return labTaskId('recollect-sample', focusId);
+}
+
+/** The coding a Task's statusReason holds, as the order panel shows it. */
+function reasonOf(task: Json): { code: string; display: string | null } | null {
+  const reason = task['statusReason'];
+  const coding = isObject(reason) && Array.isArray(reason['coding']) && isObject(reason['coding'][0]) ? reason['coding'][0] : null;
+  const code = coding ? text(coding['code']) : null;
+  return code ? { code, display: text(coding!['display']) } : null;
+}
+
 export function createLabReception(deps: LabReceptionDeps): LabReception {
+  return createReceptionCore(deps).reception;
+}
+
+/** Reception and the helpers the rejection module (lab-rejection.ts) shares with it. */
+export function createReceptionCore(deps: LabReceptionDeps) {
   const { db, fhirStore, catalog } = deps;
   const now = deps.now ?? (() => new Date());
 
@@ -364,6 +410,7 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
       const subject = first['subject'] as Json;
       patient = { id: pid, display: text(subject['display']) ?? patientName(await patientOf(pid)) ?? pid };
     }
+    const specimens = await specimensOf(facility, requisition, requests);
     return {
       requisition,
       facility: facility ? { code: facility, display: named.code === facility ? named.display : null } : null,
@@ -373,8 +420,51 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
       clinician: requesterPractitionerDisplay(first),
       note: noteOf(first),
       tests: requests.flatMap(testsOf),
-      specimens: await specimensOf(facility, requisition, requests),
+      specimens,
+      returned: await returnedOf(facility, requisition),
+      redraws: await redrawsOf([
+        ...specimens.map((s) => `Specimen/${s.id}`),
+        ...requests.map((r) => `ServiceRequest/${String(r['id'])}`),
+      ]),
     };
+  }
+
+  /** The person named by the last Provenance a Task links in relevantHistory: a read by id, not a scan. */
+  async function taskActor(task: Json): Promise<string | null> {
+    const history = Array.isArray(task['relevantHistory']) ? task['relevantHistory'] : [];
+    const last = history[history.length - 1];
+    const ref = isObject(last) ? text(last['reference']) : null;
+    if (!ref || !ref.startsWith('Provenance/')) return null;
+    const prov = (await fhirStore.get('Provenance', ref.slice('Provenance/'.length))) as Json | null;
+    const agent = prov && Array.isArray(prov['agent']) && isObject(prov['agent'][0]) ? prov['agent'][0] : null;
+    return agent && isObject(agent['who']) ? text(agent['who']['display']) : null;
+  }
+
+  /** The order's return Task while it is open (status requested), else null. */
+  async function returnedOf(facility: string | null, requisition: string): Promise<ReceptionOrder['returned']> {
+    const task = (await fhirStore.get('Task', returnTaskId(facility, requisition))) as Json | null;
+    if (!task || task['status'] !== 'requested') return null;
+    return {
+      reason: reasonOf(task) ?? { code: 'unknown', display: null },
+      by: await taskActor(task),
+      at: text(task['authoredOn']) ?? text(task['lastModified']) ?? '',
+    };
+  }
+
+  /** The redraw Tasks for these focus references, each read at its fixed id. A cancelled one is not shown. */
+  async function redrawsOf(focuses: string[]): Promise<ReceptionOrder['redraws']> {
+    const out: ReceptionOrder['redraws'] = [];
+    for (const focus of [...new Set(focuses)]) {
+      const taskId = redrawTaskId(focus.slice(focus.indexOf('/') + 1));
+      const task = (await fhirStore.get('Task', taskId)) as Json | null;
+      const status = task?.['status'];
+      if (status !== 'requested' && status !== 'completed') continue;
+      // The redraw order a completed Task names in its output (linkRedraw), by its requisition number.
+      const outputs = Array.isArray(task!['output']) ? task!['output'].filter(isObject) : [];
+      const ref = outputs.map((o) => o['valueReference']).find(isObject);
+      out.push({ taskId, status, focus, replacedBy: status === 'completed' && ref ? text(ref['display']) : null });
+    }
+    return out;
   }
 
   /** The request ids of each facility's order under this number, facilities in code order. */
@@ -558,6 +648,10 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
 
     const group = (await groups(requisition)).find((g) => g.facility === facility);
     if (!group) throw new ReceptionError('not-found', `No order ${requisition}${facility ? ` from ${facility}` : ''} was found.`);
+    // A returned order is corrected by its site, then marked corrected (lab slice 3, ruling 8).
+    if (await returnedOf(facility, requisition)) {
+      throw new ReceptionError('conflict', `Order ${requisition} was returned to its site. Mark it corrected instead.`);
+    }
     const subject = changes.patientId !== undefined ? await subjectFor(String(changes.patientId)) : null;
     const requests: Json[] = [];
     let any = false;
@@ -856,5 +950,11 @@ export function createLabReception(deps: LabReceptionDeps): LabReception {
     return after;
   }
 
-  return { findOrders, registerOrder, correctOrder, cancelOrder, searchPatients, registerPatient, receiveSample, sampleChoices };
+  const reception: LabReception = {
+    findOrders, registerOrder, correctOrder, cancelOrder, searchPatients, registerPatient, receiveSample, sampleChoices,
+  };
+  return {
+    reception,
+    helpers: { findOne, orderFor, correctAll, liveTests, specimensOf, subjectFor, corrected, returnedOf },
+  };
 }

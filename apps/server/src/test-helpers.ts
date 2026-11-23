@@ -559,6 +559,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     testCatalog: {} as never,
     labSections: {} as never,
     labReception: {} as never,
+    labRejection: {} as never,
     testMapping: {} as never,
     resultFields: {} as never,
     patientIdentifierSystems: {} as never,

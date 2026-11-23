@@ -18,6 +18,7 @@ import { createUserStore, type UserStore, createUserProfileStore, type UserProfi
 import { formAccess, type FormAccessCheck } from './form-access';
 import { createFormEntriesService, type FormEntriesService } from './form-entries';
 import { createLabReception, type LabReception } from './lab-reception';
+import { createLabRejection, type LabRejection } from './lab-rejection';
 import { dashboardAccess, type DashboardAccessCheck } from './dashboard-access';
 import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
@@ -614,6 +615,9 @@ export interface AppContext {
   /** The lab desk's orders: find one by its requisition number, register one, correct a typo
    *  (lab slices 1b and 2). The reception routes call it. */
   labReception: LabReception;
+  /** Return a request to its site, reject a sample or a test, and link a redraw (lab slice 3).
+   *  The rejection routes call it. */
+  labRejection: LabRejection;
   /** Lab test codes mapped to catalog tests, and the warehouse copy test_map. */
   testMapping: TestMapping;
   /** The result dictionary and its LOINC links (result field mapping spec 4.5). */
@@ -1256,6 +1260,12 @@ const reporting: ReportingApi = {
     db: termDb, externalDb, fhirStore: canonicalFhirStore, catalog: testCatalog, ops: terminology.ops, patientIndex, logger,
     // LAZY: labIdentity is built further down this function. The arrow runs only on a registration.
     labTimeZone: async () => (await labIdentity.all())['lab.timezone'],
+  });
+  const labRejection = createLabRejection({
+    db: termDb, externalDb, fhirStore: canonicalFhirStore, catalog: testCatalog, ops: terminology.ops, patientIndex, logger,
+    labTimeZone: async () => (await labIdentity.all())['lab.timezone'],
+    // LAZY, as above. The lab's name from Settings, Laboratory; the Tasks name it as their requester.
+    labName: async () => (await labIdentity.all())['lab.name'],
   });
   const patientDuplicates = createPatientDuplicates({ internalDb: termDb, externalDb, index: patientIndex, systems: patientIdentifierSystems });
 
@@ -2253,6 +2263,7 @@ const reporting: ReportingApi = {
     testCatalog,
     labSections,
     labReception,
+    labRejection,
     testMapping,
     resultFields,
     patientIdentifierSystems,
@@ -2355,6 +2366,7 @@ export * from './job-continue';
 export * from './form-access';
 export * from './form-entries';
 export * from './lab-reception';
+export * from './lab-rejection';
 export * from './dashboard-access';
 export * from './data-scope';
 export { MAX_SELF_RESUMES } from './job-interruptions';
