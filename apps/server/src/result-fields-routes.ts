@@ -12,6 +12,11 @@ const MANAGE = { preHandler: requireCapability('terminology.manage') };
 const IMPORT_STEP = { ...MANAGE, bodyLimit: TEST_MAPPING_IMPORT_MAX_BYTES + 1024 };
 
 const linkBody = z.object({ loinc: z.string().min(1) });
+const createBody = z.object({
+  code: z.string().max(64).nullable().optional(),
+  display: z.string().min(1).max(500),
+  units: z.string().max(64).nullable().optional(),
+});
 const fromLoincBody = z.object({ codes: z.array(z.string().min(1)).min(1).max(200), panel: z.boolean().optional() });
 
 export function registerResultFieldsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
@@ -48,6 +53,20 @@ export function registerResultFieldsRoutes(app: FastifyInstance<any, any, any, a
         before: { loinc: change.before }, after: { loinc: null },
       });
       return reply.send(change);
+    } catch (err) { return replyMappingError(err, reply); }
+  });
+
+  // One result field added by hand, from the test sheet's Add field (test catalog hints spec, task 5).
+  app.post('/api/test-catalog/result-fields', MANAGE, async (req, reply) => {
+    const parsed = createBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'display is required; code and units are optional text' });
+    try {
+      const field = await ctx.resultFields.create(parsed.data);
+      await recordAudit(ctx, req, {
+        action: 'result_field.create', entityType: 'result_field', entityId: field.code,
+        before: null, after: { display: field.display, units: field.units },
+      });
+      return reply.code(201).send(field);
     } catch (err) { return replyMappingError(err, reply); }
   });
 

@@ -56,7 +56,7 @@ import {
 } from './test-mapping';
 import {
   runResultFieldsList, runResultFieldsLink, runResultFieldsUnlink, runResultFieldsExport, runResultFieldsImport,
-  type ResultFieldsListOpts,
+  runResultFieldsAdd, type ResultFieldsAddOpts, type ResultFieldsListOpts,
 } from './result-fields';
 import { runLoincHints, runResultFieldsFromLoinc } from './loinc-hints';
 import {
@@ -793,6 +793,13 @@ export function buildProgram(): Command {
     .option('--force', 'confirm the removal', false)
     .option('--json', 'emit JSON', false)
     .action(async (code: string, opts: { force: boolean; json: boolean }) => { process.exitCode = await runResultFieldsUnlink(code, opts); });
+  resultFields.command('add')
+    .description('Add one result field by hand. Without --code, the code is made from the name (HAEMOGLOBIN_A1C for "Haemoglobin A1c").')
+    .requiredOption('--display <text>', 'the field\'s name')
+    .option('--code <code>', 'the field\'s code: letters, digits, dot, dash or underscore, up to 64 characters')
+    .option('--unit <ucum>', 'the field\'s unit, as a UCUM code')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: ResultFieldsAddOpts) => { process.exitCode = await runResultFieldsAdd(opts); });
   resultFields.command('from-loinc <code...>')
     .description('Make result fields from LOINC codes, or with --panel from each panel\'s members. Fields and answer sets already there are used as they are.')
     .option('--panel', 'treat each code as a panel and make a field for each member test', false)

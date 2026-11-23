@@ -2873,6 +2873,10 @@ export const linkResultField = (code: string, loinc: string): Promise<ResultFiel
   authFetch(resultFieldLoincUrl(code), jbody({ loinc }, 'PUT')).then((r) => okJson<ResultFieldLinkChange>(r, 'link LOINC'));
 export const unlinkResultField = (code: string): Promise<ResultFieldLinkChange> =>
   authFetch(resultFieldLoincUrl(code), { method: 'DELETE' }).then((r) => okJson<ResultFieldLinkChange>(r, 'clear LOINC link'));
+/** A field added by hand (POST /api/test-catalog/result-fields), with the dictionary's system. */
+export interface CreatedResultField extends ResultField { system: string }
+export const createResultField = (i: { code?: string | null; display: string; units?: string | null }): Promise<CreatedResultField> =>
+  authFetch('/api/test-catalog/result-fields', jbody(i, 'POST')).then((r) => okJson<CreatedResultField>(r, 'add result field'));
 export const downloadResultFieldsCsv = (): Promise<void> =>
   downloadCsv('/api/test-catalog/result-fields/export', 'result-fields.csv', 'export result fields');
 export const previewResultFieldsImport = (file: File): Promise<ImportReportLike> =>

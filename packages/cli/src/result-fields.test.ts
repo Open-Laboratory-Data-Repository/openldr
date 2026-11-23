@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const resultFields = { list: vi.fn(), link: vi.fn(), unlink: vi.fn(), exportCsv: vi.fn(), importPreview: vi.fn(), importApply: vi.fn() };
+const resultFields = { list: vi.fn(), link: vi.fn(), unlink: vi.fn(), exportCsv: vi.fn(), importPreview: vi.fn(), importApply: vi.fn(), create: vi.fn() };
 const audit: unknown[] = [];
 vi.mock('@openldr/config', () => ({ loadConfig: () => ({}) }));
 vi.mock('@openldr/bootstrap', async (orig) => {
@@ -15,7 +15,7 @@ vi.mock('@openldr/bootstrap', async (orig) => {
   };
 });
 
-import { runResultFieldsImport, runResultFieldsLink, runResultFieldsList, runResultFieldsUnlink } from './result-fields';
+import { runResultFieldsAdd, runResultFieldsImport, runResultFieldsLink, runResultFieldsList, runResultFieldsUnlink } from './result-fields';
 
 function capture() {
   const out: string[] = [];
@@ -66,5 +66,22 @@ describe('openldr test-catalog result-fields', () => {
     const io = capture();
     expect(await runResultFieldsImport(file, { apply: false, force: false, json: false })).toBe(0);
     expect(io.out()).toContain('would link 1 new, change 0, leave 0 unchanged, refuse 0');
+  });
+
+  it('add passes the name, code and unit, prints the field and audits through the CLI actor', async () => {
+    resultFields.create.mockResolvedValue({ code: 'HAEMOGLOBIN_A1C', display: 'Haemoglobin A1c', role: 'result', units: 'mmol/mol', loinc: null });
+    const io = capture();
+    expect(await runResultFieldsAdd({ display: 'Haemoglobin A1c', unit: 'mmol/mol', json: false })).toBe(0);
+    expect(resultFields.create).toHaveBeenCalledWith({ code: null, display: 'Haemoglobin A1c', units: 'mmol/mol' });
+    expect(io.out()).toBe('Added result field HAEMOGLOBIN_A1C  Haemoglobin A1c  mmol/mol.\n');
+    expect(audit).toEqual([expect.objectContaining({ action: 'result_field.create', entityId: 'HAEMOGLOBIN_A1C', before: null })]);
+  });
+
+  it('add reports a taken code, exits 1 and audits nothing', async () => {
+    resultFields.create.mockRejectedValue(new Error('a result field with code HB already exists. Give another code, or tick HB on the test.'));
+    const io = capture();
+    expect(await runResultFieldsAdd({ display: 'Haemoglobin', code: 'HB', json: false })).toBe(1);
+    expect(io.err()).toContain('test-catalog result-fields add failed: a result field with code HB already exists.');
+    expect(audit).toEqual([]);
   });
 });

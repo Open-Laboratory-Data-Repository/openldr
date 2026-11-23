@@ -277,3 +277,12 @@ describe('resultFieldsFromLoinc', () => {
     expect(links).toEqual([]);
   });
 });
+
+describe('a result field added by hand', () => {
+  it('is offered to the test picker at once', async () => {
+    const { resultFields, ops } = await build({ loinc: false });
+    await resultFields.create({ display: 'Haemoglobin A1c', units: 'mmol/mol' });
+    const offered = await ops.expand(RESULT_PARAM_VALUE_SET, { count: 100 });
+    expect(offered.expansion?.contains?.map((c) => c.code)).toContain('HAEMOGLOBIN_A1C');
+  });
+});

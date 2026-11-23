@@ -20,6 +20,7 @@ import {
   type CatalogAgeUnit, type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
 import { criteriaLabel, sexLabel, type RangeCopy } from '@/forms-runtime/rangeLabel';
+import { AddResultFieldSheet } from './AddResultFieldSheet';
 
 // Test catalog S2 (spec 4.3): add or edit one test, and this lab's own settings for it. Copies
 // forms-builder/FieldEditorSheet.tsx (AGENTS.md section 5).
@@ -63,6 +64,16 @@ function toggleParam(list: CatalogTestResultParam[], option: { system: string; c
   if (!on) return list.filter((p) => p.code !== option.code);
   if (list.some((p) => p.code === option.code)) return list;
   return [...list, { system: option.system, code: option.code, resultType: 'numeric', valueSetUrl: null, bands: [] }];
+}
+
+type ParamOption = TestCatalogOptions['resultParams'][number];
+
+/** Put these parameters on the test in order. One already ticked is kept as it is, so its type, value
+ *  set and ranges are never replaced. */
+function addParams(list: CatalogTestResultParam[], params: CatalogTestResultParam[]): CatalogTestResultParam[] {
+  const next = [...list];
+  for (const p of params) if (!next.some((k) => k.code === p.code)) next.push(p);
+  return next;
 }
 
 function setParam(list: CatalogTestResultParam[], code: string, next: CatalogTestResultParam): CatalogTestResultParam[] {
@@ -113,12 +124,14 @@ function sameLab(a: CatalogLabSettingsInput, b: CatalogTest['lab']): boolean {
   return a.enabled === b.enabled && a.localDisplay === b.localDisplay && key(a.specimenTypes) === key(b.specimenTypes);
 }
 
-export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
+export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOptionsChanged }: {
   target: TestSheetTarget | null;
   options: TestCatalogOptions;
   ownedHere: boolean;
   onClose: () => void;
   onSaved: () => void;
+  /** A result field was added to the dictionary from this sheet, so the choices should be read again. */
+  onOptionsChanged?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   // The words an unnamed range is shown by, the same the bench sheet uses (FormCapture.tsx).
@@ -134,6 +147,9 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
   // adding the test twice.
   const [saved, setSaved] = useState<CatalogTest | null>(null);
   const [busy, setBusy] = useState(false);
+  // Result fields added from this sheet, shown until the page reads the choices again.
+  const [addedParams, setAddedParams] = useState<ParamOption[]>([]);
+  const [addingField, setAddingField] = useState(false);
   // Units typed in this sheet that UCUM does not hold, so the range can say so. A saved unit is not
   // checked: it opens as it was saved (spec 3, call 3).
   const [notUcum, setNotUcum] = useState<ReadonlySet<string>>(() => new Set());
@@ -156,9 +172,20 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
     const test = target?.kind === 'edit' ? target.test : null;
     setDraft(draftFrom(test));
     setSaved(test);
+    setAddedParams([]);
   }, [target]);
 
   const isNew = saved === null;
+  const paramOptions: ParamOption[] = [
+    ...options.resultParams,
+    ...addedParams.filter((a) => !options.resultParams.some((o) => o.code === a.code)),
+  ];
+  /** Show these new dictionary fields and tick their parameters, keeping any already ticked as they are. */
+  const takeParams = (fields: ParamOption[], params: CatalogTestResultParam[]): void => {
+    setAddedParams((prev) => [...prev, ...fields.filter((f) => !prev.some((p) => p.code === f.code))]);
+    setDraft((d) => ({ ...d, resultParams: addParams(d.resultParams, params) }));
+    onOptionsChanged?.();
+  };
   // The lab chooses from the catalog list being edited here, or from central's list at a lab.
   const offered = ownedHere ? draft.specimens : saved?.specimenTypes ?? [];
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -313,10 +340,29 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                     keeps the label-left layout the rest of the sheet uses. */}
                 <Label className="col-span-2 self-start whitespace-nowrap pt-1.5 sm:col-span-1">{t('testCatalog.sheet.resultParams')}</Label>
                 <div className="col-span-2 flex flex-col gap-2 sm:col-span-1">
-                  {options.resultParams.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.noResultParams')}</span>
-                  ) : null}
-                  {options.resultParams.map((p) => {
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1 pt-1.5">
+                      {paramOptions.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.noResultParams')}</span>
+                      ) : null}
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                          data-testid="result-params-menu" aria-label={t('testCatalog.sheet.resultParamsActions')}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem data-testid="add-field" onSelect={() => setAddingField(true)}>
+                          {t('testCatalog.sheet.addField')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  {paramOptions.map((p) => {
                     const chosen = draft.resultParams.find((r) => r.code === p.code);
                     return (
                       <div key={`${p.system}|${p.code}`} className="flex flex-col gap-1.5">
@@ -614,6 +660,16 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
             <Input id="test-local-name" value={draft.localDisplay} onChange={(e) => set({ localDisplay: e.target.value })} />
           </div>
         </section>
+        {/* Inside the content, so Radix stacks the second sheet over this one. */}
+        <AddResultFieldSheet
+        open={addingField}
+        ucum={options.ucum ?? null}
+        onClose={() => setAddingField(false)}
+        onAdded={(field, param) => {
+          takeParams([{ system: field.system, code: field.code, display: field.display, units: field.units }], [param]);
+          toast.success(t('testCatalog.sheet.fieldAdded', { code: field.code }));
+        }}
+      />
       </SheetContent>
     </Sheet>
   );

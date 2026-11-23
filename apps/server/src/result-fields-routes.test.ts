@@ -28,6 +28,7 @@ function fakeCtx(over: Record<string, Impl> = {}) {
     exportCsv: spy('exportCsv', over.exportCsv ?? (async () => 'code,display,role,units,loinc\n')),
     importPreview: spy('importPreview', over.importPreview ?? (async () => REPORT)),
     importApply: spy('importApply', over.importApply ?? (async () => REPORT)),
+    create: spy('create', over.create ?? (async () => ({ system: 'urn:openldr:default_result', code: 'HBA1C', display: 'Haemoglobin A1c', role: 'result', units: 'mmol/mol', loinc: null }))),
   };
   const loincHints = {
     resultFieldsFromLoinc: spy('resultFieldsFromLoinc', over.resultFieldsFromLoinc ?? (async () => FROM_LOINC)),
@@ -123,5 +124,30 @@ describe('result fields routes', () => {
     const central = fakeCtx({ resultFieldsFromLoinc: async () => { throw new TestCatalogError('no', 'central-managed'); } });
     const res = await appWith(central.ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: ['2093-3'] } });
     expect([res.statusCode, res.json().kind, central.audit]).toEqual([409, 'central-managed', []]);
+  });
+
+  it('POST adds a field by hand with 201, passes code, name and unit, and audits it', async () => {
+    const { ctx, calls, audit } = fakeCtx();
+    const res = await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog/result-fields', payload: { code: 'HBA1C', display: 'Haemoglobin A1c', units: 'mmol/mol' },
+    });
+    expect([res.statusCode, res.json()]).toEqual([201, { system: 'urn:openldr:default_result', code: 'HBA1C', display: 'Haemoglobin A1c', role: 'result', units: 'mmol/mol', loinc: null }]);
+    expect(calls).toEqual([{ method: 'create', args: [{ code: 'HBA1C', display: 'Haemoglobin A1c', units: 'mmol/mol' }] }]);
+    expect(audit).toEqual([expect.objectContaining({
+      action: 'result_field.create', entityType: 'result_field', entityId: 'HBA1C', before: null,
+      after: { display: 'Haemoglobin A1c', units: 'mmol/mol' },
+    })]);
+  });
+
+  it('POST add refuses no name before the service, a viewer with 403, and a taken code with 409', async () => {
+    const { ctx, calls } = fakeCtx();
+    const bad = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields', payload: { code: 'X' } });
+    expect(bad.statusCode).toBe(400);
+    expect(calls).toEqual([]);
+    const viewer = await appWith(ctx, ['terminology.view']).inject({ method: 'POST', url: '/api/test-catalog/result-fields', payload: { display: 'X' } });
+    expect(viewer.statusCode).toBe(403);
+    const taken = fakeCtx({ create: async () => { throw new TestCatalogError('a result field with code HB already exists.', 'conflict'); } });
+    const res = await appWith(taken.ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields', payload: { display: 'HB' } });
+    expect([res.statusCode, res.json(), taken.audit]).toEqual([409, { error: 'a result field with code HB already exists.', kind: 'conflict' }, []]);
   });
 });
