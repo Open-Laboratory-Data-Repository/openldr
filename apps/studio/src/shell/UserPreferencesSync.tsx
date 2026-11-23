@@ -75,24 +75,25 @@ export function UserPreferencesSync() {
   return null;
 }
 
+/** The pages of a lab desk role, in the order they are preferred. A desk user lands on theirs, not
+ *  on a page every user sees (Terminology), which the desk cannot use. Reception is shown only to a
+ *  user who holds lab.receive (its NAV caps), so a user who holds it lands there. */
+const DESK_PAGES: readonly string[] = ['/reception'];
+
+/** The first page for a user who cannot open the Dashboard: the first desk page in their sidebar,
+ *  else their first sidebar page. */
+function firstPage(shown: Array<{ to: string }>): string | undefined {
+  return DESK_PAGES.find((p) => shown.some((n) => n.to === p))
+    ?? shown.find((n) => n.to !== '/')?.to;
+}
+
 /**
  * Wraps the `/` route. The first time the app lands on `/`, it sends the user to their saved first
  * page instead, if that page is in their sidebar. Every later visit to `/` shows the children.
  * A user who cannot open the Dashboard is sent on every visit: to their saved first page, else the
- * first page in their sidebar. `/` is Access denied for them (demo.4 item 6).
+ * first page in their sidebar (Reception first, for a user who holds lab.receive). `/` is Access
+ * denied for them (demo.4 item 6).
  */
-/** The pages of a lab desk role. A user whose capability-gated pages are only these lands there,
- *  not on a page every user sees (Terminology), which the desk cannot use. */
-const DESK_PAGES: ReadonlySet<string> = new Set(['/reception']);
-
-/** The first page for a user who cannot open the Dashboard: their first sidebar page, unless every
- *  page their capabilities open is a desk page, and then the first of those. */
-function firstPage(shown: Array<{ to: string; caps?: string[] }>): string | undefined {
-  const gated = shown.filter((n) => n.to !== '/' && n.caps);
-  if (gated.length > 0 && gated.every((n) => DESK_PAGES.has(n.to))) return gated[0]!.to;
-  return shown.find((n) => n.to !== '/')?.to;
-}
-
 export function StartPageGate({ children }: { children: ReactNode }) {
   const { user, hasCapability } = useAuth();
   const { loaded: prefsLoaded, prefs } = useUserPreferences();

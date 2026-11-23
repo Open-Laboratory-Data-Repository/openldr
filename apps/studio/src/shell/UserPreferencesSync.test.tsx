@@ -21,7 +21,8 @@ import { ThemeProvider } from './ThemeProvider';
 import { useTheme } from './useTheme';
 import { useSidebar } from './useSidebar';
 import { StartPageGate, UserPreferencesSync } from './UserPreferencesSync';
-import { AppShell } from './AppShell';
+import { AppShell, NAV } from './AppShell';
+import { SYSTEM_ROLES } from '@openldr/rbac';
 import { loadUserPreferences } from './userPreferences';
 import { noteEntryPath, resetUserPreferencesForTest, startPageUsed } from './userPreferences';
 
@@ -118,11 +119,11 @@ describe('first page', () => {
     expect(screen.queryByTestId('terminology')).toBeNull();
   });
 
-  it('keeps the first sidebar page for a user who holds lab.receive and other pages', async () => {
+  it('sends a user who holds lab.receive and other pages to Reception', async () => {
     caps = ['lab.receive', 'query.run'];
     (api.getMyPreferences as any).mockResolvedValue({});
     app('/');
-    expect(await screen.findByTestId('query')).toBeTruthy();
+    expect(await screen.findByTestId('reception')).toBeTruthy();
   });
 
   it('keeps Terminology first for a user with no gated page', async () => {
@@ -144,6 +145,57 @@ describe('first page', () => {
     app('/');
     expect(screen.getByTestId('dashboard')).toBeTruthy();
     expect(api.getMyPreferences).not.toHaveBeenCalled();
+  });
+});
+
+// Built from the real sidebar list and the real role presets, so a page every user sees
+// (Terminology, Forms, Docs) is in the menu, as it is on an install.
+function presetCaps(slug: string): string[] {
+  const role = SYSTEM_ROLES.find((r) => r.slug === slug);
+  if (!role) throw new Error(`no preset ${slug}`);
+  return role.capabilities;
+}
+
+function appWithEveryPage() {
+  return render(
+    <ThemeProvider>
+      <MemoryRouter initialEntries={['/']}>
+        <UserPreferencesSync />
+        <Routes>
+          <Route path="/" element={<StartPageGate><div data-testid="page-/">dashboard</div></StartPageGate>} />
+          {NAV.filter((n) => n.to !== '/').map((n) => (
+            <Route key={n.to} path={n.to} element={<div data-testid={`page-${n.to}`}>{n.to}</div>} />
+          ))}
+        </Routes>
+      </MemoryRouter>
+    </ThemeProvider>,
+  );
+}
+
+/** The page the app settled on: the gate shows `page-/` only once it has decided not to redirect. */
+async function landedPage(): Promise<string | null> {
+  const el = await screen.findByTestId(/^page-/);
+  return el.getAttribute('data-testid')!.slice('page-'.length);
+}
+
+describe('first page for each preset role, with the real sidebar', () => {
+  it.each([
+    ['reception', '/reception'],
+    ['lab_manager', '/'],
+    ['lab_admin', '/'],
+    ['lab_technician', '/terminology'],
+  ])('sends %s to %s when nothing is saved', async (slug, page) => {
+    caps = presetCaps(slug);
+    (api.getMyPreferences as any).mockResolvedValue({});
+    appWithEveryPage();
+    expect(await landedPage()).toBe(page);
+  });
+
+  it("keeps a reception user's saved first page", async () => {
+    caps = presetCaps('reception');
+    (api.getMyPreferences as any).mockResolvedValue({ startPage: '/patients' });
+    appWithEveryPage();
+    expect(await landedPage()).toBe('/patients');
   });
 });
 
