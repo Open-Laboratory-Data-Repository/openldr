@@ -6,6 +6,54 @@
       "version": null,
       "entries": [
         {
+          "hash": "17b4726c8",
+          "type": "fix",
+          "scope": "lab",
+          "title": "A received sample links only the tests that take its type"
+        },
+        {
+          "hash": "6ec13882d",
+          "type": "fix",
+          "scope": "lab",
+          "title": "Keep the return Task open while a test stays on hold, refuse a rejected sample's receipt"
+        },
+        {
+          "hash": "095d6df36",
+          "type": "fix",
+          "scope": "studio",
+          "title": "No Reject test on a shared request; a failed sample type read is an error"
+        },
+        {
+          "hash": "13e0144f4",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Return, reject and redraw at reception"
+        },
+        {
+          "hash": "a0b3c6410",
+          "type": "feat",
+          "scope": "lab",
+          "title": "Rejection routes"
+        },
+        {
+          "hash": "84136f72b",
+          "type": "fix",
+          "scope": "lab",
+          "title": "Each redraw Task names its own new request; keep shared helpers off the package root"
+        },
+        {
+          "hash": "9b32831f6",
+          "type": "feat",
+          "scope": "lab",
+          "title": "Return a request, reject a sample or test, link a redraw"
+        },
+        {
+          "hash": "f416fd1b5",
+          "type": "feat",
+          "scope": "lab",
+          "title": "Task codes, technician can reject, order form drops rejection"
+        },
+        {
           "hash": "bdc425790",
           "type": "fix",
           "scope": "studio",
