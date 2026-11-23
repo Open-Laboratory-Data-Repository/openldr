@@ -13,18 +13,22 @@ import {
 import type { Operations } from '@openldr/terminology';
 import type { PatientIndex } from './patient-index';
 import { TEST_CATALOG_SYSTEM, type TestCatalog } from './test-catalog';
+import {
+  CHANGE_KEYS, LAB_DESK_ORIGIN, NOT_LIVE, ReceptionError, VOIDED, deskProvenance, invalid, isDeskOrder, isLive, isObject,
+  statusOf, text,
+} from './lab-shared';
+
+// The package root exports these two from here, as before lab slice 3 moved them to lab-shared.ts.
+export { LAB_DESK_ORIGIN, ReceptionError };
 
 // The lab desk's orders (lab module slices 1b and 2, spec 5.2 and 5.3): find an order by its
 // requisition number whatever saved it, register one at the desk, and correct a typo on one.
 // It also finds and registers patients and receives samples. The routes and the reception page call this.
 
-/** The tag code that says an order was registered at the lab's desk (ruling 14). */
-export const LAB_DESK_ORIGIN = 'lab-desk';
 /** Says a Patient's birth date was worked out from an age, as 1 January of that year (ruling 10). */
 export const BIRTHDATE_ESTIMATED_EXTENSION = 'urn:openldr:ext:birthdate-estimated';
 /** The sample conditions a lab may record. Must equal SAMPLE_CONDITION_VALUE_SET in internal migration 137. */
 export const SAMPLE_CONDITION_VALUE_SET = 'urn:openldr:valueset:sample-condition';
-const DATA_OPERATION = 'http://terminology.hl7.org/CodeSystem/v3-DataOperation';
 /** The oldest age a registration takes. */
 const MAX_AGE_YEARS = 130;
 /** The most patients one search shows. A strong match finds one or two. */
@@ -32,10 +36,6 @@ const SEARCH_LIMIT = 25;
 const FULL_DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** The most words a name search takes. Each split of the words is a key, so this bounds the lookup. */
 const NAME_SEARCH_MAX_WORDS = 6;
-/** A request the desk has voided: it no longer holds the order's number for a new registration. */
-const VOIDED = 'entered-in-error';
-/** The statuses of a request no sample may be received for and no correction touches. */
-export const NOT_LIVE: ReadonlySet<string> = new Set([VOIDED, 'revoked']);
 /** The sexes a Patient may have, from the Patient schema itself (ruling 11). */
 const GENDERS: readonly string[] = Patient.shape.gender.unwrap().options;
 
@@ -101,13 +101,6 @@ export interface CancelOrderInput {
   reason: string;
 }
 
-/** Why reception refused. A refusal writes nothing. */
-export class ReceptionError extends Error {
-  constructor(readonly reason: 'not-found' | 'invalid' | 'conflict', message: string) {
-    super(message);
-    this.name = 'ReceptionError';
-  }
-}
 
 export interface PatientSearch { identifier?: string; name?: string; birthDate?: string }
 
@@ -177,22 +170,6 @@ export interface LabReceptionDeps {
 
 type Json = Record<string, unknown>;
 
-export const CHANGE_KEYS: ReadonlySet<string> = new Set(['priority', 'clinician', 'note', 'patientId']);
-
-export function isObject(v: unknown): v is Json {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-export function text(v: unknown): string | null {
-  if (typeof v !== 'string') return null;
-  const t = v.trim();
-  return t ? t : null;
-}
-
-export function invalid(message: string): ReceptionError {
-  return new ReceptionError('invalid', message);
-}
-
 /** A YYYY-MM-DD that names a real day: 1990-02-31 is refused. */
 export function isCalendarDate(v: string): boolean {
   if (!FULL_DATE.test(v)) return false;
@@ -216,29 +193,6 @@ export function dateInZone(at: Date, zone: string | null | undefined): string {
   return at.toISOString().slice(0, 10);
 }
 
-export function statusOf(sr: Json): string {
-  return typeof sr['status'] === 'string' ? sr['status'] : 'unknown';
-}
-
-export function isLive(sr: Json): boolean {
-  return !NOT_LIVE.has(statusOf(sr));
-}
-
-/** The Provenance of a desk write: what it wrote, how, and who did it. Every desk save carries one,
- *  saved in the same call, so all of them have this one shape. */
-export function deskProvenance(
-  targets: string[], activity: 'CREATE' | 'UPDATE', actor: string, recorded: string, reason?: string,
-): Json {
-  return {
-    resourceType: 'Provenance',
-    id: randomUUID(),
-    target: targets.map((reference) => ({ reference })),
-    recorded,
-    activity: { coding: [{ system: DATA_OPERATION, code: activity }] },
-    agent: [{ who: { display: actor } }],
-    ...(reason ? { reason: [{ text: reason }] } : {}),
-  };
-}
 
 /** A patient's name as one line: name.text, else the given names and the family name. */
 function patientName(patient: Json | null): string | null {
@@ -256,12 +210,6 @@ function patientIdOf(sr: Json): string | null {
   const subject = sr['subject'];
   const ref = isObject(subject) ? text(subject['reference']) : null;
   return ref && ref.startsWith('Patient/') ? ref.slice('Patient/'.length) : null;
-}
-
-export function isDeskOrder(sr: Json): boolean {
-  const meta = sr['meta'];
-  const tags = isObject(meta) && Array.isArray(meta['tag']) ? meta['tag'] : [];
-  return tags.some((t) => isObject(t) && t['system'] === ORDER_ORIGIN_SYSTEM && t['code'] === LAB_DESK_ORIGIN);
 }
 
 function noteOf(sr: Json): string | null {

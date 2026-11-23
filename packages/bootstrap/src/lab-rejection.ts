@@ -6,10 +6,12 @@ import {
   type LabTaskKind,
 } from '@openldr/forms';
 import {
-  CHANGE_KEYS, LAB_DESK_ORIGIN, SAMPLE_CONDITION_VALUE_SET, ReceptionError, createReceptionCore, deskProvenance,
-  invalid, isObject, isLive, orderSpecimenTypes, redrawTaskId, returnTaskId, statusOf, text,
+  SAMPLE_CONDITION_VALUE_SET, createReceptionCore, orderSpecimenTypes, redrawTaskId, returnTaskId,
   type LabReceptionDeps, type OrderChanges, type ReceptionOrder,
 } from './lab-reception';
+import {
+  CHANGE_KEYS, LAB_DESK_ORIGIN, ReceptionError, deskProvenance, invalid, isLive, isObject, statusOf, text,
+} from './lab-shared';
 
 // Lab module slice 3: return a request to its site and take it back corrected, reject a sample or
 // one test and ask for a redraw, and link the redraw to the order it replaces. Status changes go
@@ -416,16 +418,17 @@ export function createLabRejection(deps: LabRejectionDeps): LabRejection {
       nexts.push({ resourceType: 'ServiceRequest', next });
     }
     // The old order's open redraw Tasks that name a replaced request.
-    const replaced = new Set(matches.map((m) => `ServiceRequest/${m.oldId}`));
     const tasks: Json[] = [];
     for (const r of old.redraws.filter((d) => d.status === 'requested')) {
       const task = await getJson('Task', r.taskId);
-      const basedOn = task && Array.isArray(task['basedOn']) ? task['basedOn'].filter(isObject) : [];
-      if (!task || !basedOn.some((b) => replaced.has(String(b['reference'])))) continue;
+      const basedOn = new Set((task && Array.isArray(task['basedOn']) ? task['basedOn'].filter(isObject) : []).map((b) => String(b['reference'])));
+      // The output names the new request that replaced one of this Task's own requests.
+      const own = matches.find((m) => basedOn.has(`ServiceRequest/${m.oldId}`));
+      if (!task || !own) continue;
       tasks.push({
         ...structuredClone(task),
         status: 'completed',
-        output: [{ type: { text: 'Redraw order' }, valueReference: { reference: `ServiceRequest/${matches[0]!.newId}`, display: order.requisition } }],
+        output: [{ type: { text: 'Redraw order' }, valueReference: { reference: `ServiceRequest/${own.newId}`, display: order.requisition } }],
       });
     }
 

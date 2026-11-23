@@ -420,6 +420,28 @@ describe('lab rejection, link a redraw', () => {
     expect(old!.redraws).toEqual([{ taskId: labTaskId('recollect-sample', spId), status: 'completed', focus: `Specimen/${spId}`, replacedBy: 'R-41' }]);
   });
 
+  it('one link that replaces tests from two redraw Tasks: each Task\'s output names its own new request', async () => {
+    await save(w, formOrder('FAC-1', 'R-50', HB_GLU));
+    const oldHb = srId('FAC-1', 'R-50', 'HB');
+    const oldGlu = srId('FAC-1', 'R-50', 'GLU');
+    await w.rejection.rejectTest({ serviceRequestId: oldHb, reasonCode: 'QNS', redraw: true }, 'Neema');
+    await w.rejection.rejectTest({ serviceRequestId: oldGlu, reasonCode: 'HAEM', redraw: true }, 'Neema');
+    await w.reception.registerOrder({
+      requisition: 'R-51', facilityCode: 'FAC-1', patientId: 'p1',
+      tests: [{ system: TEST_CATALOG_SYSTEM, code: 'HB' }, { system: TEST_CATALOG_SYSTEM, code: 'GLU' }],
+    }, 'Neema');
+    await w.rejection.linkRedraw({ requisition: 'R-51', facilityCode: 'FAC-1', replacesRequisition: 'R-50' }, 'Neema');
+    for (const [oldId, code] of [[oldHb, 'HB'], [oldGlu, 'GLU']] as const) {
+      const task = await get(w, 'Task', labTaskId('recollect-sample', oldId));
+      expect(task['status']).toBe('completed');
+      expect(task['output']).toEqual([{
+        type: { text: 'Redraw order' },
+        valueReference: { reference: `ServiceRequest/${srId('FAC-1', 'R-51', code)}`, display: 'R-51' },
+      }]);
+      expect((await get(w, 'ServiceRequest', srId('FAC-1', 'R-51', code)))['replaces']).toEqual([{ reference: `ServiceRequest/${oldId}` }]);
+    }
+  });
+
   it('refuses a number at another facility, or with no matching test, and writes nothing (focus 4)', async () => {
     await rejectedAndRedrawn();
     await save(w, formOrder('FAC-2', 'R-42', [{ code: 'HB', display: 'Haemoglobin' }]));
@@ -434,5 +456,25 @@ describe('lab rejection, link a redraw', () => {
     await expect(w.rejection.linkRedraw({ requisition: 'R-41', facilityCode: 'FAC-1', replacesRequisition: 'R-41' }, 'Neema'))
       .rejects.toMatchObject({ reason: 'invalid' });
     expect(await historyCount(w)).toBe(before);
+  });
+});
+
+describe('lab rejection, the Provenance of a Task write', () => {
+  it('targets the Task version the store stamped, on a first and a second write', async () => {
+    const w = await world();
+    await save(w, formOrder('FAC-1', 'R-60', HB_GLU));
+    const id = labTaskId('correct-request', orderKey('FAC-1', 'R-60'));
+    const check = async (expected: string) => {
+      const task = await get(w, 'Task', id);
+      const versionId = String((task['meta'] as Json)['versionId']);
+      expect(versionId).toBe(expected);
+      const history = task['relevantHistory'] as Array<{ reference: string }>;
+      const prov = await get(w, 'Provenance', history[history.length - 1]!.reference.slice('Provenance/'.length));
+      expect(prov['target']).toEqual([{ reference: `Task/${id}/_history/${versionId}` }]);
+    };
+    await w.rejection.returnOrder({ requisition: 'R-60', facilityCode: 'FAC-1', reasonCode: 'form-incomplete' }, 'Neema');
+    await check('1');
+    await w.rejection.markCorrected({ requisition: 'R-60', facilityCode: 'FAC-1', changes: {}, reason: 'site fixed it' }, 'Neema');
+    await check('2');
   });
 });
