@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -105,7 +107,7 @@ describe('FacilityDialog', () => {
     expect(body.formSchemaId).not.toBe(SCHEMA_SLUG_ID);
   });
 
-  it("surfaces the server's duplicate-local-code message inline and keeps the dialog open", async () => {
+  it("shows the server's duplicate-local-code message as a toast and keeps the dialog open", async () => {
     (api.createFacility as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('create facility failed: a facility with that local code (or national code) already exists'),
     );
@@ -116,7 +118,9 @@ describe('FacilityDialog', () => {
     fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Dup Facility' } });
     clickMenuItem(/^create$/i);
 
-    expect(await screen.findByText(/already exists/i)).toBeTruthy();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('create facility failed: a facility with that local code (or national code) already exists'));
+    expect(screen.queryByText(/already exists/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toHaveValue('Dup Facility');
     // Success is withheld: no onSaved, and the sheet stays open so the operator can see the
     // message and correct the local code.
     expect(onSaved).not.toHaveBeenCalled();
@@ -317,6 +321,14 @@ describe('FacilityDialog', () => {
 
     await act(async () => { failFirst(new Error('get form failed: 503')); });
 
+    expect(screen.queryByText(/get form failed/i)).not.toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('a failed form load shows a toast, not a box in the sheet', async () => {
+    (api.getForm as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('get form failed: 503'));
+    render(<FacilityDialog open facility={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('get form failed: 503'));
     expect(screen.queryByText(/get form failed/i)).not.toBeInTheDocument();
   });
 

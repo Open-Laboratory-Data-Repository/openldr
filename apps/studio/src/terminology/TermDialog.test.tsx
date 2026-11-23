@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 import { TermDialog } from './TermDialog';
 import * as api from '../api';
 
@@ -16,7 +19,7 @@ const system: api.CodingSystem = {
 };
 
 describe('TermDialog', () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
 
   it('creates a term from the Details tab', async () => {
     const created: api.Term = {
@@ -99,7 +102,44 @@ describe('TermDialog', () => {
     const createItem2 = await screen.findByRole('menuitem', { name: /create/i });
     fireEvent.pointerMove(createItem2);
     fireEvent.click(createItem2);
-    await waitFor(() => expect(screen.getByText(/invalid json/i)).toBeInTheDocument());
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/invalid json/i)));
+    expect(screen.queryByText(/invalid json/i)).not.toBeInTheDocument();
     expect(api.createTerm).not.toHaveBeenCalled();
+  });
+
+  it('a failed save shows a toast and keeps the sheet open with the input', async () => {
+    vi.spyOn(api, 'createTerm').mockRejectedValue(new Error('create term failed: code exists'));
+    const onSaved = vi.fn();
+    const onOpenChange = vi.fn();
+    render(<TermDialog open system={system} term={null} onOpenChange={onOpenChange} onSaved={onSaved} onDeleted={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/^code$/i), { target: { value: 'X' } });
+    fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: 'X term' } });
+    const actionsBtn = screen.getByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(actionsBtn, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /create/i })) fireEvent.keyDown(actionsBtn, { key: 'Enter' });
+    const createItem = await screen.findByRole('menuitem', { name: /create/i });
+    fireEvent.pointerMove(createItem);
+    fireEvent.click(createItem);
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('create term failed: code exists'));
+    expect(screen.queryByText('create term failed: code exists')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/display name/i)).toHaveValue('X term');
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it('a failed mappings load shows one toast and the could-not-load text, not "no mappings"', async () => {
+    vi.spyOn(api, 'listTermMappings').mockRejectedValue(new Error('list mappings failed: 503'));
+    const term: api.Term = {
+      system: 'http://loinc.org', code: 'X', display: 'X term', status: 'ACTIVE', shortName: null,
+      class: null, unit: null, replacedBy: null, metadata: null, mappingCount: 0,
+    };
+    render(<TermDialog open system={system} term={term} onOpenChange={() => {}} onSaved={() => {}} onDeleted={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /mappings/i }));
+
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('list mappings failed: 503');
+    expect(screen.queryByText('list mappings failed: 503')).not.toBeInTheDocument();
   });
 });

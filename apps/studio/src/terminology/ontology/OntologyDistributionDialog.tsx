@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, FolderInput, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   buildOntology,
   getOntologyDistribution,
@@ -60,7 +61,8 @@ export function OntologyDistributionDialog({
   const [busy, setBusy] = useState(false);
   const [sourcePath, setSourcePath] = useState('');
   const [progress, setProgress] = useState<OntologyBuildProgress | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // The distribution could not be read. Hides "No ontology index yet", which would be a guess.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
 
   const reload = useCallback(async () => {
@@ -70,6 +72,10 @@ export function OntologyDistributionDialog({
       const next = await getOntologyDistribution(codingSystemId);
       setDist(next);
       setSourcePath((prev) => prev || next?.sourcePath || '');
+      setLoadFailed(false);
+    } catch (e) {
+      setLoadFailed(true);
+      toast.error(String(e instanceof Error ? e.message : e));
     } finally {
       setLoading(false);
     }
@@ -77,7 +83,7 @@ export function OntologyDistributionDialog({
 
   useEffect(() => {
     if (!open) return;
-    setError(null);
+    setLoadFailed(false);
     setProgress(null);
     setSourcePath('');
     void reload();
@@ -88,7 +94,6 @@ export function OntologyDistributionDialog({
       const trimmedPath = sourcePath.trim();
       if (kind === 'build' && !trimmedPath) return;
       setBusy(true);
-      setError(null);
       setProgress(null);
       try {
         const { promise } =
@@ -99,7 +104,7 @@ export function OntologyDistributionDialog({
         onChanged?.();
         await reload();
       } catch (e) {
-        setError(String(e instanceof Error ? e.message : e));
+        toast.error(String(e instanceof Error ? e.message : e));
       } finally {
         setBusy(false);
         setProgress(null);
@@ -112,13 +117,12 @@ export function OntologyDistributionDialog({
   // job poll + bell (like an upload), so the dialog just kicks it off and closes.
   const handleReingest = useCallback(async () => {
     setBusy(true);
-    setError(null);
     try {
       const { jobId } = await reingestTerminologyDistribution(codingSystemId);
       onReingestQueued?.(jobId);
       onOpenChange(false);
     } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
+      toast.error(String(e instanceof Error ? e.message : e));
     } finally {
       setBusy(false);
     }
@@ -126,13 +130,12 @@ export function OntologyDistributionDialog({
 
   const handleUnlink = useCallback(async () => {
     setBusy(true);
-    setError(null);
     try {
       await unlinkOntologyDistribution(codingSystemId);
       onChanged?.();
       onOpenChange(false);
     } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
+      toast.error(String(e instanceof Error ? e.message : e));
     } finally {
       setBusy(false);
     }
@@ -232,7 +235,7 @@ export function OntologyDistributionDialog({
                   </div>
                 </div>
               )}
-              {uploadManaged && (status === 'none' || dist === null) && (
+              {uploadManaged && !loadFailed && (status === 'none' || dist === null) && (
                 <p className="text-xs text-muted-foreground">
                   No ontology index yet. Use <span className="font-medium text-foreground">Rebuild</span> to
                   build it from the stored distribution, or re-upload the distribution.
@@ -249,11 +252,6 @@ export function OntologyDistributionDialog({
                 <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   <span>Building ontology index...</span>
-                </div>
-              )}
-              {error && (
-                <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  {error}
                 </div>
               )}
 

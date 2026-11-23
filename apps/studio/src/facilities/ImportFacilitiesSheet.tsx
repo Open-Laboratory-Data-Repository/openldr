@@ -350,7 +350,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // new file pick, same as `onDeleted`/`onAbsent` above.
   const [onConflict, setOnConflict] = useState<'skip' | 'overwrite'>('skip');
 
-  const [error, setError] = useState<string | null>(null);
+  // The run poll gave up. Only hides the "checking the import run" line, which would otherwise go
+  // on claiming an activity that had stopped. The reason itself is a toast, like every other
+  // failure in this sheet.
+  const [pollFailed, setPollFailed] = useState(false);
 
   // A2b: the background run this sheet is watching, and the request states around it.
   const [runId, setRunId] = useState<string | null>(null);
@@ -493,7 +496,8 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         if (stopped) return;
         // Stop asking rather than retrying forever: a run id that cannot be read is not going to
         // start being readable, and a silent poll loop behind a blank panel is worse than a message.
-        setError(err instanceof Error ? err.message : String(err));
+        setPollFailed(true);
+        toast.error(err instanceof Error ? err.message : String(err));
       }
     };
     void tick();
@@ -511,10 +515,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
   // Any change to the inputs a check was computed against invalidates that check — otherwise the
   // operator could edit the national system (or pick a different file) afterwards and still see a
-  // stale summary describing the OLD input. What it clears now is only the error: the summary
+  // stale summary describing the OLD input. What it clears now is only the poll-failed flag: the summary
   // itself is retired by `summarySignature` moving, which is what makes Review current or absent.
   const invalidatePreview = () => {
-    setError(null);
+    setPollFailed(false);
   };
 
   /**
@@ -579,7 +583,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       setCsvHeadReads((n) => n + 1);
     }).catch((err: unknown) => {
       setCsvHead(null);
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     });
   };
 
@@ -772,7 +776,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setAllowUnknownColumns(allowUnknown);
     setAllowInvalidCoordinates(allowInvalid);
     setUploading(true);
-    setError(null);
+    setPollFailed(false);
     try {
       await revalidateFacilityImportRun(runId as string, {
         columnMap: hasColumnMapContent(columnMap) ? columnMap : undefined,
@@ -801,7 +805,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       setChecksAsked((n) => n + 1);
       setRefreshNonce((n) => n + 1);
     } catch (err) {
-      setError(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
+      toast.error(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
     } finally {
       setUploading(false);
     }
@@ -828,7 +832,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     // `null`, not `0` — nothing has been measured yet. The first progress event decides which of the
     // two labels the sheet shows.
     setUploadProgress(null);
-    setError(null);
+    setPollFailed(false);
     try {
       // ⛔ The `File` itself, never `csv`. See `uploadFacilityImport`.
       const uploaded = await uploadFacilityImport(
@@ -905,7 +909,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         setChecksAsked((n) => n + 1);
       }
     } catch (err) {
-      setError(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
+      toast.error(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
     } finally {
       setUploading(false);
     }
@@ -914,7 +918,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const handleConfirmRun = async (): Promise<void> => {
     if (!runId || !awaitingSummary) return;
     setConfirming(true);
-    setError(null);
+    setPollFailed(false);
     try {
       // ⛔ The two parse-changing overrides are deliberately not offered here — see
       // `confirmOptionsFor`'s docblock. The run already carries whatever the UPLOAD declared,
@@ -929,7 +933,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       // which ends `failed` and would otherwise be invisible.
       setRefreshNonce((n) => n + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setConfirming(false);
     }
@@ -939,25 +943,25 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // applies it again from the stored file.
   const handleContinueRun = async (): Promise<void> => {
     if (!runId) return;
-    setError(null);
+    setPollFailed(false);
     try {
       await continueFacilityImportRun(runId);
       setRefreshNonce((n) => n + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
   const handleCancelRun = async (): Promise<void> => {
     if (!runId) return;
     setCancelling(true);
-    setError(null);
+    setPollFailed(false);
     try {
       const { outcome } = await cancelFacilityImportRun(runId);
       setCancelOutcome(outcome);
       setRefreshNonce((n) => n + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setCancelling(false);
     }
@@ -1453,10 +1457,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             parent left the grid sized to its own content, splitting the pane in half above an
             empty band (AGENTS.md §6's `wrapperClassName="min-h-0 flex-1"` trap, one level up). */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {error ? (
-            <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
-          ) : null}
-
           {/* Task 3: the source inputs — File, National system, File format, complete release and
               Release version — belong to Source (step 1) alone. Leaving them on screen at every step
               is what made five stages read as one scrolling surface; gone once the operator has
@@ -1685,13 +1685,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           {uploading && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">{uploadLabel}</p>
           )}
-          {/* ⚠ `!error` matters: the poll's catch STOPS the chain and leaves `run` null, so without
-              it this line went on claiming an activity that had already given up — underneath the
-              error box explaining that it had. Task 3: gated to Review (step 3, renumbered by the
+          {/* ⚠ `!pollFailed` matters: the poll's catch STOPS the chain and leaves `run` null, so
+              without it this line went on claiming an activity that had already given up, under
+              the toast explaining that it had. Task 3: gated to Review (step 3, renumbered by the
               reachability fix above) with the rest of the run status blocks below. `hasReview`
               (and so `step === 3`) turns true the instant Mapping's own Upload sets `runId` and
               `summaryAt` together, so this shows exactly when it used to. */}
-          {step === 3 && runId && !run && !error && (
+          {step === 3 && runId && !run && !pollFailed && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">{t('facilities.import.runLoading')}</p>
           )}
           {step === 3 && run && run.status === 'interrupted' && (

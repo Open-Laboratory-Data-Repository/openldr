@@ -48,6 +48,7 @@ import { Button } from '../components/ui/button';
 import { StripedEmpty } from '../components/ui/striped-empty';
 import { EmptyState } from '../components/ui/empty-state';
 import { LoadingState } from '../components/ui/spinner';
+import { LoadFailed, useLoadErrorToast } from '../components/ui/load-failed';
 import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
@@ -121,6 +122,7 @@ export function Terminology(): JSX.Element {
   const [codingSystems, setCodingSystems] = useState<CodingSystem[]>([]);
   const [valueSets, setValueSets] = useState<ValueSetSummary[]>([]);
   const [distributions, setDistributions] = useState<Record<string, OntologyDistribution>>({});
+  // A failed load. Cleared only by a load that works, so a reload after a change that fails the same way does not toast again.
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -174,6 +176,7 @@ export function Terminology(): JSX.Element {
         setCodingSystems(s);
         setValueSets(v);
         setDistributions(Object.fromEntries(d.map((dist) => [dist.codingSystemId, dist])));
+        setLoadError(null);
       })
       .catch((e: unknown) => {
         setLoadError(e instanceof Error ? e.message : String(e));
@@ -183,6 +186,7 @@ export function Terminology(): JSX.Element {
   useEffect(() => {
     void reload();
   }, []);
+  useLoadErrorToast(loadError);
 
   // Stop polling any in-flight distribution import jobs on unmount, and make any already
   // in-flight getTerminologyIngestJob request's continuation a no-op.
@@ -570,12 +574,6 @@ export function Terminology(): JSX.Element {
           aria-label="Import terminology file"
           onChange={(e) => void handleTermImportFile(e)}
         />
-        {loadError && (
-          <div className="mx-3 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {loadError}
-          </div>
-        )}
-
         <div className="flex flex-1 overflow-hidden">
           {/* ── Publisher rail ──────────────────────────────────────────── */}
           {/* The rail is a fixed-width column beside the main pane at every breakpoint, so on a
@@ -605,6 +603,8 @@ export function Terminology(): JSX.Element {
             <div className={cn('flex-1 overflow-auto', railCollapsed && 'hidden')}>
               {loading ? (
                 <LoadingState label="Loading…" className="min-h-40" />
+              ) : loadError && sections.length === 0 ? (
+                <LoadFailed className="min-h-40 px-3" />
               ) : sections.length === 0 ? (
                 <p className="p-3 text-xs text-muted-foreground">No publishers yet.</p>
               ) : (
@@ -634,6 +634,8 @@ export function Terminology(): JSX.Element {
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {loading ? (
               <LoadingState label="Loading terminology…" className="flex-1" />
+            ) : loadError && !activeSection ? (
+              <LoadFailed />
             ) : !activeSection ? (
               /* No publisher selected */
               <StripedEmpty className="flex-1">
@@ -1221,18 +1223,17 @@ function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType,
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  useEffect(() => { if (open) { setFile(null); setVersion(''); setAccepted(false); setBusy(false); setPct(0); setError(null); } }, [open]);
+  useEffect(() => { if (open) { setFile(null); setVersion(''); setAccepted(false); setBusy(false); setPct(0); } }, [open]);
   const canImport = !!file && accepted && !busy;
   const handleImport = async (): Promise<void> => {
     if (!canImport || !file) return;
-    setBusy(true); setError(null);
+    setBusy(true);
     try {
       const { jobId } = await uploadTerminologyDistribution(publisherId, systemType, file, accepted, version.trim() || null, setPct);
       onQueued(jobId);
-    } catch (err: unknown) { setError(err instanceof Error ? err.message : String(err)); }
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : String(err)); }
     finally { setBusy(false); }
   };
   return (
@@ -1298,11 +1299,6 @@ function ImportDistributionDialog({ open, onOpenChange, publisherId, systemType,
                 <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(pct * 100)}%` }} />
               </div>
               <div className="text-xs text-muted-foreground">Uploading… {Math.round(pct * 100)}%</div>
-            </div>
-          )}
-          {error && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
             </div>
           )}
         </div>

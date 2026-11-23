@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { LoadFailed, useLoadErrorToast } from '../components/ui/load-failed';
 import {
   saveValueSet,
   expandValueSet,
@@ -83,7 +85,9 @@ export function ValueSetBuilder({
   const [preview, setPreview] = useState<ExpandedCode[]>([]);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(valueSet?.id ?? null);
-  const [error, setError] = useState<string | null>(null);
+  // A failed expansion. The preview says it could not load rather than keep showing an old one.
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  useLoadErrorToast(previewError);
 
   const composeInput = useMemo<ValueSetInput>(() => ({
     url: url.trim(),
@@ -105,15 +109,17 @@ export function ValueSetBuilder({
       // A set CE works out when read, such as the lab's tests, has nothing stored. Show the live
       // codes instead, the ones forms and `openldr terminology expand` see.
       setPreview(stored.length > 0 || !url ? stored : await expandValueSetByUrl(url));
+      setPreviewError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setPreview([]);
+      setPreviewError((e as Error).message);
     } finally {
       setPreviewBusy(false);
     }
   }, []);
 
   useEffect(() => {
-    void listPublishers().then(setPublishers);
+    void listPublishers().then(setPublishers).catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
   }, []);
 
   useEffect(() => {
@@ -122,17 +128,16 @@ export function ValueSetBuilder({
 
   const handleSave = async (): Promise<void> => {
     if (!composeInput.url) {
-      setError('A canonical URL is required.');
+      toast.error('A canonical URL is required.');
       return;
     }
-    setError(null);
     try {
       const saved = await saveValueSet(composeInput);
       setSavedId(saved.id);
       onSaved(saved);
       await refreshPreview(saved.id, saved.url);
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     }
   };
 
@@ -206,7 +211,6 @@ export function ValueSetBuilder({
         </DropdownMenu>
       </div>
 
-      {error && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>}
       {readOnly && <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">This value set is immutable (standard catalog). Duplicate it to make changes.</div>}
 
       <div className="grid grid-cols-2 gap-3">
@@ -342,6 +346,8 @@ export function ValueSetBuilder({
         <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Expansion ({preview.length})</div>
         {savedId == null ? (
           <p className="text-xs text-muted-foreground">Save to preview the expansion.</p>
+        ) : previewError ? (
+          <LoadFailed className="min-h-0 justify-start px-0 text-left" />
         ) : preview.length === 0 ? (
           <p className="text-xs text-muted-foreground">Expansion is empty.</p>
         ) : (

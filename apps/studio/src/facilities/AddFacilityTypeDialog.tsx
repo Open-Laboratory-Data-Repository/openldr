@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -56,14 +57,12 @@ export function AddFacilityTypeDialog({
   const { t } = useTranslation();
   const [display, setDisplay] = useState(rawValue);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // A fresh form every time the dialog (re)opens, for the raw value it opened for. Same reset
   // idiom as `RegisterSourceDialog.tsx`.
   useEffect(() => {
     if (!open) return;
     setDisplay(rawValue);
-    setError(null);
   }, [open, rawValue]);
 
   const code = codeFor(display);
@@ -72,7 +71,6 @@ export function AddFacilityTypeDialog({
   const handleSave = async (): Promise<void> => {
     if (!canSave) return;
     setSaving(true);
-    setError(null);
     try {
       const result = await addFacilityType(nationalSystem, display.trim());
       onAdded(result.code);
@@ -82,11 +80,11 @@ export function AddFacilityTypeDialog({
       // of adding a second one. Never a generic "something went wrong".
       const collidesWith = (e as { collidesWith?: FacilityTypeCollision }).collidesWith;
       if (collidesWith) {
-        setError(t('facilities.import.valueMap.addTypeCollision', {
+        toast.error(t('facilities.import.valueMap.addTypeCollision', {
           display: collidesWith.display ?? collidesWith.code,
         }));
       } else {
-        setError(e instanceof Error ? e.message : String(e));
+        toast.error(e instanceof Error ? e.message : String(e));
       }
     } finally {
       setSaving(false);
@@ -151,11 +149,6 @@ export function AddFacilityTypeDialog({
           </span>
         </div>
 
-        {error && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {error}
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );

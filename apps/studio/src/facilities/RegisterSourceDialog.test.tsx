@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -107,7 +109,7 @@ describe('RegisterSourceDialog', () => {
     expect(sent).not.toHaveProperty('publisherId');
   });
 
-  it('shows the server error (e.g. a duplicate-url 409) and does not close or clear the form', async () => {
+  it('shows the server error (e.g. a duplicate-url 409) as a toast and does not close or clear the form', async () => {
     mocked(api.createFacilityImportSource).mockRejectedValue(
       new Error('a facility register already exists for a url matching "urn:tz:hfr" (case-insensitive)'),
     );
@@ -121,7 +123,8 @@ describe('RegisterSourceDialog', () => {
     openDialogMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: /^register$/i }));
 
-    expect(await screen.findByText(/already exists/i)).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('a facility register already exists for a url matching "urn:tz:hfr" (case-insensitive)'));
+    expect(screen.queryByText(/already exists/i)).not.toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
     expect(onCreated).not.toHaveBeenCalled();
     // The operator's typed values survive the failed attempt — worth keeping to retry with a fix.

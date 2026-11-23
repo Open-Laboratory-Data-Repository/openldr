@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import type { CodingSystem, CodingSystemInput, Publisher } from '../api';
 import { createCodingSystem, listPublishers, updateCodingSystem } from '../api';
 import { Button } from '../components/ui/button';
@@ -49,11 +50,10 @@ export function CodingSystemDialog({
   const [publishers, setPublishers] = useState<Publisher[]>([]);
   const [publisherId, setPublisherId] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Re-fetch on open so a publisher created elsewhere in the session appears.
   useEffect(() => {
-    if (open) void listPublishers().then(setPublishers);
+    if (open) void listPublishers().then(setPublishers).catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
   }, [open]);
 
   useEffect(() => {
@@ -65,7 +65,6 @@ export function CodingSystemDialog({
     setDescription(system?.description ?? '');
     setActive(system?.active ?? true);
     setPublisherId(system?.publisherId ?? defaultPublisherId ?? '');
-    setError(null);
   }, [open, system, defaultPublisherId]);
 
   const canSave = systemCode.trim().length > 0 && systemName.trim().length > 0;
@@ -73,7 +72,6 @@ export function CodingSystemDialog({
   const handleSave = async (): Promise<void> => {
     if (!canSave) return;
     setSaving(true);
-    setError(null);
     try {
       const input: CodingSystemInput = {
         systemCode: systemCode.trim(),
@@ -90,7 +88,7 @@ export function CodingSystemDialog({
       if (saved) onSaved(saved);
       onOpenChange(false);
     } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
+      toast.error(String(e instanceof Error ? e.message : e));
     } finally {
       setSaving(false);
     }
@@ -195,12 +193,6 @@ export function CodingSystemDialog({
             />
             <span>Active</span>
           </label>
-
-          {error && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </div>
-          )}
         </div>
 
         <SheetFooter className="border-t border-border px-6 py-4 sm:justify-end">

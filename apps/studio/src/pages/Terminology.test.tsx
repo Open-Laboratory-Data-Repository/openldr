@@ -65,6 +65,18 @@ describe('Terminology page', () => {
     await waitFor(() => expect(screen.getByText(/Select a publisher to browse/i)).toBeInTheDocument());
   });
 
+  it('a failed load shows one toast and the could-not-load text, not "no publishers" or a red box', async () => {
+    vi.spyOn(api, 'listCodingSystems').mockRejectedValue(new Error('list coding systems failed: 503'));
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    await waitFor(() => expect(screen.getAllByText('Could not load this list. Reload the page to try again.').length).toBeGreaterThan(0));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('list coding systems failed: 503');
+    expect(screen.queryByText('list coding systems failed: 503')).not.toBeInTheDocument();
+    expect(screen.queryByText('No publishers yet.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Select a publisher to browse/i)).not.toBeInTheDocument();
+  });
+
   it('starts with the publisher rail folded on a phone', async () => {
     // Open by default, the rail took 160 of a phone's 375 pixels and cut the names short.
     const original = window.matchMedia;
@@ -605,5 +617,25 @@ describe('Terminology page', () => {
     expect(toast.error).not.toHaveBeenCalled();
     // No inline banner — the message only ever reaches the mocked sonner toast, never the DOM.
     expect(screen.queryByText(/Import started/)).not.toBeInTheDocument();
+  });
+
+  it('a failed distribution upload shows a toast and keeps the dialog open', async () => {
+    vi.spyOn(api, 'uploadTerminologyDistribution').mockRejectedValue(new Error('upload refused: not a LOINC zip'));
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+
+    const pageActions = (await screen.findAllByRole('button', { name: /actions/i }))[0];
+    fireEvent.pointerDown(pageActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Import distribution...')) fireEvent.keyDown(pageActions, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Import distribution...'));
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'loinc.zip');
+    fireEvent.change(await screen.findByLabelText('Distribution .zip'), { target: { files: [file] } });
+    fireEvent.click(await screen.findByLabelText('I have accepted the license for this distribution.'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload & import' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('upload refused: not a LOINC zip'));
+    expect(screen.queryByText('upload refused: not a LOINC zip')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upload & import' })).toBeInTheDocument();
   });
 });

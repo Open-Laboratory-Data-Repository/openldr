@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -91,7 +92,9 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   const [initialAnswers, setInitialAnswers] = useState<RuntimeAnswers>({});
 
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // More than one published facility form. Kept in the sheet, in place of the form: the operator
+  // must archive one in the Form Builder, and a toast would leave an empty sheet with no reason.
+  const [ambiguousForm, setAmbiguousForm] = useState<string | null>(null);
 
   // The ⋯ "Save" menu item lives outside the FormRuntime-rendered <form> (it's in a toolbar row
   // under the SheetHeader, not a footer). Save proxies a click to this hidden submit button so the
@@ -189,7 +192,7 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   // Load the published 'facilities' form schema whenever the dialog opens.
   useEffect(() => {
     if (!open) return;
-    setError(null);
+    setAmbiguousForm(null);
     setSaving(false);
     setSchema(null);
     setFormDefId(null);
@@ -216,7 +219,7 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
         // rather than capture a facility through an arbitrary one. Sorted so the message reads the
         // same on every install regardless of that server-side order.
         if (summaries.length > 1) {
-          setError(t('facilities.ambiguousForm', { names: summaries.map((s) => s.name).sort().join(', ') }));
+          setAmbiguousForm(t('facilities.ambiguousForm', { names: summaries.map((s) => s.name).sort().join(', ') }));
           return;
         }
         const summary = summaries[0];
@@ -225,7 +228,7 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
         const parsed = FormSchemaZ.safeParse(def.schema);
         if (!parsed.success) {
           setNoForm(true);
-          setError(`Facility form schema is invalid: ${parsed.error.issues[0]?.message ?? 'unknown'}`);
+          toast.error(`Facility form schema is invalid: ${parsed.error.issues[0]?.message ?? 'unknown'}`);
           return;
         }
         const loaded = parsed.data as FormSchema;
@@ -239,7 +242,7 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
         else setInitialAnswers(defaultSystem ? { 'fld-fac-system': defaultSystem } : {});
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) toast.error(e instanceof Error ? e.message : String(e));
       })
       // Guarded too: an abandoned load clearing this flag would report the CURRENT, still-pending
       // load as finished, leaving the dialog blank instead of loading.
@@ -251,7 +254,6 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   const handleSubmit = async (answers: RuntimeAnswers) => {
     if (!schema) return;
     setSaving(true);
-    setError(null);
     try {
       // FormRuntime deletes a field's key from its own answer state the instant its value becomes
       // empty (see setField in FormRuntime.tsx), and cleanAnswers drops empties again on submit —
@@ -286,8 +288,8 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
     } catch (err) {
       // createFacility/updateFacility reject with the server's own message (via okJson/formatApiError)
       // — a duplicate local code, a blank name, or a form that maps no facility field all surface
-      // here verbatim rather than a generic "save failed".
-      setError(err instanceof Error ? err.message : String(err));
+      // here verbatim rather than a generic "save failed". The sheet stays open to correct it.
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
@@ -361,8 +363,8 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
             </div>
           )}
 
-          {error ? (
-            <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
+          {ambiguousForm ? (
+            <div className="px-6 py-8 text-center text-sm text-muted-foreground">{ambiguousForm}</div>
           ) : null}
 
           {schemaLoading ? (

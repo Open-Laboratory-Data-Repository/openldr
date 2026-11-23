@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { LoadingState } from '@/components/ui/spinner';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -32,6 +33,7 @@ export function LinkMatchingSheet({ open, onOpenChange, onLinked, initialRegiste
   const [preview, setPreview] = useState<LinkMatchingResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
+  // A failed preview load. The list area says it could not load, so a failure never reads as "nothing to link".
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
@@ -40,7 +42,7 @@ export function LinkMatchingSheet({ open, onOpenChange, onLinked, initialRegiste
     if (!open) return;
     void listFacilityImportSources()
       .then((rows) => setSources(rows))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
   }, [open]);
 
   useEffect(() => {
@@ -56,20 +58,20 @@ export function LinkMatchingSheet({ open, onOpenChange, onLinked, initialRegiste
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [open, registerUrl]);
+  useLoadErrorToast(error);
 
   const toLink = preview ? preview.pairs.filter((p) => p.outcome === 'linked') : [];
   const linkCount = preview?.counts.linked ?? 0;
 
   const apply = useCallback(async () => {
     setApplying(true);
-    setError(null);
     try {
       const result = await linkMatchingFacilityCodes({ registerUrl, apply: true });
       toast.success(t('facilities.observed.linkMatchingDone', { count: result.counts.linked }));
       onLinked(result);
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setApplying(false);
     }
@@ -122,10 +124,6 @@ export function LinkMatchingSheet({ open, onOpenChange, onLinked, initialRegiste
           </Select>
         </div>
 
-        {error && (
-          <div className="mx-6 mb-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>
-        )}
-
         <div className="flex min-h-0 flex-1 flex-col">
           {registerUrl === '' ? (
             <StripedEmpty className="min-h-[16rem]">
@@ -133,6 +131,8 @@ export function LinkMatchingSheet({ open, onOpenChange, onLinked, initialRegiste
             </StripedEmpty>
           ) : loading ? (
             <LoadingState className="min-h-[16rem]" label={t('common.loading')} />
+          ) : error ? (
+            <LoadFailed />
           ) : toLink.length === 0 ? (
             <StripedEmpty className="min-h-[16rem]">
               <span className="text-sm text-muted-foreground">{t('facilities.observed.linkMatchingEmpty')}</span>

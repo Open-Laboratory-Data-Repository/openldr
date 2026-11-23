@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -168,9 +170,13 @@ describe('FacilityHistory', () => {
     expect(await screen.findByText(/Dodoma RRH/)).toBeInTheDocument();
   });
 
-  it('surfaces a fetch error instead of an endless spinner', async () => {
+  it('a failed fetch shows one toast and the could-not-load text, not an endless spinner', async () => {
     getFacilityHistoryMock.mockRejectedValue(new Error('network down'));
     show();
-    expect(await screen.findByText(/network down/i)).toBeInTheDocument();
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('network down');
+    expect(screen.queryByText(/network down/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('No recorded history for this facility yet.')).not.toBeInTheDocument();
   });
 });

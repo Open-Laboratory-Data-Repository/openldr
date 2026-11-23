@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 import { PublisherDialog } from './PublisherDialog';
 import * as api from '../api';
 
 describe('PublisherDialog', () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
 
   it('creates a publisher', async () => {
     const created = { id: 'p9', name: 'My Lab', role: 'local', icon: null, seeded: false, sortOrder: 100 };
@@ -14,6 +16,20 @@ describe('PublisherDialog', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'My Lab' } });
     fireEvent.click(screen.getByRole('button', { name: /create/i }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(created));
+  });
+
+  it('a failed save shows a toast and keeps the sheet open with the input', async () => {
+    vi.spyOn(api, 'createPublisher').mockRejectedValue(new Error('create publisher failed: name taken'));
+    const onSaved = vi.fn();
+    const onOpenChange = vi.fn();
+    render(<PublisherDialog open publisher={null} onOpenChange={onOpenChange} onSaved={onSaved} />);
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'My Lab' } });
+    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('create publisher failed: name taken'));
+    expect(screen.queryByText('create publisher failed: name taken')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toHaveValue('My Lab');
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it('edits an existing publisher (Save label, updatePublisher called)', async () => {

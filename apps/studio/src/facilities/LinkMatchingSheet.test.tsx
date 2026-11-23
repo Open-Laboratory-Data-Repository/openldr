@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -76,11 +78,34 @@ describe('LinkMatchingSheet', () => {
     fireEvent.click(screen.getByText('Other register'));
 
     await waitFor(() => expect(linkMatchingFacilityCodes).toHaveBeenLastCalledWith({ registerUrl: OTHER }));
-    await waitFor(() => expect(screen.getByText('dry run failed')).toBeInTheDocument());
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('dry run failed'));
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    expect(screen.queryByText('dry run failed')).not.toBeInTheDocument();
+    expect(screen.queryByText(/no codes would be linked/i)).not.toBeInTheDocument();
     expect(screen.queryByText('MICAN')).not.toBeInTheDocument();
     const trigger = screen.getByRole('button', { name: 'Link actions' });
     openMenu(trigger, /link 0 codes/i);
     expect(screen.getByRole('menuitem', { name: /link 0 codes/i })).toHaveAttribute('data-disabled');
+  });
+
+  it('a failed apply shows a toast and keeps the sheet open', async () => {
+    (linkMatchingFacilityCodes as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(preview)
+      .mockRejectedValueOnce(new Error('apply refused'));
+    const onOpenChange = vi.fn();
+    const onLinked = vi.fn();
+    render(<LinkMatchingSheet open onOpenChange={onOpenChange} onLinked={onLinked} initialRegisterUrl={MZ} />);
+    expect(await screen.findByText('MICAN')).toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: 'Link actions' });
+    openMenu(trigger, /link 1 code/i);
+    fireEvent.click(screen.getByRole('menuitem', { name: /link 1 code/i }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('apply refused'));
+    expect(screen.queryByText('apply refused')).not.toBeInTheDocument();
+    expect(screen.getByText('MICAN')).toBeInTheDocument();
+    expect(onLinked).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it('shows the empty state and disables apply when nothing would link', async () => {

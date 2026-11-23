@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -66,7 +68,8 @@ describe('AddFacilityTypeDialog', () => {
     openDialogMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add type' }));
 
-    expect(await screen.findByText(/Health Center.*already in this list/i)).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Health Center.*already in this list/i)));
+    expect(screen.queryByText(/Health Center.*already in this list/i)).not.toBeInTheDocument();
     expect(onAdded).not.toHaveBeenCalled();
   });
 

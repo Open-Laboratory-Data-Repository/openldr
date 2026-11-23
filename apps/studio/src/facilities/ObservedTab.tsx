@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreHorizontal, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM } from '@openldr/db/facility-observed';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -9,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TablePagination } from '@/components/ui/table-pagination';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/auth/AuthProvider';
@@ -25,6 +27,9 @@ import {
 } from '@/api';
 import { TermMappingDialog } from '@/terminology/TermMappingDialog';
 import { LinkMatchingSheet } from './LinkMatchingSheet';
+
+/** A failed action (save, delete, scan, retry) is a toast, never a box in the page. */
+function actionFailed(e: unknown): void { toast.error(e instanceof Error ? e.message : String(e)); }
 
 /** `district, region` (both known), or just whichever of the two is known, or `null` when
  *  neither is — never a stray leading/trailing/doubled separator. Shared by the resolved-facility
@@ -96,6 +101,7 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
 
   const [rows, setRows] = useState<ObservedFacility[]>([]);
   const [loading, setLoading] = useState(true);
+  // A failed list load. Cleared only by a load that works, so a background reload that fails the same way does not toast again.
   const [error, setError] = useState<string | null>(null);
   // Client-side pagination: GET /api/facilities/observed returns the whole (already
   // reportCount-ordered) array unpaginated, so paging happens here against the fetched rows.
@@ -106,7 +112,7 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
 
   // F1's fix, reapplied here: a plain `reload()` flips `loading`, and the render below swaps in a
   // full-page `LoadingState` that unmounts everything else — including a just-opened mapping
-  // dialog or a scan/publish result banner the operator hasn't read yet. `background: true` skips
+  // dialog the operator is using. `background: true` skips
   // that so a refresh after a write never blanks the screen mid-confirmation.
   const reload = useCallback(async (opts?: { background?: boolean }) => {
     if (!opts?.background) setLoading(true);
@@ -122,30 +128,29 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
   }, []);
 
   useEffect(() => { void reload(); }, [reload]);
+  useLoadErrorToast(error);
 
   // ── Scan / Publish (header ⋯ menu) ──────────────────────────────────────────
   const [scanning, setScanning] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [actionResult, setActionResult] = useState<string | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
 
   const runScan = useCallback(async () => {
     setScanning(true);
-    setError(null);
     try {
       // `apply: true` — the operator already sees the impact-ordered table before choosing this
       // action, unlike a CSV upload whose CONTENT they haven't seen yet, so there is no separate
       // preview step here (see the CSV import sheet for that pattern).
       const result = await scanObservedFacilities({ apply: true });
       // Branch on the COUNTERS, never the HTTP status — a scan that discovers zero new codes is
-      // still a 200, and the banner must say so honestly rather than a bare "done".
-      setActionResult(t('facilities.observed.scanDone', { ...result }));
+      // still a 200, and the toast must say so honestly rather than a bare "done".
+      toast.success(t('facilities.observed.scanDone', { ...result }));
       // The underlying row set just changed (new codes discovered) — an operator sitting on page 3
       // must not be stranded past the new last page.
       setPage(0);
       await reload({ background: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      actionFailed(e);
     } finally {
       setScanning(false);
     }
@@ -153,14 +158,13 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
 
   const runPublish = useCallback(async () => {
     setPublishing(true);
-    setError(null);
     try {
       const result = await publishFacilities({ apply: true });
-      setActionResult(t('facilities.observed.publishDone', { ...result }));
+      toast.success(t('facilities.observed.publishDone', { ...result }));
       setPage(0);
       await reload({ background: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      actionFailed(e);
     } finally {
       setPublishing(false);
     }
@@ -188,7 +192,6 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
   const openMapping = useCallback(async (row: ObservedFacility) => {
     if (mappingLoading) return;
     setMappingLoading(true);
-    setError(null);
     try {
       // Each row carries the resolver's OWN verdict on which coding system its mappings are keyed
       // on (`row.observedSystem`: the wire's `performer_system` when it sent one, else the feed's
@@ -216,7 +219,7 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
       setMappingRow(row);
       setMappingDialogOpen(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      actionFailed(e);
     } finally {
       setMappingLoading(false);
     }
@@ -264,7 +267,6 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
     if (!removingRow) return;
     const row = removingRow;
     setRemovingRow(null);
-    setError(null);
     try {
       const system = row.observedSystem;
       const { outgoing } = await listTermMappings(system, row.sourceCode);
@@ -274,7 +276,7 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
       // `loading` and unmounts this panel, blanking the just-closed confirmation.
       await reload({ background: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      actionFailed(e);
     }
   }, [removingRow, reload]);
 
@@ -318,18 +320,6 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
         </div>
       ) : (
         actionsPortalTarget && createPortal(actionsMenu, actionsPortalTarget)
-      )}
-
-      {error && (
-        <div className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
-      )}
-
-      {actionResult && (
-        <div className="mx-4 mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          {actionResult}
-        </div>
       )}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -448,10 +438,12 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
               })}
             </TableBody>
           </Table>
-        ) : error ? null : (
-          // Mutually exclusive with the error banner above: "run a scan to discover facilities"
-          // actively misdirects an operator whose load just failed for network reasons — there is
-          // nothing to scan into fixing that. See ObservedTab.test.tsx's "surfaces a load error".
+        ) : error ? (
+          <LoadFailed />
+        ) : (
+          // Never shown after a failed load: "run a scan to discover facilities" actively
+          // misdirects an operator whose load just failed for network reasons. There is nothing to
+          // scan into fixing that. See ObservedTab.test.tsx's "a failed load".
           <EmptyState
             icon={<Building2 className="h-6 w-6" />}
             title={t('facilities.observed.empty')}

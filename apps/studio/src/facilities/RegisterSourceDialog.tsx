@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -50,7 +51,6 @@ export function RegisterSourceDialog({
   const [jurisdiction, setJurisdiction] = useState('');
   const [contact, setContact] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // A fresh form every time the dialog is (re)opened — otherwise a second "Register a source" in
   // the same sheet session would reopen onto the previous attempt's leftover values (or its error).
@@ -62,7 +62,6 @@ export function RegisterSourceDialog({
     setVersion('');
     setJurisdiction('');
     setContact('');
-    setError(null);
   }, [open]);
 
   const canSave = url.trim().length > 0 && name.trim().length > 0 && code.trim().length > 0 && !saving;
@@ -70,7 +69,6 @@ export function RegisterSourceDialog({
   const handleSave = async (): Promise<void> => {
     if (!canSave) return;
     setSaving(true);
-    setError(null);
     try {
       const created = await createFacilityImportSource({
         url: url.trim(),
@@ -83,7 +81,7 @@ export function RegisterSourceDialog({
       onCreated(created);
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -182,11 +180,6 @@ export function RegisterSourceDialog({
           />
         </div>
 
-        {error && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {error}
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );

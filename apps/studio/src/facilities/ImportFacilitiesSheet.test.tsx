@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StrictMode } from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import i18n from '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -599,7 +601,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(/2 duplicate national code/i)).toBeInTheDocument();
   });
 
-  it('a rejected upload surfaces the server message and keeps the sheet open', async () => {
+  it('a rejected upload shows the server message as a toast and keeps the sheet open', async () => {
     mocked(api.uploadFacilityImport).mockRejectedValue(
       new Error('import facilities failed: Invalid Record Length: columns length is 3, got 2 on line 4'),
     );
@@ -609,7 +611,8 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    expect(await screen.findByText(/invalid record length/i)).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('import facilities failed: Invalid Record Length: columns length is 3, got 2 on line 4'));
+    expect(screen.queryByText(/invalid record length/i)).not.toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
@@ -1396,8 +1399,8 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    expect(await screen.findByText(/larger than the upload limit/i)).toBeInTheDocument();
-    expect(screen.queryByText(/67108864-byte/)).not.toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/larger than the upload limit/i)));
+    expect(toast.error).not.toHaveBeenCalledWith(expect.stringMatching(/67108864-byte/));
   });
 
   // The positive half of the StrictMode test's "never sticks on checking" assertion: this copy has
@@ -1837,9 +1840,9 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   // A poll that gives up STOPS the chain: `run` stays null forever, so a "checking…" line gated on
-  // `runId && !run` alone went on claiming an activity that had already stopped — directly under the
-  // error box saying so.
-  it('A2b: a poll that fails replaces "checking the import run" with the failure, rather than both', async () => {
+  // `runId && !run` alone went on claiming an activity that had already stopped, under the toast
+  // saying so.
+  it('A2b: a poll that fails replaces "checking the import run" with a failure toast, rather than both', async () => {
     mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
     mocked(api.getFacilityImportRun).mockRejectedValue(new Error('import run not found: run-b1'));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
@@ -1847,7 +1850,8 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    expect(await screen.findByText(/import run not found: run-b1/i)).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('import run not found: run-b1'));
+    expect(screen.queryByText(/import run not found: run-b1/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/checking the import run/i)).not.toBeInTheDocument();
   });
 

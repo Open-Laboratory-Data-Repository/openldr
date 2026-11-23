@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 // Mirrors Facilities.test.tsx's mocking pattern: spread the real module so anything this
 // component doesn't override keeps working, and stub only the surface ObservedTab uses.
@@ -331,10 +333,13 @@ describe('ObservedTab', () => {
     expect(await screen.findByText(/no observed facilities/i)).toBeInTheDocument();
   });
 
-  it('surfaces a load error, and does not ALSO show the misleading "run a scan" empty state', async () => {
+  it('a failed load shows one toast and the could-not-load text, not the misleading "run a scan" empty state', async () => {
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('network blip'));
     show();
-    expect(await screen.findByText(/network blip/i)).toBeInTheDocument();
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('network blip');
+    expect(screen.queryByText(/network blip/i)).not.toBeInTheDocument();
     // A load failure leaves `rows` at `[]`, same as a genuinely empty result — but "run a scan to
     // discover facility strings" actively misdirects an operator whose fetch failed for network
     // reasons; there is nothing a scan fixes here. The two states must be mutually exclusive.
@@ -374,10 +379,9 @@ describe('ObservedTab', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /scan for new facilities/i }));
 
     await waitFor(() => expect(scanObservedFacilities).toHaveBeenCalledWith({ apply: true }));
-    // The banner must report the REAL counters, not a bare "done" — a caller that only checked
+    // The toast must report the REAL counters, not a bare "done". A caller that only checked
     // res.ok would say the same thing for a scan that discovered zero new codes.
-    expect(await screen.findByText(/23 discovered/i)).toBeInTheDocument();
-    expect(screen.getByText(/2 created/i)).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('23 discovered, 2 created, 21 updated.'));
     // The list is refreshed after a successful scan.
     await waitFor(() => expect(listObservedFacilities).toHaveBeenCalledTimes(2));
   });
@@ -398,9 +402,24 @@ describe('ObservedTab', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /scan for new facilities/i }));
 
     await waitFor(() => expect(scanObservedFacilities).toHaveBeenCalledWith({ apply: true }));
-    expect(await screen.findByText(/0 discovered/i)).toBeInTheDocument();
-    expect(screen.getByText(/0 created/i)).toBeInTheDocument();
-    expect(screen.getByText(/0 updated/i)).toBeInTheDocument();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('0 discovered, 0 created, 0 updated.'));
+  });
+
+  it('a failed scan shows a toast and keeps the list', async () => {
+    (scanObservedFacilities as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('scan refused'));
+    show();
+    await screen.findByText('Dodoma');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /scan for new facilities/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /scan for new facilities/i }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('scan refused'));
+    expect(screen.queryByText('scan refused')).not.toBeInTheDocument();
+    expect(screen.getByText('Dodoma')).toBeInTheDocument();
   });
 
   it('paginates client-side using the shared TablePagination, and resets to page 0 after a scan', async () => {
