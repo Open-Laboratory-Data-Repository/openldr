@@ -1806,6 +1806,7 @@ export const fr: EnShape = {
       samples: 'Échantillons',
       noSamples: 'Aucun échantillon reçu pour l\'instant.',
       noType: 'Aucun type d\'échantillon',
+      sampleRejected: 'Rejeté',
       markCorrected: "Corrigée par le site",
       returnOrder: "Renvoyer au site",
       rejectSample: "Rejeter l'échantillon",

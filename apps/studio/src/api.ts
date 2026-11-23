@@ -3920,7 +3920,8 @@ export interface ReceptionOrder {
     /** Why the request was rejected, from its rejection extension (lab slice 3). */
     rejection: { code: string; display: string | null } | null;
   }>;
-  specimens: Array<{ id: string; type: ReceptionCoding | null; condition: string | null; receivedTime: string | null }>;
+  /** status is the Specimen status as stored: unsatisfactory is a rejected sample. */
+  specimens: Array<{ id: string; type: ReceptionCoding | null; condition: string | null; receivedTime: string | null; status: string | null }>;
   /** The open return Task: why the lab returned the order to its site, who did and when. */
   returned: { reason: { code: string; display: string | null }; by: string | null; at: string } | null;
   /** The redraw Tasks of the order's samples and requests. */

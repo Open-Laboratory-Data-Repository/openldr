@@ -1818,6 +1818,7 @@ export const en = {
       samples: 'Samples',
       noSamples: 'No sample received yet.',
       noType: 'No sample type',
+      sampleRejected: 'Rejected',
       markCorrected: "Corrected by site",
       returnOrder: "Return to site",
       rejectSample: "Reject sample",

@@ -1806,6 +1806,7 @@ export const pt: EnShape = {
       samples: 'Amostras',
       noSamples: 'Ainda não foi recebida nenhuma amostra.',
       noType: 'Sem tipo de amostra',
+      sampleRejected: 'Rejeitada',
       markCorrected: "Corrigido pelo local",
       returnOrder: "Devolver ao local",
       rejectSample: "Rejeitar amostra",

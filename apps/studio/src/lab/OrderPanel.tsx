@@ -60,8 +60,8 @@ export function OrderPanel({
   for (const x of order.tests.filter(isLive)) liveRows.set(x.serviceRequestId, (liveRows.get(x.serviceRequestId) ?? 0) + 1);
   const mayRejectTest = (x: ReceptionOrder['tests'][number]): boolean => isLive(x) && liveRows.get(x.serviceRequestId) === 1;
   const hasLive = order.tests.some(isLive);
-  // The server refuses a desk order and one already returned or on hold.
-  const mayReturn = canReject && hasLive && order.origin !== 'lab-desk' && !returned
+  // The server refuses a desk order, one with no facility to return it to, and one already returned or on hold.
+  const mayReturn = canReject && hasLive && order.origin !== 'lab-desk' && order.facility !== null && !returned
     && !order.tests.some((x) => x.status === 'on-hold');
   const returnedText = order.returned
     ? t(order.returned.by ? 'reception.panel.returnedBy' : 'reception.panel.returnedAt', {
@@ -203,6 +203,7 @@ export function OrderPanel({
             {order.specimens.map((s) => (
               <li key={s.id} className="flex flex-wrap gap-x-3">
                 <span>{s.type ? (s.type.display ?? s.type.code) : t('reception.panel.noType')}</span>
+                {s.status === 'unsatisfactory' && <span data-testid={`sample-rejected-${s.id}`}>{t('reception.panel.sampleRejected')}</span>}
                 {s.condition && <span className="text-muted-foreground">{s.condition}</span>}
                 {s.receivedTime && <span className="text-muted-foreground">{localDateTime(s.receivedTime, i18n.language)}</span>}
               </li>

@@ -18,6 +18,8 @@ describe('system role presets', () => {
   it('technician enters data and results at the bench', () => {
     const tech = SYSTEM_ROLES.find((r) => r.slug === 'lab_technician')!;
     expect(tech.capabilities).toEqual(['forms.view', 'forms.submit', 'lab.reject', 'lab.results.enter', 'lab.worklist.view']);
+    // The role holds lab.reject, so its description says it can reject.
+    expect(tech.description).toMatch(/reject a sample or test/);
   });
 
   // forms.submit WRITES clinical records (POST /api/forms/:id/responses runs the submission

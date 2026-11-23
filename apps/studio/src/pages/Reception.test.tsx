@@ -259,6 +259,34 @@ describe('Reception return, reject and redraw', () => {
     expect(await menuItems({ ...ORDER, tests: [{ ...ORDER.tests[0]!, status: 'on-hold' }] })).not.toContain('Return to site');
   });
 
+  it('offers no Return to site for an order with no facility', async () => {
+    caps.set = new Set(['lab.receive', 'lab.reject']);
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([{ ...ORDER, facility: null }]);
+    renderPage();
+    await search('REQ-1');
+    await screen.findByTestId('order-panel-|REQ-1');
+    openMenu('order-actions-|REQ-1');
+    const items = (await screen.findAllByRole('menuitem')).map((m) => m.textContent);
+    expect(items).toContain('Reject sample');
+    expect(items).not.toContain('Return to site');
+  });
+
+  it('shows a rejected sample as rejected in the sample list', async () => {
+    const withSamples: api.ReceptionOrder = {
+      ...ORDER,
+      specimens: [
+        { id: 'sp1', type: { system: 'urn:test:specimen', code: 'S1', display: 'Sample one' }, condition: 'Clotted', receivedTime: null, status: 'unsatisfactory' },
+        { id: 'sp2', type: { system: 'urn:test:specimen', code: 'S2', display: 'Sample two' }, condition: null, receivedTime: null, status: 'available' },
+      ],
+    };
+    vi.mocked(api.findReceptionOrders).mockResolvedValue([withSamples]);
+    renderPage();
+    await search('REQ-1');
+    const samples = await screen.findByTestId('order-samples-F1|REQ-1');
+    expect(within(samples).getByTestId('sample-rejected-sp1')).toHaveTextContent('Rejected');
+    expect(within(samples).queryByTestId('sample-rejected-sp2')).toBeNull();
+  });
+
   it('offers Corrected by site, not Correct order, for a returned order, and shows why it was returned', async () => {
     caps.set = new Set(['lab.receive', 'lab.reject']);
     expect(await menuItems(RETURNED)).toEqual([

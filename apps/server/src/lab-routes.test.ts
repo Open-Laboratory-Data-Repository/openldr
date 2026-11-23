@@ -16,7 +16,7 @@ const ORDER: ReceptionOrder = {
   clinician: 'Dr K',
   note: null,
   tests: [{ serviceRequestId: 'sr1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active', rejection: null }],
-  specimens: [{ id: 'sp1', type: { system: 'urn:t', code: 'BLD', display: 'Blood' }, condition: 'Good', receivedTime: '2026-11-23T08:00:00Z' }],
+  specimens: [{ id: 'sp1', type: { system: 'urn:t', code: 'BLD', display: 'Blood' }, condition: 'Good', receivedTime: '2026-11-23T08:00:00Z', status: 'available' }],
   returned: null,
   redraws: [],
 };
@@ -146,7 +146,7 @@ describe('lab reception routes', () => {
           clinician: 'Dr K',
           note: null,
           tests: [{ serviceRequestId: 'sr1', system: TEST_CATALOG_SYSTEM, code: 'HB', display: 'Haemoglobin', status: 'active', rejection: null }],
-          specimens: [{ id: 'sp1', type: { system: 'urn:t', code: 'BLD', display: 'Blood' }, condition: 'Good', receivedTime: '2026-11-23T08:00:00Z' }],
+          specimens: [{ id: 'sp1', type: { system: 'urn:t', code: 'BLD', display: 'Blood' }, condition: 'Good', receivedTime: '2026-11-23T08:00:00Z', status: 'available' }],
           returned: null,
           redraws: [],
         }],

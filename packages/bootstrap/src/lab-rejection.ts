@@ -239,9 +239,12 @@ export function createLabRejection(deps: LabRejectionDeps): LabRejection {
     return readBack(order.requisition, facility);
   }
 
-  /** The open return Task set to cancelled, for a returned order whose sample was rejected (ruling 8). */
-  async function cancelledReturn(order: ReceptionOrder): Promise<Json | null> {
+  /** The open return Task set to cancelled, for a returned order a rejection leaves with no live
+   *  request (ruling 8). While another request is still live, the Task stays open so the desk can
+   *  mark the order corrected. `revokedIds` are the requests this rejection revokes. */
+  async function cancelledReturn(order: ReceptionOrder, revokedIds: string[]): Promise<Json | null> {
     const facility = order.facility?.code ?? null;
+    if ((await liveRequests(order)).some((sr) => !revokedIds.includes(String(sr['id'])))) return null;
     if (!(await returnedOf(facility, order.requisition))) return null;
     const task = await getJson('Task', returnTaskId(facility, order.requisition));
     return task ? { ...structuredClone(task), status: 'cancelled' } : null;
@@ -320,7 +323,7 @@ export function createLabRejection(deps: LabRejectionDeps): LabRejection {
       if (existing) nexts.push({ resourceType: 'Specimen', next: specimen });
     }
 
-    const returnTask = await cancelledReturn(order);
+    const returnTask = await cancelledReturn(order, targets.map((sr) => String(sr['id'])));
     const redrawId = redrawTaskId(specimenId);
     const redrawStored = await getJson('Task', redrawId);
     const redrawDone = redrawStored !== null && ['requested', 'completed'].includes(String(redrawStored['status']));
@@ -368,6 +371,7 @@ export function createLabRejection(deps: LabRejectionDeps): LabRejection {
       dataAbsentReason: { coding: [reason] },
     };
     if (observation) checkedOrThrow(observation);
+    const returnTask = await cancelledReturn(order, [id]);
     const redrawId = redrawTaskId(id);
     const redrawStored = await getJson('Task', redrawId);
     const redrawDone = redrawStored !== null && ['requested', 'completed'].includes(String(redrawStored['status']));
@@ -381,6 +385,7 @@ export function createLabRejection(deps: LabRejectionDeps): LabRejection {
       await persistResources({ fhirStore, logger: deps.logger },
         [observation, deskProvenance([`Observation/${obsId}`], 'CREATE', actor, now().toISOString(), why)], { sourceSystem: LAB_DESK_ORIGIN });
     }
+    if (returnTask) await writeTask(returnTask, actor, why);
     if (redraw) await writeTask(redraw, actor, why);
     return readBack(order.requisition, order.facility?.code ?? null);
   }

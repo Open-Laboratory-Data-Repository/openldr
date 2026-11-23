@@ -61,6 +61,8 @@ export interface ReceptionOrder {
     type: { system: string; code: string; display: string | null } | null;
     condition: string | null;
     receivedTime: string | null;
+    /** The Specimen status as stored: unsatisfactory is a rejected sample. */
+    status: string | null;
   }>;
   /** The open return Task (lab slice 3, ruling 2): why the lab returned the order, who did and when. */
   returned: { reason: { code: string; display: string | null }; by: string | null; at: string } | null;
@@ -263,6 +265,7 @@ function specimenOf(sp: Json): ReceptionOrder['specimens'][number] {
       : null,
     condition: (cond && text(cond['text'])) ?? (condCoding && (text(condCoding['display']) ?? text(condCoding['code']))) ?? null,
     receivedTime: text(sp['receivedTime']),
+    status: text(sp['status']),
   };
 }
 
@@ -865,6 +868,10 @@ export function createReceptionCore(deps: LabReceptionDeps) {
 
     const id = labSpecimenId(facility, order.requisition, choice);
     const existing = (await fhirStore.get('Specimen', id)) as Json | null;
+    // A rejected sample stays rejected: a new sample comes in on a redraw order.
+    if (existing && existing['status'] === 'unsatisfactory') {
+      throw new ReceptionError('conflict', `This ${choice.display ?? choice.code} sample was rejected. Register a redraw order for the new sample.`);
+    }
     const display = text(input.type.display) ?? choice.display;
     const recorded = now().toISOString();
     const specimen: Json = {

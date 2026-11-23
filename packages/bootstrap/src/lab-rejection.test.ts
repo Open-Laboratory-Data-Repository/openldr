@@ -330,6 +330,47 @@ describe('lab rejection, reject a sample', () => {
     expect(o.tests.every((t) => t.status === 'revoked')).toBe(true);
   });
 
+  it('rejecting one sample of a returned order keeps the return Task open while a test stays on hold', async () => {
+    await save(w, formOrder('FAC-1', 'R-25', [{ code: 'HB', display: 'Haemoglobin' }, { code: 'UA', display: 'Urinalysis' }]));
+    await w.rejection.returnOrder({ requisition: 'R-25', facilityCode: 'FAC-1', reasonCode: 'form-incomplete' }, 'Neema');
+    const taskId = labTaskId('correct-request', orderKey('FAC-1', 'R-25'));
+    const o = await w.rejection.rejectSample({
+      requisition: 'R-25', facilityCode: 'FAC-1', specimenTypeCode: 'BLD', conditionCode: 'CLOT', reasonCode: 'WRONGPT', redraw: false,
+    }, 'Neema');
+    expect((await get(w, 'Task', taskId))['status']).toBe('requested');
+    expect(o.returned).not.toBeNull();
+    expect(Object.fromEntries(o.tests.map((t) => [t.code, t.status]))).toEqual({ HB: 'revoked', UA: 'on-hold' });
+    // Corrected by site still takes the urine test out of hold.
+    const after = await w.rejection.markCorrected({ requisition: 'R-25', facilityCode: 'FAC-1', changes: {}, reason: 'site fixed the form' }, 'Neema');
+    expect(Object.fromEntries(after.tests.map((t) => [t.code, t.status]))).toEqual({ HB: 'revoked', UA: 'active' });
+    expect((await get(w, 'Task', taskId))['status']).toBe('completed');
+  });
+
+  it('a rejected sample shows its status on the order', async () => {
+    await save(w, formOrder('FAC-1', 'R-26', [{ code: 'HB', display: 'Haemoglobin' }, { code: 'UA', display: 'Urinalysis' }]));
+    await w.reception.receiveSample({ requisition: 'R-26', facilityCode: 'FAC-1', type: URINE, receivedTime: '2026-11-23T08:00:00Z' }, 'Neema');
+    const o = await w.rejection.rejectSample({
+      requisition: 'R-26', facilityCode: 'FAC-1', specimenTypeCode: 'BLD', conditionCode: 'CLOT', reasonCode: 'WRONGPT', redraw: false,
+    }, 'Neema');
+    expect(Object.fromEntries(o.specimens.map((s) => [s.type?.code, s.status]))).toEqual({ BLD: 'unsatisfactory', UR: 'available' });
+  });
+
+  it('refuses to receive a rejected sample again, writing nothing', async () => {
+    await save(w, formOrder('FAC-1', 'R-27', HB_GLU));
+    // The receipt names the haemoglobin request only, so glucose stays live and still takes blood.
+    await w.reception.receiveSample({
+      requisition: 'R-27', facilityCode: 'FAC-1', type: BLD, serviceRequestIds: [srId('FAC-1', 'R-27', 'HB')], receivedTime: '2026-11-23T08:00:00Z',
+    }, 'Neema');
+    await w.rejection.rejectSample({
+      requisition: 'R-27', facilityCode: 'FAC-1', specimenTypeCode: 'BLD', conditionCode: 'CLOT', reasonCode: 'WRONGPT', redraw: false,
+    }, 'Neema');
+    const before = await historyCount(w);
+    await expect(w.reception.receiveSample({ requisition: 'R-27', facilityCode: 'FAC-1', type: BLD }, 'Neema'))
+      .rejects.toMatchObject({ reason: 'conflict', message: expect.stringMatching(/was rejected\. Register a redraw/) });
+    expect(await historyCount(w)).toBe(before);
+    expect((await get(w, 'Specimen', labSpecimenId('FAC-1', 'R-27', BLD)))['status']).toBe('unsatisfactory');
+  });
+
   it('a retried sample reject writes nothing more (focus 5)', async () => {
     await save(w, formOrder('FAC-1', 'R-24', HB_GLU));
     const input = { requisition: 'R-24', facilityCode: 'FAC-1', specimenTypeCode: 'BLD', conditionCode: 'HEM', reasonCode: 'WRONGPT', redraw: true };
@@ -370,6 +411,18 @@ describe('lab rejection, reject one test', () => {
     expect(Object.fromEntries(o.tests.map((t) => [t.code, t.status]))).toEqual({ HB: 'revoked', GLU: 'active' });
     expect(o.tests.find((t) => t.code === 'HB')!.rejection).toEqual({ code: 'QNS', display: 'Insufficient volume' });
     expect(o.redraws).toEqual([{ taskId: task['id'], status: 'requested', focus: `ServiceRequest/${hb}`, replacedBy: null }]);
+  });
+
+  it('on a returned order, the return Task closes only when the last live test is rejected', async () => {
+    await save(w, formOrder('FAC-1', 'R-33', HB_GLU));
+    await w.rejection.returnOrder({ requisition: 'R-33', facilityCode: 'FAC-1', reasonCode: 'form-incomplete' }, 'Neema');
+    const taskId = labTaskId('correct-request', orderKey('FAC-1', 'R-33'));
+    const first = await w.rejection.rejectTest({ serviceRequestId: srId('FAC-1', 'R-33', 'HB'), reasonCode: 'QNS', redraw: false }, 'Neema');
+    expect((await get(w, 'Task', taskId))['status']).toBe('requested');
+    expect(first.returned).not.toBeNull();
+    const last = await w.rejection.rejectTest({ serviceRequestId: srId('FAC-1', 'R-33', 'GLU'), reasonCode: 'QNS', redraw: false }, 'Neema');
+    expect((await get(w, 'Task', taskId))['status']).toBe('cancelled');
+    expect(last.returned).toBeNull();
   });
 
   it('a retried test reject writes no second Observation or Task (focus 5)', async () => {

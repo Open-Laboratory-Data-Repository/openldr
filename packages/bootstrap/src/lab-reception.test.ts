@@ -147,7 +147,7 @@ describe('lab reception, orders', () => {
     w.fhirStore.get = async (type, id) => { read.push(`${type}/${id}`); return get(type, id); };
     const [o] = await w.reception.findOrders('R-300');
     expect(o!.specimens).toEqual([
-      { id: fixed, type: { ...BLD, display: 'Blood' }, condition: 'Haemolysed', receivedTime: '2026-11-22T08:00:00Z' },
+      { id: fixed, type: { ...BLD, display: 'Blood' }, condition: 'Haemolysed', receivedTime: '2026-11-22T08:00:00Z', status: 'available' },
     ]);
     expect(read.filter((r) => r.startsWith('Specimen/'))).toEqual([`Specimen/${fixed}`]);
   });
@@ -431,7 +431,7 @@ describe('lab reception, samples', () => {
     const o = await w.reception.receiveSample({
       requisition: ' R-S2 ', facilityCode: 'FAC-1', type: { ...BLD, display: 'Blood' }, receivedTime: '2026-11-23T08:00:00Z',
     }, 'Neema');
-    expect(o.specimens).toEqual([{ id, type: { ...BLD, display: 'Blood' }, condition: null, receivedTime: '2026-11-23T08:00:00Z' }]);
+    expect(o.specimens).toEqual([{ id, type: { ...BLD, display: 'Blood' }, condition: null, receivedTime: '2026-11-23T08:00:00Z', status: 'available' }]);
     const sp = await w.fhirStore.get('Specimen', id) as Record<string, unknown>;
     expect(sp).toMatchObject({
       status: 'available', subject: { reference: 'Patient/p1', display: 'Asha Mrema' },

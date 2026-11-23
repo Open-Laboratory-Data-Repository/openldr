@@ -66,7 +66,7 @@ describe('RejectSampleSheet', () => {
 
   it('sends redraw false when the switch is turned off, and starts on a received sample\'s type', async () => {
     vi.mocked(api.rejectReceptionSample).mockResolvedValue(ORDER);
-    const received = { ...ORDER, specimens: [{ id: 'sp1', type: { system: 'urn:test:specimen', code: 'S2', display: 'Sample two' }, condition: null, receivedTime: '2026-11-23T09:00:00Z' }] };
+    const received = { ...ORDER, specimens: [{ id: 'sp1', type: { system: 'urn:test:specimen', code: 'S2', display: 'Sample two' }, condition: null, receivedTime: '2026-11-23T09:00:00Z', status: 'available' }] };
     render(<RejectSampleSheet order={received} onClose={() => {}} onRejected={() => {}} />);
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Sample type' })).toHaveTextContent('Sample two'));
     await pick('Condition', 'Condition one');
