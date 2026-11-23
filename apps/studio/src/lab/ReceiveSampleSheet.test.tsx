@@ -25,10 +25,12 @@ const ORDER: api.ReceptionOrder = {
   requisition: 'REQ-1', facility: { code: 'F1', display: 'Facility one' }, origin: 'form',
   patient: { id: 'p1', display: 'Ann Banda' }, priority: null, clinician: null, note: null,
   tests: [
-    { serviceRequestId: 'sr1', system: 'urn:test:catalog', code: 'T1', display: 'Test one', status: 'active' },
-    { serviceRequestId: 'sr2', system: 'urn:test:catalog', code: 'T2', display: 'Test two', status: 'active' },
+    { serviceRequestId: 'sr1', system: 'urn:test:catalog', code: 'T1', display: 'Test one', status: 'active', rejection: null },
+    { serviceRequestId: 'sr2', system: 'urn:test:catalog', code: 'T2', display: 'Test two', status: 'active', rejection: null },
   ],
   specimens: [],
+  returned: null,
+  redraws: [],
 };
 
 function openMenu(testId: string) {

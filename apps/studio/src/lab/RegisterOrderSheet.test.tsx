@@ -40,7 +40,7 @@ describe('RegisterOrderSheet', () => {
   it('registers the order with the values filled in, and the patient made in the patient sheet', async () => {
     const onRegistered = vi.fn();
     const made = { requisition: 'REQ-9', facility: { code: 'F1', display: 'Facility one' }, origin: 'lab-desk' as const,
-      patient: { id: 'p1', display: 'Ann Banda' }, priority: 'p9', clinician: 'Dr Phiri', note: null, tests: [], specimens: [] };
+      patient: { id: 'p1', display: 'Ann Banda' }, priority: 'p9', clinician: 'Dr Phiri', note: null, tests: [], specimens: [], returned: null, redraws: [] };
     vi.mocked(api.registerReceptionOrder).mockResolvedValue(made);
     vi.mocked(api.registerReceptionPatient).mockResolvedValue({ id: 'p1', display: 'Ann Banda' });
     render(<RegisterOrderSheet open requisition="REQ-9" onClose={() => {}} onRegistered={onRegistered} />);

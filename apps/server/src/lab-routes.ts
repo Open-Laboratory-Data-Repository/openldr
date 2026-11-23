@@ -11,6 +11,9 @@ import { requireCapability } from './rbac';
 // but not forms.view, facilities.view, terminology.view or patients.view_identifiers, so every
 // existing lookup refuses it. These routes gate on lab.receive alone and call createLabReception.
 const RECEIVE = { preHandler: requireCapability('lab.receive') };
+// Slice 3: returning a request and rejecting a sample or test need lab.reject. Linking a redraw is
+// part of receiving the new order, so it stays on lab.receive.
+const REJECT = { preHandler: requireCapability('lab.reject') };
 
 /** The facility search's page and minimum, as the form picker's (reference-search-routes.ts). */
 const FACILITY_LIMIT = 20;
@@ -64,6 +67,38 @@ const cancelOrderBody = z.object({
   facilityCode: code.nullable(),
   reason: z.string().max(TEXT_MAX),
 });
+// Slice 3 bodies are strict: an extra key is refused with 400, not dropped. The changes of a
+// corrected order pass through as a correction's do, so the service names the change it refuses.
+const returnOrderBody = z.object({
+  requisition,
+  facilityCode: code.nullable(),
+  reasonCode: code,
+  note: z.string().max(TEXT_MAX).optional(),
+}).strict();
+const markCorrectedBody = z.object({
+  requisition,
+  facilityCode: code.nullable(),
+  changes: correctOrderBody.shape.changes,
+  reason: z.string().max(TEXT_MAX),
+}).strict();
+const rejectSampleBody = z.object({
+  requisition,
+  facilityCode: code.nullable(),
+  specimenTypeCode: code,
+  conditionCode: code,
+  reasonCode: code,
+  redraw: z.boolean(),
+}).strict();
+const rejectTestBody = z.object({
+  serviceRequestId: code,
+  reasonCode: code,
+  redraw: z.boolean(),
+}).strict();
+const linkRedrawBody = z.object({
+  requisition,
+  facilityCode: code.nullable(),
+  replacesRequisition: requisition,
+}).strict();
 const patientsQuery = z.object({
   identifier: z.string().max(CODE_MAX).optional(),
   name: name.optional(),
@@ -124,6 +159,7 @@ function actorOf(req: FastifyRequest): string | null {
 
 export function registerLabRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   const desk = ctx.labReception;
+  const rejection = ctx.labRejection;
 
   /** Parses a body or query, or answers 400 and returns null. */
   function parse<T>(schema: z.ZodType<T>, input: unknown, reply: FastifyReply): T | null {
@@ -192,6 +228,100 @@ export function registerLabRoutes(app: FastifyInstance<any, any, any, any>, ctx:
       await recordAudit(ctx, req, {
         action: 'lab.order.cancel', entityType: 'lab_order', entityId: order.requisition,
         metadata: { facility: order.facility?.code ?? null },
+      });
+      return reply.send(order);
+    } catch (err) {
+      return replyReceptionError(err, reply);
+    }
+  });
+
+  app.post('/api/lab/orders/return', REJECT, async (req, reply) => {
+    const who = actor(req, reply);
+    if (!who) return reply;
+    const body = parse(returnOrderBody, req.body, reply);
+    if (!body) return reply;
+    try {
+      const order = await rejection.returnOrder(body, who);
+      // The reason code, not the note: the note may name the patient. The Task holds it.
+      await recordAudit(ctx, req, {
+        action: 'lab.order.return', entityType: 'lab_order', entityId: order.requisition,
+        metadata: { facility: order.facility?.code ?? null, reason: body.reasonCode },
+      });
+      return reply.send(order);
+    } catch (err) {
+      return replyReceptionError(err, reply);
+    }
+  });
+
+  app.post('/api/lab/orders/corrected', REJECT, async (req, reply) => {
+    const who = actor(req, reply);
+    if (!who) return reply;
+    const body = parse(markCorrectedBody, req.body, reply);
+    if (!body) return reply;
+    try {
+      const order = await rejection.markCorrected(body, who);
+      await recordAudit(ctx, req, {
+        action: 'lab.order.corrected', entityType: 'lab_order', entityId: order.requisition,
+        metadata: { facility: order.facility?.code ?? null, fields: Object.keys(body.changes) },
+      });
+      return reply.send(order);
+    } catch (err) {
+      return replyReceptionError(err, reply);
+    }
+  });
+
+  app.post('/api/lab/samples/reject', REJECT, async (req, reply) => {
+    const who = actor(req, reply);
+    if (!who) return reply;
+    const body = parse(rejectSampleBody, req.body, reply);
+    if (!body) return reply;
+    try {
+      const order = await rejection.rejectSample(body, who);
+      const specimen = order.specimens.find((s) => s.type?.code === body.specimenTypeCode);
+      await recordAudit(ctx, req, {
+        action: 'lab.sample.reject', entityType: 'specimen', entityId: specimen?.id ?? order.requisition,
+        metadata: {
+          requisition: order.requisition, facility: order.facility?.code ?? null,
+          type: body.specimenTypeCode, condition: body.conditionCode, reason: body.reasonCode, redraw: body.redraw,
+        },
+      });
+      return reply.send(order);
+    } catch (err) {
+      return replyReceptionError(err, reply);
+    }
+  });
+
+  app.post('/api/lab/tests/reject', REJECT, async (req, reply) => {
+    const who = actor(req, reply);
+    if (!who) return reply;
+    const body = parse(rejectTestBody, req.body, reply);
+    if (!body) return reply;
+    try {
+      const order = await rejection.rejectTest(body, who);
+      const test = order.tests.find((t) => t.serviceRequestId === body.serviceRequestId);
+      await recordAudit(ctx, req, {
+        action: 'lab.test.reject', entityType: 'service_request', entityId: body.serviceRequestId,
+        metadata: {
+          requisition: order.requisition, facility: order.facility?.code ?? null,
+          test: test?.code ?? null, reason: body.reasonCode, redraw: body.redraw,
+        },
+      });
+      return reply.send(order);
+    } catch (err) {
+      return replyReceptionError(err, reply);
+    }
+  });
+
+  app.post('/api/lab/orders/redraw', RECEIVE, async (req, reply) => {
+    const who = actor(req, reply);
+    if (!who) return reply;
+    const body = parse(linkRedrawBody, req.body, reply);
+    if (!body) return reply;
+    try {
+      const order = await rejection.linkRedraw(body, who);
+      await recordAudit(ctx, req, {
+        action: 'lab.order.redraw', entityType: 'lab_order', entityId: order.requisition,
+        metadata: { facility: order.facility?.code ?? null, replaces: body.replacesRequisition },
       });
       return reply.send(order);
     } catch (err) {
