@@ -58,3 +58,24 @@ export class PermissionGroupTakenError extends Error {
     this.name = 'PermissionGroupTakenError';
   }
 }
+
+/** The permissions each entrypoint needs, as a stored plugin row declares them
+ *  (`manifest.payload.actionPermissions`). `undefined` when the row declares none: the plugin keeps
+ *  the broker's old rules. When the field is there, an entrypoint with no usable list is absent from
+ *  the result, so the broker refuses it (closed by default). A shape check only, like
+ *  `storedPermissions`. */
+export function storedActionPermissions(manifest: Record<string, unknown> | null | undefined): Map<string, string[]> | undefined {
+  const payload = (manifest as { payload?: unknown } | null | undefined)?.payload;
+  if (typeof payload !== 'object' || payload === null || !('actionPermissions' in payload)) return undefined;
+  const raw = (payload as { actionPermissions?: unknown }).actionPermissions;
+  if (raw === undefined) return undefined;
+  // A Map, so an entrypoint named like an Object property ('constructor', '__proto__') finds nothing.
+  const out = new Map<string, string[]>();
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return out;
+  for (const [entrypoint, keys] of Object.entries(raw)) {
+    if (!Array.isArray(keys)) continue;
+    const listed = keys.filter((k): k is string => typeof k === 'string' && k.length > 0);
+    if (listed.length > 0) out.set(entrypoint, listed);
+  }
+  return out;
+}

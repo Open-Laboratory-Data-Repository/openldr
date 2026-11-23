@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { beginOp } from '@openldr/core';
 import { readGrant, type Capability } from '@openldr/marketplace';
 import type { DataScope, JobInterruption, JobInterruptionStore, PluginCaller, PluginDataStore } from '@openldr/db';
-import { hasHostFnCapability, type PluginHost } from '@openldr/plugins';
+import { hasHostFnCapability, storedActionPermissions, storedPermissions, type PluginHost } from '@openldr/plugins';
+import { CAPABILITIES } from '@openldr/rbac';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
 import { checkReadOp } from './check-read-audit';
@@ -336,6 +337,28 @@ function rolesFor(op: BrokerOp): string[] {
   }
 }
 
+const CE_LABELS = new Map(CAPABILITIES.map((c) => [c.key, c.label]));
+
+/** Why this caller may not run this action, or undefined when it may. The caller needs any one of
+ *  the listed permissions. A listed key counts only if it is the plugin's own or a CE capability, so
+ *  a stored row cannot make an action open to a grant of some other plugin's key. An entrypoint the
+ *  plugin does not list is refused (closed by default). */
+function actionRefusal(
+  pluginId: string, manifest: Record<string, unknown>, actions: Map<string, string[]>, entrypoint: string, caller: { capabilities?: string[] },
+): string | undefined {
+  const listed = actions.get(entrypoint);
+  if (!listed) return `the action ${entrypoint} of plugin ${pluginId} is closed: the plugin names no permission for it`;
+  const own = new Map(storedPermissions(manifest).map((p) => [p.key, p.label]));
+  const usable = listed.filter((k) => own.has(k) || CE_LABELS.has(k));
+  const held = new Set(caller.capabilities ?? []);
+  if (usable.some((k) => held.has(k))) return undefined;
+  // CE's label wins when a later CE release adds a key equal to the plugin's (CE owns the key).
+  const names = usable.map((k) => CE_LABELS.get(k) ?? own.get(k) ?? k);
+  return names.length > 0
+    ? `the action ${entrypoint} of plugin ${pluginId} needs one of these permissions: ${names.join(', ')}`
+    : `the action ${entrypoint} of plugin ${pluginId} is closed: it names no permission CE knows`;
+}
+
 export interface PluginBrokerDeps {
   plugins: {
     list(): Promise<Array<{ id: string; version: string; enabled: boolean; manifest: Record<string, unknown> }>>;
@@ -461,7 +484,17 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
         if (!opened.allowed) {
           return deny(op.kind, `plugin ${pluginId} requires one of roles: ${(ui?.requiredRoles ?? []).join(', ')}`);
         }
-        if (!opened.byRole && !CORRECTOR_OPS.has(op.kind)) {
+        // 1c. The permission each action needs (plugin host 2b ruling 2), read from the stored row
+        // of the active version, never from the op. Ruling 6: fhir_emit runs inside an action, so
+        // this gate covers it too.
+        const actions = storedActionPermissions(row.manifest);
+        if (op.kind === 'invoke' && actions) {
+          const refusal = actionRefusal(pluginId, row.manifest, actions, op.entrypoint, principal);
+          if (refusal) return deny(`invoke:${op.entrypoint}`, refusal);
+        }
+        // A caller let in by a capability may make only the corrector's calls. A plugin that names
+        // the permission of each action may also be invoked by such a caller: the gate above decided.
+        if (!opened.byRole && !CORRECTOR_OPS.has(op.kind) && !(op.kind === 'invoke' && actions)) {
           return deny(op.kind, `operation ${op.kind} is not open to a caller without the plugin's role`);
         }
 
