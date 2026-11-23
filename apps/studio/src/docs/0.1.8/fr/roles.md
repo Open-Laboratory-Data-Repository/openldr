@@ -202,7 +202,7 @@ Créer un rôle ne l'attribue à personne. Les attributions se gèrent dans User
 
 Les permissions d'un plugin restent sur les rôles qui les ont quand le plugin est désactivé ou retiré. Son groupe quitte la page Roles, et les permissions n'ouvrent plus rien. Enregistrer le rôle les garde. Quand le plugin est réinstallé, son groupe revient avec les mêmes interrupteurs activés. Pour retirer une permission, désactivez-la pendant que le plugin est installé. `openldr roles doctor` liste comme conservées les permissions laissées par un plugin retiré.
 
-**Trouver un patient** (`patients.find`) est dans le groupe Patients. Elle permet à une page de plugin de trouver un patient dans les établissements de la personne, par un identifiant exact, ou par son nom avec la date de naissance complète. Elle n'ouvre pas l'index des patients. Une personne dont les données sont limitées à certains lieux la garde, et perd **Voir l’index des patients**. Parmi les rôles système, seul Administrator l'a.
+**Find a patient** (`patients.find`), c'est-à-dire trouver un patient, est dans le groupe **Patients**. Elle permet à une page de plugin de trouver un patient dans les établissements de la personne, par un identifiant exact, ou par son nom avec la date de naissance complète. Elle n'ouvre pas l'index des patients. Une personne dont les données sont limitées à certains lieux la garde, et perd **View patient index** (`patients.view`). Parmi les rôles système, seul Administrator l'a.
 
 ## Dépannage
 

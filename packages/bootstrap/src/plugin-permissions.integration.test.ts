@@ -41,8 +41,12 @@ const pluginDir = join(here, '..', '..', '..', 'reference-plugins', 'test-sink-h
 const wasmPath = join(pluginDir, 'plugin.wasm');
 const manifestPath = join(pluginDir, 'manifest.json');
 const url = process.env.HOST_FNS_TEST_DATABASE_URL;
-const ready = Boolean(url) && existsSync(wasmPath) && existsSync(manifestPath)
-  && readFileSync(manifestPath, 'utf8').includes('actionPermissions');
+const staged = existsSync(wasmPath) && existsSync(manifestPath);
+// With a database set, a stale staged manifest (built before plan 2b) must fail loudly, not skip.
+if (url && staged && !readFileSync(manifestPath, 'utf8').includes('actionPermissions')) {
+  throw new Error(`${manifestPath} has no actionPermissions: it was staged before plugin host 2b. Run \`pnpm build:test-sink\` again.`);
+}
+const ready = Boolean(url) && staged;
 
 const ID = 'test-sink-host';
 const F1 = 'aaaaaaaa-1111-4111-8111-111111111111';

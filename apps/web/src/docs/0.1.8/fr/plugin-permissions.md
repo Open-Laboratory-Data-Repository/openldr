@@ -75,7 +75,7 @@ Une mise en page de profil peut lister une page de plugin par son chemin, par ex
 
 ## Trouver un patient avec patients.find
 
-`patients.find` est une capacité de CE pour les utilisateurs qui doivent trouver un patient sans parcourir la liste. Son nom dans le studio est **Trouver un patient**. Un utilisateur limité à certains établissements la garde, et perd `patients.view`. Parmi les rôles prédéfinis, seul Administrator l'a.
+`patients.find` est une capacité de CE pour les utilisateurs qui doivent trouver un patient sans parcourir la liste. Le studio l'affiche sous le nom **Find a patient**, en anglais dans toutes les langues. Un utilisateur limité à certains établissements la garde, et perd `patients.view`. Parmi les rôles prédéfinis, seul Administrator l'a.
 
 Par `ce_read`, un appelant qui a `patients.find` sans `patients.view` :
 

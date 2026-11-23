@@ -75,7 +75,7 @@ Um layout de perfil pode listar uma página de plugin pelo seu caminho, por exem
 
 ## Encontrar um paciente com patients.find
 
-`patients.find` é uma capacidade do CE para utilizadores que precisam de encontrar um paciente sem percorrer a lista. O seu nome no studio é **Encontrar um paciente**. Um utilizador limitado a algumas unidades mantém-na, e perde `patients.view`. Entre as funções predefinidas, só Administrator a tem.
+`patients.find` é uma capacidade do CE para utilizadores que precisam de encontrar um paciente sem percorrer a lista. O studio mostra-a como **Find a patient**, em inglês em todas as línguas. Um utilizador limitado a algumas unidades mantém-na, e perde `patients.view`. Entre as funções predefinidas, só Administrator a tem.
 
 Através de `ce_read`, quem chama com `patients.find` e sem `patients.view`:
 

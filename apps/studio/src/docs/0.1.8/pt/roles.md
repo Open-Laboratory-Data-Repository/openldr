@@ -202,7 +202,7 @@ Criar uma função não a atribui a ninguém. As atribuições são geridas em U
 
 As permissões de um plugin ficam nas funções que as têm quando o plugin é desativado ou removido. O seu grupo sai da página Roles, e as permissões deixam de abrir o que quer que seja. Guardar a função mantém-nas. Quando o plugin volta a ser instalado, o seu grupo regressa com os mesmos interruptores ativos. Para retirar uma permissão, desative-a enquanto o plugin está instalado. `openldr roles doctor` lista como mantidas as permissões que um plugin removido deixou.
 
-**Encontrar um paciente** (`patients.find`) está no grupo Pacientes. Permite a uma página de plugin encontrar um paciente nas unidades da própria pessoa, por um identificador exato, ou pelo nome com a data de nascimento completa. Não abre o índice de pacientes. Uma pessoa cujos dados estão limitados a alguns locais mantém-na, e perde **Ver o índice de pacientes**. Entre as funções do sistema, só Administrator a tem.
+**Find a patient** (`patients.find`), ou seja, encontrar um paciente, está no grupo **Patients**. Permite a uma página de plugin encontrar um paciente nas unidades da própria pessoa, por um identificador exato, ou pelo nome com a data de nascimento completa. Não abre o índice de pacientes. Uma pessoa cujos dados estão limitados a alguns locais mantém-na, e perde **View patient index** (`patients.view`). Entre as funções do sistema, só Administrator a tem.
 
 ## Resolução de problemas
 
