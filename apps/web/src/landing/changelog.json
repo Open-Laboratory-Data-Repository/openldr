@@ -6,6 +6,78 @@
       "version": null,
       "entries": [
         {
+          "hash": "5c670b291",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "Older versions keep using their tables after an upgrade or rollback"
+        },
+        {
+          "hash": "51653b2ea",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Plugin SDK wrappers for the CE host functions"
+        },
+        {
+          "hash": "9fd27c01a",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "The broker passes the caller to plugin code"
+        },
+        {
+          "hash": "c9bb8f0c0",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A plugin changes only records it wrote, and every emit is audited"
+        },
+        {
+          "hash": "65a69808a",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "Plain install errors from the database, keep a schema another plugin owns"
+        },
+        {
+          "hash": "ea325b312",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "Fhir_emit needs host:db, patient ops need patients.view, limited callers cannot emit"
+        },
+        {
+          "hash": "838ad13ba",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Host functions for tables, CE reads and FHIR emit"
+        },
+        {
+          "hash": "10362acc8",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Create and upgrade plugin tables at install"
+        },
+        {
+          "hash": "889520c5b",
+          "type": "fix",
+          "scope": "db",
+          "title": "Plugin schemas parse stored shapes and keep RLS on outside tests"
+        },
+        {
+          "hash": "cdba65f64",
+          "type": "feat",
+          "scope": "db",
+          "title": "Structured requests on a plugin's own tables"
+        },
+        {
+          "hash": "f69d5f2bf",
+          "type": "feat",
+          "scope": "db",
+          "title": "Plugin schemas from declared table shapes"
+        },
+        {
+          "hash": "44878eb42",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Declare tables and the host:db and host:ce-read capabilities"
+        },
+        {
           "hash": "461d5de29",
           "type": "fix",
           "scope": "studio",
