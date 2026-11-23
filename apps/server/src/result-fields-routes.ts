@@ -77,7 +77,8 @@ export function registerResultFieldsRoutes(app: FastifyInstance<any, any, any, a
     if (!parsed.success) return reply.code(400).send({ error: 'codes must be a list of 1 to 200 LOINC codes' });
     try {
       const answer = await ctx.loincHints.resultFieldsFromLoinc(parsed.data.codes, { panel: parsed.data.panel === true });
-      await recordAudit(ctx, req, {
+      // A run that only reused fields changed nothing, so it writes no audit row.
+      if (answer.created.length > 0 || answer.valueSetsCreated.length > 0) await recordAudit(ctx, req, {
         action: 'result_field.from_loinc', entityType: 'result_field', entityId: parsed.data.codes.join(','),
         before: null, after: { created: answer.created, valueSetsCreated: answer.valueSetsCreated },
         metadata: { codes: parsed.data.codes, panel: parsed.data.panel === true, reused: answer.reused },

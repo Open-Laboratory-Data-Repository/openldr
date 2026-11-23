@@ -124,6 +124,18 @@ describe('TestSheet: LOINC hints fill empty fields', () => {
     expect(screen.getByRole('textbox', { name: 'unit for 2093-3 band 1' })).toHaveProperty('value', 'mg/dL');
   });
 
+  it("drops the hint after Use LOINC's result field reused a field with its own code", async () => {
+    hintsFor({ '2093-3': CHOL });
+    const options = { ...OPTIONS, resultParams: [...OPTIONS.resultParams, { system: RESULT, code: 'CHOL', display: 'Cholesterol', units: 'mg/dL' }] };
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue({ params: [param('CHOL')], created: [], reused: ['CHOL'], valueSetsCreated: [] });
+    renderSheet(NEW_TEST(), options);
+    await pickLoinc('2093-3');
+    expect(screen.getByTestId('hint-result')).toBeTruthy();
+    await choose('result-params-menu', 'use-loinc-field');
+    expect(checked('param-CHOL')).toBe(true);
+    expect(screen.queryByTestId('hint-result')).toBeNull();
+  });
+
   it('picking one code and then another ticks nothing until the menu is used, and the menu uses the last code', async () => {
     hintsFor({ '2093-3': CHOL, '6429-5': HIV });
     vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));

@@ -96,7 +96,7 @@ async function patientBandKeyFor(ctx: AppContext, reference: string | undefined)
   // The lab's zone decides what date today is, so a baby born today is 0 days old in the lab.
   const zone = await labTimeZone(ctx.labIdentity);
   if (!id) return patientBandKey(null, Date.now(), zone);
-  const patient = (await ctx.fhirStore.get('Patient', id).catch(() => null)) as { gender?: string; birthDate?: string } | null;
+  const patient = (await ctx.fhirStore.get('Patient', id).catch(() => null)) as { gender?: string; birthDate?: string; extension?: unknown } | null;
   return patientBandKey(patient, Date.now(), zone);
 }
 

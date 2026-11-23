@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ageIn, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey, SEX_OPTIONS, type ResultBand } from './result-params';
+import { ageIn, BIRTHDATE_ESTIMATED_EXTENSION, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey, SEX_OPTIONS, type ResultBand } from './result-params';
 
 // Ages are taken at one fixed moment. aged(n) is a patient born on 1 January n years before it, so
 // whole years come out as n.
@@ -165,12 +165,12 @@ describe('result parameters: a submitted range against the catalog', () => {
 describe('patientBandKey', () => {
   const now = Date.parse('2026-11-23T12:00:00Z');
   it('reads the FHIR gender and the birth date, with the moment the age is taken at', () => {
-    expect(patientBandKey({ gender: 'female', birthDate: '1990-01-05' }, now)).toEqual({ sex: 'female', birthDate: '1990-01-05', at: now, timeZone: null });
+    expect(patientBandKey({ gender: 'female', birthDate: '1990-01-05' }, now)).toEqual({ sex: 'female', birthDate: '1990-01-05', birthDateEstimated: false, at: now, timeZone: null });
   });
   it('answers nulls for a missing patient, birth date or gender', () => {
-    expect(patientBandKey(null, now)).toEqual({ sex: null, birthDate: null, at: now, timeZone: null });
-    expect(patientBandKey({}, now)).toEqual({ sex: null, birthDate: null, at: now, timeZone: null });
-    expect(patientBandKey({ gender: 'female', birthDate: 'not a date' }, now)).toEqual({ sex: 'female', birthDate: null, at: now, timeZone: null });
+    expect(patientBandKey(null, now)).toEqual({ sex: null, birthDate: null, birthDateEstimated: false, at: now, timeZone: null });
+    expect(patientBandKey({}, now)).toEqual({ sex: null, birthDate: null, birthDateEstimated: false, at: now, timeZone: null });
+    expect(patientBandKey({ gender: 'female', birthDate: 'not a date' }, now)).toEqual({ sex: 'female', birthDate: null, birthDateEstimated: false, at: now, timeZone: null });
   });
 });
 
@@ -340,6 +340,41 @@ describe('ageIn: today is the lab date, in the lab time zone', () => {
 
   it('keeps the zone in the band key', () => {
     expect(patientBandKey({ gender: 'female', birthDate: '2026-11-24' }, nairobiEarly, NAIROBI))
-      .toEqual({ sex: 'female', birthDate: '2026-11-24', at: nairobiEarly, timeZone: NAIROBI });
+      .toEqual({ sex: 'female', birthDate: '2026-11-24', birthDateEstimated: false, at: nairobiEarly, timeZone: NAIROBI });
+  });
+});
+
+describe('result parameters: a birth date estimated from an age', () => {
+  const NOW = Date.parse('2026-11-23T12:00:00Z');
+  const ESTIMATED = [{ url: BIRTHDATE_ESTIMATED_EXTENSION, valueBoolean: true }];
+  // The lab plugin registers a newborn whose age was given as 0 years as born 1 January this year.
+  const newborn = patientBandKey({ gender: 'female', birthDate: '2026-01-01', extension: ESTIMATED }, NOW);
+
+  it('reads the mark from the stored Patient, and only when it is true', () => {
+    expect(newborn.birthDateEstimated).toBe(true);
+    expect(patientBandKey({ birthDate: '2026-01-01', extension: [{ url: BIRTHDATE_ESTIMATED_EXTENSION, valueBoolean: false }] }, NOW).birthDateEstimated).toBe(false);
+    expect(patientBandKey({ birthDate: '2026-01-01', extension: [{ url: 'urn:other', valueBoolean: true }] }, NOW).birthDateEstimated).toBe(false);
+  });
+
+  it('answers unknown for days and months ranges, and still fits a years range', () => {
+    expect(bandFit(band({ ageLow: 0, ageHigh: 28, ageUnit: 'd' }), newborn)).toBe('unknown');
+    expect(bandFit(band({ ageLow: 1, ageHigh: 12, ageUnit: 'mo' }), newborn)).toBe('unknown');
+    expect(bandFit(band({ ageLow: 0, ageHigh: 1, ageUnit: 'y' }), newborn)).toBe('yes');
+    expect(bandFit(band({ ageLow: 0, ageHigh: 1 }), newborn)).toBe('yes');
+    expect(bandFit(band({ ageLow: 18 }), newborn)).toBe('no');
+    // Without the mark the same date is a 326-day-old baby, who fits "1 to 12 months" for certain.
+    const known = patientBandKey({ gender: 'female', birthDate: '2026-01-01' }, NOW);
+    expect(bandFit(band({ ageLow: 1, ageHigh: 12, ageUnit: 'mo' }), known)).toBe('yes');
+  });
+
+  it('never picks a days or months range for that patient, falling to the years range', () => {
+    const days = band({ low: 14, high: 22, ageLow: 0, ageHigh: 28, ageUnit: 'd' });
+    const months = band({ low: 10, high: 14, ageLow: 1, ageHigh: 12, ageUnit: 'mo' });
+    const years = band({ low: 11, high: 14, ageLow: 0, ageHigh: 1 });
+    expect(matchBand([days, months, years], newborn)).toBe(years);
+  });
+
+  it('still answers no for a days range whose sex does not match', () => {
+    expect(bandFit(band({ sex: 'male', ageLow: 0, ageHigh: 28, ageUnit: 'd' }), newborn)).toBe('no');
   });
 });

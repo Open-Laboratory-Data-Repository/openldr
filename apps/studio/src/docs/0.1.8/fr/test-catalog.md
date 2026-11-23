@@ -337,7 +337,7 @@ Ouvrez les points du panneau de test et sélectionnez **Save**.
 Indiquez en combien de temps les résultats de cet examen doivent revenir, et si une seconde personne les vérifie. CE les enregistre avec l'examen. Le plugin de laboratoire ne les utilise pas encore.
 
 1. Ouvrez les points de la ligne et sélectionnez **Modifier**.
-2. Saisissez dans **Délai attendu (heures)**, sous les prélèvements, les heures visées entre la réception et la validation. L'exemple utilise `4`.
+2. Saisissez dans **Délai attendu (heures)**, après la liste **Paramètres de résultat**, les heures visées entre la réception et la validation. L'exemple utilise `4`.
 3. Saisissez dans **Délai critique (heures)** les heures après lesquelles l'examen est en retard, ou laissez vide.
 4. Laissez **Vérification requise** activé quand une seconde personne doit vérifier chaque résultat. Désactivez-le si ce n'est pas nécessaire.
 5. Ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
@@ -355,7 +355,7 @@ Lorsque LOINC est chargé, choisir un code LOINC dans le panneau de l'examen rem
 5. Ouvrez les points à côté de **Paramètres de résultat** et sélectionnez **Utiliser le champ de résultat de LOINC**. Pour un code de panel, sélectionnez plutôt **Remplir depuis le panel**.
 6. Vérifiez chaque paramètre ajouté, puis ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
 
-**Résultat attendu :** **Utiliser le champ de résultat de LOINC** coche un champ de résultat pour le code. **Remplir depuis le panel** coche un champ pour chaque examen du panel, dans l'ordre de LOINC. Un champ déjà dans le dictionnaire est réutilisé, donc relancer l'un ou l'autre n'ajoute rien de nouveau. Un nouvel intervalle sur un champ numérique commence avec l'unité de LOINC. Un champ codé reçoit la liste de réponses de LOINC comme jeu de valeurs.
+**Résultat attendu :** **Utiliser le champ de résultat de LOINC** coche un champ de résultat pour le code. **Remplir depuis le panel** coche un champ pour chaque examen du panel, dans l'ordre de LOINC. Un champ déjà dans le dictionnaire est réutilisé, donc relancer l'un ou l'autre n'ajoute rien de nouveau. Un nouvel intervalle commence avec l'unité du champ. Pour un champ créé par LOINC, c'est l'unité de LOINC. Un champ codé reçoit la liste de réponses de LOINC comme jeu de valeurs.
 
 Ouvrir un examen enregistré affiche les lignes LOINC mais ne remplit rien. Seul un code choisi dans le panneau remplit des champs. Un type de prélèvement n'est coché tout seul que s'il est associé à son code SNOMED dans [Terminologie](/docs/terminology).
 

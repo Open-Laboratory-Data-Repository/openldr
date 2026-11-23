@@ -114,6 +114,14 @@ describe('result fields routes', () => {
     })]);
   });
 
+  it('POST from-loinc writes no audit row when it only reused fields', async () => {
+    const reusedOnly = { params: FROM_LOINC.params, created: [], reused: ['CHOL'], valueSetsCreated: [] };
+    const { ctx, audit } = fakeCtx({ resultFieldsFromLoinc: async () => reusedOnly });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: ['2093-3'] } });
+    expect([res.statusCode, res.json()]).toEqual([200, reusedOnly]);
+    expect(audit).toEqual([]);
+  });
+
   it('POST from-loinc refuses an empty list before the service, a viewer with 403, and maps refusals', async () => {
     const { ctx, calls } = fakeCtx();
     const empty = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: [] } });

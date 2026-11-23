@@ -156,6 +156,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   // What LOINC says about the test's code. Null when LOINC or its ontology is not loaded, and then the
   // sheet shows no hint and offers no LOINC action (spec, call 7).
   const [hints, setHints] = useState<LoincHints | null>(null);
+  /** The field codes from-loinc answered for a LOINC code. A reused field may have its own code (CHOL for 2093-3). */
+  const [loincTaken, setLoincTaken] = useState<{ loinc: string; codes: string[] } | null>(null);
   const hintsAsked = useRef(0);
   // The draft as last drawn, for the steps that run after a request comes back.
   const draftNow = useRef(draft);
@@ -212,6 +214,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   async function takeFromLoinc(h: LoincHints, panel: boolean): Promise<void> {
     try {
       const answer = await resultFieldsFromLoinc([h.code], panel);
+      setLoincTaken({ loinc: h.code, codes: answer.params.map((p) => p.code) });
       const names = new Map<string, string | null>(panel ? h.panelMembers.map((m) => [m.code, m.display]) : [[h.code, h.display]]);
       const ticked = draftNow.current.resultParams;
       const fresh = answer.params.filter((p) => !ticked.some((k) => k.code === p.code));
@@ -270,7 +273,9 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   const specimenMapHint = untaken.some((s) => !s.specimenType);
   const resultHint = !hints ? null
     : hints.panelMembers.length > 0 ? t('testCatalog.sheet.hintPanel', { count: hints.panelMembers.length })
-      : draft.resultParams.some((p) => p.code === hints.code) ? null
+      // Gone once the field is ticked: LOINC's own code, or the field from-loinc answered for it.
+      : draft.resultParams.some((p) => p.code === hints.code
+        || (loincTaken?.loinc === hints.code && loincTaken.codes.includes(p.code))) ? null
         : t('testCatalog.sheet.hintResult', { name: hints.display ?? hints.code, unit: hints.unit ? ` (${hints.unit})` : '' });
   // The lab chooses from the catalog list being edited here, or from central's list at a lab.
   const offered = ownedHere ? draft.specimens : saved?.specimenTypes ?? [];

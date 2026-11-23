@@ -107,7 +107,14 @@ export interface BandPatient {
   /** The lab's IANA time zone (lab.timezone), which decides what date "today" is. Unset or unreadable
    *  means UTC, as elsewhere in CE. */
   timeZone?: string | null;
+  /** True when the birth date was worked out from an age (Patient extension
+   *  urn:openldr:ext:birthdate-estimated), as 1 January of the guessed year. Such a date is good
+   *  for years, not for days or months. */
+  birthDateEstimated?: boolean;
 }
+
+/** The Patient extension that says the birth date was worked out from an age. The lab plugin sets it. */
+export const BIRTHDATE_ESTIMATED_EXTENSION = 'urn:openldr:ext:birthdate-estimated';
 
 /** A civil date as a day count, so two of them subtract to whole days. */
 type CivilDate = { y: number; m: number; d: number };
@@ -190,6 +197,8 @@ export function bandFit(band: ResultBand, patient: BandPatient): BandFit {
     else if (band.sex !== sex) return 'no';
   }
   if (band.ageLow !== null || band.ageHigh !== null) {
+    // A birth date guessed from an age in years cannot say whether a baby is 3 days or 3 months old.
+    if (patient.birthDateEstimated && (band.ageUnit === 'd' || band.ageUnit === 'mo')) return 'unknown';
     const age = ageIn(band.ageUnit ?? 'y', patient.birthDate, patient.at ?? Date.now(), patient.timeZone);
     if (age === null) unknown = true;
     else if ((band.ageLow !== null && age < band.ageLow) || (band.ageHigh !== null && age > band.ageHigh)) return 'no';
@@ -228,19 +237,22 @@ export const SEX_OPTIONS: SexOption[] = Patient.shape.gender.unwrap().options
 
 /**
  * A patient's sex and birth date, as the band rules read them, from a stored FHIR Patient, with the
- * moment the age is taken at and the lab's time zone. Bench result entry and a plugin's testCatalog.resultParams both call
+ * moment the age is taken at and the lab's time zone, and whether the birth date was estimated. Bench result entry and a plugin's testCatalog.resultParams both call
  * this, so both pick the same band. A missing Patient or an unreadable birth date gives null, and the
  * catalog then answers the catch-all band.
  */
 export function patientBandKey(
-  patient: { gender?: unknown; birthDate?: unknown } | null,
+  patient: { gender?: unknown; birthDate?: unknown; extension?: unknown } | null,
   now: number = Date.now(),
   timeZone?: string | null,
-): { sex: string | null; birthDate: string | null; at: number; timeZone: string | null } {
+): { sex: string | null; birthDate: string | null; birthDateEstimated: boolean; at: number; timeZone: string | null } {
   const zone = timeZone?.trim() || null;
-  if (!patient) return { sex: null, birthDate: null, at: now, timeZone: zone };
+  if (!patient) return { sex: null, birthDate: null, birthDateEstimated: false, at: now, timeZone: zone };
   const birthDate = typeof patient.birthDate === 'string' && birthCivil(patient.birthDate, zone) ? patient.birthDate : null;
-  return { sex: typeof patient.gender === 'string' ? patient.gender : null, birthDate, at: now, timeZone: zone };
+  const birthDateEstimated = Array.isArray(patient.extension) && patient.extension.some((e) =>
+    !!e && typeof e === 'object' && (e as { url?: unknown }).url === BIRTHDATE_ESTIMATED_EXTENSION
+    && (e as { valueBoolean?: unknown }).valueBoolean === true);
+  return { sex: typeof patient.gender === 'string' ? patient.gender : null, birthDate, birthDateEstimated, at: now, timeZone: zone };
 }
 
 const NUMBER_FIELDS = ['low', 'high', 'ageLow', 'ageHigh', 'criticalLow', 'criticalHigh'] as const;

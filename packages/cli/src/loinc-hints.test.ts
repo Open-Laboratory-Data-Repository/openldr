@@ -88,6 +88,13 @@ describe('openldr test-catalog result-fields from-loinc', () => {
     expect(audit).toEqual([expect.objectContaining({ action: 'result_field.from_loinc', entityId: '24331-1', after: { created: ['2571-8'], valueSetsCreated: [] } })]);
   });
 
+  it('writes no audit row when it only reused fields', async () => {
+    loincHints.resultFieldsFromLoinc.mockResolvedValue({ params: [], created: [], reused: ['CHOL'], valueSetsCreated: [] });
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    expect(await runResultFieldsFromLoinc(['2093-3'], { panel: false, json: false })).toBe(0);
+    expect(audit).toEqual([]);
+  });
+
   it('--json prints the answer, and a refusal is not audited', async () => {
     loincHints.resultFieldsFromLoinc.mockResolvedValue(FROM_PANEL);
     const io = capture();

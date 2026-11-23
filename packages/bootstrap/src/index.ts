@@ -2408,7 +2408,7 @@ export * from './patient-index';
 export * from './patient-duplicates';
 export * from './patient-mask';
 export {
-  AGE_UNITS, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, ageIn, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey,
+  AGE_UNITS, BIRTHDATE_ESTIMATED_EXTENSION, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, ageIn, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey,
   type AgeUnit, type BandFit, type BandPatient, type SexOption, type TestResultParam, type ResultBand, type ResultType,
 } from './result-params';
 export {

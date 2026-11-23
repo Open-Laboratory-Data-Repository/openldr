@@ -337,7 +337,7 @@ Open the test sheet dots menu and select **Save**.
 Record how fast results of this test should come back, and whether a second person checks them. TAT means turnaround time. CE stores these with the test. The lab plugin does not use them yet.
 
 1. Open the test row dots menu and select **Edit**.
-2. Type in **Expected TAT (hours)**, below the specimens, the hours from receipt to release that the lab aims for. The example uses `4`.
+2. Type in **Expected TAT (hours)**, after the **Result parameters** list, the hours from receipt to release that the lab aims for. The example uses `4`.
 3. Type in **Critical TAT (hours)** the hours after which the test is overdue, or leave it empty.
 4. Leave **Requires verification** on when a second person must check each result. Switch it off when it is not needed.
 5. Open the test sheet dots menu and select **Save**.
@@ -355,7 +355,7 @@ When LOINC is loaded, picking a LOINC code in the test sheet fills some of the t
 5. Open the dots menu beside **Result parameters** and select **Use LOINC's result field**. For a panel code, select **Fill from panel** instead.
 6. Check each result parameter added, then open the test sheet dots menu and select **Save**.
 
-**Expected result:** **Use LOINC's result field** ticks one result field for the code. **Fill from panel** ticks one field for each test in the panel, in LOINC's order. A field already in the dictionary is reused, so running either one again adds nothing new. A new range on a number field starts with LOINC's unit. A coded field gets LOINC's answer list as its value set.
+**Expected result:** **Use LOINC's result field** ticks one result field for the code. **Fill from panel** ticks one field for each test in the panel, in LOINC's order. A field already in the dictionary is reused, so running either one again adds nothing new. A new range starts with the field's own unit. For a field LOINC made, that is LOINC's unit. A coded field gets LOINC's answer list as its value set.
 
 Opening a saved test shows the LOINC lines but fills nothing. Only a code you pick in the sheet fills fields. A specimen type is ticked by itself only when it is mapped to its SNOMED code in [Terminology](/docs/terminology).
 

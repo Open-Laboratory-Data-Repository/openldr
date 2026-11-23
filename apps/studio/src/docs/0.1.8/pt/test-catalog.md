@@ -337,7 +337,7 @@ Abra os pontos do painel do teste e selecione **Save**.
 Registe em quanto tempo os resultados deste exame devem voltar, e se uma segunda pessoa os verifica. O CE guarda-os com o exame. O plugin de laboratório ainda não os usa.
 
 1. Abra os pontos da linha e selecione **Editar**.
-2. Escreva em **Tempo de resposta esperado (horas)**, abaixo das amostras, as horas da receção à libertação que o laboratório pretende. O exemplo usa `4`.
+2. Escreva em **Tempo de resposta esperado (horas)**, depois da lista **Parâmetros de resultado**, as horas da receção à libertação que o laboratório pretende. O exemplo usa `4`.
 3. Escreva em **Tempo de resposta crítico (horas)** as horas após as quais o exame está atrasado, ou deixe vazio.
 4. Deixe **Requer verificação** ligado quando uma segunda pessoa tem de verificar cada resultado. Desligue-o quando não for preciso.
 5. Abra os pontos do painel do exame e selecione **Guardar**.
@@ -355,7 +355,7 @@ Quando LOINC está carregado, escolher um código LOINC no painel do exame preen
 5. Abra os pontos ao lado de **Parâmetros de resultado** e selecione **Usar o campo de resultado do LOINC**. Para um código de painel, selecione **Preencher a partir do painel**.
 6. Verifique cada parâmetro adicionado, depois abra os pontos do painel do exame e selecione **Guardar**.
 
-**Resultado esperado:** **Usar o campo de resultado do LOINC** marca um campo de resultado para o código. **Preencher a partir do painel** marca um campo para cada exame do painel, pela ordem do LOINC. Um campo que já está no dicionário é reutilizado, por isso repetir qualquer um deles não adiciona nada de novo. Um novo intervalo num campo numérico começa com a unidade do LOINC. Um campo codificado recebe a lista de respostas do LOINC como conjunto de valores.
+**Resultado esperado:** **Usar o campo de resultado do LOINC** marca um campo de resultado para o código. **Preencher a partir do painel** marca um campo para cada exame do painel, pela ordem do LOINC. Um campo que já está no dicionário é reutilizado, por isso repetir qualquer um deles não adiciona nada de novo. Um novo intervalo começa com a unidade do campo. Para um campo criado pelo LOINC, é a unidade do LOINC. Um campo codificado recebe a lista de respostas do LOINC como conjunto de valores.
 
 Abrir um exame guardado mostra as linhas LOINC mas não preenche nada. Só um código escolhido no painel preenche campos. Um tipo de amostra só fica marcado sozinho quando está associado ao seu código SNOMED em [Terminologia](/docs/terminology).
 

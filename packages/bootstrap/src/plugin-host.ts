@@ -464,7 +464,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           // The band key comes from the stored FHIR Patient, as bench result entry reads it.
           const stored = await deps.fhirGetWithProvenance('Patient', found.id);
           const zone = await deps.labTimeZone?.().catch(() => undefined);
-          const key = patientBandKey(stored ? stored.resource as { gender?: unknown; birthDate?: unknown } : null, Date.now(), zone);
+          const key = patientBandKey(stored ? stored.resource as { gender?: unknown; birthDate?: unknown; extension?: unknown } : null, Date.now(), zone);
           const tests = await deps.testCatalog.resultParamsFor(i.tests, key);
           return { tests, sexes: SEX_OPTIONS };
         },

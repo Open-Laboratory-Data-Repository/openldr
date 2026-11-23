@@ -853,6 +853,16 @@ describe('plugin host: testCatalog.resultParams', () => {
     expect(param.fits).toEqual(['yes', 'no']);
   });
 
+  it('reads the estimated birth date mark from the stored Patient', async () => {
+    const { call, deps, ruth } = await fixture();
+    vi.mocked(deps.fhirGetWithProvenance).mockResolvedValue(stored({
+      resourceType: 'Patient', id: 'p-1', gender: 'female', birthDate: '2026-01-01',
+      extension: [{ url: 'urn:openldr:ext:birthdate-estimated', valueBoolean: true }],
+    }, 'ingest'));
+    await call(SITE, { tests: [T('FBC')], patientRef: ruth });
+    expect(resultParamsFor.mock.calls[0][1]).toMatchObject({ birthDate: '2026-01-01', birthDateEstimated: true });
+  });
+
   it('reads the patient age in the lab time zone', async () => {
     const { call, deps, ruth } = await fixture();
     // Wired as index.ts wires it: the real lab identity service over a settings store.

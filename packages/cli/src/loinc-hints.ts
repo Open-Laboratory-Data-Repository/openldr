@@ -42,7 +42,8 @@ export async function runResultFieldsFromLoinc(codes: string[], opts: { panel: b
   const ctx = await createAppContext(loadConfig());
   try {
     const answer = await ctx.loincHints.resultFieldsFromLoinc(codes, { panel: opts.panel });
-    await recordAuditEvent(ctx, cliActor(), {
+    // A run that only reused fields changed nothing, so it writes no audit row.
+    if (answer.created.length > 0 || answer.valueSetsCreated.length > 0) await recordAuditEvent(ctx, cliActor(), {
       action: 'result_field.from_loinc', entityType: 'result_field', entityId: codes.join(','),
       before: null, after: { created: answer.created, valueSetsCreated: answer.valueSetsCreated },
       metadata: { codes, panel: opts.panel, reused: answer.reused },
