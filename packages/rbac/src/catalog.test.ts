@@ -127,3 +127,13 @@ describe('reserved permission groups', () => {
     expect(permissionGroup('lab.orders.receive')).toBe('lab');
   });
 });
+
+describe('the lab group stays free for the lab plugin', () => {
+  // The lab plugin claims the group `lab` (plan 2026-11-23-plugin-host-2b, ruling 1). If CE ever
+  // takes it, the plugin can no longer install, and the kept lab.* grants from step 1 are lost.
+  it('no CE capability key and no capability group name starts with the segment lab', () => {
+    expect(CAPABILITY_KEYS.filter((k) => permissionGroup(k) === 'lab')).toEqual([]);
+    expect(CAPABILITY_GROUPS.map((g) => g.key).filter((g) => permissionGroup(g) === 'lab')).toEqual([]);
+    expect(reservedPermissionGroups().has('lab')).toBe(false);
+  });
+});
