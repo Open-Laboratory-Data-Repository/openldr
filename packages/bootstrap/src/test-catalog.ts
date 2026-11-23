@@ -7,7 +7,7 @@ import { toCsv } from '@openldr/reporting';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { readTableFile, TableFileError, type TableFileFormat } from './table-file';
 import {
-  bandFit, matchBand, parseResultParams, type BandPatient, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, type BandFit, type ResultBand,
+  AGE_UNITS, bandFit, matchBand, parseResultParams, type AgeUnit, type BandPatient, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, type BandFit, type ResultBand,
   type SexOption, type TestResultParam,
 } from './result-params';
 import type { AuditDetails } from './record-audit';
@@ -545,6 +545,21 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return isLoincLoaded(db);
   }
 
+  /** Refuses a numeric range whose age unit is set but is not d, mo or y, naming the test, parameter and range. */
+  function checkAgeUnits(test: string, params: unknown): void {
+    if (!Array.isArray(params)) return;
+    for (const raw of params) {
+      if (!raw || typeof raw !== 'object') continue;
+      const p = raw as { code?: unknown; resultType?: unknown; bands?: unknown };
+      if (p.resultType !== 'numeric' || !Array.isArray(p.bands)) continue;
+      p.bands.forEach((band: unknown, i: number) => {
+        const unit = band && typeof band === 'object' ? (band as { ageUnit?: unknown }).ageUnit : undefined;
+        if (unit === undefined || unit === null || AGE_UNITS.includes(unit as AgeUnit)) return;
+        throw invalid(`${test}: ${String(p.code)} range ${i + 1} has the age unit ${JSON.stringify(unit)}. Use d (days), mo (months) or y (years).`);
+      });
+    }
+  }
+
   /**
    * The rules every write shares: create, update and each import row. It reads nothing, so an import
    * checks thousands of rows against one read of the lists. `linked` is the LOINC code the test already
@@ -564,6 +579,9 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     // A parameter must be a code the result dictionary offers, as a specimen must come from the
     // specimen list. A coded parameter must name the ValueSet its answers come from, or data entry
     // would have nothing to offer.
+    // The parser drops an age unit it does not know, which would read the range as years. Check the
+    // unit as sent first, so the route, the CLI and an import all refuse the same input.
+    checkAgeUnits(clean(input.code) ?? display, input.resultParams);
     const resultParams = input.resultParams === undefined ? undefined : parseResultParams(input.resultParams);
     for (const param of resultParams ?? []) {
       if (!ctx.resultParams.has(param.code)) {
@@ -713,7 +731,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (!stored) throw notFound(code);
     const given = clean(input.code);
     if (given && given !== code) throw invalid(`A test's code cannot change once saved (${code}).`);
-    const t = await validate(input);
+    // The code goes in so a refusal can name the test.
+    const t = await validate({ ...input, code });
     await writeConcept(code, t, stored.properties);
     await writeLoincLink(code, t.loinc);
     changed();

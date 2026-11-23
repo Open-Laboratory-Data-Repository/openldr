@@ -833,6 +833,13 @@ describe('plugin host: testCatalog.resultParams', () => {
     expect(param.fits).toEqual(['yes', 'no']);
   });
 
+  it('reads the patient age in the lab time zone', async () => {
+    const { call, deps, ruth } = await fixture();
+    deps.labTimeZone = vi.fn(async () => 'Africa/Nairobi');
+    await call(SITE, { tests: [T('FBC')], patientRef: ruth });
+    expect(resultParamsFor.mock.calls[0][1]).toMatchObject({ birthDate: '1990-01-05', timeZone: 'Africa/Nairobi' });
+  });
+
   it('does not return the patient sex, age, birth date or id', async () => {
     const { call, ruth } = await fixture();
     const out = await call(SITE, { tests: [T('FBC')], patientRef: ruth });

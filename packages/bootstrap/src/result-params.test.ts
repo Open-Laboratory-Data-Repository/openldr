@@ -165,12 +165,12 @@ describe('result parameters: a submitted range against the catalog', () => {
 describe('patientBandKey', () => {
   const now = Date.parse('2026-11-23T12:00:00Z');
   it('reads the FHIR gender and the birth date, with the moment the age is taken at', () => {
-    expect(patientBandKey({ gender: 'female', birthDate: '1990-01-05' }, now)).toEqual({ sex: 'female', birthDate: '1990-01-05', at: now });
+    expect(patientBandKey({ gender: 'female', birthDate: '1990-01-05' }, now)).toEqual({ sex: 'female', birthDate: '1990-01-05', at: now, timeZone: null });
   });
   it('answers nulls for a missing patient, birth date or gender', () => {
-    expect(patientBandKey(null, now)).toEqual({ sex: null, birthDate: null, at: now });
-    expect(patientBandKey({}, now)).toEqual({ sex: null, birthDate: null, at: now });
-    expect(patientBandKey({ gender: 'female', birthDate: 'not a date' }, now)).toEqual({ sex: 'female', birthDate: null, at: now });
+    expect(patientBandKey(null, now)).toEqual({ sex: null, birthDate: null, at: now, timeZone: null });
+    expect(patientBandKey({}, now)).toEqual({ sex: null, birthDate: null, at: now, timeZone: null });
+    expect(patientBandKey({ gender: 'female', birthDate: 'not a date' }, now)).toEqual({ sex: 'female', birthDate: null, at: now, timeZone: null });
   });
 });
 
@@ -199,9 +199,13 @@ describe('ageIn: a patient age in days, months or years', () => {
   it('keeps the years rule CE used before units: whole average years of 365.2425 days', () => {
     expect(ageIn('y', '1990-01-05', at('2026-11-23T12:00:00Z'))).toBe(36);
     expect(ageIn('y', '2025-12-01', at('2026-11-23T12:00:00Z'))).toBe(0);
-    expect(ageIn('y', '2008-11-23', at('2026-11-23T12:00:00Z'))).toBe(Math.floor((at('2026-11-23T12:00:00Z') - at('2008-11-23')) / (365.2425 * 86400000)));
+    // The average year can land a day after the calendar birthday: on the 18th birthday, 6574 days
+    // is 17.999 average years, so the patient is 18 from the next day.
+    expect(ageIn('y', '2008-11-23', at('2026-11-23T12:00:00Z'))).toBe(17);
+    expect(ageIn('y', '2008-11-23', at('2026-11-24T12:00:00Z'))).toBe(18);
   });
   it('answers null for a missing or unreadable birth date', () => {
+    expect(ageIn('d', '2026-02-30', at('2026-11-23T12:00:00Z'))).toBeNull();
     expect(ageIn('d', null, at('2026-11-23T12:00:00Z'))).toBeNull();
     expect(ageIn('mo', 'not a date', at('2026-11-23T12:00:00Z'))).toBeNull();
   });
@@ -274,5 +278,57 @@ describe('result parameters: the age unit is kept wherever a band is copied', ()
     expect(findCatalogBand({ ...sent, ageUnit: 'y' }, [days, years])).toBe(years);
     expect(findCatalogBand(sent, [days])).toBeNull();
     expect(findCatalogBand({ ...sent, ageUnit: 'w' }, [years])).toBeNull();
+  });
+});
+
+describe('ageIn: today is the lab date, in the lab time zone', () => {
+  const NAIROBI = 'Africa/Nairobi'; // UTC+3, no daylight saving
+  const BOGOTA = 'America/Bogota'; // UTC-5, no daylight saving
+  // 22:30 UTC on the 23rd is 01:30 on the 24th in Nairobi.
+  const nairobiEarly = Date.parse('2026-11-23T22:30:00Z');
+  // 04:00 UTC on the 24th is 23:00 on the 23rd in Bogota.
+  const bogotaLate = Date.parse('2026-11-24T04:00:00Z');
+  const neonatal = band({ ageLow: 0, ageHigh: 28, ageUnit: 'd' });
+
+  it('gives 0 days to a baby born on the lab date, at 01:30 in UTC+3', () => {
+    expect(ageIn('d', '2026-11-24', nairobiEarly, NAIROBI)).toBe(0);
+    expect(bandFit(neonatal, { birthDate: '2026-11-24', at: nairobiEarly, timeZone: NAIROBI })).toBe('yes');
+    // In UTC the same moment is still the 23rd, so the baby is not born yet.
+    expect(ageIn('d', '2026-11-24', nairobiEarly)).toBe(-1);
+  });
+
+  it('gives 0 days to a baby born on the lab date, late in the evening in UTC-5', () => {
+    expect(ageIn('d', '2026-11-23', bogotaLate, BOGOTA)).toBe(0);
+    expect(ageIn('d', '2026-11-23', bogotaLate)).toBe(1);
+    expect(bandFit(band({ ageLow: 1, ageHigh: 7, ageUnit: 'd' }), { birthDate: '2026-11-23', at: bogotaLate, timeZone: BOGOTA })).toBe('no');
+  });
+
+  it('completes a month and a year on the lab date', () => {
+    expect(ageIn('mo', '2026-10-24', nairobiEarly, NAIROBI)).toBe(1);
+    expect(ageIn('mo', '2026-10-24', nairobiEarly)).toBe(0);
+    expect(ageIn('mo', '2026-10-23', bogotaLate, BOGOTA)).toBe(1);
+    expect(ageIn('mo', '2026-10-24', bogotaLate, BOGOTA)).toBe(0);
+    // Four years from 24 November 2022 is 1461 days, 4.0002 average years.
+    expect(ageIn('y', '2022-11-24', nairobiEarly, NAIROBI)).toBe(4);
+    expect(ageIn('y', '2022-11-24', nairobiEarly)).toBe(3);
+    expect(ageIn('y', '2022-11-24', bogotaLate, BOGOTA)).toBe(3);
+  });
+
+  it('moves a birth dateTime with a zone to the lab date first', () => {
+    // 23:30 UTC on the 23rd is 02:30 on the 24th in Nairobi.
+    const at = Date.parse('2026-11-24T10:00:00Z');
+    expect(ageIn('d', '2026-11-23T23:30:00Z', at, NAIROBI)).toBe(0);
+    expect(ageIn('d', '2026-11-23T23:30:00Z', at)).toBe(1);
+    expect(ageIn('d', '2026-11-24T02:30:00+03:00', at, NAIROBI)).toBe(0);
+  });
+
+  it('reads an unset or unreadable zone as UTC', () => {
+    expect(ageIn('d', '2026-11-24', nairobiEarly, 'Not/AZone')).toBe(-1);
+    expect(ageIn('d', '2026-11-24', nairobiEarly, '  ')).toBe(-1);
+  });
+
+  it('keeps the zone in the band key', () => {
+    expect(patientBandKey({ gender: 'female', birthDate: '2026-11-24' }, nairobiEarly, NAIROBI))
+      .toEqual({ sex: 'female', birthDate: '2026-11-24', at: nairobiEarly, timeZone: NAIROBI });
   });
 });

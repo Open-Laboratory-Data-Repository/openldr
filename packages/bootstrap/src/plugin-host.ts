@@ -47,6 +47,8 @@ export interface PluginHostDeps {
   facilityRegistry: Pick<FacilityRegistryStore, 'list' | 'get' | 'idsMatching'>;
   /** The latest stored FHIR resource with its stored provenance, or null. */
   fhirGetWithProvenance(resourceType: string, id: string): Promise<{ resource: unknown; provenance: Provenance } | null>;
+  /** The lab's time zone (lab.timezone), which decides a patient's age in days. Undefined means UTC. */
+  labTimeZone?(): Promise<string | undefined>;
   /** CE's FHIR save path with validation (bootstrap index.ts `workflowPersist`). */
   persist(resources: unknown[], provenance: Provenance): Promise<unknown>;
   audit(actor: AuditActor, details: AuditDetails): Promise<void>;
@@ -461,7 +463,8 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           if (!found) throw new PatientIndexError('patient not found', 'not-found');
           // The band key comes from the stored FHIR Patient, as bench result entry reads it.
           const stored = await deps.fhirGetWithProvenance('Patient', found.id);
-          const key = patientBandKey(stored ? stored.resource as { gender?: unknown; birthDate?: unknown } : null);
+          const zone = await deps.labTimeZone?.().catch(() => undefined);
+          const key = patientBandKey(stored ? stored.resource as { gender?: unknown; birthDate?: unknown } : null, Date.now(), zone);
           const tests = await deps.testCatalog.resultParamsFor(i.tests, key);
           return { tests, sexes: SEX_OPTIONS };
         },

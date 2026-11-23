@@ -18,7 +18,10 @@ vi.mock('@openldr/bootstrap', async () => {
   };
 });
 
-import { formatResultParams, readResultParamsFile, runTestCatalogList } from './test-catalog';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { formatResultParams, readResultParamsFile, runTestCatalogList, runTestCatalogParams } from './test-catalog';
 
 const TEST = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
@@ -113,5 +116,32 @@ describe('test-catalog params', () => {
 
   it('refuses a set file that is not a list', () => {
     expect(() => readResultParamsFile('{"code":"HGB"}')).toThrow(/list of result parameters/);
+  });
+});
+
+describe('openldr test-catalog params --set', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    mocks.createAppContext.mockReset();
+  });
+
+  // The parser drops an age unit it does not know, which would save the range as years. The CLI
+  // hands the service the file as written, and the service refuses it as the route does.
+  it('sends an unknown age unit to the service as written, and reports its refusal', async () => {
+    const err: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((s) => { err.push(String(s)); return true; });
+    const update = vi.fn().mockRejectedValue(new Error('FBC: HGB range 1 has the age unit "days". Use d (days), mo (months) or y (years).'));
+    const close = vi.fn().mockResolvedValue(undefined);
+    mocks.createAppContext.mockResolvedValue({
+      testCatalog: { get: vi.fn().mockResolvedValue({ ...TEST, code: 'FBC', resultParams: [] }), update }, close,
+    });
+    const file = join(mkdtempSync(join(tmpdir(), 'tc-params-')), 'params.json');
+    writeFileSync(file, JSON.stringify([
+      { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 14, high: 22, ageLow: 0, ageHigh: 28, ageUnit: 'days' }] },
+    ]));
+    expect(await runTestCatalogParams('FBC', { set: file, json: false })).toBe(1);
+    expect(update.mock.calls[0][1].resultParams[0].bands[0].ageUnit).toBe('days');
+    expect(err.join('')).toContain('HGB range 1 has the age unit "days"');
+    expect(close).toHaveBeenCalledTimes(1);
   });
 });

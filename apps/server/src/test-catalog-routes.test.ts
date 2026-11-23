@@ -456,6 +456,23 @@ describe('test catalog routes', () => {
     expect(typeof patient.at).toBe('number');
   });
 
+  it('passes the lab time zone, so a patient age counts from the lab date', async () => {
+    const { ctx, calls } = fakeCtx();
+    (ctx as any).labIdentity = { tokens: async () => ({ 'lab.timezone': 'Africa/Nairobi' }) };
+    await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params',
+      payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }], patient: { reference: 'Patient/p1' } },
+    });
+    expect(calls[0].args[1]).toMatchObject({ birthDate: '1990-01-01', timeZone: 'Africa/Nairobi' });
+    // A lab with no zone, or one whose settings cannot be read, counts in UTC.
+    (ctx as any).labIdentity = { tokens: async () => { throw new Error('down'); } };
+    await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params',
+      payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }], patient: { reference: 'Patient/p1' } },
+    });
+    expect(calls[1].args[1]).toMatchObject({ timeZone: null });
+  });
+
   it('asks with no patient when the order names none, rather than refusing', async () => {
     const { ctx, calls } = fakeCtx();
     const res = await appWith(ctx, ['forms.view']).inject({

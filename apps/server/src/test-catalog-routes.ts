@@ -88,9 +88,16 @@ const resultParamsInput = z.object({
  */
 async function patientBandKeyFor(ctx: AppContext, reference: string | undefined): Promise<BandPatient> {
   const id = reference?.split('/')[1];
-  if (!id) return patientBandKey(null);
+  // The lab's zone decides what date today is, so a baby born today is 0 days old in the lab.
+  let zone: string | undefined;
+  try {
+    zone = (await ctx.labIdentity?.tokens())?.['lab.timezone'] || undefined;
+  } catch {
+    zone = undefined;
+  }
+  if (!id) return patientBandKey(null, Date.now(), zone);
   const patient = (await ctx.fhirStore.get('Patient', id).catch(() => null)) as { gender?: string; birthDate?: string } | null;
-  return patientBandKey(patient);
+  return patientBandKey(patient, Date.now(), zone);
 }
 
 /** The reasons one value set offers, as plain codings. An unreadable set answers none, so a reject

@@ -78,7 +78,11 @@ export async function runTestCatalogParams(code: string, opts: { set?: string; j
   const ctx = await createAppContext(loadConfig());
   try {
     if (opts.set) {
-      const params = readResultParamsFile(readFileSync(opts.set, 'utf8'));
+      const text = readFileSync(opts.set, 'utf8');
+      const params = readResultParamsFile(text);
+      // The service gets the file as written, so it refuses what the route refuses (an unknown age
+      // unit, say) rather than seeing the parser's copy with that unit already dropped.
+      const sent = JSON.parse(text) as TestResultParam[];
       const before = await ctx.testCatalog.get(code);
       if (!before) {
         process.stderr.write(`test-catalog params failed: no such test: ${code}\n`);
@@ -87,7 +91,7 @@ export async function runTestCatalogParams(code: string, opts: { set?: string; j
       await ctx.testCatalog.update(code, {
         display: before.display, shortName: before.shortName, category: before.category,
         specimenTypes: before.specimenTypes, loinc: before.loinc, active: before.active,
-        resultParams: params,
+        resultParams: sent,
       });
       await recordAuditEvent(ctx, cliActor(), {
         action: 'test_catalog.result_params_set', entityType: 'test_catalog', entityId: code,

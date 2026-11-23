@@ -2138,6 +2138,8 @@ const reporting: ReportingApi = {
     terminology: terminology.ops,
     facilityRegistry,
     fhirGetWithProvenance: (resourceType, id) => canonicalFhirStore.getWithProvenance(resourceType, id),
+    // A patient's age in days is counted from the lab's date, not UTC's.
+    labTimeZone: async () => (await labIdentity.tokens())['lab.timezone'] || undefined,
     persist: workflowPersist,
     audit: (actor, details) => recordAuditEvent({ audit, logger }, actor, details),
     logger,

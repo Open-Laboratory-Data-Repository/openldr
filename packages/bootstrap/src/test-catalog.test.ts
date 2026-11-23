@@ -997,6 +997,17 @@ describe('test catalog: result parameters on a test', () => {
     await expect(save({ criticalHigh: 20 })).resolves.toBeDefined();
   });
 
+  it('refuses a range whose age unit is not d, mo or y, naming the test, parameter and range', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    const days = { ...range({ ageLow: 0, ageHigh: 28 }), ageUnit: 'days' } as never;
+    await expect(catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({}), days] }] }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'FBC: HGB range 2 has the age unit "days". Use d (days), mo (months) or y (years).' });
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    await expect(catalog.update('FBC', { display: 'Full blood count', resultParams: [{ ...HGB, bands: [days] }] }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'FBC: HGB range 1 has the age unit "days". Use d (days), mo (months) or y (years).' });
+  });
+
   it('refuses a range whose sex is not one of the Patient codes', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);

@@ -26,9 +26,9 @@ export const RANGE_EN: Required<RangeCopy> = {
   chooseRange: 'Choose a range',
   misfit: 'This range is for {label}',
   anyone: 'Default',
-  ageFrom: '{from}+',
-  ageTo: 'up to {to}',
-  ageBetween: '{from} to {to}',
+  ageFrom: '{from}+ years',
+  ageTo: 'up to {to} years',
+  ageBetween: '{from} to {to} years',
   ageFromDays: '{from}+ days',
   ageToDays: 'up to {to} days',
   ageBetweenDays: '{from} to {to} days',
@@ -37,7 +37,7 @@ export const RANGE_EN: Required<RangeCopy> = {
   ageBetweenMonths: '{from} to {to} months',
 };
 
-/** The age words for a band's unit. A band with no unit, or in years, keeps the words it had before units. */
+/** The age words for a band's unit. A band with no unit is in years. */
 function ageWords(c: Required<RangeCopy>, unit: CatalogResultBand['ageUnit']): { from: string; to: string; between: string } {
   if (unit === 'd') return { from: c.ageFromDays, to: c.ageToDays, between: c.ageBetweenDays };
   if (unit === 'mo') return { from: c.ageFromMonths, to: c.ageToMonths, between: c.ageBetweenMonths };

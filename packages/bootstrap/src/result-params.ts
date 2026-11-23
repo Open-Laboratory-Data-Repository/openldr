@@ -94,8 +94,9 @@ export function parseResultParams(value: unknown): TestResultParam[] {
 }
 
 /**
- * Who a band is matched against: the patient's sex and birth date, and the moment the age is taken at.
- * The age is worked out per band, in the band's own unit, so the birth date travels and not an age.
+ * Who a band is matched against: the patient's sex and birth date, the moment the age is taken at,
+ * and the lab's time zone. The age is worked out per band, in the band's own unit, so the birth date
+ * travels and not an age.
  */
 export interface BandPatient {
   sex?: string | null;
@@ -103,38 +104,76 @@ export interface BandPatient {
   birthDate?: string | null;
   /** Epoch milliseconds. Defaults to now. */
   at?: number;
+  /** The lab's IANA time zone (lab.timezone), which decides what date "today" is. Unset or unreadable
+   *  means UTC, as elsewhere in CE. */
+  timeZone?: string | null;
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const YEAR_MS = 365.2425 * DAY_MS;
+const DAYS_PER_YEAR = 365.2425;
 
-function bornAt(birthDate: string | null | undefined): Date | null {
+/** A civil date as a day count, so two of them subtract to whole days. */
+type CivilDate = { y: number; m: number; d: number };
+const dayNumber = (c: CivilDate) => Math.round(Date.UTC(c.y, c.m - 1, c.d) / 86_400_000);
+
+/** The civil date one moment falls on in a zone. An unset or unreadable zone is UTC. */
+function civilDateIn(at: number, timeZone: string | null | undefined): CivilDate {
+  const partsIn = (zone: string) => new Intl.DateTimeFormat('en-US', {
+    timeZone: zone, year: 'numeric', month: 'numeric', day: 'numeric',
+  }).formatToParts(new Date(at));
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = partsIn(timeZone?.trim() || 'UTC');
+  } catch {
+    parts = partsIn('UTC');
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  return { y: part('year'), m: part('month'), d: part('day') };
+}
+
+// A FHIR date: a year, a year and month, or a full date. A missing month or day is the first.
+const FHIR_DATE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
+
+/**
+ * The civil date of birth. A FHIR date is already a civil date and is read as written, never as UTC
+ * midnight. A dateTime is a moment, so it is moved to the lab's zone first. Null when unreadable.
+ */
+function birthCivil(birthDate: string | null | undefined, timeZone: string | null | undefined): CivilDate | null {
   if (typeof birthDate !== 'string' || birthDate.trim() === '') return null;
-  const born = new Date(birthDate);
-  return Number.isNaN(born.getTime()) ? null : born;
+  const text = birthDate.trim();
+  const date = FHIR_DATE.exec(text);
+  if (date) {
+    const c = { y: Number(date[1]), m: Number(date[2] ?? 1), d: Number(date[3] ?? 1) };
+    const check = new Date(Date.UTC(c.y, c.m - 1, c.d));
+    // 2026-02-30 is not a date. Date.UTC would roll it into March.
+    if (check.getUTCMonth() !== c.m - 1 || check.getUTCDate() !== c.d) return null;
+    return c;
+  }
+  const ms = Date.parse(text);
+  return Number.isNaN(ms) ? null : civilDateIn(ms, timeZone);
 }
 
 /**
- * The patient's age in one unit, or null when the birth date is missing or unreadable.
- * - y: whole years completed, by the average year (365.2425 days). This is the rule CE used before
- *   units existed, kept exactly so a band saved in years fits the same patients as before.
- * - mo: whole calendar months completed, read in UTC. A birth on the 31st completes a month on the
- *   last day of a shorter month (born 31 January: 1 month on 28 February, or the 29th in a leap year).
- * - d: whole days completed since the birth date. Born today is 0 days.
+ * The patient's age in one unit, or null when the birth date is missing or unreadable. Both ends are
+ * civil dates: the birth date as written, and today's date in the lab's zone.
+ * - d: whole days since the birth date. Born today is 0 days.
+ * - mo: whole calendar months completed. A birth on the 31st completes a month on the last day of a
+ *   shorter month (born 31 January: 1 month on 28 February, or the 29th in a leap year).
+ * - y: whole years by the average year (365.2425 days), the rule CE used before units existed. It
+ *   can land a day after the calendar birthday: 365 days is 0.9993 years, so a baby turns 1 the day
+ *   after its first birthday in a year with no 29 February.
  */
-export function ageIn(unit: AgeUnit, birthDate: string | null | undefined, at: number = Date.now()): number | null {
-  const born = bornAt(birthDate);
+export function ageIn(
+  unit: AgeUnit, birthDate: string | null | undefined, at: number = Date.now(), timeZone?: string | null,
+): number | null {
+  const born = birthCivil(birthDate, timeZone);
   if (!born) return null;
-  const ms = at - born.getTime();
-  if (unit === 'd') return Math.floor(ms / DAY_MS);
-  if (unit === 'y') return Math.floor(ms / YEAR_MS);
-  const now = new Date(at);
-  let months = (now.getUTCFullYear() - born.getUTCFullYear()) * 12 + (now.getUTCMonth() - born.getUTCMonth());
-  const lastDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
-  const monthDay = Math.min(born.getUTCDate(), lastDay);
-  const bornTime = born.getTime() - Date.UTC(born.getUTCFullYear(), born.getUTCMonth(), born.getUTCDate());
-  const nowTime = at - Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  if (now.getUTCDate() < monthDay || (now.getUTCDate() === monthDay && nowTime < bornTime)) months -= 1;
+  const today = civilDateIn(at, timeZone);
+  const days = dayNumber(today) - dayNumber(born);
+  if (unit === 'd') return days;
+  if (unit === 'y') return Math.floor(days / DAYS_PER_YEAR);
+  let months = (today.y - born.y) * 12 + (today.m - born.m);
+  const lastDay = new Date(Date.UTC(today.y, today.m, 0)).getUTCDate();
+  if (today.d < Math.min(born.d, lastDay)) months -= 1;
   return months;
 }
 
@@ -144,7 +183,8 @@ export type BandFit = 'yes' | 'no' | 'unknown';
 /**
  * Whether one band fits one patient. The sex must match when the band names one. The age, in the
  * band's unit, must fall inside its window, both edges counted as inside: a band "0 to 28 days" fits
- * through day 28, and "18+ years" from the 18th birthday. A band naming a sex or an age the record
+ * through day 28, and "18+ years" from the 18th birthday by the average-year rule (which can land a
+ * day after the calendar birthday, see ageIn). A band naming a sex or an age the record
  * lacks is unknown, unless the other half already rules it out.
  */
 export function bandFit(band: ResultBand, patient: BandPatient): BandFit {
@@ -155,7 +195,7 @@ export function bandFit(band: ResultBand, patient: BandPatient): BandFit {
     else if (band.sex !== sex) return 'no';
   }
   if (band.ageLow !== null || band.ageHigh !== null) {
-    const age = ageIn(band.ageUnit ?? 'y', patient.birthDate, patient.at ?? Date.now());
+    const age = ageIn(band.ageUnit ?? 'y', patient.birthDate, patient.at ?? Date.now(), patient.timeZone);
     if (age === null) unknown = true;
     else if ((band.ageLow !== null && age < band.ageLow) || (band.ageHigh !== null && age > band.ageHigh)) return 'no';
   }
@@ -193,17 +233,19 @@ export const SEX_OPTIONS: SexOption[] = Patient.shape.gender.unwrap().options
 
 /**
  * A patient's sex and birth date, as the band rules read them, from a stored FHIR Patient, with the
- * moment the age is taken at. Bench result entry and a plugin's testCatalog.resultParams both call
+ * moment the age is taken at and the lab's time zone. Bench result entry and a plugin's testCatalog.resultParams both call
  * this, so both pick the same band. A missing Patient or an unreadable birth date gives null, and the
  * catalog then answers the catch-all band.
  */
 export function patientBandKey(
   patient: { gender?: unknown; birthDate?: unknown } | null,
   now: number = Date.now(),
-): { sex: string | null; birthDate: string | null; at: number } {
-  if (!patient) return { sex: null, birthDate: null, at: now };
-  const birthDate = typeof patient.birthDate === 'string' && bornAt(patient.birthDate) ? patient.birthDate : null;
-  return { sex: typeof patient.gender === 'string' ? patient.gender : null, birthDate, at: now };
+  timeZone?: string | null,
+): { sex: string | null; birthDate: string | null; at: number; timeZone: string | null } {
+  const zone = timeZone?.trim() || null;
+  if (!patient) return { sex: null, birthDate: null, at: now, timeZone: zone };
+  const birthDate = typeof patient.birthDate === 'string' && birthCivil(patient.birthDate, zone) ? patient.birthDate : null;
+  return { sex: typeof patient.gender === 'string' ? patient.gender : null, birthDate, at: now, timeZone: zone };
 }
 
 const NUMBER_FIELDS = ['low', 'high', 'ageLow', 'ageHigh', 'criticalLow', 'criticalHigh'] as const;

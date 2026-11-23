@@ -145,9 +145,9 @@ describe('TestDetailSheet', () => {
     const user = userEvent.setup();
     render(<TestDetailSheet test={test} params={[numeric]} detail={detail} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
     const picker = await screen.findByRole('combobox', { name: /range haemoglobin/i });
-    expect(picker).toHaveTextContent('Female 18+');
+    expect(picker).toHaveTextContent('Female 18+ years');
     await user.click(picker);
-    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Female 18+', 'Highland women', 'Male 15+']);
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Female 18+ years', 'Highland women', 'Male 15+ years']);
   });
 
   it('writes the picked range, name included, and flags the value against it', async () => {
@@ -206,7 +206,7 @@ describe('TestDetailSheet', () => {
     ] };
     render(<TestDetailSheet test={test} params={[numeric]} detail={typed} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
     const picker = await screen.findByRole('combobox', { name: /range haemoglobin/i });
-    expect(picker).toHaveTextContent('Female 18+');
+    expect(picker).toHaveTextContent('Female 18+ years');
   });
 
   it('tells a range in days from the same numbers in years, and labels it by its unit', async () => {
@@ -221,7 +221,7 @@ describe('TestDetailSheet', () => {
     const picker = await screen.findByRole('combobox', { name: /range haemoglobin/i });
     expect(picker).toHaveTextContent('0 to 28 days');
     await user.click(picker);
-    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['0 to 28', '0 to 28 days']);
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['0 to 28 years', '0 to 28 days']);
   });
 
   it('warns when the picked range does not fit the patient, and allows it', async () => {
@@ -229,7 +229,7 @@ describe('TestDetailSheet', () => {
       { param: { system: numeric.system, code: 'HGB' }, resultType: 'numeric' as const, value: 14, unit: 'g/dL', band: MEN },
     ] };
     render(<TestDetailSheet test={test} params={[numeric]} detail={typed} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
-    expect(await screen.findByText('This range is for Male 15+')).toBeInTheDocument();
+    expect(await screen.findByText('This range is for Male 15+ years')).toBeInTheDocument();
     expect(screen.getByLabelText('Haemoglobin')).toHaveValue('14');
   });
 
