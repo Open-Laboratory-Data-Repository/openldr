@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import {
-  TestCatalogError, createLabIdentity, type AppContext, type CatalogImportReport, type CatalogOptions, type CatalogTest, SEX_OPTIONS,
+  TestCatalogError, createLabIdentity, type AppContext, type CatalogImportReport, type CatalogOptions, type CatalogTest, type LoincHints, SEX_OPTIONS,
 } from '@openldr/bootstrap';
 import { registerTestCatalogRoutes } from './test-catalog-routes';
 import './auth-plugin';
@@ -595,5 +595,39 @@ describe('test catalog routes', () => {
     const res = await appWith(ctx, ['terminology.view', 'terminology.manage']).inject({ method: 'GET', url: '/api/test-catalog/browse/categories' });
     expect(res.statusCode).toBe(403);
     expect(calls).toEqual([]);
+  });
+});
+
+describe('GET /api/test-catalog/loinc-hints/:code', () => {
+  const HINTS: LoincHints = {
+    code: '6429-5', display: 'HIV culture of Blood', class: 'MICRO', categorySuggestion: { code: 'MICRO', display: 'Microbiology' },
+    unit: null, resultType: 'text',
+    specimens: [{ snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }, tick: true }],
+    answers: [], panelMembers: [],
+  };
+  function hintsApp(impl: (code: string) => Promise<LoincHints | null>, capabilities?: string[]) {
+    const { ctx } = fakeCtx();
+    const asked: string[] = [];
+    (ctx as unknown as { loincHints: unknown }).loincHints = { hints: async (code: string) => { asked.push(code); return impl(code); } };
+    return { app: appWith(ctx, capabilities), asked };
+  }
+
+  it('answers the hints as the service gives them', async () => {
+    const { app, asked } = hintsApp(async () => HINTS, ['terminology.view']);
+    const res = await app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/6429-5' });
+    expect([res.statusCode, res.json()]).toEqual([200, HINTS]);
+    expect(asked).toEqual(['6429-5']);
+  });
+
+  it('answers JSON null when LOINC is not loaded', async () => {
+    const res = await hintsApp(async () => null).app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/6429-5' });
+    expect([res.statusCode, res.headers['content-type'], res.body]).toEqual([200, 'application/json; charset=utf-8', 'null']);
+  });
+
+  it('maps a refusal to its status, and needs terminology.view', async () => {
+    const bad = await hintsApp(async () => { throw new TestCatalogError('no', 'invalid'); }).app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/x' });
+    const missing = await hintsApp(async () => { throw new TestCatalogError('no', 'not-found'); }).app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/1-1' });
+    expect([bad.statusCode, missing.statusCode]).toEqual([400, 404]);
+    expect((await hintsApp(async () => HINTS, []).app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/6429-5' })).statusCode).toBe(403);
   });
 });

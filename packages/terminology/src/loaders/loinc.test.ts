@@ -62,6 +62,12 @@ describe('loincRowToConcept', () => {
     expect(c.display).toBe('Creatinine [Mass/volume] in Serum or Plasma');
     expect(c.status).toBe('ACTIVE');
     expect(c.properties).toMatchObject({ COMPONENT: 'Creatinine', CLASS: 'CHEM' });
+    expect(c.properties).not.toHaveProperty('EXAMPLE_UCUM_UNITS');
+  });
+
+  it('keeps LOINC\'s example UCUM unit when the row has one', () => {
+    const c = loincRowToConcept({ LOINC_NUM: '2160-0', LONG_COMMON_NAME: 'Creatinine', CLASS: 'CHEM', EXAMPLE_UCUM_UNITS: 'mg/dL' });
+    expect(c.properties).toMatchObject({ EXAMPLE_UCUM_UNITS: 'mg/dL' });
   });
 
   it('throws a clean error (does not crash the process) when Loinc.csv is missing', async () => {

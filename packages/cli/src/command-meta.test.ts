@@ -311,6 +311,8 @@ const NOT_A_PATH: Record<string, string[]> = {
   'test-catalog result-fields list': ['--search', '--loinc', '--role', '--limit', '--offset'],
   'test-catalog result-fields link': ['code', 'loinc'],
   'test-catalog result-fields unlink': ['code'],
+  'test-catalog result-fields from-loinc': ['code'],
+  'test-catalog loinc-hints': ['code'],
   'patients list': ['--search', '--status', '--limit', '--offset'],
   'patients show': ['id'],
   'patients identifier-systems set': ['system', '--label', '--list-column', '--searchable'],

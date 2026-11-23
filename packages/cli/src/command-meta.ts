@@ -480,6 +480,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   // --apply writes over catalog rows.
   'test-catalog import': { kind: 'app', capability: 'terminology.manage', destructive: true, paths: [inFile('file'), inFile('--column-map'), inFile('--value-map')] }, // catalog :221, :233, :244
   'test-catalog list': { kind: 'app', capability: 'terminology.view' }, // catalog :132
+  // GET /api/test-catalog/loinc-hints/:code, view.
+  'test-catalog loinc-hints': { kind: 'app', capability: 'terminology.view' },
   'test-catalog map clear': { kind: 'app', capability: 'terminology.manage', destructive: true }, // mapping :79
   'test-catalog map export': { kind: 'app', capability: 'terminology.view', paths: [outFile('--out')] }, // mapping :93
   'test-catalog map import': { kind: 'app', capability: 'terminology.manage', destructive: true, paths: [inFile('file')] }, // mapping :104, :115
@@ -494,6 +496,8 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'test-catalog restore': { kind: 'app', capability: 'terminology.manage' }, // catalog :202
   // Overwrites a test's turnaround times and verification switch (PUT /api/test-catalog/:code, manage).
   'test-catalog set': { kind: 'app', capability: 'terminology.manage', destructive: true },
+  // POST /api/test-catalog/result-fields/from-loinc, manage. Adds fields and answer sets, changes none.
+  'test-catalog result-fields from-loinc': { kind: 'app', capability: 'terminology.manage' },
   'test-catalog result-fields export': { kind: 'app', capability: 'terminology.view', paths: [outFile('--out')] }, // fields :53
   'test-catalog result-fields import': { kind: 'app', capability: 'terminology.manage', destructive: true, paths: [inFile('file')] }, // fields :61, :69
   // Replaces a field's LOINC link.

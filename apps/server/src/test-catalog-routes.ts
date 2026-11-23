@@ -150,6 +150,15 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     return reply.send(await ctx.testCatalog.options());
   });
 
+  // What a LOINC code suggests for a test (test catalog hints spec, call 7). Answers null when LOINC or
+  // its ontology is not loaded here, so the sheet offers no hint controls.
+  app.get('/api/test-catalog/loinc-hints/:code', VIEW, async (req, reply) => {
+    const { code } = req.params as { code: string };
+    try {
+      return reply.send(await ctx.loincHints.hints(code));
+    } catch (err) { return replyCatalogError(err, reply); }
+  });
+
   app.post('/api/test-catalog', MANAGE, async (req, reply) => {
     const parsed = testInput.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });

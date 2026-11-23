@@ -91,6 +91,7 @@ import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-ca
 import { catalogStoredExpansion } from './register-fhir-catalog';
 import { createTestMapping, isTestMapRelevantRecord, type TestMapping } from './test-mapping';
 import { createResultFields, type ResultFields } from './result-fields';
+import { createLoincHints, type LoincHintsService } from './loinc-hints';
 import { createPatientIdentifierSystems, type PatientIdentifierSystems } from './patient-identifier-systems';
 import { createPatientIndex, type PatientIndex } from './patient-index';
 import { createPatientDuplicates, type PatientDuplicates } from './patient-duplicates';
@@ -617,6 +618,8 @@ export interface AppContext {
   testMapping: TestMapping;
   /** The result dictionary and its LOINC links (result field mapping spec 4.5). */
   resultFields: ResultFields;
+  /** Hints from a LOINC code for the test sheet, and result fields made from LOINC (test catalog hints spec). */
+  loincHints: LoincHintsService;
   /** Labels and flags for patient identifier systems (patient index spec, section 1). */
   patientIdentifierSystems: PatientIdentifierSystems;
   /** The read-only patient index and its masking (patient index spec, section 2). */
@@ -1273,6 +1276,7 @@ const reporting: ReportingApi = {
   });
   // A changed LOINC link changes the loinc column of test_map's result rows.
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
+  const loincHints = createLoincHints({ db: termDb, admin: termAdmin, ops: terminology.ops, ontology: termOntologyStore, resultFields });
   const patientIdentifierSystems = createPatientIdentifierSystems({ internalDb: termDb, externalDb, admin: termAdmin });
   const patientIndex = createPatientIndex({ externalDb, systems: patientIdentifierSystems, engine });
   const patientDuplicates = createPatientDuplicates({ internalDb: termDb, externalDb, index: patientIndex, systems: patientIdentifierSystems });
@@ -2295,6 +2299,7 @@ const reporting: ReportingApi = {
     testCatalog,
     testMapping,
     resultFields,
+    loincHints,
     patientIdentifierSystems,
     patientIndex,
     patientDuplicates,
@@ -2391,6 +2396,7 @@ export {
 } from './test-catalog';
 export * from './test-mapping';
 export * from './result-fields';
+export * from './loinc-hints';
 export * from './job-continue';
 export * from './form-access';
 export * from './form-entries';
