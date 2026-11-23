@@ -18,7 +18,7 @@ const LOCAL = 'urn:openldr:cs:local';
 const SNOMED = 'http://snomed.info/sct';
 
 // The terminology context bootstrap builds (index.ts), over a migrated pg-mem db. Mirrors test-catalog.test.ts.
-async function build(opts: { loinc?: boolean; ontology?: boolean } = {}) {
+async function build(opts: { loinc?: boolean; ontology?: boolean; failLinks?: number } = {}) {
   const db = await makeMigratedDb();
   const fhirStore = createFhirStore(db);
   const store = createTerminologyStore(db, fhirStore);
@@ -58,7 +58,16 @@ async function build(opts: { loinc?: boolean; ontology?: boolean } = {}) {
     await buildOntologyDistribution(row.id, FIXTURE, ontology, () => {});
   }
   const resultFields = createResultFields({ db, admin });
-  const hints = createLoincHints({ db, admin, ops, ontology, resultFields });
+  // A link that fails the first n times, as a store error part way through a call would.
+  let failLinks = opts.failLinks ?? 0;
+  const flaky = {
+    ownedHere: () => resultFields.ownedHere(),
+    link: async (code: string, loinc: string) => {
+      if (failLinks > 0) { failLinks -= 1; throw new Error('link store down'); }
+      return resultFields.link(code, loinc);
+    },
+  };
+  const hints = createLoincHints({ db, admin, ops, ontology, resultFields: flaky });
   return { db, admin, ops, hints, resultFields };
 }
 
@@ -147,6 +156,13 @@ describe('loincHints', () => {
     expect(specimens.some((s) => s.tick)).toBe(false);
   });
 
+  it('suggests but does not tick a match through a local map that is only related', async () => {
+    const { hints, admin } = await build();
+    await admin.termMappings.create({ fromSystem: LOCAL, fromCode: 'BLD', toSystem: SNOMED, toCode: '119297000', toDisplay: null, mapType: 'RELATED-TO', isActive: true });
+    const specimens = (await hints.hints('6429-5'))?.specimens ?? [];
+    expect(specimens[0]).toMatchObject({ snomed: '119297000', specimenType: { code: 'BLD' }, tick: false });
+  });
+
   it('ticks nothing when the one match is not equivalent', async () => {
     const { hints, admin } = await build();
     await admin.termMappings.create({ fromSystem: LOCAL, fromCode: 'BLD', toSystem: SNOMED, toCode: '122555007', toDisplay: null, mapType: 'SAME-AS', isActive: true });
@@ -233,5 +249,31 @@ describe('resultFieldsFromLoinc', () => {
       .onConflict((oc) => oc.column('url').doUpdateSet({ managed_origin: 'central' })).execute();
     await expect(hints.resultFieldsFromLoinc(['2093-3'])).rejects.toMatchObject({ kind: 'central-managed' });
     expect((await counts(db)).fields).toEqual([]);
+  });
+
+  it('a call that stops before the link is saved is completed by a re-run', async () => {
+    const { hints, db } = await build({ failLinks: 1 });
+    await expect(hints.resultFieldsFromLoinc(['32789-0'])).rejects.toThrow('link store down');
+    // The field was written, its link and answer set were not.
+    expect(await counts(db)).toEqual({ fields: ['32789-0'], sets: [] });
+    const again = await hints.resultFieldsFromLoinc(['32789-0']);
+    expect([again.created, again.reused, again.valueSetsCreated]).toEqual([[], ['32789-0'], ['urn:openldr:valueset:loinc-answers:32789-0']]);
+    const link = await db.selectFrom('term_mappings').select('to_code').where('from_system', '=', RESULT_PARAM_SYSTEM)
+      .where('from_code', '=', '32789-0').where('is_active', '=', true).executeTakeFirst();
+    expect(link?.to_code).toBe('32789-0');
+  });
+
+  it('refuses a field of another role, or a retired one, naming it, and writes nothing', async () => {
+    const { hints, db } = await build();
+    await db.insertInto('terminology_concepts').values([
+      { system: RESULT_PARAM_SYSTEM, code: '2093-3', display: 'Cholesterol', status: 'ACTIVE', properties: JSON.stringify({ result_role: 'metadata' }) as never },
+      { system: RESULT_PARAM_SYSTEM, code: '2571-8', display: 'Triglyceride', status: 'DEPRECATED', properties: JSON.stringify({ result_role: 'result' }) as never },
+    ]).execute();
+    await expect(hints.resultFieldsFromLoinc(['2093-3'])).rejects.toThrow('result field 2093-3 stands for LOINC 2093-3 but its role is metadata, not result');
+    await expect(hints.resultFieldsFromLoinc(['2571-8'])).rejects.toThrow('result field 2571-8 stands for LOINC 2571-8 but is retired (DEPRECATED)');
+    await expect(hints.resultFieldsFromLoinc(['32789-0', '2571-8'])).rejects.toMatchObject({ kind: 'invalid' });
+    expect(await counts(db)).toEqual({ fields: ['2093-3', '2571-8'], sets: [] });
+    const links = await db.selectFrom('term_mappings').select('from_code').where('from_system', '=', RESULT_PARAM_SYSTEM).execute();
+    expect(links).toEqual([]);
   });
 });

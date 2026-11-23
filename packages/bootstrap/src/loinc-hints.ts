@@ -18,6 +18,12 @@ import {
 // Nothing here names a clinical code. Categories and specimen types come from the lab's own value sets.
 
 const SNOMED_SYSTEM = 'http://snomed.info/sct';
+/** Local map equivalences that say a specimen type is the SNOMED code itself. The Terminology page writes
+ *  its map type (SAME-AS) here; an imported FHIR ConceptMap writes equivalent or equal. A wider, narrower
+ *  or related map is suggested but never ticked. */
+const SAME_EQUIVALENCES = new Set(['same-as', 'equivalent', 'equal']);
+/** A retired result field. Terminology's statuses are ACTIVE, DRAFT, DEPRECATED and DISABLED. */
+const RETIRED_STATUSES = new Set(['DEPRECATED', 'DISABLED']);
 /** The value set a coded field from LOINC takes its answers from. One per LOINC code. */
 export const LOINC_ANSWERS_VALUE_SET_PREFIX = 'urn:openldr:valueset:loinc-answers:';
 
@@ -129,19 +135,34 @@ export function createLoincHints(deps: LoincHintsDeps) {
     // Each specimen type's SNOMED codes through the lab's local map ($translate). The list is short.
     const translated = await Promise.all(types.map(async (t) => {
       const res = await deps.ops.translate({ mapUrl: LOCAL_MAP_URL, system: t.system, code: t.code, targetSystem: SNOMED_SYSTEM });
-      return new Set(res.matches.map((m) => m.targetCode));
+      const exact = new Set<string>();
+      const any = new Set<string>();
+      for (const m of res.matches) {
+        any.add(m.targetCode);
+        if (SAME_EQUIVALENCES.has((m.equivalence ?? '').toLowerCase())) exact.add(m.targetCode);
+      }
+      return { exact, any };
     }));
+    // A type whose own code is the SNOMED code, or whose local map says it is the same, is an exact match.
+    const exactMatches = new Set<LoincSpecimenHint>();
     const out: LoincSpecimenHint[] = [];
     for (const m of maps) {
       const display = (await deps.ops.lookup(SNOMED_SYSTEM, m.snomedCode)).display;
-      const matched = types.filter((t, i) => t.code === m.snomedCode || translated[i]!.has(m.snomedCode));
-      if (matched.length === 0) out.push({ snomed: m.snomedCode, display, equivalence: m.equivalence, specimenType: null, tick: false });
-      for (const t of matched) out.push({ snomed: m.snomedCode, display, equivalence: m.equivalence, specimenType: t, tick: false });
+      let any = false;
+      types.forEach((t, i) => {
+        const own = t.code === m.snomedCode;
+        if (!own && !translated[i]!.any.has(m.snomedCode)) return;
+        any = true;
+        const hint: LoincSpecimenHint = { snomed: m.snomedCode, display, equivalence: m.equivalence, specimenType: t, tick: false };
+        if (own || translated[i]!.exact.has(m.snomedCode)) exactMatches.add(hint);
+        out.push(hint);
+      });
+      if (!any) out.push({ snomed: m.snomedCode, display, equivalence: m.equivalence, specimenType: null, tick: false });
     }
-    // Ticked by itself only when exactly one specimen type matched, through an equivalent map. Several
-    // matches are suggested and none is ticked (spec call 4).
+    // Ticked by itself only when exactly one specimen type matched, LOINC's map is equivalent, and the lab's
+    // match is exact. Several matches are suggested and none is ticked (spec call 4).
     const matches = out.filter((s) => s.specimenType !== null);
-    if (matches.length === 1 && matches[0]!.equivalence === 'equivalent') matches[0]!.tick = true;
+    if (matches.length === 1 && matches[0]!.equivalence === 'equivalent' && exactMatches.has(matches[0]!)) matches[0]!.tick = true;
     return out;
   }
 
@@ -174,16 +195,44 @@ export function createLoincHints(deps: LoincHintsDeps) {
     };
   }
 
-  /** The result field already standing for a LOINC code: one with that code, else one linked to it. */
-  async function existingField(loinc: string): Promise<string | null> {
-    const own = await db.selectFrom('terminology_concepts').select('code')
+  /** The code's active LOINC link, or null. */
+  async function loincLinkOf(code: string): Promise<string | null> {
+    const row = await db.selectFrom('term_mappings').select('to_code')
+      .where('from_system', '=', RESULT_PARAM_SYSTEM).where('from_code', '=', code).where('to_system', '=', LOINC_SYSTEM)
+      .where('map_type', '=', 'SAME-AS').where('is_active', '=', true).executeTakeFirst();
+    return row?.to_code ?? null;
+  }
+
+  /**
+   * The result field already standing for a LOINC code: one with that code, else one linked to it. A
+   * field of another kind, or a retired one, is refused, since a test could not name it (the picker and
+   * the save check offer only active fields whose result_role is result).
+   */
+  async function existingField(loinc: string): Promise<{ code: string; needsLink: boolean } | null> {
+    let row = await db.selectFrom('terminology_concepts').select(['code', 'status', 'properties'])
       .where('system', '=', RESULT_PARAM_SYSTEM).where('code', '=', loinc).executeTakeFirst();
-    if (own) return own.code;
-    const linked = await db.selectFrom('term_mappings').select('from_code')
-      .where('from_system', '=', RESULT_PARAM_SYSTEM).where('to_system', '=', LOINC_SYSTEM).where('to_code', '=', loinc)
-      .where('map_type', '=', 'SAME-AS').where('is_active', '=', true)
-      .orderBy('from_code').executeTakeFirst();
-    return linked?.from_code ?? null;
+    let needsLink = false;
+    if (row) {
+      // A field made by an earlier call that stopped before its link was saved: link it now.
+      needsLink = (await loincLinkOf(row.code)) === null;
+    } else {
+      const linked = await db.selectFrom('term_mappings').select('from_code')
+        .where('from_system', '=', RESULT_PARAM_SYSTEM).where('to_system', '=', LOINC_SYSTEM).where('to_code', '=', loinc)
+        .where('map_type', '=', 'SAME-AS').where('is_active', '=', true)
+        .orderBy('from_code').executeTakeFirst();
+      if (!linked) return null;
+      row = await db.selectFrom('terminology_concepts').select(['code', 'status', 'properties'])
+        .where('system', '=', RESULT_PARAM_SYSTEM).where('code', '=', linked.from_code).executeTakeFirst();
+      if (!row) return null;
+    }
+    const role = text(propsOf(row.properties).result_role);
+    if (role !== 'result') {
+      throw invalid(`result field ${row.code} stands for LOINC ${loinc} but its role is ${role ?? 'not set'}, not result. Change its role or pick another code.`);
+    }
+    if (row.status !== null && RETIRED_STATUSES.has(row.status)) {
+      throw invalid(`result field ${row.code} stands for LOINC ${loinc} but is retired (${row.status}). Make it active again first.`);
+    }
+    return { code: row.code, needsLink };
   }
 
   async function ensureAnswers(loinc: string, answers: Array<{ value: string; label: string }>): Promise<{ url: string; created: boolean }> {
@@ -226,6 +275,7 @@ export function createLoincHints(deps: LoincHintsDeps) {
     const seen = new Set<string>();
     const newRows: Array<{ code: string; display: string; units: string | null; inLoinc: boolean }> = [];
     const planned: Array<{ code: string; fieldCode: string | null; type: ResultType; answers: Array<{ value: string; label: string }> }> = [];
+    const repairLinks: string[] = [];
     for (const w of wanted) {
       if (seen.has(w.code)) continue;
       seen.add(w.code);
@@ -233,22 +283,30 @@ export function createLoincHints(deps: LoincHintsDeps) {
       if (!c && w.name === null) throw new TestCatalogError(`LOINC code ${w.code} is not in the LOINC loaded on this install.`, 'not-found');
       const answers = await deps.ontology.answerOptions(systemId, w.code);
       const props = c?.props ?? {};
-      const fieldCode = await existingField(w.code);
+      const existing = await existingField(w.code);
+      const fieldCode = existing?.code ?? null;
+      if (existing?.needsLink && c !== null) repairLinks.push(existing.code);
       if (fieldCode === null) newRows.push({ code: w.code, display: c?.display ?? w.name ?? w.code, units: unitOf(props), inLoinc: c !== null });
       planned.push({ code: w.code, fieldCode, type: resultTypeOf(props, answers), answers });
     }
 
+    // The stores here take no shared transaction, so the writes are ordered to be safe to re-run: the
+    // checks above refuse before anything is written, and a call that stops part way leaves fields a
+    // re-run finds, links and completes. Answer sets are made whenever missing, below.
     if (newRows.length > 0) {
       await deps.admin.terms.importRows(newRows.map((r) => ({
         system: RESULT_PARAM_SYSTEM, code: r.code, display: r.display, status: 'ACTIVE',
         properties: { result_role: 'result', ...(r.units ? { parm_units: r.units } : {}) },
       })));
+    }
+    if (newRows.length > 0 || repairLinks.length > 0) {
       // The test sheet's picker and the save check read the reportable-result set, built on this system.
       await reexpandValueSetsForSystem(deps.admin, RESULT_PARAM_SYSTEM);
-      // The same link the Result fields page saves, so test mapping carries the LOINC code. A panel
-      // member missing from the loaded LOINC cannot be linked (result-fields.ts refuses it), so it is not.
-      for (const r of newRows) if (r.inLoinc) await deps.resultFields.link(r.code, r.code);
     }
+    // The same link the Result fields page saves, so test mapping carries the LOINC code. A panel member
+    // missing from the loaded LOINC cannot be linked (result-fields.ts refuses it), so it is not.
+    for (const r of newRows) if (r.inLoinc) await deps.resultFields.link(r.code, r.code);
+    for (const code of repairLinks) await deps.resultFields.link(code, code);
 
     for (const p of planned) {
       const code = p.fieldCode ?? p.code;
