@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
 import { slugify } from '@openldr/rbac';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import {
 import { useAuth } from '@/auth/AuthProvider';
 import { createRole, updateRole, getRoleCatalog, type RoleRecord, type CapabilityGroup } from '@/api';
 import { CapabilityGrid } from './CapabilityGrid';
+import { LoadFailed } from '@/components/ui/load-failed';
 
 export interface RoleSheetProps {
   open: boolean;
@@ -47,20 +49,27 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
   const [description, setDescription] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [groups, setGroups] = useState<CapabilityGroup[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalog, setCatalog] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Fetch the capability catalog once — it's mounted for the lifetime of the parent page
-  // (open/close only toggles visibility), and the catalog doesn't change during a session.
+  // Read the capability catalog when the sheet opens, and keep it once read: it does not change
+  // during a session. The Roles page mounts two sheets for its whole life, so reading on mount
+  // gave two toasts on page open and nothing when a sheet opened. A failed read is tried again on
+  // the next open.
   useEffect(() => {
+    if (!open || catalog === 'ready') return;
     let cancelled = false;
+    setCatalog('loading');
     getRoleCatalog()
-      .then((res) => { if (!cancelled) setGroups(res.groups); })
-      .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); })
-      .finally(() => { if (!cancelled) setCatalogLoading(false); });
+      .then((res) => { if (!cancelled) { setGroups(res.groups); setCatalog('ready'); } })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setCatalog('failed');
+        toast.error(e instanceof Error ? e.message : String(e));
+      });
     return () => { cancelled = true; };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // (Re)seed the draft whenever the sheet opens, for whichever role it was opened with.
   useEffect(() => {
@@ -70,7 +79,6 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
     setSlugTouched(false);
     setDescription(role?.description ?? '');
     setSelected(new Set(role?.capabilities ?? []));
-    setError(null);
     setSaving(false);
   }, [open, role]);
 
@@ -83,9 +91,8 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
   const handleSave = async () => {
     if (saving || readOnly) return;
     const trimmedName = name.trim();
-    if (!trimmedName) { setError(t('roles.nameRequired')); return; }
+    if (!trimmedName) { toast.error(t('roles.nameRequired')); return; }
     setSaving(true);
-    setError(null);
     try {
       const capabilities = [...selected];
       const saved = isEdit && role
@@ -94,7 +101,7 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
       onSaved(saved);
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -130,11 +137,6 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
         <div className="border-t border-border" />
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          {error ? (
-            <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="role-sheet-error">
-              {error}
-            </div>
-          ) : null}
           {locked ? (
             <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700" data-testid="role-locked-notice">
               {t('roles.lockedNotice')}
@@ -173,8 +175,10 @@ export function RoleSheet({ open, onOpenChange, role, onSaved }: RoleSheetProps)
 
           <div className="mt-6">
             <h3 className="mb-3 text-sm font-semibold">{t('roles.capabilitiesHeading')}</h3>
-            {catalogLoading ? (
+            {catalog === 'loading' ? (
               <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            ) : catalog === 'failed' ? (
+              <LoadFailed className="min-h-[8rem]" />
             ) : (
               <CapabilityGrid groups={groups} selected={selected} onChange={setSelected} readOnly={readOnly} />
             )}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MoreHorizontal, Network } from 'lucide-react';
+import { toast } from 'sonner';
 import type { CodingSystem, MapType, OntologyDistribution, TermMapping, TermMappingInput } from '../api';
 import { createTermMapping, updateTermMapping } from '../api';
 import { Button } from '../components/ui/button';
@@ -167,7 +168,6 @@ export function TermMappingDialog({
 
   // ── ui ────────────────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [browseOpen, setBrowseOpen] = useState(false);
 
   // ── derived ───────────────────────────────────────────────────────────────
@@ -201,7 +201,6 @@ export function TermMappingDialog({
   // ── seed state on open / mapping change ───────────────────────────────────
   useEffect(() => {
     if (!open) return;
-    setError(null);
     if (mapping) {
       // Edit mode — always use manual mode since we don't have toTermId in our API
       setMapType(mapping.mapType);
@@ -262,7 +261,6 @@ export function TermMappingDialog({
   const handleSave = async (): Promise<void> => {
     if (!canSave) return;
     setSaving(true);
-    setError(null);
     try {
       // Build the body — toSystem is the url, not the id
       // Fix round 2 (mapping-targets report): when editing under lock with a `targetMismatch`, the
@@ -299,7 +297,7 @@ export function TermMappingDialog({
       }
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -329,11 +327,6 @@ export function TermMappingDialog({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6">
-          {error && (
-            <div className="my-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </div>
-          )}
 
           {/* General section */}
           <section>

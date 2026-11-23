@@ -19,6 +19,7 @@ import { ReadmeMarkdown } from './ReadmeMarkdown';
 import { capabilityLine, packFailureText, type CardEntry } from './util';
 import { compareVersions } from '@/docs/version';
 import { PluginSitesSheet } from './PluginSitesSheet';
+import { useLoadErrorToast } from '@/components/ui/load-failed';
 
 interface PackageDetailProps {
   entry: CardEntry;
@@ -40,6 +41,9 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
   const requestKey = JSON.stringify([entry.id, entry.ref, selectedRef]);
   const detail = result?.key === requestKey ? result.detail ?? null : null;
   const error = result?.key === requestKey ? result.error ?? null : null;
+
+  // A failed detail read is a toast. The pane keeps the entry's own fields.
+  useLoadErrorToast(error);
 
   // Reset the selection when navigating to a different package.
   useEffect(() => { setSelectedRef(entry.ref); }, [entry.ref]);
@@ -265,9 +269,6 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
               </p>
             ) : null}
             {isPack && !packPayload ? null : <PayloadPreview payload={packPayload} />}
-            {error ? (
-              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
-            ) : null}
           </div>
 
           {/* ⚠ `order-first` when stacked. This block is short and factual — publisher, version,

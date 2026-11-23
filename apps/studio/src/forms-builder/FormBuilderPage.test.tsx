@@ -177,6 +177,35 @@ describe('FormBuilderPage (three-pane shell)', () => {
     await waitFor(() => expect(screen.getByLabelText('Form name')).toHaveValue('Sample tracking'));
   });
 
+  it('shows a failed form load as one toast, not a box in the page', async () => {
+    vi.spyOn(api, 'getForm').mockRejectedValue(new Error('get form failed: insufficient capability'));
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('get form failed: insufficient capability'));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('get form failed: insufficient capability')).not.toBeInTheDocument();
+  });
+
+  it('after a failed load shows no builder and offers no Save, so a blank form cannot overwrite the stored one', async () => {
+    vi.spyOn(api, 'getForm').mockRejectedValue(new Error('get form failed: 500'));
+    const update = vi.spyOn(api, 'updateForm');
+    const create = vi.spyOn(api, 'createForm');
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Could not load this form. Reload the page to try again.')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Form name')).not.toBeInTheDocument();
+    expect(screen.queryByText('Save draft')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /builder actions|form actions/i })).not.toBeInTheDocument();
+    expect(update).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('renders with /forms/new: the header Form name input is present', () => {
     render(
       <MemoryRouter initialEntries={['/forms/new']}>

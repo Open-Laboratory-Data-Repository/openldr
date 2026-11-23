@@ -94,7 +94,7 @@ describe('ImportQueriesSheet', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('shows the server error on a 400 and keeps the sheet open', async () => {
+  it('shows the server error on a 400 as a toast and keeps the sheet open', async () => {
     vi.mocked(queryApi.importQueries).mockRejectedValue(new Error('connector not found'));
     const onOpenChange = vi.fn();
     render(<ImportQueriesSheet open onOpenChange={onOpenChange} />);
@@ -103,7 +103,8 @@ describe('ImportQueriesSheet', () => {
     await waitFor(() => expect(queryApi.connectors).toHaveBeenCalled());
     const item = await menuItem('import-apply');
     await act(async () => { fireEvent.click(item); });
-    expect(await screen.findByText('Import failed: connector not found')).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Import failed: connector not found'));
+    expect(screen.queryByText('Import failed: connector not found')).not.toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
@@ -114,19 +115,41 @@ describe('ImportQueriesSheet', () => {
     expect(await screen.findByText('This file holds no queries.')).toBeInTheDocument();
   });
 
-  it('shows an error line when the saved-query list fails to load', async () => {
+  it('shows a failed load as a toast, not a line in the sheet', async () => {
     vi.mocked(queryApi.list).mockRejectedValue(new Error('boom'));
     render(<ImportQueriesSheet open onOpenChange={() => {}} />);
-    expect(await screen.findByText('Could not load existing queries or connectors: boom')).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not load existing queries or connectors: boom'));
+    expect(screen.queryByText('Could not load existing queries or connectors: boom')).not.toBeInTheDocument();
   });
 
-  it('keeps the load-failure line after a file is chosen', async () => {
+  it('toasts one failure once when both reads fail the same way, and not again after a file is chosen', async () => {
     vi.mocked(queryApi.list).mockRejectedValue(new Error('boom'));
+    vi.mocked(queryApi.connectors).mockRejectedValue(new Error('boom'));
     render(<ImportQueriesSheet open onOpenChange={() => {}} />);
-    await screen.findByText('Could not load existing queries or connectors: boom');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not load existing queries or connectors: boom'));
     await chooseFile(FILE);
     expect(await screen.findByText('Fresh')).toBeInTheDocument();
-    expect(screen.getByText('Could not load existing queries or connectors: boom')).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('says it could not compare, not new, when the saved queries fail to load, and keeps a line beside the preview', async () => {
+    vi.mocked(queryApi.list).mockRejectedValue(new Error('boom'));
+    render(<ImportQueriesSheet open onOpenChange={() => {}} />);
+    expect(await screen.findByText('Could not load the saved queries, so the file cannot be compared with them.')).toBeInTheDocument();
+    await chooseFile(FILE);
+    expect(await screen.findByText('Fresh')).toBeInTheDocument();
+    expect(screen.getAllByText('could not compare')).toHaveLength(2);
+    expect(screen.queryByText('new')).not.toBeInTheDocument();
+  });
+
+  it('keeps the two reads apart: a connectors failure does not mark the preview unknown', async () => {
+    vi.mocked(queryApi.connectors).mockRejectedValue(new Error('connectors down'));
+    render(<ImportQueriesSheet open onOpenChange={() => {}} />);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not load existing queries or connectors: connectors down'));
+    await chooseFile(FILE);
+    expect(await screen.findByText('Fresh')).toBeInTheDocument();
+    expect(screen.getByText('new')).toBeInTheDocument();
+    expect(screen.queryByTestId('import-existing-failed')).not.toBeInTheDocument();
   });
 
   it('leaves the connector empty and Import disabled when no connector has the default name', async () => {

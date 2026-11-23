@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { toast } from 'sonner';
+const auth = vi.hoisted(() => ({ caps: new Set<string>(['forms.view', 'forms.edit']) }));
+vi.mock('@/auth/AuthProvider', () => ({ useAuth: () => ({ hasCapability: (c: string) => auth.caps.has(c) }) }));
 import '@/i18n';
 import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 import { Forms } from './Forms';
@@ -37,6 +39,7 @@ const form: api.FormSummary = {
 
 describe('Forms page', () => {
   beforeEach(() => {
+    auth.caps = new Set(['forms.view', 'forms.edit']);
     vi.spyOn(api, 'listForms').mockResolvedValue([form]);
     vi.spyOn(api, 'createForm').mockResolvedValue({ ...form, schema: importedSchema, targetPages: ['forms'], createdAt: form.updatedAt });
     vi.spyOn(api, 'setFormStatus').mockImplementation(async (_id, status) => ({ ...form, status, schema: importedSchema, targetPages: ['forms'], createdAt: form.updatedAt }));
@@ -73,6 +76,31 @@ describe('Forms page', () => {
     } finally {
       await i18n.changeLanguage('en');
     }
+  });
+
+  it('a failed list load shows one toast and the could-not-load text, not the empty state or a red box', async () => {
+    vi.spyOn(api, 'listForms').mockRejectedValue(new Error('list forms failed: insufficient capability'));
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('list forms failed: insufficient capability');
+    expect(screen.queryByText('No forms yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('list forms failed: insufficient capability')).not.toBeInTheDocument();
+  });
+
+  it('a failed publish shows a toast, not a box in the page', async () => {
+    vi.spyOn(api, 'publishForm').mockRejectedValue(new Error('publish form: forms.publish required'));
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: /actions for specimen intake/i });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Publish')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Publish'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('publish form: forms.publish required'));
+    expect(screen.queryByText('publish form: forms.publish required')).not.toBeInTheDocument();
   });
 
   it('publishing from a row reports which form was published', async () => {
@@ -258,5 +286,36 @@ describe('Forms page', () => {
 
     fireEvent.change(screen.getByPlaceholderText(/search forms/i), { target: { value: 'xray' } });
     expect(await screen.findByText('Gamma Form')).toBeInTheDocument();
+  });
+
+  async function openMenus() {
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+    const open = (name: string, probe: string) => {
+      const b = screen.getByRole('button', { name });
+      fireEvent.pointerDown(b, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText(probe)) fireEvent.keyDown(b, { key: 'Enter' });
+    };
+    open('Form actions', 'Refresh');
+    const pageItems = screen.queryAllByRole('menuitem').map((e) => e.textContent);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    open('Actions for Specimen intake', 'Export');
+    const rowItems = screen.queryAllByRole('menuitem').map((e) => e.textContent);
+    return { pageItems, rowItems };
+  }
+
+  it('a view-only user sees no New, Import, Duplicate, Publish, Archive or Delete', async () => {
+    auth.caps = new Set(['forms.view', 'forms.submit']);
+    const { pageItems, rowItems } = await openMenus();
+    const all = [...pageItems, ...rowItems].join('|');
+    for (const word of ['New', 'Import', 'Duplicate', 'Publish', 'Archive', 'Delete']) expect(all).not.toContain(word);
+    expect(all).toContain('Refresh');
+    expect(all).toContain('Export');
+  });
+
+  it('a user with forms.edit sees New, Import, Duplicate, Publish, Archive and Delete', async () => {
+    const { pageItems, rowItems } = await openMenus();
+    const all = [...pageItems, ...rowItems].join('|');
+    for (const word of ['New', 'Import', 'Duplicate', 'Publish', 'Archive', 'Delete']) expect(all).toContain(word);
   });
 });

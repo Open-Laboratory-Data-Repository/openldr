@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LoadingState } from '@/components/ui/spinner';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { TruncatedText } from '@/components/ui/truncated-text';
@@ -37,6 +38,7 @@ export function EntriesTab({ formId, refreshKey }: {
   const [rows, setRows] = useState<FormEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  // A failed load. Cleared only by a load that works, so a filter that fails the same way does not toast again.
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   // What the list asks for: the box's text once typing has paused.
@@ -55,7 +57,6 @@ export function EntriesTab({ formId, refreshKey }: {
   const load = useCallback(async () => {
     const id = ++request.current;
     setLoading(true);
-    setError(null);
     try {
       const out = await listFormEntries(formId, {
         limit: pageSize,
@@ -67,6 +68,7 @@ export function EntriesTab({ formId, refreshKey }: {
       if (id !== request.current) return;
       setRows(out.entries);
       setTotal(out.total);
+      setError(null);
       setPeople((prev) => {
         const fresh = out.entries.filter((e) => prev.get(e.enteredBy) !== e.enteredByName);
         if (fresh.length === 0) return prev;
@@ -85,6 +87,7 @@ export function EntriesTab({ formId, refreshKey }: {
   }, [formId, page, pageSize, query, status, person]);
 
   useEffect(() => { void load(); return () => { request.current++; }; }, [load, refreshKey]);
+  useLoadErrorToast(error);
 
   useEffect(() => {
     if (search === query) return;
@@ -136,7 +139,6 @@ export function EntriesTab({ formId, refreshKey }: {
             </Select>
           </div>
         </div>
-        {error ? <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive [overflow-wrap:anywhere]">{error}</div> : null}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -211,7 +213,8 @@ export function EntriesTab({ formId, refreshKey }: {
           </Table>
         )}
         {loading && <LoadingState className="min-h-[16rem] flex-1" label={t('common.loading')} />}
-        {!loading && rows.length === 0 && (
+        {!loading && error && <LoadFailed />}
+        {!loading && !error && rows.length === 0 && (
           <StripedEmpty className="min-h-[16rem] flex-1">
             {query.trim() || status !== ALL || person !== ALL ? t(`${P}.noMatch`) : t(`${P}.empty`)}
           </StripedEmpty>

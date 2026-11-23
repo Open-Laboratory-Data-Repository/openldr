@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { LoadingState } from '@/components/ui/spinner';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { getFacilityHistory, type FacilityHistoryEntry } from '@/api';
 import { FACILITY_STATUS_VALUESET_ID, FACILITY_LEVEL_VALUESET_ID, useCodeDisplayMap, displayFor } from './facility-code-labels';
 
@@ -126,6 +127,7 @@ export function FacilityHistory({ open, onOpenChange, facilityId, facilityName }
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [open, facilityId]);
+  useLoadErrorToast(error);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -138,11 +140,7 @@ export function FacilityHistory({ open, onOpenChange, facilityId, facilityName }
         <div className="min-h-0 flex-1 overflow-y-auto">
           {loading && <LoadingState label={t('common.loading')} />}
 
-          {error && !loading && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </div>
-          )}
+          {error && !loading && <LoadFailed />}
 
           {!loading && !error && rows.length === 0 && (
             <p className="px-1 py-4 text-xs text-muted-foreground">{t('facilities.history.empty')}</p>

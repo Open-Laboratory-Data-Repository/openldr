@@ -200,6 +200,34 @@ describe('Facilities page', () => {
     });
   });
 
+  it('a failed list load shows one toast and the could-not-load text, not the empty state or a red box', async () => {
+    listFacilitiesMock.mockRejectedValue(new Error('list facilities failed: 503'));
+    vi.mocked(listPublishedForms).mockResolvedValue([publishedFacilityForm]);
+    window.history.replaceState({}, '', '/facilities');
+    show();
+
+    expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('list facilities failed: 503'));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('list facilities failed: 503')).not.toBeInTheDocument();
+    expect(screen.queryByText('No facilities yet.')).not.toBeInTheDocument();
+  });
+
+  it('a failed page change keeps the old rows under a muted line saying they are from before', async () => {
+    listFacilitiesMock.mockResolvedValueOnce(makePage(makeRows(50), { total: 150 }))
+      .mockRejectedValue(new Error('list facilities failed: 503'));
+    window.history.replaceState({}, '', '/facilities');
+    show();
+    await screen.findByText('Facility 0');
+    expect(screen.queryByText('The latest change could not load. These rows are from before it.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('list facilities failed: 503'));
+    expect(screen.getByText('The latest change could not load. These rows are from before it.')).toBeInTheDocument();
+    expect(screen.getByText('Facility 0')).toBeInTheDocument();
+  });
+
   it.each(['create', 'edit'] as const)('reloads the bounded filtered page after %s instead of appending the saved facility', async (operation) => {
     const original = makeRows(50);
     const saved = { ...sampleFacility, id: operation === 'edit' ? 'f0' : 'off-page', name: 'Outside current filter' };
@@ -1651,10 +1679,9 @@ describe('Facilities page', () => {
         .toHaveBeenCalledWith(expect.stringMatching(/2 facilities deleted/i)));
     });
 
-    // ⛔ A FAILED BULK DELETE STAYS IN THE DIALOG, and gets no toast. The stale-count 409 means the
-    // selection moved under the operator, and the dialog's own message is the one place that
-    // explains why nothing was deleted. A toast that vanishes would replace an explanation with a
-    // flash.
+    // ⛔ A failed bulk delete is a toast.error with the server's reason, never a success toast. The
+    // stale-count 409 means the selection moved under the operator. Errors as toasts, 2026-11-23:
+    // the reason used to sit in a red box in the page; it is now the toast's text.
     it('reports a stale-count refusal instead of pretending it worked', async () => {
       seedTwo();
       (previewBulkDeleteFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -1670,7 +1697,10 @@ describe('Facilities page', () => {
       const dialog = await screen.findByRole('alertdialog');
       fireEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }));
 
-      expect(await screen.findByText(/not the 2 that were reviewed/i)).toBeInTheDocument();
+      await waitFor(() => expect(toast.error)
+        .toHaveBeenCalledWith('this selection now matches 5 facilities, not the 2 that were reviewed', { duration: Infinity }));
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(screen.queryByText(/not the 2 that were reviewed/i)).not.toBeInTheDocument();
     });
 
     it('is not offered to a view-only operator', async () => {

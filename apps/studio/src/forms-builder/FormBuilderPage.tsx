@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { LoadFailed } from '@/components/ui/load-failed';
 import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, loadStarterPack, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
 import { createDefaultFormSchema, formSchemaOf, makeUniqueFieldId, newField, slugify } from './builderModel';
 import {
@@ -64,7 +65,8 @@ export function FormBuilderPage(): JSX.Element {
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
   const [pendingNewFieldId, setPendingNewFieldId] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(id));
-  const [error, setError] = useState<string | null>(null);
+  // The stored form could not be read. The builder is not shown, so a Save cannot write a blank form.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
@@ -90,6 +92,7 @@ export function FormBuilderPage(): JSX.Element {
     if (!id) return;
     let cancelled = false;
     setLoading(true);
+    setLoadFailed(false);
     void getForm(id)
       .then((loaded) => {
         if (cancelled) return;
@@ -101,7 +104,7 @@ export function FormBuilderPage(): JSX.Element {
           .catch(() => { /* the number is a nicety; a failure here must not break the builder */ });
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) { setLoadFailed(true); toast.error(err instanceof Error ? err.message : String(err)); }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -455,6 +458,7 @@ export function FormBuilderPage(): JSX.Element {
   };
 
   const save = async () => {
+    if (loadFailed) return;
     try {
       const saved = await saveDraft();
       toast.success(t('formBuilder.page.saved', { name: saved.name }));
@@ -564,6 +568,14 @@ export function FormBuilderPage(): JSX.Element {
     </div>
   );
 
+  if (loadFailed) {
+    return (
+      <AppShell title={t('formBuilder.page.title')} fullBleed>
+        <LoadFailed message={t('common.formLoadFailed')} />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell title={t('formBuilder.page.title')} fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -597,18 +609,13 @@ export function FormBuilderPage(): JSX.Element {
           }
         />
 
-        {/* Announce form lifecycle changes (draft → published/archived) and transient errors to
-            assistive tech. The status region is visually hidden because the state is already shown
-            as a colored dot in the header; the live region gives non-visual users the same update. */}
+        {/* Announce form lifecycle changes (draft → published/archived) to assistive tech. Errors
+            are sonner toasts, which announce themselves. The status region is visually hidden
+            because the state is already shown as a colored dot in the header; the live region gives
+            non-visual users the same update. */}
         <p role="status" aria-live="polite" className="sr-only">
           {status ? t('formBuilder.page.statusLive', { status: t(`formBuilder.header.status.${status}`, { defaultValue: status }) }) : ''}
         </p>
-
-        {error ? (
-          <div role="alert" className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {error}
-          </div>
-        ) : null}
 
         {!loading ? <SubmissionReadiness schema={schema} /> : null}
 

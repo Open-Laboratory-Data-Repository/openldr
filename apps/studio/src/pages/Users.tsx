@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LoadingState } from '@/components/ui/spinner';
@@ -37,7 +39,8 @@ export function Users() {
   const resetEmail = authCapabilities?.passwordResetEmail !== false;
   const [rows, setRows] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  // A failed load. Cleared only by a load that works, so a search that fails the same way does not toast again.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<UserSummary | null>(null);
   const [pendingToggle, setPendingToggle] = useState<UserSummary | null>(null);
@@ -61,14 +64,15 @@ export function Users() {
       if (id !== request.current) return;
       setRows(result.rows);
       setHasMore(result.hasMore);
+      setLoadError(null);
     } catch (e) {
-      if (id === request.current) setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) });
+      if (id === request.current) setLoadError(e instanceof Error ? e.message : String(e));
     } finally { if (id === request.current) setLoading(false); }
-  }, [t, page, pageSize, search, status]);
+  }, [page, pageSize, search, status]);
   useEffect(() => { void load(); return () => { request.current++; }; }, [load]);
-  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 6000); return () => clearTimeout(id); }, [toast]);
+  useLoadErrorToast(loadError);
 
-  const onSaved = (u: UserSummary) => { void load(); setToast({ kind: 'ok', text: t('users.savedToast', { username: u.username }) }); };
+  const onSaved = (u: UserSummary) => { void load(); toast.success(t('users.savedToast', { username: u.username })); };
 
   const doToggle = async () => {
     if (!pendingToggle) return;
@@ -77,21 +81,21 @@ export function Users() {
     try {
       const updated = await setUserStatus(u.id, !u.enabled);
       void load();
-      setToast({ kind: 'ok', text: t(updated.enabled ? 'users.enabledToast' : 'users.disabledToast', { username: u.username }) });
+      toast.success(t(updated.enabled ? 'users.enabledToast' : 'users.disabledToast', { username: u.username }));
     } catch (e) {
-      setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) });
+      toast.error(t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }));
     }
   };
 
   const doSendResetEmail = useCallback(async (u: UserSummary) => {
-    try { await sendUserResetEmail(u.id); setToast({ kind: 'ok', text: t('users.sendResetEmailToast', { username: u.username }) }); }
-    catch (e) { setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) }); }
+    try { await sendUserResetEmail(u.id); toast.success(t('users.sendResetEmailToast', { username: u.username })); }
+    catch (e) { toast.error(t('users.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [t]);
   const doForceLogout = useCallback(async () => {
     if (!pendingLogout) return;
     const u = pendingLogout; setPendingLogout(null);
-    try { await forceUserLogout(u.id); setToast({ kind: 'ok', text: t('users.forceSignOutToast', { username: u.username }) }); }
-    catch (e) { setToast({ kind: 'err', text: t('users.errorToast', { error: e instanceof Error ? e.message : String(e) }) }); }
+    try { await forceUserLogout(u.id); toast.success(t('users.forceSignOutToast', { username: u.username })); }
+    catch (e) { toast.error(t('users.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [pendingLogout, t]);
 
   const columns = useMemo<ColumnDef<UserSummary>[]>(() => [
@@ -182,7 +186,6 @@ export function Users() {
           </div>
           <p className="text-xs text-muted-foreground">{t('users.directoryOrder')}</p>
           {!identityAdmin && <p className="text-xs text-muted-foreground">{t('users.identityAdminUnavailable')}</p>}
-          {toast ? <div className={toast.kind === 'ok' ? 'rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700' : 'rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'}>{toast.text}</div> : null}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -203,7 +206,8 @@ export function Users() {
             )}
           </Table>}
           {loading && <LoadingState className="flex-1" label={t('common.loading')} />}
-          {!loading && rows.length === 0 && <StripedEmpty className="min-h-[16rem] flex-1">{t('users.noMatch')}</StripedEmpty>}
+          {!loading && rows.length === 0 && loadError && <LoadFailed />}
+          {!loading && rows.length === 0 && !loadError && <StripedEmpty className="min-h-[16rem] flex-1">{t('users.noMatch')}</StripedEmpty>}
         </div>
 
         <TablePagination page={page} pageSize={pageSize} total={null} rowCount={rows.length} hasMore={!loading && hasMore} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(0); }} />
@@ -219,7 +223,7 @@ export function Users() {
           destructive={pendingToggle?.enabled ?? false}
           onConfirm={() => { void doToggle(); }}
         />
-        <ResetPasswordDialog open={resetting !== null} onOpenChange={(o) => { if (!o) setResetting(null); }} user={resetUser} onDone={(u) => setToast({ kind: 'ok', text: t('users.resetPasswordSavedToast', { username: u.username }) })} />
+        <ResetPasswordDialog open={resetting !== null} onOpenChange={(o) => { if (!o) setResetting(null); }} user={resetUser} onDone={(u) => toast.success(t('users.resetPasswordSavedToast', { username: u.username }))} />
         <ConfirmDialog
           open={pendingLogout !== null}
           onOpenChange={(o) => { if (!o) setPendingLogout(null); }}

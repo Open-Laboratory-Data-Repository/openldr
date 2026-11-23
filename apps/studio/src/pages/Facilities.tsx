@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
+import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import {
   ActiveFilterChips, DataTableToolbar, newId, useTableState,
   type ColumnDef, type FilterOperator, type FilterRule, type SortRule,
@@ -34,6 +35,9 @@ import { ImportFacilitiesSheet } from '@/facilities/ImportFacilitiesSheet';
 import { ObservedTab } from '@/facilities/ObservedTab';
 import { FacilityHistory } from '@/facilities/FacilityHistory';
 import { FACILITY_STATUS_VALUESET_ID, useCodeDisplayMap, displayFor } from '@/facilities/facility-code-labels';
+
+/** A failed action (save, delete, scan, retry) is a toast, never a box in the page. */
+function actionFailed(e: unknown): void { toast.error(e instanceof Error ? e.message : String(e)); }
 
 /** Task 5: the filters `GET /api/facilities` accepts that have NO column in `FACILITY_COLUMNS`,
  *  so they cannot be expressed as grammar rules and keep their own named params and their own
@@ -437,7 +441,10 @@ export function Facilities() {
   // own doc comment for why the ValueSet id is a frozen, hardcoded literal.
   const statusDisplayMap = useCodeDisplayMap(FACILITY_STATUS_VALUESET_ID);
   const [importing, setImporting] = useState(false);
+  // A failed list load. Cleared only by a load that works, so a reload that fails the same way
+  // (a filter, a page, a keystroke) does not toast again. Action failures go straight to a toast.
   const [error, setError] = useState<string | null>(null);
+  useLoadErrorToast(error);
   // Task: one `⋯` on the TAB STRIP itself, right-aligned, instead of each tab wasting a second
   // header row purely to host its own. The strip owns ONE portal target; whichever tab is actually
   // mounted (Radix unmounts the inactive `TabsContent`'s whole subtree — see the comment on
@@ -491,7 +498,7 @@ export function Facilities() {
       await retryFacilityJob(jobId);
       await reloadHealth();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      actionFailed(e);
     } finally {
       setRetryingJobId(null);
     }
@@ -954,11 +961,10 @@ export function Facilities() {
 
   const openBulkDelete = useCallback(async () => {
     setBulkPreviewing(true);
-    setError(null);
     try {
       setBulkPreview(await previewBulkDeleteFacilities(bulkSelection()));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      actionFailed(e);
     } finally {
       setBulkPreviewing(false);
     }
@@ -971,7 +977,6 @@ export function Facilities() {
     // the server's 409 guard exists to prevent.
     const expected = bulkPreview.total;
     setBulkDeleting(true);
-    setError(null);
     try {
       await bulkDeleteFacilities(bulkSelection(), expected);
       // The count the operator REVIEWED, matching the dialog they just read and the number the
@@ -983,8 +988,9 @@ export function Facilities() {
       void reloadHealth();
     } catch (e) {
       // Left OPEN on failure. A stale-count 409 means the selection moved under the operator, and
-      // closing the dialog would hide the one message explaining why nothing was deleted.
-      setError(e instanceof Error ? e.message : String(e));
+      // closing the dialog would hide the question the toast explains. The toast stays until the
+      // operator closes it: the reason is a count they must read before choosing again.
+      toast.error(e instanceof Error ? e.message : String(e), { duration: Infinity });
     } finally {
       setBulkDeleting(false);
     }
@@ -998,13 +1004,12 @@ export function Facilities() {
       await deleteFacility(f.id);
       toast.success(t('facilities.deletedToast', { name: f.name }));
       setRows((prev) => prev.filter((r) => r.id !== f.id));
-      setError(null);
       // A delete enqueues a rebuild server-side, so the dimension is now `updating`. This path
       // deliberately does NOT call `reload()` (it drops the row locally instead of refetching the
       // whole list), so it has to refresh the chip itself or the mutation stays invisible.
       void reloadHealth();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      actionFailed(e);
     }
   }, [confirming, reloadHealth, t]);
 
@@ -1197,10 +1202,10 @@ export function Facilities() {
           <ActiveFilterChips columns={columns} filters={table.filters} onChange={applyFilters} />
         </div>
 
-        {error && (
-          <div className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {error}
-          </div>
+        {/* A reload failed over rows already shown. They stay, but must not pass for the result of
+            the filter, search or page the operator just chose. Kept after the toast closes. */}
+        {error && rows.length > 0 && (
+          <p className="mx-4 mt-2 text-xs text-muted-foreground">{t('facilities.staleRows')}</p>
         )}
 
         {/* Minor 4: a lab with rows already imported but no published form sees Add/Edit greyed
@@ -1247,6 +1252,9 @@ export function Facilities() {
                 ))}
               </TableBody>
             </Table>
+          ) : error ? (
+            // A failed load is not an empty registry: never say "no facilities yet" over it.
+            <LoadFailed />
           ) : !hasForm ? (
             // No rows AND no published form: the no-form state must name its own cause (see the
             // ⛔ test) rather than fall into the same "no facilities yet" message a lab with a

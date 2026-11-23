@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { MoreHorizontal, Upload, Download, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   searchTerms,
   importTerms,
@@ -27,6 +28,7 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { TablePagination } from '../components/ui/table-pagination';
+import { LoadFailed, useLoadErrorToast } from '../components/ui/load-failed';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,8 +80,11 @@ export function TermsTable({
   // ── delete confirm state ─────────────────────────────────────────────────────
   const [confirmDelete, setConfirmDelete] = useState<Term | null>(null);
 
-  // ── action error banner ───────────────────────────────────────────────────────
-  const [actionError, setActionError] = useState<string | null>(null);
+  // ── a failed search ──────────────────────────────────────────────────────────
+  // Cleared only by a search that works, so a new page or filter that fails the same way does not
+  // toast again. Shown as "could not load", never as "No terms found."
+  const [loadError, setLoadError] = useState<string | null>(null);
+  useLoadErrorToast(loadError);
 
   // ── import busy state + hidden file input ────────────────────────────────────
   const [importBusy, setImportBusy] = useState(false);
@@ -110,12 +115,14 @@ export function TermsTable({
         if (!cancelled) {
           setRows(r);
           setTotal(t);
+          setLoadError(null);
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!cancelled) {
           setRows([]);
           setTotal(0);
+          setLoadError(err instanceof Error ? err.message : String(err));
         }
       })
       .finally(() => {
@@ -132,14 +139,12 @@ export function TermsTable({
     if (!file) return;
     // reset so the same file can be selected again
     e.target.value = '';
-    setActionError(null);
     setImportBusy(true);
     try {
       await importTerms(systemId, file);
-      setActionError(null);
       setLocalReload((n) => n + 1);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setImportBusy(false);
     }
@@ -150,13 +155,11 @@ export function TermsTable({
     if (!confirmDelete) return;
     const code = confirmDelete.code;
     setConfirmDelete(null);
-    setActionError(null);
     try {
       await deleteTerm(systemId, code);
-      setActionError(null);
       setLocalReload((n) => n + 1);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -226,13 +229,6 @@ export function TermsTable({
         </DropdownMenu>
       </div>
 
-      {/* Action error banner */}
-      {actionError && (
-        <div className="mx-3 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {actionError}
-        </div>
-      )}
-
       {/* Table */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <Table wrapperClassName="min-h-0 flex-1">
@@ -252,6 +248,12 @@ export function TermsTable({
               <TableRow>
                 <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   Searching…
+                </TableCell>
+              </TableRow>
+            ) : loadError ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={7} className="p-0">
+                  <LoadFailed />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (

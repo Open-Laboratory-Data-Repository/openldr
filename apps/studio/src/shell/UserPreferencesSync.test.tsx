@@ -161,7 +161,8 @@ describe('first page for each preset role, with the real sidebar', () => {
   it.each([
     ['lab_manager', '/'],
     ['lab_admin', '/'],
-    ['lab_technician', '/terminology'],
+    // Terminology needs terminology.view now, so a technician starts on Forms, a page they can open.
+    ['lab_technician', '/forms'],
   ])('sends %s to %s when nothing is saved', async (slug, page) => {
     caps = presetCaps(slug);
     (api.getMyPreferences as any).mockResolvedValue({});

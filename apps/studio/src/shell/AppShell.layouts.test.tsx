@@ -58,7 +58,7 @@ describe('sidebar under a layout', () => {
   });
 
   it('never shows a page the capabilities hide, even if the layout lists it', async () => {
-    caps = ['terminology.view'];
+    caps = ['forms.view'];
     await load({});
     shell();
     expect(sidebar()).not.toContain('/query');

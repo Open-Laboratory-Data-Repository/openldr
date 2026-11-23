@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { toast } from 'sonner';
 import type { CodingSystem, OntologyDistribution, Term, TermInput, TermMapping, TermStatus } from '../api';
 import {
   createTerm,
@@ -9,6 +10,7 @@ import {
   deleteTermMapping,
 } from '../api';
 import { Badge } from '../components/ui/badge';
+import { LoadFailed, useLoadErrorToast } from '../components/ui/load-failed';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -163,7 +165,6 @@ export function TermDialog({
   const [replacedBy, setReplacedBy] = useState('');
   const [metadataText, setMetadataText] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // ── confirm dialog ───────────────────────────────────────────────────────────
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
@@ -172,6 +173,9 @@ export function TermDialog({
   const [outgoing, setOutgoing] = useState<TermMapping[]>([]);
   const [reverse, setReverse] = useState<TermMapping[]>([]);
   const [mappingsLoading, setMappingsLoading] = useState(false);
+  // A failed mappings load. The tab says it could not load, never "no mappings".
+  const [mappingsError, setMappingsError] = useState<string | null>(null);
+  useLoadErrorToast(mappingsError);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
 
   // ── T13 state (TermMappingDialog) ────────────────────────────────────────────
@@ -190,7 +194,7 @@ export function TermDialog({
     setStatus((term?.status as TermStatus | undefined) ?? 'ACTIVE');
     setReplacedBy(term?.replacedBy ?? '');
     setMetadataText(term?.metadata ? JSON.stringify(term.metadata, null, 2) : '');
-    setError(null);
+    setMappingsError(null);
     setDraftNotice(null);
     setOutgoing([]);
     setReverse([]);
@@ -205,8 +209,9 @@ export function TermDialog({
       const result = await listTermMappings(system.url, term.code);
       setOutgoing(result.outgoing);
       setReverse(result.reverse);
+      setMappingsError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setMappingsError(e instanceof Error ? e.message : String(e));
     } finally {
       setMappingsLoading(false);
     }
@@ -227,7 +232,6 @@ export function TermDialog({
   const handleSave = async (): Promise<void> => {
     if (!canSave) return;
     setSaving(true);
-    setError(null);
 
     // Validate metadata JSON
     let metadata: Record<string, unknown> | null = null;
@@ -240,7 +244,7 @@ export function TermDialog({
           throw new Error('Metadata must be a JSON object');
         }
       } catch (e) {
-        setError(`${L.metadataInvalid}: ${(e as Error).message}`);
+        toast.error(`${L.metadataInvalid}: ${(e as Error).message}`);
         setSaving(false);
         return;
       }
@@ -265,7 +269,7 @@ export function TermDialog({
       onSaved();
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -290,7 +294,7 @@ export function TermDialog({
       onDeleted();
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
@@ -312,7 +316,7 @@ export function TermDialog({
       setOutgoing((prev) => prev.filter((x) => x.id !== m.id));
       setReverse((prev) => prev.filter((x) => x.id !== m.id));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -542,18 +546,13 @@ export function TermDialog({
                 <div className="-mx-6 border-b border-border" />
               </section>
 
-              {error && (
-                <div className="my-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  {error}
-                </div>
-              )}
             </div>
           ) : (
             <MappingsTabBody
               outgoing={outgoing}
               reverse={reverse}
               loading={mappingsLoading}
-              error={error}
+              loadFailed={mappingsError !== null}
               draftNotice={draftNotice}
               onDismissDraftNotice={() => setDraftNotice(null)}
               onEdit={(m) => {
@@ -639,7 +638,7 @@ function MappingsTabBody({
   outgoing,
   reverse,
   loading,
-  error,
+  loadFailed,
   draftNotice,
   onDismissDraftNotice,
   onEdit,
@@ -648,7 +647,7 @@ function MappingsTabBody({
   outgoing: TermMapping[];
   reverse: TermMapping[];
   loading: boolean;
-  error: string | null;
+  loadFailed: boolean;
   draftNotice: string | null;
   onDismissDraftNotice: () => void;
   onEdit: (m: TermMapping) => void;
@@ -671,12 +670,6 @@ function MappingsTabBody({
         </span>
       </div>
 
-      {error && (
-        <div className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
-      )}
-
       {draftNotice && (
         <div className="mx-4 mt-2 flex items-start justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs text-foreground">
           <span>{draftNotice}</span>
@@ -695,6 +688,8 @@ function MappingsTabBody({
           <div className="px-4 py-6 text-center text-sm text-muted-foreground">
             {L.loading}
           </div>
+        ) : loadFailed ? (
+          <LoadFailed />
         ) : allRows.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-muted-foreground">
             {L.mappingEmpty}

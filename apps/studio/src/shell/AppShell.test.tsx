@@ -70,6 +70,17 @@ describe('AppShell', () => {
     expect(pages(['dashboards.view', 'audit.view'])).toContain('/audit');
   });
 
+  it('shows Terminology and Forms only to a user who can open them', () => {
+    const pages = (caps: string[]) => visibleNav((c) => caps.includes(c), null).map((n) => n.to);
+    const patientsOnly = pages(['patients.view']);
+    expect(patientsOnly).toContain('/patients');
+    expect(patientsOnly).toContain('/docs');
+    expect(patientsOnly).not.toContain('/terminology');
+    expect(patientsOnly).not.toContain('/forms');
+    expect(pages(['forms.view'])).toContain('/forms');
+    expect(pages(['terminology.view'])).toContain('/terminology');
+  });
+
   it('toggles theme via the navbar icon button', () => {
     renderShell();
     fireEvent.click(screen.getByLabelText('Switch to light mode'));

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -127,7 +128,6 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
   const [scopeChoices, setScopeChoices] = useState<DataScopeChoices | null>(null);
 
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // The ⋯ "Save" menu item lives outside the FormRuntime-rendered <form> (it's in a toolbar row
   // under the SheetHeader, not a footer). When a Users form is published, Save proxies a click to
@@ -140,13 +140,22 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
   // re-attempts the role assignment instead of creating a duplicate user / re-PUTting identity.
   const [savedIdentity, setSavedIdentity] = useState<UserSummary | null>(null);
 
+  // The schema, roles and data-limit reads run together, so one outage can fail all three.
+  // The first failure each time the sheet opens is a toast; the rest say the same thing.
+  const loadToasted = useRef(false);
+  useEffect(() => { if (open) loadToasted.current = false; }, [open]);
+  const loadFailed = (message: string) => {
+    if (loadToasted.current) return;
+    loadToasted.current = true;
+    toast.error(message);
+  };
+
   // Load the published 'users' form schema when the dialog opens
   useEffect(() => {
     if (!open) return;
     setUsername(user?.username ?? '');
     setPassword('');
     setConfirmPassword('');
-    setError(null);
     setSaving(false);
     setSchema(null);
     setFormDefId(null);
@@ -165,7 +174,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
         const parsed = FormSchemaZ.safeParse(def.schema);
         if (!parsed.success) {
           setNoForm(true);
-          setError(`User form schema is invalid: ${parsed.error.issues[0]?.message ?? 'unknown'}`);
+          loadFailed(`User form schema is invalid: ${parsed.error.issues[0]?.message ?? 'unknown'}`);
           return;
         }
         const loaded = parsed.data as FormSchema;
@@ -179,7 +188,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
         else setInitialAnswers({});
       })
       .catch((e: unknown) => {
-        setError(e instanceof Error ? e.message : String(e));
+        loadFailed(e instanceof Error ? e.message : String(e));
       })
       .finally(() => setSchemaLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,7 +219,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
     };
     load()
       .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) loadFailed(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
         if (!cancelled) setRolesLoading(false);
@@ -231,14 +240,14 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
         setScope(current);
         setSavedScope(current);
       })
-      .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); });
+      .catch((e: unknown) => { if (!cancelled) loadFailed(e instanceof Error ? e.message : String(e)); });
     return () => { cancelled = true; };
   }, [open, user?.id, canSetDataScope]);
 
   /** Shared create-only validation for the fixed username/password fields above the form. */
   const validateCore = (): boolean => {
-    if (!isEdit && !username.trim() && !savedIdentity) { setError('Username is required.'); return false; }
-    if (!isEdit && password && password !== confirmPassword && !savedIdentity) { setError(t('users.passwordMismatch')); return false; }
+    if (!isEdit && !username.trim() && !savedIdentity) { toast.error('Username is required.'); return false; }
+    if (!isEdit && password && password !== confirmPassword && !savedIdentity) { toast.error(t('users.passwordMismatch')); return false; }
     return true;
   };
 
@@ -254,7 +263,6 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
     formMeta: FormMeta,
   ) => {
     setSaving(true);
-    setError(null);
     try {
       // If a prior submit already persisted the identity but failed to assign roles, don't
       // re-create/re-update it — just retry the role assignment for the same directory id.
@@ -290,16 +298,16 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
         await setUserRoles(saved.subject ?? saved.id, selectedRoleId ? [selectedRoleId] : []);
       } catch (roleErr) {
         // The identity write succeeded but the role change was rejected (e.g. the last-admin
-        // guard). Do NOT signal success — surface the error inline and keep the dialog open so
+        // guard). Do NOT signal success. Show the error in a toast and keep the dialog open so
         // the user can pick a valid role and retry (or close and fix it later by re-editing).
-        setError(t('users.rolesSaveError', { error: roleErr instanceof Error ? roleErr.message : String(roleErr) }));
+        toast.error(t('users.rolesSaveError', { error: roleErr instanceof Error ? roleErr.message : String(roleErr) }));
         return;
       }
       if (canSetDataScope && scopeChoices && JSON.stringify(scope) !== JSON.stringify(savedScope)) {
         try {
           setSavedScope(await setUserDataScope(saved.subject ?? saved.id, scope));
         } catch (scopeErr) {
-          setError(t('users.dataScope.saveError', { error: scopeErr instanceof Error ? scopeErr.message : String(scopeErr) }));
+          toast.error(t('users.dataScope.saveError', { error: scopeErr instanceof Error ? scopeErr.message : String(scopeErr) }));
           return;
         }
       }
@@ -307,8 +315,8 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
       onSaved(saved);
       onOpenChange(false);
     } catch (err) {
-      if (err instanceof PasswordRuleError) setError(t(PASSWORD_RULE_KEYS[err.rule]));
-      else setError(err instanceof Error ? err.message : String(err));
+      if (err instanceof PasswordRuleError) toast.error(t(PASSWORD_RULE_KEYS[err.rule]));
+      else toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
@@ -376,10 +384,6 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
         <div className="border-t border-border" />
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {error ? (
-            <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
-          ) : null}
-
           {/* Fixed fields above the form — create only */}
           {!isEdit && (
             <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-6 py-4 border-b border-border">

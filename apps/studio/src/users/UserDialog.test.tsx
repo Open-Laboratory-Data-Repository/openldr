@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -185,7 +187,7 @@ describe('UserDialog — role assignment (single-select)', () => {
     await waitFor(() => expect(api.setUserRoles).toHaveBeenCalledWith('new-directory-id', ['r1']));
   });
 
-  it('surfaces a setUserRoles rejection inline, withholds success, and keeps the dialog open', async () => {
+  it('surfaces a setUserRoles rejection as a toast, withholds success, and keeps the dialog open', async () => {
     (api.updateUser as ReturnType<typeof vi.fn>).mockResolvedValue({ ...editUser });
     (api.setUserRoles as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('cannot remove the last member of a role granting roles.manage'),
@@ -197,7 +199,8 @@ describe('UserDialog — role assignment (single-select)', () => {
     await screen.findByRole('combobox', { name: 'Role' });
     clickMenuItem(/^save$/i);
 
-    expect(await screen.findByText(/cannot remove the last member/i)).toBeTruthy();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/cannot remove the last member/i)));
+    expect(screen.queryByText(/cannot remove the last member/i)).toBeNull();
     // Success is withheld when the role change is rejected: onSaved does NOT fire (so no
     // misleading "saved" toast), and the sheet stays open so the error is visible and the
     // user can pick a valid role and retry.
@@ -286,7 +289,10 @@ describe('UserDialog — seedless (no published Users form)', () => {
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'nora' } });
     await screen.findByRole('combobox', { name: 'Role' });
     clickMenuItem(/^create$/i);
-    expect(await screen.findByText(text)).toBeTruthy();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(text));
+    expect(screen.queryByText(text)).toBeNull();
+    // The sheet keeps what the user typed, so they can fix it and retry.
+    expect(screen.getByLabelText('Username')).toHaveValue('nora');
     expect(onSaved).not.toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
@@ -358,7 +364,22 @@ describe('UserDialog — data limit', () => {
     fireEvent.click(screen.getByRole('combobox', { name: 'Data' }));
     fireEvent.click(screen.getByRole('option', { name: 'Everything' }));
     clickMenuItem(/^save$/i);
-    expect(await screen.findByText(/the data limit failed: no region Nowhere/)).toBeTruthy();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/the data limit failed: no region Nowhere/)));
     expect(onSaved).not.toHaveBeenCalled();
+  });
+});
+
+describe('UserDialog, load failure', () => {
+  it('shows one toast when the schema, roles and data-limit reads all fail on open', async () => {
+    const outage = new Error('server unreachable');
+    (api.listPublishedForms as ReturnType<typeof vi.fn>).mockRejectedValue(outage);
+    (api.listRoles as ReturnType<typeof vi.fn>).mockRejectedValue(outage);
+    (api.getDataScopeChoices as ReturnType<typeof vi.fn>).mockRejectedValue(outage);
+    (api.getUserDataScope as ReturnType<typeof vi.fn>).mockRejectedValue(outage);
+    render(<UserDialog open user={editUser} onOpenChange={vi.fn()} onSaved={vi.fn()} canSetDataScope />);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('server unreachable'));
+    await waitFor(() => expect(api.getDataScopeChoices).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(toast.error).toHaveBeenCalledTimes(1);
   });
 });

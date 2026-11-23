@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -120,6 +122,18 @@ describe('Users page', () => {
     fireEvent.click(confirmBtn);
 
     await waitFor(() => expect(setUserStatus).toHaveBeenCalledWith('u2', false));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Disabled bob'));
+  });
+
+  it('shows a failed disable as a toast, not a box in the page', async () => {
+    (setUserStatus as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('cannot disable the last admin'));
+    render(<MemoryRouter><Users /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByText('bob')).toBeTruthy());
+    openDropdown(within(screen.getByText('bob').closest('tr')!).getByLabelText(/actions for bob/i));
+    fireEvent.click(await screen.findByText('Disable'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Disable' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Action failed: cannot disable the last admin'));
+    expect(screen.queryByText('Action failed: cannot disable the last admin')).toBeNull();
   });
 
   it('blocks disabling your own account (menu item is disabled)', async () => {
@@ -150,7 +164,7 @@ describe('Users page', () => {
     fireEvent.click(sendEmailItem);
 
     await waitFor(() => expect(sendUserResetEmail).toHaveBeenCalledWith('u4'));
-    expect(await screen.findByText(/reset email sent to ada/i)).toBeTruthy();
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Reset email sent to ada'));
   });
 
   it('edit dialog does not send roles on the identity payload (role assignment is a separate call)', async () => {
@@ -322,4 +336,18 @@ describe('local-only administration', () => {
     expect(updateUser).not.toHaveBeenCalled();
     expect(listPublishedForms).not.toHaveBeenCalled();
   });
+});
+
+it('shows a failed list load as one toast and the could-not-load text, and does not toast it again on a new search', async () => {
+  vi.mocked(listUserDirectory).mockRejectedValue(new Error('list users failed: insufficient capability'));
+  render(<MemoryRouter><Users /></MemoryRouter>);
+  expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeTruthy();
+  expect(screen.queryByText('No users match.')).toBeNull();
+  expect(toast.error).toHaveBeenCalledTimes(1);
+  expect(toast.error).toHaveBeenCalledWith('list users failed: insufficient capability');
+
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Ada' } });
+  await waitFor(() => expect(listUserDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'Ada' })));
+  expect(await screen.findByText('Could not load this list. Reload the page to try again.')).toBeTruthy();
+  expect(toast.error).toHaveBeenCalledTimes(1);
 });

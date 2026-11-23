@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@/i18n';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -43,6 +45,14 @@ async function openDetailMenu(): Promise<void> {
 }
 
 describe('PackageDetail', () => {
+  it('shows a failed detail load as one toast, not a box in the pane', async () => {
+    vi.mocked(api.getAvailableArtifact).mockRejectedValue(new Error('bundle detail failed: registry unreachable'));
+    render(<PackageDetail entry={entry} onBack={vi.fn()} onInstall={vi.fn()} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} />);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('bundle detail failed: registry unreachable'));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('bundle detail failed: registry unreachable')).toBeNull();
+  });
+
   it.each(['loading', 'failed'] as const)('does not claim empty permissions when detail is %s', async (state) => {
     if (state === 'loading') vi.mocked(api.getAvailableArtifact).mockImplementation(() => new Promise(() => {}));
     else vi.mocked(api.getAvailableArtifact).mockRejectedValue(new Error('Registry unreachable'));

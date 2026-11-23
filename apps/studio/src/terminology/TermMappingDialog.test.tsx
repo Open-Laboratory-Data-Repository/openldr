@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 import { TermMappingDialog } from './TermMappingDialog';
 import * as api from '../api';
 
@@ -76,7 +78,7 @@ const stubMapping: api.TermMapping = {
 };
 
 describe('TermMappingDialog', () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
 
   it('renders the sheet header in create mode', () => {
     render(
@@ -150,6 +152,29 @@ describe('TermMappingDialog', () => {
       );
       expect(onSaved).toHaveBeenCalledWith(stubMapping, true);
     });
+  });
+
+  it('a failed save shows a toast and keeps the sheet open with the input', async () => {
+    vi.spyOn(api, 'createTermMapping').mockRejectedValue(new Error('create mapping failed: duplicate'));
+    const onSaved = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <TermMappingDialog open fromTerm={fromTerm} systems={[system]} mapping={null} onOpenChange={onOpenChange} onSaved={onSaved} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /manual/i }));
+    fireEvent.change(screen.getByPlaceholderText('441407007'), { target: { value: '1' } });
+    const actionsBtn = screen.getByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(actionsBtn, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Create')) fireEvent.keyDown(actionsBtn, { key: 'Enter' });
+    const createItem = await screen.findByText('Create');
+    fireEvent.pointerMove(createItem);
+    fireEvent.click(createItem);
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('create mapping failed: duplicate'));
+    expect(screen.queryByText('create mapping failed: duplicate')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('441407007')).toHaveValue('1');
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it('updates an existing mapping and reports draftCreated=false', async () => {
