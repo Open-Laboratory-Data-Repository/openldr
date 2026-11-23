@@ -2400,7 +2400,7 @@ export * from './patient-index';
 export * from './patient-duplicates';
 export * from './patient-mask';
 export {
-  RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams,
+  RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey,
   type BandFit, type SexOption, type TestResultParam, type ResultBand, type ResultType,
 } from './result-params';
 export {

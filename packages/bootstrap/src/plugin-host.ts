@@ -10,6 +10,7 @@ import { checkResources } from './import-run';
 import { parsePatientFindQuery, parsePatientListQuery, type PatientDetail, type PatientIndex } from './patient-index';
 import { PatientIndexError } from './patient-identifier-systems';
 import { parseCatalogListQuery, type TestCatalog } from './test-catalog';
+import { patientBandKey, SEX_OPTIONS } from './result-params';
 import type { AuditActor, AuditDetails } from './record-audit';
 import { pluginPatientRefs } from './plugin-patient-ref';
 
@@ -41,7 +42,7 @@ export interface PluginHostDeps {
   patients: Pick<PatientIndex, 'list' | 'find' | 'get' | 'getById' | 'idForRef' | 'rowsByIds'>;
   /** The lasting key behind `pluginRef` (plugin-patient-ref.ts), read once and kept. */
   pluginRefKey(): Promise<Buffer>;
-  testCatalog: Pick<TestCatalog, 'list' | 'get'>;
+  testCatalog: Pick<TestCatalog, 'list' | 'get' | 'resultParamsFor'>;
   terminology: Pick<Operations, 'expand' | 'lookup'>;
   facilityRegistry: Pick<FacilityRegistryStore, 'list' | 'get' | 'idsMatching'>;
   /** The latest stored FHIR resource with its stored provenance, or null. */
@@ -81,6 +82,13 @@ const expandInput = z.object({
 const lookupInput = z.object({ system: z.string().min(1).max(2000), code: z.string().min(1).max(500) }).strict();
 const catalogListInput = z.record(z.string().max(500)).refine((r) => Object.keys(r).length <= 20, 'too many fields');
 const catalogGetInput = z.object({ code: z.string().min(1).max(500) }).strict();
+/** The most tests one testCatalog.resultParams reads. */
+export const MAX_RESULT_PARAM_TESTS = 20;
+const resultParamsInput = z.object({
+  tests: z.array(z.object({ system: z.string().min(1).max(2000), code: z.string().min(1).max(500) }).strict())
+    .min(1).max(MAX_RESULT_PARAM_TESTS),
+  patientRef: z.string().min(1).max(500),
+}).strict();
 const facilitySearchInput = z.object({
   q: z.string().max(200).optional(),
   limit: z.number().int().min(1).max(200).optional(),
@@ -97,7 +105,7 @@ export const MAX_AUDITED_IDS = 200;
 /** The ops `ce_read` answers (ruling 6). */
 export const CE_READ_OPS = [
   'patients.search', 'patients.get', 'patients.getMany', 'patients.register', 'valueset.expand', 'valueset.lookup',
-  'testCatalog.list', 'testCatalog.get', 'facilities.search', 'facilities.get', 'caller.get',
+  'testCatalog.list', 'testCatalog.get', 'testCatalog.resultParams', 'facilities.search', 'facilities.get', 'caller.get',
 ] as const;
 type CeReadOp = typeof CE_READ_OPS[number];
 
@@ -139,6 +147,51 @@ function inScope(scope: Set<string> | '*', reference: unknown): boolean {
   if (scope === '*') return true;
   const id = orgId(reference);
   return id !== null && scope.has(id);
+}
+
+/** A reference to a patient by the plugin's lasting link (ruling 11): `Patient/p1.<...>`. */
+const PATIENT_PLUGIN_REF = /^Patient\/(p1\.[A-Za-z0-9_-]+)$/;
+/** The most distinct pluginRefs one fhir_emit resolves. */
+export const MAX_EMIT_PLUGIN_REFS = 200;
+
+/** Every pluginRef a `Patient/p1.` reference names, anywhere in the value. A Reference is any object
+ *  with a string `reference`, at any depth. */
+function patientPluginRefs(value: unknown, into: Set<string> = new Set()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const v of value) patientPluginRefs(v, into);
+  } else if (value !== null && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) {
+      if (k === 'reference' && typeof v === 'string') {
+        const m = PATIENT_PLUGIN_REF.exec(v);
+        if (m) into.add(m[1]);
+        // Any other spelling (`patient/p1.`, a full URL, a trailing path) would save a link to no
+        // patient, so it is refused rather than kept as written.
+        else if (v.includes('/p1.')) {
+          throw new HostInputError('INVALID_REQUEST', `fhir_emit: a patient link must be exactly Patient/ followed by a pluginRef, not ${v.slice(0, 200)}; nothing was saved`);
+        }
+      } else {
+        patientPluginRefs(v, into);
+      }
+    }
+  }
+  return into;
+}
+
+/** A copy of the value with each `Patient/p1.` reference replaced by `Patient/<id>`. Every other
+ *  value is kept as it is. */
+function rewritePatientRefs(value: unknown, ids: Map<string, string>): unknown {
+  if (Array.isArray(value)) return value.map((v) => rewritePatientRefs(v, ids));
+  if (value === null || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) {
+    const m = k === 'reference' && typeof v === 'string' ? PATIENT_PLUGIN_REF.exec(v) : null;
+    // defineProperty, so a `__proto__` key from JSON stays a plain key.
+    Object.defineProperty(out, k, {
+      value: m ? `Patient/${ids.get(m[1]) as string}` : rewritePatientRefs(v, ids),
+      enumerable: true, writable: true, configurable: true,
+    });
+  }
+  return out;
 }
 
 export function createPluginHost(deps: PluginHostDeps): PluginHost {
@@ -219,6 +272,20 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
       const lasting = (refs: { encode(id: string): string }, ref: string | null): string | null => {
         const id = ref === null ? null : deps.patients.idForRef(ref);
         return id === null ? null : refs.encode(id);
+      };
+      /** The patient id a pluginRef names, if this plugin was given it and the patient is inside the
+       *  caller's limit; null otherwise, so outside the limit reads the same as missing. */
+      const resolvePluginRef = async (pluginRef: string): Promise<{ id: string; detail: PatientDetail } | null> => {
+        const id = (await refsFor()).decode(pluginRef);
+        if (id === null) return null;
+        let detail: PatientDetail;
+        try {
+          detail = await deps.patients.getById(id, { unmask: false });
+        } catch (err) {
+          if (err instanceof PatientIndexError && err.kind === 'not-found') return null;
+          throw err;
+        }
+        return inScope(scope, detail.managingFacility?.reference) ? { id, detail } : null;
       };
       /** The survivor ids, of those given, whose managing facility is inside the caller's limit. A
        *  survivor outside it is not named, so the answer says nothing about whether it exists. */
@@ -383,6 +450,21 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           return test;
         },
 
+        // The result parameters of each test, with the band that fits one patient (plan 2, task 1).
+        // The patient's sex and age are read inside CE and used only to pick the band: the answer
+        // carries neither, nor anything else about the patient.
+        async 'testCatalog.resultParams'(raw) {
+          needPatientsAccess('testCatalog.resultParams');
+          const i = parse(resultParamsInput, raw, 'testCatalog.resultParams');
+          const found = await resolvePluginRef(i.patientRef);
+          if (!found) throw new PatientIndexError('patient not found', 'not-found');
+          // The band key comes from the stored FHIR Patient, as bench result entry reads it.
+          const stored = await deps.fhirGetWithProvenance('Patient', found.id);
+          const key = patientBandKey(stored ? stored.resource as { gender?: unknown; birthDate?: unknown } : null);
+          const tests = await deps.testCatalog.resultParamsFor(i.tests, key);
+          return { tests, sexes: SEX_OPTIONS };
+        },
+
         // Who is calling, from CE's session. The capabilities stay out: the plugin gets only what
         // the caller could see of itself.
         async 'caller.get'(raw) {
@@ -453,7 +535,22 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           if (scope !== '*') {
             throw new HostInputError('OUTSIDE_DATA_LIMIT', 'fhir_emit: a caller with a data limit cannot send records to CE; nothing was saved');
           }
-          const { resources } = parse(fhirEmitInput, raw, 'fhir_emit');
+          const { resources: sent } = parse(fhirEmitInput, raw, 'fhir_emit');
+          // Ruling 11: a `Patient/p1.` reference is the plugin's lasting link, and CE writes the real
+          // id in before any other check, so ownership and validation see real ids. One that does not
+          // open, for this plugin and inside the caller's limit, refuses the whole send.
+          const ids = new Map<string, string>();
+          const pluginRefs = patientPluginRefs(sent);
+          if (pluginRefs.size > 0) needPatientsAccess('fhir_emit');
+          if (pluginRefs.size > MAX_EMIT_PLUGIN_REFS) {
+            throw new HostInputError('INVALID_REQUEST', `fhir_emit: one send may link at most ${MAX_EMIT_PLUGIN_REFS} patients; nothing was saved`);
+          }
+          for (const pluginRef of pluginRefs) {
+            const found = await resolvePluginRef(pluginRef);
+            if (!found) throw new HostInputError('NOT_FOUND', `fhir_emit: Patient/${pluginRef} does not name a patient this plugin can see; nothing was saved`);
+            ids.set(pluginRef, found.id);
+          }
+          const resources = ids.size === 0 ? sent : rewritePatientRefs(sent, ids) as unknown[];
           // Every record is checked before any is saved, so a refused type saves nothing.
           const refused = checkResources(resources, allowed);
           if (refused) {
@@ -469,18 +566,18 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
             }
           }
           // Each record is new or one this plugin wrote, checked before any is saved.
-          const ids: string[] = [];
+          const savedIds: string[] = [];
           for (const r of resources as Array<{ resourceType: string; id?: unknown }>) {
             if (typeof r.id === 'string' && r.id.length > 0) {
               await ownedOrNew('fhir_emit', r.resourceType, r.id);
-              ids.push(`${r.resourceType}/${r.id}`);
+              savedIds.push(`${r.resourceType}/${r.id}`);
             }
           }
           await deps.persist(resources, provenance);
           const types = [...new Set((resources as Array<{ resourceType: string }>).map((r) => r.resourceType))].sort();
           await deps.audit(actor, {
-            action: 'fhir.emit', entityType: 'fhir', entityId: ids[0] ?? 'batch',
-            metadata: { ...auditMeta, count: resources.length, types, ids: ids.slice(0, MAX_AUDITED_IDS), idsTruncated: ids.length > MAX_AUDITED_IDS },
+            action: 'fhir.emit', entityType: 'fhir', entityId: savedIds[0] ?? 'batch',
+            metadata: { ...auditMeta, count: resources.length, types, ids: savedIds.slice(0, MAX_AUDITED_IDS), idsTruncated: savedIds.length > MAX_AUDITED_IDS },
           });
           return { saved: resources.length };
         });

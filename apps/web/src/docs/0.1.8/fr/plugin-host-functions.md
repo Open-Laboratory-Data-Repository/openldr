@@ -117,6 +117,7 @@ Lit les enregistrements de CE par une opération. La requête est `{ "op": "<op>
 | `valueset.lookup` | `system`, `code` |
 | `testCatalog.list` | les filtres de liste du catalogue des tests |
 | `testCatalog.get` | `code` |
+| `testCatalog.resultParams` | `tests`, une liste de 1 à 20 `{ system, code }`, et `patientRef`, un `pluginRef` |
 | `facilities.search` | `q`, `limit`, `offset` |
 | `facilities.get` | `id`. Donne un établissement sous la forme d'une ligne de `facilities.search` |
 | `caller.get` | aucune. Donne `userId`, `displayName` et `facilities` (`*` ou la liste des identifiants d'établissement) de la personne qui appelle. `displayName` peut être null |
@@ -137,6 +138,12 @@ La ligne d'un patient fusionné a aussi `replacedByPluginRef`, le `pluginRef` de
 
 Un `pluginRef` appartient à l'identifiant du plugin, pas à une installation. Si vous retirez un plugin puis en installez un sous le même identifiant, il peut ouvrir les refs que le premier a gardées. Une réinitialisation d'usine garde les liens en état de marche.
 
+### Paramètres de résultat pour un patient
+
+`testCatalog.resultParams` donne les paramètres de résultat de chaque test, avec l'intervalle de référence qui convient à un patient. Envoyez `{ "tests": [{ "system": "...", "code": "..." }], "patientRef": "p1...." }`. Il faut `patients.view` ou `patients.find`, comme pour les opérations patient. Un patient hors de la limite de l'appelant donne `NOT_FOUND`.
+
+La réponse est `{ "tests": [...], "sexes": [...] }`. Chaque test liste ses `params`. Chaque paramètre a son `unit`, son `display`, ses `bands`, la `band` qui convient au patient ou null, et `fits`, qui vaut `yes`, `no` ou `unknown` pour chaque intervalle, dans l'ordre. Un intervalle a un `name` quand le laboratoire lui en a donné un. `sexes` donne chaque code de sexe avec son libellé en en, fr et pt. CE lit le sexe et l'âge du patient pour choisir l'intervalle. La réponse ne les contient pas.
+
 ## fhir_emit
 
 Envoie des enregistrements FHIR terminés dans CE. La requête est `{ "resources": [ ... ] }`.
@@ -144,6 +151,8 @@ Envoie des enregistrements FHIR terminés dans CE. La requête est `{ "resources
 CE vérifie chaque enregistrement avant d'en enregistrer un seul. Si un enregistrement a un type absent de la liste `emit-fhir` du plugin, rien n'est enregistré. CE applique sa propre validation, comme pour un import. Un plugin ne peut changer un enregistrement que s'il l'a écrit. Chaque enregistrement va dans le journal d'audit avec l'identifiant et la version du plugin, et garde `plugin:<id>` comme source.
 
 Un appelant limité à certains établissements ne peut pas envoyer d'enregistrements. Un Bundle, ou un enregistrement avec des enregistrements `contained`, est refusé.
+
+Une référence écrite `Patient/` suivie d'un `pluginRef` est remplacée par l'identifiant réel du patient avant que CE ne vérifie ou n'enregistre quoi que ce soit. Cela vaut pour toute référence de l'enregistrement, comme `subject` ou la `target` d'une Provenance. Si un de ces `pluginRef` ne s'ouvre pas pour votre plugin, rien n'est enregistré et la réponse est `NOT_FOUND`. Une référence à `Patient/<id>` reste telle que vous l'avez écrite. Un envoi avec un lien `pluginRef` demande que l'appelant ait `patients.view` ou `patients.find`, donc un rôle qui autorise les résultats a besoin de **View patient index** ou **Find a patient**. Sans cela, la réponse est `FORBIDDEN`. Un envoi peut lier au plus 200 patients différents. Un lien doit être exactement `Patient/` suivi d'un `pluginRef`. Toute autre écriture contenant `/p1.`, comme `patient/p1...`, une URL complète ou un chemin en plus, donne `INVALID_REQUEST`. Dans chaque cas, rien n'est enregistré.
 
 ## Réponses et erreurs
 

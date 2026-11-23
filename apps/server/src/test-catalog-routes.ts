@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   catalogChangeAction, catalogImportAudit, catalogImportInputSchema, parseCatalogListQuery, readCatalogImportFile,
-  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, type AppContext,
+  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, patientBandKey, type AppContext,
 } from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
@@ -82,16 +82,11 @@ const resultParamsInput = z.object({
  * picker answer. A patient that cannot be read gives nulls, and the catalog then answers the
  * catch-all band (bench result entry, spec 7).
  */
-async function patientBandKey(ctx: AppContext, reference: string | undefined): Promise<{ sex: string | null; ageYears: number | null }> {
+async function patientBandKeyFor(ctx: AppContext, reference: string | undefined): Promise<{ sex: string | null; ageYears: number | null }> {
   const id = reference?.split('/')[1];
   if (!id) return { sex: null, ageYears: null };
   const patient = (await ctx.fhirStore.get('Patient', id).catch(() => null)) as { gender?: string; birthDate?: string } | null;
-  if (!patient) return { sex: null, ageYears: null };
-  const born = patient.birthDate ? new Date(patient.birthDate) : null;
-  const ageYears = born && !Number.isNaN(born.getTime())
-    ? Math.floor((Date.now() - born.getTime()) / (365.2425 * 24 * 60 * 60 * 1000))
-    : null;
-  return { sex: patient.gender ?? null, ageYears };
+  return patientBandKey(patient);
 }
 
 /** The reasons one value set offers, as plain codings. An unreadable set answers none, so a reject
@@ -301,7 +296,7 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
   app.post('/api/test-catalog/result-params', FORMS_VIEW, async (req, reply) => {
     const parsed = resultParamsInput.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
-    const patient = await patientBandKey(ctx, parsed.data.patient?.reference);
+    const patient = await patientBandKeyFor(ctx, parsed.data.patient?.reference);
     const [tests, order, test] = await Promise.all([
       ctx.testCatalog.resultParamsFor(parsed.data.tests, patient),
       expandReasons(ctx, ORDER_REJECT_VALUE_SET),

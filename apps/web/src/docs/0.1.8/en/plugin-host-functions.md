@@ -117,6 +117,7 @@ Reads CE's own records through one op. The request is `{ "op": "<op>", "input": 
 | `valueset.lookup` | `system`, `code` |
 | `testCatalog.list` | the test catalog's list filters |
 | `testCatalog.get` | `code` |
+| `testCatalog.resultParams` | `tests`, a list of 1 to 20 `{ system, code }`, and `patientRef`, a `pluginRef` |
 | `facilities.search` | `q`, `limit`, `offset` |
 | `facilities.get` | `id`. Gives one facility in the shape of a `facilities.search` row |
 | `caller.get` | none. Gives `userId`, `displayName` and `facilities` (`*` or the list of facility ids) of the person calling. `displayName` may be null |
@@ -137,6 +138,12 @@ A merged patient's row also has `replacedByPluginRef`, the `pluginRef` of the re
 
 A `pluginRef` belongs to the plugin id, not to one install. If you remove a plugin and later install one under the same id, it can open the refs the earlier one stored. A factory reset keeps the links working.
 
+### Result parameters for one patient
+
+`testCatalog.resultParams` gives each test's result parameters, with the reference range that fits one patient. Send `{ "tests": [{ "system": "...", "code": "..." }], "patientRef": "p1...." }`. It needs `patients.view` or `patients.find`, as the patient ops do. A patient outside the caller's limit gives `NOT_FOUND`.
+
+The answer is `{ "tests": [...], "sexes": [...] }`. Each test lists its `params`. Each parameter has its `unit`, `display`, `bands`, the `band` that fits the patient or null, and `fits`, one of `yes`, `no` or `unknown` for each band in order. A band has a `name` when the lab gave the range one. `sexes` gives each sex code with its label in en, fr and pt. CE reads the patient's sex and age to pick the band. The answer does not include them.
+
 ## fhir_emit
 
 Sends finished FHIR records into CE. The request is `{ "resources": [ ... ] }`.
@@ -144,6 +151,8 @@ Sends finished FHIR records into CE. The request is `{ "resources": [ ... ] }`.
 CE checks every record before it saves any. If one record has a type not in the plugin's `emit-fhir` list, nothing is saved. CE runs its own validation on the records, as it does for an import. A plugin may change a record only if it wrote that record. Each save goes in the audit log with the plugin's id and version, and the record keeps `plugin:<id>` as its source.
 
 A caller limited to some facilities cannot send records. A Bundle, or a record with `contained` records, is refused.
+
+A reference written `Patient/` followed by a `pluginRef` is changed to the patient's real id before CE checks or saves anything. This works on any reference in the record, such as `subject` or a Provenance `target`. If one of these `pluginRef` values does not open for your plugin, nothing is saved and the answer is `NOT_FOUND`. A reference to `Patient/<id>` stays as you wrote it. A send with a `pluginRef` link needs the caller to hold `patients.view` or `patients.find`, so a role that authorises results needs **View patient index** or **Find a patient**. Without it the answer is `FORBIDDEN`. One send may link up to 200 different patients. A link must be exactly `Patient/` and a `pluginRef`. Any other spelling with `/p1.` in it, such as `patient/p1...`, a full URL or a trailing path, gives `INVALID_REQUEST`. In each case nothing is saved.
 
 ## Answers and errors
 
