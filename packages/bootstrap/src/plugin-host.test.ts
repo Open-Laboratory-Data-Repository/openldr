@@ -916,6 +916,43 @@ describe('plugin host: fhir_emit with a patient pluginRef', () => {
     expect(vi.mocked(deps.persist).mock.calls[0][0]).toEqual(sent);
   });
 
+  it('needs patients.view or patients.find when a send carries a pluginRef, and saves nothing without it', async () => {
+    const { deps, ruth } = await fixture();
+    const noPatients: PluginCaller = { ...EVERYONE, capabilities: [] };
+    const fns = createPluginHost(deps).forCall(emit, noPatients);
+    const out = await fns.fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o-1', subject: { reference: `Patient/${ruth}` } }] }) as any;
+    expect(out.error.code).toBe('FORBIDDEN');
+    expect(deps.persist).not.toHaveBeenCalled();
+    // Without a pluginRef the send does not need patient access.
+    expect((await fns.fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o-2', subject: { reference: 'Patient/p-1' } }] }) as any).ok).toBe(true);
+    // patients.find alone is enough.
+    const finder = createPluginHost(deps).forCall(emit, { ...EVERYONE, capabilities: ['patients.find'] });
+    expect((await finder.fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o-3', subject: { reference: `Patient/${ruth}` } }] }) as any).ok).toBe(true);
+  });
+
+  it('refuses more than 200 distinct pluginRefs in one send, and saves nothing', async () => {
+    const { deps, fns, ruth } = await fixture();
+    const refs = pluginPatientRefs(KEY, 'lab');
+    const many = Array.from({ length: 201 }, (_, n) => ({ resourceType: 'Observation', id: `o-${n}`, subject: { reference: `Patient/${refs.encode(`p-${n}`)}` } }));
+    const out = await fns.fhir_emit({ resources: many }) as any;
+    expect(out.error.code).toBe('INVALID_REQUEST');
+    expect(out.error.message).toMatch(/200.*nothing was saved/);
+    // The same ref many times counts once.
+    const same = Array.from({ length: 250 }, (_, n) => ({ resourceType: 'Observation', id: `o-${n}`, subject: { reference: `Patient/${ruth}` } }));
+    expect((await fns.fhir_emit({ resources: same }) as any).ok).toBe(true);
+    expect(deps.persist).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a patient link in any form other than Patient/ and a pluginRef, and saves nothing', async () => {
+    const { deps, fns, ruth } = await fixture();
+    for (const bad of [`patient/${ruth}`, `https://ce.example/fhir/Patient/${ruth}`, `Patient/${ruth}/_history/1`, `Patient/${ruth}?x=1`, `Group/${ruth}`]) {
+      const out = await fns.fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o-1', focus: [{ reference: bad }] }] }) as any;
+      expect(out.error?.code, bad).toBe('INVALID_REQUEST');
+      expect(out.error.message).toMatch(/exactly Patient\/ followed by a pluginRef/);
+    }
+    expect(deps.persist).not.toHaveBeenCalled();
+  });
+
   it('checks ownership against the rewritten records', async () => {
     const { deps, fns, ruth } = await fixture();
     vi.mocked(deps.fhirGetWithProvenance).mockResolvedValue(stored({ resourceType: 'Observation', id: 'o-1' }, 'disa-ingest') as any);

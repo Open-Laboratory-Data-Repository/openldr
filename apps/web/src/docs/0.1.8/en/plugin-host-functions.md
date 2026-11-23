@@ -152,7 +152,7 @@ CE checks every record before it saves any. If one record has a type not in the 
 
 A caller limited to some facilities cannot send records. A Bundle, or a record with `contained` records, is refused.
 
-A reference written `Patient/` followed by a `pluginRef` is changed to the patient's real id before CE checks or saves anything. This works on any reference in the record, such as `subject` or a Provenance `target`. If one of these `pluginRef` values does not open for your plugin, nothing is saved and the answer is `NOT_FOUND`. A reference to `Patient/<id>` stays as you wrote it.
+A reference written `Patient/` followed by a `pluginRef` is changed to the patient's real id before CE checks or saves anything. This works on any reference in the record, such as `subject` or a Provenance `target`. If one of these `pluginRef` values does not open for your plugin, nothing is saved and the answer is `NOT_FOUND`. A reference to `Patient/<id>` stays as you wrote it. A send with a `pluginRef` link needs the caller to hold `patients.view` or `patients.find`, so a role that authorises results needs **View patient index** or **Find a patient**. Without it the answer is `FORBIDDEN`. One send may link up to 200 different patients. A link must be exactly `Patient/` and a `pluginRef`. Any other spelling with `/p1.` in it, such as `patient/p1...`, a full URL or a trailing path, gives `INVALID_REQUEST`. In each case nothing is saved.
 
 ## Answers and errors
 

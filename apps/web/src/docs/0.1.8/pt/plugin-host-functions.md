@@ -152,7 +152,7 @@ O CE verifica cada registo antes de guardar algum. Se um registo tiver um tipo q
 
 Quem está limitado a algumas unidades não pode enviar registos. Um Bundle, ou um registo com registos `contained`, é recusado.
 
-Uma referência escrita `Patient/` seguida de um `pluginRef` é trocada pelo identificador real do paciente antes de o CE verificar ou guardar alguma coisa. Isto vale para qualquer referência no registo, como `subject` ou o `target` de uma Provenance. Se um destes `pluginRef` não abrir para o seu plugin, nada é guardado e a resposta é `NOT_FOUND`. Uma referência a `Patient/<id>` fica como a escreveu.
+Uma referência escrita `Patient/` seguida de um `pluginRef` é trocada pelo identificador real do paciente antes de o CE verificar ou guardar alguma coisa. Isto vale para qualquer referência no registo, como `subject` ou o `target` de uma Provenance. Se um destes `pluginRef` não abrir para o seu plugin, nada é guardado e a resposta é `NOT_FOUND`. Uma referência a `Patient/<id>` fica como a escreveu. Um envio com uma ligação `pluginRef` exige que quem chama tenha `patients.view` ou `patients.find`, por isso uma função que autoriza resultados precisa de **View patient index** ou **Find a patient**. Sem isso, a resposta é `FORBIDDEN`. Um envio pode ligar no máximo 200 pacientes diferentes. Uma ligação tem de ser exatamente `Patient/` seguido de um `pluginRef`. Qualquer outra escrita com `/p1.`, como `patient/p1...`, um URL completo ou um caminho a mais, dá `INVALID_REQUEST`. Em cada caso, nada é guardado.
 
 ## Respostas e erros
 

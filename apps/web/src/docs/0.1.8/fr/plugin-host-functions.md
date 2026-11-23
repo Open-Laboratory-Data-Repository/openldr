@@ -152,7 +152,7 @@ CE vérifie chaque enregistrement avant d'en enregistrer un seul. Si un enregist
 
 Un appelant limité à certains établissements ne peut pas envoyer d'enregistrements. Un Bundle, ou un enregistrement avec des enregistrements `contained`, est refusé.
 
-Une référence écrite `Patient/` suivie d'un `pluginRef` est remplacée par l'identifiant réel du patient avant que CE ne vérifie ou n'enregistre quoi que ce soit. Cela vaut pour toute référence de l'enregistrement, comme `subject` ou la `target` d'une Provenance. Si un de ces `pluginRef` ne s'ouvre pas pour votre plugin, rien n'est enregistré et la réponse est `NOT_FOUND`. Une référence à `Patient/<id>` reste telle que vous l'avez écrite.
+Une référence écrite `Patient/` suivie d'un `pluginRef` est remplacée par l'identifiant réel du patient avant que CE ne vérifie ou n'enregistre quoi que ce soit. Cela vaut pour toute référence de l'enregistrement, comme `subject` ou la `target` d'une Provenance. Si un de ces `pluginRef` ne s'ouvre pas pour votre plugin, rien n'est enregistré et la réponse est `NOT_FOUND`. Une référence à `Patient/<id>` reste telle que vous l'avez écrite. Un envoi avec un lien `pluginRef` demande que l'appelant ait `patients.view` ou `patients.find`, donc un rôle qui autorise les résultats a besoin de **View patient index** ou **Find a patient**. Sans cela, la réponse est `FORBIDDEN`. Un envoi peut lier au plus 200 patients différents. Un lien doit être exactement `Patient/` suivi d'un `pluginRef`. Toute autre écriture contenant `/p1.`, comme `patient/p1...`, une URL complète ou un chemin en plus, donne `INVALID_REQUEST`. Dans chaque cas, rien n'est enregistré.
 
 ## Réponses et erreurs
 

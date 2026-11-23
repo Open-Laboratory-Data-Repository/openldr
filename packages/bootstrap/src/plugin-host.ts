@@ -150,7 +150,9 @@ function inScope(scope: Set<string> | '*', reference: unknown): boolean {
 }
 
 /** A reference to a patient by the plugin's lasting link (ruling 11): `Patient/p1.<...>`. */
-const PATIENT_PLUGIN_REF = /^Patient\/(p1\..*)$/;
+const PATIENT_PLUGIN_REF = /^Patient\/(p1\.[A-Za-z0-9_-]+)$/;
+/** The most distinct pluginRefs one fhir_emit resolves. */
+export const MAX_EMIT_PLUGIN_REFS = 200;
 
 /** Every pluginRef a `Patient/p1.` reference names, anywhere in the value. A Reference is any object
  *  with a string `reference`, at any depth. */
@@ -162,6 +164,11 @@ function patientPluginRefs(value: unknown, into: Set<string> = new Set()): Set<s
       if (k === 'reference' && typeof v === 'string') {
         const m = PATIENT_PLUGIN_REF.exec(v);
         if (m) into.add(m[1]);
+        // Any other spelling (`patient/p1.`, a full URL, a trailing path) would save a link to no
+        // patient, so it is refused rather than kept as written.
+        else if (v.includes('/p1.')) {
+          throw new HostInputError('INVALID_REQUEST', `fhir_emit: a patient link must be exactly Patient/ followed by a pluginRef, not ${v.slice(0, 200)}; nothing was saved`);
+        }
       } else {
         patientPluginRefs(v, into);
       }
@@ -533,7 +540,12 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           // id in before any other check, so ownership and validation see real ids. One that does not
           // open, for this plugin and inside the caller's limit, refuses the whole send.
           const ids = new Map<string, string>();
-          for (const pluginRef of patientPluginRefs(sent)) {
+          const pluginRefs = patientPluginRefs(sent);
+          if (pluginRefs.size > 0) needPatientsAccess('fhir_emit');
+          if (pluginRefs.size > MAX_EMIT_PLUGIN_REFS) {
+            throw new HostInputError('INVALID_REQUEST', `fhir_emit: one send may link at most ${MAX_EMIT_PLUGIN_REFS} patients; nothing was saved`);
+          }
+          for (const pluginRef of pluginRefs) {
             const found = await resolvePluginRef(pluginRef);
             if (!found) throw new HostInputError('NOT_FOUND', `fhir_emit: Patient/${pluginRef} does not name a patient this plugin can see; nothing was saved`);
             ids.set(pluginRef, found.id);
