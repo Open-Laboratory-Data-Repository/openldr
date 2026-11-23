@@ -1,10 +1,142 @@
 {
-  "generatedAt": "2026-11-22",
+  "generatedAt": "2026-11-23",
   "days": [
+    {
+      "date": "2026-11-23",
+      "version": null,
+      "entries": [
+        {
+          "hash": "bdc425790",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Land a Reception user on Reception, not Terminology"
+        },
+        {
+          "hash": "d2bf04071",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A Reception user lands on Reception after sign-in"
+        },
+        {
+          "hash": "b9a7a4232",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Reception texts for cancel, sample types and the data limit"
+        },
+        {
+          "hash": "73a567548",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Cancel a desk registration from the order menu"
+        },
+        {
+          "hash": "dfd758817",
+          "type": "feat",
+          "scope": "server",
+          "title": "Cancel a desk order, and refuse an impossible date"
+        },
+        {
+          "hash": "ac09dc4be",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Reception cancels a desk order, registers it again, and dates by the lab's day"
+        },
+        {
+          "hash": "37d58cd59",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Reception keeps the scan box ready and shows names, not codes"
+        },
+        {
+          "hash": "72bf534e8",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The Reception page"
+        },
+        {
+          "hash": "bca326660",
+          "type": "fix",
+          "scope": "server",
+          "title": "A data limit takes away reception, and reception strings are capped"
+        },
+        {
+          "hash": "efa1ba3f1",
+          "type": "feat",
+          "scope": "server",
+          "title": "Reception routes"
+        },
+        {
+          "hash": "67fe2238d",
+          "type": "feat",
+          "scope": "lab",
+          "title": "Reception registers patients and receives samples"
+        },
+        {
+          "hash": "609e89d5c",
+          "type": "fix",
+          "scope": "lab",
+          "title": "Reception reads an order's specimens at their fixed ids, with no scan"
+        },
+        {
+          "hash": "c99a70cbf",
+          "type": "feat",
+          "scope": "lab",
+          "title": "Reception finds, registers and corrects orders"
+        },
+        {
+          "hash": "995c2d56a",
+          "type": "fix",
+          "scope": "lab",
+          "title": "The requisition index names the warehouse's facility and rebuilds without a lock"
+        },
+        {
+          "hash": "bbc61b1fa",
+          "type": "feat",
+          "scope": "lab",
+          "title": "Find an order by its requisition number, from any source"
+        },
+        {
+          "hash": "c4b89bb22",
+          "type": "feat",
+          "scope": "db",
+          "title": "Preliminary and registered results stay out of the warehouse"
+        },
+        {
+          "hash": "82ec14e9d",
+          "type": "feat",
+          "scope": "forms",
+          "title": "The Lab order form orders tests and no longer enters results"
+        },
+        {
+          "hash": "2f335f933",
+          "type": "fix",
+          "scope": "forms",
+          "title": "An order already saved from another form is refused"
+        },
+        {
+          "hash": "a4b3cb569",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Each result points at its own test's order"
+        }
+      ]
+    },
     {
       "date": "2026-11-22",
       "version": "v0.1.12",
       "entries": [
+        {
+          "hash": "7c27c2c17",
+          "type": "fix",
+          "scope": "forms",
+          "title": "A test picked twice makes one ServiceRequest"
+        },
+        {
+          "hash": "1cd61101a",
+          "type": "feat",
+          "scope": "forms",
+          "title": "An order is one ServiceRequest per test, with fixed ids"
+        },
         {
           "hash": "276b35b11",
           "type": "fix",
