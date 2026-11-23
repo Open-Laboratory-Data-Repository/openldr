@@ -102,8 +102,34 @@ describe('plugin host: ce_read', () => {
   it('knows the first set of ops', () => {
     expect([...CE_READ_OPS]).toEqual([
       'patients.search', 'patients.get', 'patients.register', 'valueset.expand', 'valueset.lookup',
-      'testCatalog.list', 'testCatalog.get', 'facilities.search',
+      'testCatalog.list', 'testCatalog.get', 'facilities.search', 'caller.get',
     ]);
+  });
+
+  it('caller.get gives a limited caller its facility list, and no capabilities', async () => {
+    const fns = createPluginHost(fakeDeps()).forCall(plugin([{ kind: 'host:ce-read' }]), SITE);
+    expect(await fns.ce_read({ op: 'caller.get', input: {} }))
+      .toEqual({ ok: true, result: { userId: 'u-site', displayName: 'Site User', facilities: ['fac-1'] } });
+  });
+
+  it("caller.get gives an unlimited caller '*', with or without an input", async () => {
+    const fns = createPluginHost(fakeDeps()).forCall(plugin([{ kind: 'host:ce-read' }]), EVERYONE);
+    const want = { ok: true, result: { userId: 'u-admin', displayName: 'Admin', facilities: '*' } };
+    expect(await fns.ce_read({ op: 'caller.get' })).toEqual(want);
+    expect(await fns.ce_read({ op: 'caller.get', input: {} })).toEqual(want);
+  });
+
+  it('caller.get takes the name from the session and refuses an input carrying one', async () => {
+    const fns = createPluginHost(fakeDeps()).forCall(plugin([{ kind: 'host:ce-read' }]), SITE);
+    const out = await fns.ce_read({ op: 'caller.get', input: { displayName: 'Someone Else' } }) as any;
+    expect(out.ok).toBe(false);
+    expect(out.error.code).toBe('INVALID_REQUEST');
+    expect((await fns.ce_read({ op: 'caller.get', input: {} }) as any).result.displayName).toBe('Site User');
+  });
+
+  it('caller.get is not there for a plugin without host:ce-read', () => {
+    const fns = createPluginHost(fakeDeps()).forCall(plugin([{ kind: 'host:db' }]), SITE);
+    expect(fns.ce_read).toBeUndefined();
   });
 
   it('refuses an input field that is not part of the request', async () => {

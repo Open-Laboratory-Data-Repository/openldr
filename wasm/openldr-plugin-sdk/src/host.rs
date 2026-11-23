@@ -120,6 +120,13 @@ pub fn ce_read(op: &str, input: Value) -> Result<Value, HostError> {
     call("ce_read", imports::ce_read, &ce_read_request(op, input))
 }
 
+/// Who is calling, from CE's session: `{ userId, displayName, facilities }`. `facilities` is `"*"`
+/// for no limit, or the list of facility ids. It is `ce_read("caller.get", {})`.
+#[cfg(target_arch = "wasm32")]
+pub fn caller() -> Result<Value, HostError> {
+    ce_read("caller.get", json!({}))
+}
+
 /// Sends finished FHIR records into CE. Every type must be in the plugin's `emit-fhir` list. Either
 /// all are saved or none. The result is `{ saved }`.
 #[cfg(target_arch = "wasm32")]
@@ -154,6 +161,7 @@ mod tests {
     #[test]
     fn request_shapes() {
         assert_eq!(ce_read_request("patients.get", json!({ "ref": "p1" })), json!({ "op": "patients.get", "input": { "ref": "p1" } }));
+        assert_eq!(ce_read_request("caller.get", json!({})), json!({ "op": "caller.get", "input": {} }));
         assert_eq!(fhir_emit_request(&[json!({ "resourceType": "Observation" })]), json!({ "resources": [{ "resourceType": "Observation" }] }));
     }
 }

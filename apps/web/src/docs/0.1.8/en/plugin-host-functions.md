@@ -117,6 +117,7 @@ Reads CE's own records through one op. The request is `{ "op": "<op>", "input": 
 | `testCatalog.list` | the test catalog's list filters |
 | `testCatalog.get` | `code` |
 | `facilities.search` | `q`, `limit`, `offset` |
+| `caller.get` | none. Gives `userId`, `displayName` and `facilities` (`*` or the list of facility ids) of the person calling |
 
 Each op follows the same rules as the studio page that shows the same records. The patient ops need the caller to hold `patients.view` or `patients.find`. With `patients.find` alone, a search must be an exact identifier, or a name with full birth date. See [Plugin permissions](/docs/plugin-permissions). Identifiers show only to a caller who holds `patients.view_identifiers`. A limited caller finds only patients and facilities inside their limit. `patients.register` also needs `Patient` in the plugin's `emit-fhir` list.
 

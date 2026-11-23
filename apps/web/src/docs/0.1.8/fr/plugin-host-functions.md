@@ -117,6 +117,7 @@ Lit les enregistrements de CE par une opération. La requête est `{ "op": "<op>
 | `testCatalog.list` | les filtres de liste du catalogue des tests |
 | `testCatalog.get` | `code` |
 | `facilities.search` | `q`, `limit`, `offset` |
+| `caller.get` | aucune. Donne `userId`, `displayName` et `facilities` (`*` ou la liste des identifiants d'établissement) de la personne qui appelle |
 
 Chaque opération suit les mêmes règles que la page du studio qui montre les mêmes enregistrements. Les opérations patient demandent que l'appelant ait `patients.view` ou `patients.find`. Avec `patients.find` seul, une recherche doit donner un identifiant exact, ou un nom avec la date de naissance complète. Voir [Permissions des plugins](/docs/plugin-permissions). Les identifiants ne s'affichent que pour un appelant qui a `patients.view_identifiers`. Un appelant limité ne trouve que les patients et les établissements de sa limite. `patients.register` demande aussi `Patient` dans la liste `emit-fhir` du plugin.
 

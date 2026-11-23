@@ -117,6 +117,7 @@ Lê os registos do próprio CE através de uma operação. O pedido é `{ "op": 
 | `testCatalog.list` | os filtros de lista do catálogo de testes |
 | `testCatalog.get` | `code` |
 | `facilities.search` | `q`, `limit`, `offset` |
+| `caller.get` | nenhuma. Dá `userId`, `displayName` e `facilities` (`*` ou a lista de identificadores de unidade) de quem chama |
 
 Cada operação segue as mesmas regras da página do studio que mostra os mesmos registos. As operações de pacientes precisam que quem chama tenha `patients.view` ou `patients.find`. Só com `patients.find`, uma pesquisa tem de dar um identificador exato, ou um nome com a data de nascimento completa. Veja [Permissões dos plugins](/docs/plugin-permissions). Os identificadores só aparecem a quem tem `patients.view_identifiers`. Quem tem um limite só encontra pacientes e unidades dentro do seu limite. `patients.register` também precisa de `Patient` na lista `emit-fhir` do plugin.
 

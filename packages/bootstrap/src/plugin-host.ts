@@ -81,6 +81,7 @@ const facilitySearchInput = z.object({
 }).strict();
 const ceReadInput = z.object({ op: z.string().min(1).max(100), input: z.unknown().optional() }).strict();
 const fhirEmitInput = z.object({ resources: z.array(z.unknown()) }).strict();
+const callerGetInput = z.object({}).strict();
 
 /** The most record ids one fhir_emit audit row lists. The count and types are always complete. */
 export const MAX_AUDITED_IDS = 200;
@@ -88,7 +89,7 @@ export const MAX_AUDITED_IDS = 200;
 /** The ops `ce_read` answers (ruling 6). */
 export const CE_READ_OPS = [
   'patients.search', 'patients.get', 'patients.register', 'valueset.expand', 'valueset.lookup',
-  'testCatalog.list', 'testCatalog.get', 'facilities.search',
+  'testCatalog.list', 'testCatalog.get', 'facilities.search', 'caller.get',
 ] as const;
 type CeReadOp = typeof CE_READ_OPS[number];
 
@@ -283,6 +284,17 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           const test = await deps.testCatalog.get(code);
           if (!test) throw new HostInputError('NOT_FOUND', `testCatalog.get: no test ${code}`);
           return test;
+        },
+
+        // Who is calling, from CE's session. The capabilities stay out: the plugin gets only what
+        // the caller could see of itself.
+        async 'caller.get'(raw) {
+          parse(callerGetInput, raw, 'caller.get');
+          return {
+            userId: caller.userId,
+            displayName: caller.displayName,
+            facilities: caller.facilities === '*' ? '*' : [...caller.facilities],
+          };
         },
 
         async 'facilities.search'(raw) {
