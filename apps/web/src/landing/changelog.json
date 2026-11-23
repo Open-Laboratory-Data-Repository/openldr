@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "cc6613de2",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "Patient links in sent records need patient access and the exact form"
+        },
+        {
+          "hash": "7527df74d",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Plugins read result parameters and send results for a linked patient"
+        },
+        {
           "hash": "8995de4c6",
           "type": "feat",
           "scope": "plugins",
