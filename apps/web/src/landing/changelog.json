@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "02f7219b0",
+          "type": "fix",
+          "scope": "server",
+          "title": "Give each address of an outbound connection 2 seconds, so slow links stop failing with fetch failed"
+        },
+        {
           "hash": "9851c605c",
           "type": "fix",
           "scope": "test-catalog",
