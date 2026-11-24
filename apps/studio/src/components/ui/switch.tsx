@@ -6,6 +6,8 @@ export interface SwitchProps {
   disabled?: boolean;
   'aria-label'?: string;
   'data-testid'?: string;
+  /** Put on the button, so a `<Label htmlFor>` can name it. */
+  id?: string;
 }
 
 /** Minimal accessible toggle switch — no external dependency. */
@@ -14,6 +16,7 @@ export function Switch({ checked, onCheckedChange, disabled, ...rest }: SwitchPr
     <button
       type="button"
       role="switch"
+      id={rest.id}
       aria-checked={checked}
       aria-label={rest['aria-label']}
       data-testid={rest['data-testid']}

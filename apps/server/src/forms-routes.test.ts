@@ -1356,6 +1356,41 @@ describe('forms routes', () => {
     expect(observation.referenceRange[0].text).toBe('Highland women');
   });
 
+  // Plan B, call 3: valid dates decide the fit only, never the band check, so a range picked at the
+  // bench outside its dates is not refused at submit. Review focus 2: an absent pregnancy and "any" match.
+  it('accepts a range picked outside its valid dates, and one sent without the pregnancy the catalog reads as any', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    const expired = { name: 'Old national', low: 12, high: 16, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null,
+      country: 'TZA', validFrom: '2020-01-01', validTo: '2020-12-31', source: 'national', scope: 'national' };
+    (ctx as any).testCatalog = {
+      orderCodingsFor: async () => new Map(),
+      resultParamsFor: async () => [{
+        test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
+        params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: ['no'], bands: [expired] }],
+      }],
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: resultOrderSchema, targetPages: ['forms'] } });
+    const submit = (band: object) => app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }],
+        details: { 'urn:openldr:codesystem:test-catalog|FBC': { specimen: null, rejection: null, results: [
+          { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL', band },
+        ] } },
+      } },
+    });
+    expect((await submit(expired)).statusCode).toBe(201);
+    expect((await submit({ ...expired, pregnancy: 'any' })).statusCode).toBe(201);
+    // Another source is another range.
+    expect((await submit({ ...expired, source: 'WHO' })).statusCode).toBe(400);
+  });
+
   it('matches a range by its age unit too, and writes the age window in UCUM days', async () => {
     const ctx = fakeCtx();
     const runs: any[] = [];

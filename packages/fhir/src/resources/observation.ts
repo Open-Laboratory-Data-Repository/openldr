@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { fhirId, fhirDateTime, fhirInstant, fhirString } from '../datatypes/primitives';
+import { fhirBoolean, fhirId, fhirDateTime, fhirInstant, fhirString } from '../datatypes/primitives';
 import { Identifier, CodeableConcept, Reference, Quantity, Meta } from '../datatypes/complex';
 import { registerResource } from '../registry';
 
@@ -41,6 +41,9 @@ export const Observation = z
     valueQuantity: Quantity.optional(),
     valueCodeableConcept: CodeableConcept.optional(),
     valueString: fhirString.optional(),
+    // A yes/no and a date result from the bench (plan B, Task 3).
+    valueBoolean: fhirBoolean.optional(),
+    valueDateTime: fhirDateTime.optional(),
     interpretation: z.array(CodeableConcept).optional(),
     method: CodeableConcept.optional(),
     specimen: Reference.optional(),

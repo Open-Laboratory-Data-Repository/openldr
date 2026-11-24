@@ -10,6 +10,7 @@ import { isOrderRejectionField, orderRejectionFieldId } from './order-rejection-
 import { linkToOrder } from './link-to-order'
 import { labOrderId } from './extract/order-ids'
 import { projectObservation, projectServiceRequest } from '@openldr/db'
+import { Observation as FhirObservation } from '@openldr/fhir'
 
 const ctx = { subject: { reference: 'Patient/p1' }, authored: '2026-06-04T00:00:00Z' }
 
@@ -368,6 +369,50 @@ describe('TestResultsExtractor (bench result entry)', () => {
   it('writes nothing when the form has no testDetails field', () => {
     const model = makeSchema({ id: 'o', name: 'Order', fhirResourceType: 'ServiceRequest', fields: [makeField({ id: 'tests', displayLabel: 'Tests', fieldType: 'reference', order: 0, fhirPath: 'ServiceRequest.code' })] })
     expect(TestResultsExtractor.extract(toQuestionnaireResponse(model, { tests: [] } as never), toQuestionnaire(model), ctx)).toEqual([])
+  })
+
+  // Plan B, Task 3 (call 6): each new type goes from the bench answer, through the stored response,
+  // to an Observation the FHIR schema accepts and to a warehouse row.
+  describe('yes/no, date and several-answer fields', () => {
+    const POS = { system: 'urn:openldr:cs:local', code: 'POS', display: 'Positive' }
+    const ESBL = { system: 'urn:openldr:cs:local', code: 'ESBL' }
+    const CARB = { system: 'urn:openldr:cs:local', code: 'CARB', display: 'Carbapenemase' }
+    const run = (results: unknown[]) => (extract({ [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results } }) as any[])
+    const rows = (obs: any[]) => obs.map((o, i) => projectObservation({ ...o, id: `o${i}` }, {}))
+
+    it('writes yes/no as valueBoolean and lands it as ST with true or false', () => {
+      const obs = run([
+        { param: { system: PARAM, code: 'GROWTH' }, resultType: 'boolean', value: true },
+        { param: { system: PARAM, code: 'HAEMOLYSIS' }, resultType: 'boolean', value: false },
+      ])
+      expect(obs.map((o) => o.valueBoolean)).toEqual([true, false])
+      expect(obs.every((o) => FhirObservation.safeParse(o).success)).toBe(true)
+      expect(rows(obs).map((r) => [r.observation_code, r.result_type, r.text_value])).toEqual([['GROWTH', 'ST', 'true'], ['HAEMOLYSIS', 'ST', 'false']])
+    })
+
+    it('writes a date as valueDateTime and lands it as DT with the ISO date', () => {
+      const obs = run([{ param: { system: PARAM, code: 'COLLECTED' }, resultType: 'date', value: '2026-11-20' }])
+      expect(obs[0].valueDateTime).toBe('2026-11-20')
+      expect(FhirObservation.safeParse(obs[0]).success).toBe(true)
+      expect(rows(obs)[0]).toMatchObject({ result_type: 'DT', text_value: '2026-11-20', numeric_value: null, coded_value: null })
+    })
+
+    // Review focus 4.
+    it('writes three chosen answers as three Observations and three CE rows, each with the field code', () => {
+      const obs = run([{ param: { system: PARAM, code: 'MARKERS' }, resultType: 'multicoded', value: [POS, ESBL, CARB] }])
+      expect(obs).toHaveLength(3)
+      expect(obs.map((o) => o.code)).toEqual([0, 1, 2].map(() => ({ coding: [{ system: PARAM, code: 'MARKERS' }] })))
+      expect(obs.map((o) => o.valueCodeableConcept.coding[0].code)).toEqual(['POS', 'ESBL', 'CARB'])
+      expect(obs.every((o) => FhirObservation.safeParse(o).success)).toBe(true)
+      expect(rows(obs).map((r) => [r.observation_code, r.result_type, r.coded_value])).toEqual([
+        ['MARKERS', 'CE', 'POS'], ['MARKERS', 'CE', 'ESBL'], ['MARKERS', 'CE', 'CARB'],
+      ])
+    })
+
+    it('writes one chosen answer of a several-answer field as one coded Observation', () => {
+      const obs = run([{ param: { system: PARAM, code: 'MARKERS' }, resultType: 'multicoded', value: [POS] }])
+      expect(obs.map((o) => o.valueCodeableConcept)).toEqual([{ coding: [POS] }])
+    })
   })
 
   // The round trip, settled 2026-09-16: values survive a stored response, bands do not.

@@ -165,6 +165,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     ageFrom: t('forms.rangeAgeFrom'), ageTo: t('forms.rangeAgeTo'), ageBetween: t('forms.rangeAgeBetween'),
     ageFromDays: t('forms.rangeAgeFromDays'), ageToDays: t('forms.rangeAgeToDays'), ageBetweenDays: t('forms.rangeAgeBetweenDays'),
     ageFromMonths: t('forms.rangeAgeFromMonths'), ageToMonths: t('forms.rangeAgeToMonths'), ageBetweenMonths: t('forms.rangeAgeBetweenMonths'),
+    pregnant: t('forms.rangePregnant'), notPregnant: t('forms.rangeNotPregnant'),
+    validFrom: t('forms.rangeValidFrom'), validTo: t('forms.rangeValidTo'), validBetween: t('forms.rangeValidBetween'),
   };
   const [draft, setDraft] = useState<Draft>(() => draftFrom(null));
   // The test as last saved. A create that went through sets it, so saving again edits instead of

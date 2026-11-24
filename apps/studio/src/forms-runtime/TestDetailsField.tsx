@@ -9,13 +9,14 @@ import { LoadingState } from '@/components/ui/spinner';
 import { TestDetailSheet } from './TestDetailSheet';
 import { RejectSheet } from './RejectSheet';
 import { RANGE_EN, type RangeCopy } from './rangeLabel';
+import { ENTRY_EN, type EntryCopy } from './entryCopy';
 import { OrderRejectedContext } from './order-rejection-context';
 
 /**
  * Chrome copy. FormRuntime is schema-driven and has no i18n of its own (FormRuntime.tsx:84-92), so
  * the caller that does have one supplies these. Every key falls back to English.
  */
-export interface TestDetailsCopy extends RangeCopy {
+export interface TestDetailsCopy extends RangeCopy, EntryCopy {
   empty?: string;
   loading?: string;
   open?: string;
@@ -28,6 +29,7 @@ export interface TestDetailsCopy extends RangeCopy {
 
 const EN: Required<TestDetailsCopy> = {
   ...RANGE_EN,
+  ...ENTRY_EN,
   empty: 'No tests chosen yet.',
   loading: 'Reading the tests',
   open: 'Open',

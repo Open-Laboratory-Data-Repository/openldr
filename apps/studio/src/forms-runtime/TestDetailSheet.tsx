@@ -1,12 +1,16 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { catalogSpecimensFor, expandValueSetByUrl, type CatalogResultBand, type CatalogResultParam, type CatalogSexOption } from '@/api';
 import type { CodingAnswer, ResultCoding, TestDetail, TypedResult } from '@openldr/forms/pure';
+import { DatePicker } from '@/components/ui/date-picker';
 import { DecimalInput } from '@/components/ui/decimal-input';
 import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { criteriaLabel, RANGE_EN, rangeLabel, type RangeCopy } from './rangeLabel';
+import { ENTRY_EN, fieldHint, type EntryCopy } from './entryCopy';
 
 const keyOf = (c: { system: string; code: string }): string => `${c.system}|${c.code}`;
 
@@ -34,10 +38,17 @@ function flagFor(band: CatalogResultBand | null, value: number | null): string |
 
 // Critical limits and the age unit count too, so a band that differs only in them is a different
 // band. An absent limit and a null one both mean "no limit". An absent age unit means years.
-const sameBand = (a: CatalogResultBand, b: { name?: string | null } & Omit<CatalogResultBand, 'name'>): boolean =>
+// Plan B: an absent pregnancy and "any" are the same, and so are an absent source or scope and none.
+// Valid dates and country decide the fit only, never which band this is, as findCatalogBand does.
+type BandLike = { name?: string | null } & Omit<CatalogResultBand, 'name' | 'pregnancy'> & { pregnancy?: string };
+const sameBand = (a: CatalogResultBand, b: BandLike): boolean =>
   a.name === (b.name ?? null) && a.low === b.low && a.high === b.high && a.unit === b.unit
   && a.sex === b.sex && a.ageLow === b.ageLow && a.ageHigh === b.ageHigh && (a.ageUnit ?? 'y') === (b.ageUnit ?? 'y')
-  && (a.criticalLow ?? null) === (b.criticalLow ?? null) && (a.criticalHigh ?? null) === (b.criticalHigh ?? null);
+  && (a.criticalLow ?? null) === (b.criticalLow ?? null) && (a.criticalHigh ?? null) === (b.criticalHigh ?? null)
+  && (a.pregnancy ?? 'any') === (b.pregnancy ?? 'any')
+  && (a.source ?? null) === (b.source ?? null) && (a.scope ?? null) === (b.scope ?? null);
+
+const codingsOf = (value: TypedResult['value'] | undefined): ResultCoding[] => (Array.isArray(value) ? value : []);
 
 export function TestDetailSheet({ test, testCode, params, detail, sexes, copy, onChange, onClose }: {
   test: CodingAnswer;
@@ -47,12 +58,12 @@ export function TestDetailSheet({ test, testCode, params, detail, sexes, copy, o
   detail: TestDetail;
   /** The sex choices the server sent, for labelling unnamed ranges. */
   sexes: CatalogSexOption[];
-  /** Range words. The runtime has no i18n (TestDetailsField). */
-  copy?: RangeCopy;
+  /** Range and entry words. The runtime has no i18n (TestDetailsField). */
+  copy?: RangeCopy & EntryCopy;
   onChange: (detail: TestDetail) => void;
   onClose: () => void;
 }): JSX.Element {
-  const words = { ...RANGE_EN, ...(copy ?? {}) };
+  const words = { ...RANGE_EN, ...ENTRY_EN, ...(copy ?? {}) };
   const [specimens, setSpecimens] = useState<ResultCoding[]>([]);
   const [codedOptions, setCodedOptions] = useState<Record<string, ResultCoding[]>>({});
 
@@ -67,7 +78,7 @@ export function TestDetailSheet({ test, testCode, params, detail, sexes, copy, o
   // A coded parameter names the ValueSet its answers come from, and the server put that url in the
   // parameter. The studio still names no vocabulary of its own.
   const codedUrls = useMemo(
-    () => params.filter((p) => p.resultType === 'coded' && p.valueSetUrl).map((p) => [keyOf(p), p.valueSetUrl as string] as const),
+    () => params.filter((p) => (p.resultType === 'coded' || p.resultType === 'multicoded') && p.valueSetUrl).map((p) => [keyOf(p), p.valueSetUrl as string] as const),
     [params],
   );
   useEffect(() => {
@@ -129,6 +140,9 @@ export function TestDetailSheet({ test, testCode, params, detail, sexes, copy, o
           {params.map((param) => {
             const current = resultFor(param);
             const label = param.display ?? param.code;
+            // Optional, and the entry limits. Shown, never refused (plan B, call 5).
+            const hint = fieldHint(param, words);
+            const hintLine = hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null;
             if (param.resultType === 'numeric') {
               const typed = typeof current?.value === 'number' ? current.value : null;
               const index = pickedIndex(param, current);
@@ -136,7 +150,7 @@ export function TestDetailSheet({ test, testCode, params, detail, sexes, copy, o
               const flag = flagFor(band, typed);
               const range = bandText(band, param.unit);
               const misfit = band !== null && param.fits[index] === 'no';
-              const hasLine = param.bands.length > 0;
+              const hasLine = param.bands.length > 0 || hint !== null;
               return (
                 // A fragment, not a nested grid: every label shares the sheet's one label column, so the
                 // inputs line up.
@@ -154,7 +168,8 @@ export function TestDetailSheet({ test, testCode, params, detail, sexes, copy, o
                       {param.unit ? <span className="text-sm text-muted-foreground">{param.unit}</span> : null}
                       {flag ? <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700">{flag}</span> : null}
                     </div>
-                    {hasLine ? (
+                    {hintLine}
+                    {param.bands.length > 0 ? (
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <Select
                           value={index >= 0 ? String(index) : undefined}
@@ -180,28 +195,93 @@ export function TestDetailSheet({ test, testCode, params, detail, sexes, copy, o
             }
             if (param.resultType === 'coded') {
               const options = codedOptions[keyOf(param)] ?? [];
-              const chosen = current?.value && typeof current.value === 'object' ? keyOf(current.value as ResultCoding) : undefined;
+              const chosen = current?.value && typeof current.value === 'object' && !Array.isArray(current.value) ? keyOf(current.value as ResultCoding) : undefined;
               return (
                 <Fragment key={keyOf(param)}>
-                  <Label htmlFor={keyOf(param)}>{label}</Label>
-                  <Select value={chosen} onValueChange={(v) => writeResult(param, options.find((o) => keyOf(o) === v) ?? null, null)}>
-                    <SelectTrigger id={keyOf(param)}><SelectValue placeholder="Choose a result" /></SelectTrigger>
-                    <SelectContent>
-                      {options.map((o) => <SelectItem key={keyOf(o)} value={keyOf(o)}>{o.display ?? o.code}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor={keyOf(param)} className={hint ? TOP_LABEL : undefined}>{label}</Label>
+                  <div>
+                    <Select value={chosen} onValueChange={(v) => writeResult(param, options.find((o) => keyOf(o) === v) ?? null, null)}>
+                      <SelectTrigger id={keyOf(param)}><SelectValue placeholder="Choose a result" /></SelectTrigger>
+                      <SelectContent>
+                        {options.map((o) => <SelectItem key={keyOf(o)} value={keyOf(o)}>{o.display ?? o.code}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {hintLine}
+                  </div>
                 </Fragment>
               );
             }
+            if (param.resultType === 'multicoded') {
+              const options = codedOptions[keyOf(param)] ?? [];
+              const chosen = codingsOf(current?.value);
+              // A saved answer the value set no longer lists still shows, by its own name.
+              const known = [...options, ...chosen.filter((c) => !options.some((o) => keyOf(o) === keyOf(c)))];
+              return (
+                <Fragment key={keyOf(param)}>
+                  <Label htmlFor={keyOf(param)} className={TOP_LABEL}>{label}</Label>
+                  <div className="min-w-0">
+                    <MultiSelect
+                      id={keyOf(param)}
+                      aria-label={label}
+                      options={known.map((o) => ({ value: keyOf(o), label: o.display ?? o.code }))}
+                      value={chosen.map(keyOf)}
+                      onChange={(next) => {
+                        const picked = next.flatMap((k) => known.filter((o) => keyOf(o) === k));
+                        writeResult(param, picked.length > 0 ? picked : null, null);
+                      }}
+                      placeholder={words.addAnswer}
+                      removeLabel={(name) => words.removeAnswer.replace('{label}', name)}
+                    />
+                    {hintLine}
+                  </div>
+                </Fragment>
+              );
+            }
+            if (param.resultType === 'boolean') {
+              const value = typeof current?.value === 'boolean' ? current.value : null;
+              return (
+                <Fragment key={keyOf(param)}>
+                  <Label htmlFor={keyOf(param)} className={hint ? TOP_LABEL : undefined}>{label}</Label>
+                  <div>
+                    <div className="flex h-9 items-center gap-2">
+                      <Switch id={keyOf(param)} aria-label={label} checked={value === true} onCheckedChange={(next) => writeResult(param, next, null)} />
+                      <span className="text-sm text-muted-foreground">{value === null ? words.notAnswered : value ? words.yes : words.no}</span>
+                    </div>
+                    {hintLine}
+                  </div>
+                </Fragment>
+              );
+            }
+            if (param.resultType === 'date') {
+              return (
+                <Fragment key={keyOf(param)}>
+                  <Label htmlFor={keyOf(param)} className={hint ? TOP_LABEL : undefined}>{label}</Label>
+                  <div>
+                    {/* No min or max date: the bench shows the limit and does not refuse (plan B, call 5). */}
+                    <DatePicker
+                      id={keyOf(param)}
+                      className="w-48"
+                      value={typeof current?.value === 'string' ? current.value : null}
+                      onChange={(next) => writeResult(param, next, null)}
+                      placeholder={words.chooseDate}
+                    />
+                    {hintLine}
+                  </div>
+                </Fragment>
+              );
+            }
+            const textarea = (
+              <Textarea
+                id={keyOf(param)}
+                rows={2}
+                value={typeof current?.value === 'string' ? current.value : ''}
+                onChange={(e) => writeResult(param, e.target.value === '' ? null : e.target.value, null)}
+              />
+            );
             return (
               <Fragment key={keyOf(param)}>
                 <Label htmlFor={keyOf(param)} className={TOP_LABEL}>{label}</Label>
-                <Textarea
-                  id={keyOf(param)}
-                  rows={2}
-                  value={typeof current?.value === 'string' ? current.value : ''}
-                  onChange={(e) => writeResult(param, e.target.value === '' ? null : e.target.value, null)}
-                />
+                {hintLine ? <div>{textarea}{hintLine}</div> : textarea}
               </Fragment>
             );
           })}

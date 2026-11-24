@@ -51,6 +51,52 @@ describe('test details answer', () => {
     expect(parseTestDetails(sent)[`${CATALOG}|FBC`].results[0].band).toEqual(band)
   })
 
+  // Plan B, Task 3: yes/no, date and several-answer fields.
+  const POS = { system: 'urn:openldr:cs:local', code: 'POS', display: 'Positive' }
+  const ESBL = { system: 'urn:openldr:cs:local', code: 'ESBL' }
+  const CARB = { system: 'urn:openldr:cs:local', code: 'CARB', display: 'Carbapenemase' }
+  const newTypes = {
+    [`${CATALOG}|CUL`]: { specimen: null, rejection: null, results: [
+      { param: { system: 'urn:openldr:default_result', code: 'GROWTH' }, resultType: 'boolean', value: false },
+      { param: { system: 'urn:openldr:default_result', code: 'COLLECTED' }, resultType: 'date', value: '2026-11-20' },
+      { param: { system: 'urn:openldr:default_result', code: 'MARKERS' }, resultType: 'multicoded', value: [POS, ESBL, CARB] },
+    ] },
+  }
+
+  it('keeps a yes/no, a date and a several-answer value as they were sent', () => {
+    expect(parseTestDetails(newTypes)[`${CATALOG}|CUL`].results.map((r) => [r.resultType, r.value])).toEqual([
+      ['boolean', false],
+      ['date', '2026-11-20'],
+      ['multicoded', [POS, ESBL, CARB]],
+    ])
+  })
+
+  it('reads a value of the wrong kind for its type as no value', () => {
+    const empty = { [`${CATALOG}|CUL`]: { specimen: null, rejection: null, results: [
+      { param: { system: 'urn:openldr:default_result', code: 'MARKERS' }, resultType: 'multicoded', value: [] },
+      { param: { system: 'urn:openldr:default_result', code: 'GROWTH' }, resultType: 'boolean', value: 'yes' },
+      { param: { system: 'urn:openldr:default_result', code: 'COLLECTED' }, resultType: 'date', value: '20/11/2026' },
+    ] } }
+    expect(parseTestDetails(empty)[`${CATALOG}|CUL`].results.map((r) => r.value)).toEqual([null, null, null])
+  })
+
+  it('reads an older answer as before: a type it does not know is text', () => {
+    const old = { [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+      { param: { system: 'urn:openldr:default_result', code: 'NOTE' }, resultType: 'memo', value: 'clotted' },
+    ] } }
+    expect(parseTestDetails(old)[`${CATALOG}|FBC`].results[0]).toEqual({
+      param: { system: 'urn:openldr:default_result', code: 'NOTE' }, resultType: 'text', value: 'clotted',
+    })
+  })
+
+  it('writes yes/no as valueBoolean, a date as valueDate, and one answer per chosen code', () => {
+    expect(testDetailItems(parseTestDetails(newTypes))[0].item).toEqual([
+      { linkId: `${CATALOG}|CUL#urn:openldr:default_result|GROWTH`, answer: [{ valueBoolean: false }] },
+      { linkId: `${CATALOG}|CUL#urn:openldr:default_result|COLLECTED`, answer: [{ valueDate: '2026-11-20' }] },
+      { linkId: `${CATALOG}|CUL#urn:openldr:default_result|MARKERS`, answer: [{ valueCoding: POS }, { valueCoding: ESBL }, { valueCoding: CARB }] },
+    ])
+  })
+
   it('reads a rejection and drops nothing else', () => {
     const rejected = { [`${CATALOG}|FBC`]: { ...answer[`${CATALOG}|FBC`], rejection: { system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' } } }
     const parsed = parseTestDetails(rejected)[`${CATALOG}|FBC`]
