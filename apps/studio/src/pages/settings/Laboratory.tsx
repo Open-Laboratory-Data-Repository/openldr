@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import {
   fetchLabIdentity, saveLabIdentity, listFacilityImportSources, expandValueSetByUrl,
   type CatalogRejectReason, type LabIdentity, type LabIdentityResponse, type FacilityRegisterSource,
@@ -186,16 +187,17 @@ export function Laboratory(): JSX.Element {
           ) : f.source === 'country' ? (
             /* Picked, never typed: a reference range naming a country fits only on an exact code. */
             <FieldRow key={f.id} id={f.id} label={t(f.labelKey)}>
-              <Select value={values[f.id] ?? ''} onValueChange={(v) => set(f.id, v)}>
-                <SelectTrigger id={f.id} aria-label={t(f.labelKey)} className="h-8 text-xs">
-                  <SelectValue placeholder={t('settings.laboratory.countryPlaceholder')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {countries.map((c) => (
-                    <SelectItem key={c.code} value={c.code}>{c.display ? `${c.display} (${c.code})` : c.code}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* About 250 countries, so the operator types to find one. None clears it; the server
+                  takes '' as no country. */}
+              <Combobox
+                id={f.id} ariaLabel={t(f.labelKey)} className="h-8 text-xs"
+                options={countries.map((c) => ({ value: c.code, label: c.display ? `${c.display} (${c.code})` : c.code }))}
+                value={values[f.id] ?? ''}
+                onChange={(v) => set(f.id, v)}
+                noneLabel={t('settings.laboratory.countryNone')}
+                placeholder={t('settings.laboratory.countryPlaceholder')}
+                searchPlaceholder={t('settings.laboratory.countrySearch')}
+              />
             </FieldRow>
           ) : f.multiline ? (
             <FieldRow key={f.id} id={f.id} label={t(f.labelKey)} alignTop>

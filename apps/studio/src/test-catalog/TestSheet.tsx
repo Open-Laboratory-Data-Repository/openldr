@@ -12,8 +12,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
+import { DatePicker, pickerValueToDate } from '@/components/ui/date-picker';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -22,13 +24,18 @@ import {
 import { TermPicker } from '@/terminology/TermPicker';
 import { OntologyPickerDialog } from '@/terminology/ontology/OntologyPickerDialog';
 import {
-  createCatalogTest, getLoincHints, resultFieldsFromLoinc, setCatalogLabSettings, termExists, updateCatalogTest,
-  type LoincFieldPlan, type LoincHints, type Term,
+  createCatalogTest, getLoincHints, listCodingSystems, resultFieldsFromLoinc, setCatalogLabSettings,
+  termExists, updateCatalogTest, type CatalogTestCoding,
+  type LoincFieldPlan, type LoincHints, type Term, type CatalogResultType,
+  type CatalogBandPregnancy, type CatalogBandSource, type CatalogBandScope,
   type CatalogLabSettingsInput, type CatalogTestResultParam, type CatalogSpecimenCoding, type CatalogTest, type CatalogTestInput,
   type CatalogAgeUnit, type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
 import { criteriaLabel, sexLabel, type RangeCopy } from '@/forms-runtime/rangeLabel';
+import { AddCodingSheet } from './AddCodingSheet';
 import { AddResultFieldSheet } from './AddResultFieldSheet';
+import { FieldSettingsSheet } from './FieldSettingsSheet';
+import { changeType, fieldsInOrder, moveParam, setRequired, settingsOf, withBandField } from './field-settings';
 import { addFromLoinc, dropLoincAdded, type LoincAdded } from './loinc-draft';
 
 // Test catalog S2 (spec 4.3): add or edit one test, and this lab's own settings for it. Copies
@@ -50,6 +57,8 @@ interface Draft {
   shortName: string;
   category: string;
   loinc: string;
+  /** Codes from other loaded systems that also name the test (plan B, call 10), in the operator's order. */
+  codings: CatalogTestCoding[];
   specimens: CatalogSpecimenCoding[];
   /** Bench result entry: the parameters this test yields, in the order the operator ticked them. */
   resultParams: CatalogTestResultParam[];
@@ -71,6 +80,32 @@ const AGE_UNITS: Array<{ code: CatalogAgeUnit; key: string }> = [
   { code: 'd', key: 'testCatalog.sheet.ageUnitDays' },
   { code: 'mo', key: 'testCatalog.sheet.ageUnitMonths' },
   { code: 'y', key: 'testCatalog.sheet.ageUnitYears' },
+];
+/** The six result types, in Corlix's order of the ones CE has (plan B, Task 1). */
+const RESULT_TYPES: Array<{ code: CatalogResultType; key: string }> = [
+  { code: 'numeric', key: 'testCatalog.sheet.typeNumeric' },
+  { code: 'coded', key: 'testCatalog.sheet.typeCoded' },
+  { code: 'text', key: 'testCatalog.sheet.typeText' },
+  { code: 'boolean', key: 'testCatalog.sheet.typeBoolean' },
+  { code: 'date', key: 'testCatalog.sheet.typeDate' },
+  { code: 'multicoded', key: 'testCatalog.sheet.typeMulticoded' },
+];
+/** Radix Select cannot hold an empty value, so "any" or "none" on a range's plan B fields is this sentinel. */
+const UNSET = '__none__';
+const PREGNANCIES: Array<{ code: CatalogBandPregnancy; key: string }> = [
+  { code: 'pregnant', key: 'testCatalog.sheet.bandPregnant' },
+  { code: 'not-pregnant', key: 'testCatalog.sheet.bandNotPregnant' },
+];
+/** Corlix's lists (shared-types index.ts:1030-1050). The three bodies are names and stay as they are. */
+const SOURCES: Array<{ code: CatalogBandSource; key?: string }> = [
+  { code: 'WHO' }, { code: 'CLSI' }, { code: 'EUCAST' },
+  { code: 'national', key: 'testCatalog.sheet.bandNational' },
+  { code: 'facility', key: 'testCatalog.sheet.bandFacility' },
+];
+const SCOPES: Array<{ code: CatalogBandScope; key: string }> = [
+  { code: 'global', key: 'testCatalog.sheet.bandGlobal' },
+  { code: 'national', key: 'testCatalog.sheet.bandNational' },
+  { code: 'facility', key: 'testCatalog.sheet.bandFacility' },
 ];
 
 /** Tick or untick one parameter, keeping the order the operator ticked them in. */
@@ -120,6 +155,7 @@ function draftFrom(test: CatalogTest | null): Draft {
     shortName: test?.shortName ?? '',
     category: test?.category ?? '',
     loinc: test?.loinc ?? '',
+    codings: test?.codings ?? [],
     specimens: test?.specimenTypes ?? [],
     resultParams: test?.resultParams ?? [],
     active: test?.active ?? true,
@@ -165,6 +201,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     ageFrom: t('forms.rangeAgeFrom'), ageTo: t('forms.rangeAgeTo'), ageBetween: t('forms.rangeAgeBetween'),
     ageFromDays: t('forms.rangeAgeFromDays'), ageToDays: t('forms.rangeAgeToDays'), ageBetweenDays: t('forms.rangeAgeBetweenDays'),
     ageFromMonths: t('forms.rangeAgeFromMonths'), ageToMonths: t('forms.rangeAgeToMonths'), ageBetweenMonths: t('forms.rangeAgeBetweenMonths'),
+    pregnant: t('forms.rangePregnant'), notPregnant: t('forms.rangeNotPregnant'),
+    validFrom: t('forms.rangeValidFrom'), validTo: t('forms.rangeValidTo'), validBetween: t('forms.rangeValidBetween'),
   };
   const [draft, setDraft] = useState<Draft>(() => draftFrom(null));
   // The test as last saved. A create that went through sets it, so saving again edits instead of
@@ -180,6 +218,22 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   const loincMenuButton = useRef<HTMLButtonElement>(null);
   // The menu item that opens Add field is gone once the menu closes, so focus comes back to the menu's button.
   const paramsMenuButton = useRef<HTMLButtonElement>(null);
+  // The field whose Field settings sheet is open (plan B call 9), and the ⋯ button focus returns to.
+  const [settingsFor, setSettingsFor] = useState<string | null>(null);
+  const fieldMenuButtons = useRef(new Map<string, HTMLButtonElement>());
+  const settingsReturn = useRef<HTMLButtonElement | null>(null);
+  // The Add coding sheet (plan B, Task 5): closed, adding (index null), or editing the coding at index.
+  const [codingSheet, setCodingSheet] = useState<{ index: number | null } | null>(null);
+  const codingsMenuButton = useRef<HTMLButtonElement>(null);
+  const codingMenuButtons = useRef(new Map<number, HTMLButtonElement>());
+  const codingReturn = useRef<HTMLButtonElement | null>(null);
+  // Each loaded system's name by url, so a coding row names its system. Read only when the test has
+  // codings; a failure leaves the url showing.
+  const [systemNames, setSystemNames] = useState<ReadonlyMap<string, string>>(() => new Map());
+  // CE's country list, for a range's country. It comes with the catalog options, which a catalog editor
+  // can read (terminology.view); /api/settings/lab needs reports.view. Empty when it could not be read,
+  // and then a saved country still shows by its code.
+  const countries = options.countries ?? [];
   // What LOINC says about the test's code. Null when LOINC or its ontology is not loaded, and then the
   // sheet shows no hint and offers no LOINC action (spec, call 7).
   const [hints, setHints] = useState<LoincHints | null>(null);
@@ -229,6 +283,20 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     setKeptPlans([]);
     setFillAsk(null);
   }, [target]);
+
+  const open = target !== null;
+
+  const hasCodings = draft.codings.length > 0;
+  useEffect(() => {
+    if (!open || !hasCodings || systemNames.size > 0) return;
+    let cancelled = false;
+    listCodingSystems()
+      .then((rows) => {
+        if (!cancelled) setSystemNames(new Map(rows.flatMap((r) => (r.url ? [[r.url, r.systemName] as const] : []))));
+      })
+      .catch(() => { /* the url stands in for the name */ });
+    return () => { cancelled = true; };
+  }, [open, hasCodings, systemNames.size]);
 
   // A saved code shows its hints, but fills nothing: only a code picked here fills empty fields. Keyed
   // on the LOINC system id, not the options object, which is read again after a field is added.
@@ -438,8 +506,10 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
       </div>
     </>
   );
+  // Plan B call 8: the ticked fields in the test's order, then the unticked ones.
+  const drawnFields = fieldsInOrder(paramOptions, draft.resultParams);
   // Reference ranges, one sub-heading per ticked numeric field, in the field list's order.
-  const rangeFields = paramOptions.flatMap((p) => {
+  const rangeFields = drawnFields.flatMap((p) => {
     const chosen = draft.resultParams.find((r) => r.code === p.code);
     return chosen && chosen.resultType === 'numeric' ? [{ p, chosen }] : [];
   });
@@ -485,6 +555,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
           specimenTypes: draft.specimens,
           resultParams,
           loinc: draft.loinc.trim() || null,
+          codings: draft.codings,
           active: draft.active,
           expectedTatHours: draft.expectedTatHours,
           criticalTatHours: draft.criticalTatHours,
@@ -603,7 +674,70 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
               </>
             )}
 
-            {/* Plan B puts Additional codings here, between the LOINC code and Basic information (spec call 11). */}
+            {/* Additional codings, between the LOINC code and Basic information (spec call 11, plan B Task 5). */}
+            {section(t('testCatalog.sheet.sectionCodings'), ownedHere ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    ref={codingsMenuButton}
+                    variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                    data-testid="codings-menu" aria-label={t('testCatalog.sheet.codingsActions')}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    data-testid="add-coding"
+                    onSelect={() => { codingReturn.current = codingsMenuButton.current; setCodingSheet({ index: null }); }}
+                  >
+                    {t('testCatalog.sheet.addCoding')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null)}
+            <div className="col-span-2 flex min-w-0 flex-col gap-2">
+              {draft.codings.length === 0 ? (
+                <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.noCodings')}</span>
+              ) : draft.codings.map((c, i) => (
+                <div key={`${c.system}|${c.code}`} data-testid={`coding-row-${i}`} className="flex min-w-0 items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="break-words">{c.display ?? c.code}</span>
+                    <span className="break-all text-xs text-muted-foreground">
+                      {[systemNames.get(c.system) ?? c.system, c.code, t(`testCatalog.addCoding.purpose${c.purpose}`)].join(' · ')}
+                    </span>
+                    {c.note ? <span className="break-words text-xs text-muted-foreground">{c.note}</span> : null}
+                  </div>
+                  {ownedHere ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          ref={(el) => { if (el) codingMenuButtons.current.set(i, el); else codingMenuButtons.current.delete(i); }}
+                          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                          data-testid={`coding-menu-${i}`} aria-label={t('testCatalog.sheet.codingActions', { code: c.code })}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          data-testid={`coding-edit-${i}`}
+                          onSelect={() => { codingReturn.current = codingMenuButtons.current.get(i) ?? null; setCodingSheet({ index: i }); }}
+                        >
+                          {t('testCatalog.sheet.editCoding')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          data-testid={`coding-remove-${i}`}
+                          onSelect={() => set({ codings: draft.codings.filter((_, k) => k !== i) })}
+                        >
+                          {t('testCatalog.sheet.removeCoding')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+                </div>
+              ))}
+            </div>
 
             {section(t('testCatalog.sheet.sectionBasic'))}
             {/* Test identity spec, call 8: the Test code is the first field, editable on a saved test
@@ -763,8 +897,9 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                       {resultHint ? <span data-testid="hint-result" className="break-words text-xs text-muted-foreground">{resultHint}</span> : null}
                     </div>
                   ) : null}
-                  {paramOptions.map((p) => {
+                  {drawnFields.map((p) => {
                     const chosen = draft.resultParams.find((r) => r.code === p.code);
+                    const at = draft.resultParams.findIndex((r) => r.code === p.code);
                     return (
                       <div key={`${p.system}|${p.code}`} className="flex flex-col gap-1.5">
                         <label className="flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-[rgba(70,130,180,0.08)]">
@@ -794,21 +929,60 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                         </label>
                         {chosen ? (
                           // The indent is desktop-only. On a phone it cost the fields 32px they cannot spare.
-                          // Plan B adds the field's own ⋯ (Required, Settings, Move) beside its type.
+                          // The field's own ⋯ sits beside its type: Required, Settings, Move (Corlix
+                          // TestEditorPage.tsx:205-237).
                           <div className="flex items-center gap-2 sm:ml-8">
                             <Select
                               value={chosen.resultType}
-                              onValueChange={(v) => set({ resultParams: setParam(draft.resultParams, p.code, {
-                                ...chosen, resultType: v as CatalogTestResultParam['resultType'], bands: v === 'numeric' ? chosen.bands : [],
-                              }) })}
+                              // A new type drops the settings of the old one, which the server refuses.
+                              onValueChange={(v) => set({ resultParams: setParam(draft.resultParams, p.code, changeType(chosen, v as CatalogResultType)) })}
                             >
-                              <SelectTrigger className="h-8 w-36" aria-label={`Result type for ${p.code}`}><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="h-8 w-40" aria-label={`Result type for ${p.code}`}><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="numeric">{t('testCatalog.sheet.typeNumeric')}</SelectItem>
-                                <SelectItem value="coded">{t('testCatalog.sheet.typeCoded')}</SelectItem>
-                                <SelectItem value="text">{t('testCatalog.sheet.typeText')}</SelectItem>
+                                {RESULT_TYPES.map((r) => <SelectItem key={r.code} value={r.code}>{t(r.key)}</SelectItem>)}
                               </SelectContent>
                             </Select>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  ref={(el) => { if (el) fieldMenuButtons.current.set(p.code, el); else fieldMenuButtons.current.delete(p.code); }}
+                                  variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                                  data-testid={`field-menu-${p.code}`}
+                                  aria-label={t('testCatalog.sheet.fieldActions', { code: p.code })}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuCheckboxItem
+                                  data-testid={`field-required-${p.code}`}
+                                  checked={chosen.required !== false}
+                                  onCheckedChange={(c) => set({ resultParams: setParam(draft.resultParams, p.code, setRequired(chosen, c === true)) })}
+                                >
+                                  {t('testCatalog.sheet.fieldRequired')}
+                                </DropdownMenuCheckboxItem>
+                                {settingsOf(chosen.resultType).length > 0 ? (
+                                  <DropdownMenuItem
+                                    data-testid={`field-settings-${p.code}`}
+                                    onSelect={() => { settingsReturn.current = fieldMenuButtons.current.get(p.code) ?? null; setSettingsFor(p.code); }}
+                                  >
+                                    {t('testCatalog.sheet.fieldSettings')}
+                                  </DropdownMenuItem>
+                                ) : null}
+                                <DropdownMenuItem
+                                  data-testid={`field-up-${p.code}`} disabled={at <= 0}
+                                  onSelect={() => set({ resultParams: moveParam(draft.resultParams, p.code, -1) })}
+                                >
+                                  {t('testCatalog.sheet.moveUp')}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  data-testid={`field-down-${p.code}`} disabled={at === draft.resultParams.length - 1}
+                                  onSelect={() => set({ resultParams: moveParam(draft.resultParams, p.code, 1) })}
+                                >
+                                  {t('testCatalog.sheet.moveDown')}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         ) : null}
                       </div>
@@ -855,6 +1029,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                         const n = i + 1;
                         const writeBands = (bands: CatalogResultBand[]) => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands }) });
                         const setBand = (patch: Partial<CatalogResultBand>) => writeBands(chosen.bands.map((b, j) => (j === i ? { ...b, ...patch } : b)));
+                        const writeBand = (next: CatalogResultBand) => writeBands(chosen.bands.map((b, j) => (j === i ? next : b)));
                         const move = (by: number) => {
                           const next = [...chosen.bands];
                           [next[i], next[i + by]] = [next[i + by], next[i]];
@@ -993,6 +1168,71 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                                   />
                                 </Fragment>
                               ))}
+                              {/* Plan B range fields (Corlix ReferenceRangeDialog.tsx). Each is written only when set. */}
+                              {label('pregnancy', 'testCatalog.sheet.bandPregnancy')}
+                              <Select
+                                value={band.pregnancy ?? UNSET}
+                                onValueChange={(v) => writeBand(withBandField(band, 'pregnancy', v === UNSET ? null : v as CatalogBandPregnancy))}
+                              >
+                                <SelectTrigger id={id('pregnancy')} className="h-8" aria-label={t('testCatalog.sheet.bandPregnancyFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={UNSET}>{t('testCatalog.sheet.bandAnyPregnancy')}</SelectItem>
+                                  {PREGNANCIES.map((o) => <SelectItem key={o.code} value={o.code}>{t(o.key)}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              {label('country', 'testCatalog.sheet.bandCountry')}
+                              {/* About 250 countries, so the operator types to find one. None removes it. */}
+                              <Combobox
+                                id={id('country')} className="h-8" ariaLabel={t('testCatalog.sheet.bandCountryFor', { code: p.code, n })}
+                                options={[
+                                  // A saved country the list lacks (it failed to load) still shows, by its code.
+                                  ...(band.country && !countries.some((c) => c.code === band.country) ? [{ value: band.country, label: band.country }] : []),
+                                  ...countries.map((c) => ({ value: c.code, label: c.display ? `${c.display} (${c.code})` : c.code })),
+                                ]}
+                                value={band.country ?? ''}
+                                onChange={(v) => writeBand(withBandField(band, 'country', v === '' ? null : v))}
+                                noneLabel={t('testCatalog.sheet.bandNone')}
+                                placeholder={t('testCatalog.sheet.bandNone')}
+                                searchPlaceholder={t('settings.laboratory.countrySearch')}
+                              />
+                              {label('validFrom', 'testCatalog.sheet.bandValidFrom')}
+                              <DatePicker
+                                id={id('validFrom')} className="h-8"
+                                placeholder={t('testCatalog.sheet.bandPickDate')}
+                                value={band.validFrom ?? null}
+                                maxDate={band.validTo ? pickerValueToDate(band.validTo) : undefined}
+                                onChange={(v) => writeBand(withBandField(band, 'validFrom', v))}
+                              />
+                              {label('validTo', 'testCatalog.sheet.bandValidTo')}
+                              <DatePicker
+                                id={id('validTo')} className="h-8"
+                                placeholder={t('testCatalog.sheet.bandPickDate')}
+                                value={band.validTo ?? null}
+                                minDate={band.validFrom ? pickerValueToDate(band.validFrom) : undefined}
+                                onChange={(v) => writeBand(withBandField(band, 'validTo', v))}
+                              />
+                              {label('source', 'testCatalog.sheet.bandSource')}
+                              <Select
+                                value={band.source ?? UNSET}
+                                onValueChange={(v) => writeBand(withBandField(band, 'source', v === UNSET ? null : v as CatalogBandSource))}
+                              >
+                                <SelectTrigger id={id('source')} className="h-8" aria-label={t('testCatalog.sheet.bandSourceFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={UNSET}>{t('testCatalog.sheet.bandNone')}</SelectItem>
+                                  {SOURCES.map((o) => <SelectItem key={o.code} value={o.code}>{o.key ? t(o.key) : o.code}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              {label('scope', 'testCatalog.sheet.bandScope')}
+                              <Select
+                                value={band.scope ?? UNSET}
+                                onValueChange={(v) => writeBand(withBandField(band, 'scope', v === UNSET ? null : v as CatalogBandScope))}
+                              >
+                                <SelectTrigger id={id('scope')} className="h-8" aria-label={t('testCatalog.sheet.bandScopeFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={UNSET}>{t('testCatalog.sheet.bandNone')}</SelectItem>
+                                  {SCOPES.map((o) => <SelectItem key={o.code} value={o.code}>{t(o.key)}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
                         );
@@ -1100,6 +1340,24 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        <FieldSettingsSheet
+          param={settingsFor ? draft.resultParams.find((r) => r.code === settingsFor) ?? null : null}
+          name={paramOptions.find((o) => o.code === settingsFor)?.display ?? settingsFor ?? ''}
+          returnFocusTo={settingsReturn}
+          onClose={() => setSettingsFor(null)}
+          onApply={(next) => set({ resultParams: setParam(draft.resultParams, next.code, next) })}
+        />
+        <AddCodingSheet
+          open={codingSheet !== null}
+          editing={codingSheet?.index != null ? draft.codings[codingSheet.index] ?? null : null}
+          taken={draft.codings.filter((_, k) => k !== codingSheet?.index)}
+          returnFocusTo={codingReturn}
+          onClose={() => setCodingSheet(null)}
+          onSave={(coding) => {
+            const at = codingSheet?.index ?? null;
+            set({ codings: at === null ? [...draft.codings, coding] : draft.codings.map((c, k) => (k === at ? coding : c)) });
+          }}
+        />
         <AddResultFieldSheet
         open={addingField}
         ucum={options.ucum ?? null}

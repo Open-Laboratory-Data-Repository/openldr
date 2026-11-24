@@ -11,16 +11,25 @@ import { orderRejectionOf } from './order-rejection'
 // produces Observations. The reference band cannot ride in a FHIR answer, so it comes from the
 // extraction context, which the forms route fills. A replay carries no context and so no range.
 
-function valueOf(result: TypedResult): Partial<Observation> {
+const codedValue = (coding: ResultCoding): Partial<Observation> =>
+  ({ valueCodeableConcept: { coding: [{ system: coding.system, code: coding.code, ...(coding.display ? { display: coding.display } : {}) }] } })
+
+/**
+ * The Observation values one result makes. One for every type but multicoded, which makes one per
+ * chosen answer (plan B, call 7), each under the field's code.
+ */
+function valuesOf(result: TypedResult): Array<Partial<Observation>> {
   if (result.resultType === 'numeric' && typeof result.value === 'number') {
-    return { valueQuantity: { value: result.value, ...(result.unit ? { unit: result.unit } : {}) } }
+    return [{ valueQuantity: { value: result.value, ...(result.unit ? { unit: result.unit } : {}) } }]
   }
-  if (result.resultType === 'coded' && result.value && typeof result.value === 'object') {
-    const coding = result.value as ResultCoding
-    return { valueCodeableConcept: { coding: [{ system: coding.system, code: coding.code, ...(coding.display ? { display: coding.display } : {}) }] } }
+  if (result.resultType === 'multicoded' && Array.isArray(result.value)) return result.value.map(codedValue)
+  if (result.resultType === 'coded' && result.value && typeof result.value === 'object' && !Array.isArray(result.value)) {
+    return [codedValue(result.value as ResultCoding)]
   }
-  if (typeof result.value === 'string') return { valueString: result.value }
-  return {}
+  if (result.resultType === 'boolean' && typeof result.value === 'boolean') return [{ valueBoolean: result.value }]
+  if (result.resultType === 'date' && typeof result.value === 'string') return [{ valueDateTime: result.value }]
+  if (typeof result.value === 'string') return [{ valueString: result.value }]
+  return [{}]
 }
 
 const UCUM = 'http://unitsofmeasure.org'
@@ -87,13 +96,13 @@ function observationsFor(key: string, detail: TestDetail, ctx: ExtractionContext
   }
   return detail.results
     .filter((result) => result.value !== null)
-    .map((result) => ({
+    .flatMap((result) => valuesOf(result).map((value) => ({
       ...base,
       status: 'final',
       code: { coding: [{ system: result.param.system, code: result.param.code }] },
-      ...valueOf(result),
+      ...value,
       ...rangeOf(result, key, ctx),
-    }) as Observation)
+    }) as Observation))
 }
 
 /** Rebuild the answer from the nested items the response carries (test-details.ts writes them). */
@@ -105,13 +114,22 @@ export function readTestDetails(response: QuestionnaireResponse): Record<string,
         const detail: { specimen: unknown; rejection: unknown; results: unknown[] } = { specimen: null, rejection: null, results: [] }
         for (const child of item.item) {
           const suffix = child.linkId.slice(item.linkId.length + 1)
-          const answer = child.answer?.[0]
+          const answers = child.answer ?? []
+          const answer = answers[0]
           if (suffix === 'specimen') detail.specimen = answer?.valueCoding
           else if (suffix === 'rejection') detail.rejection = answer?.valueCoding
           else if (answer) {
             const cut = suffix.lastIndexOf('|')
             const param = { system: suffix.slice(0, cut), code: suffix.slice(cut + 1) }
-            if (answer.valueQuantity !== undefined) {
+            // Several answers are a multicoded result, one per chosen code. One coded answer reads as
+            // coded, which makes the same Observation a multicoded result with one answer would.
+            if (answers.length > 1 && answers.every((a) => a.valueCoding !== undefined)) {
+              detail.results.push({ param, resultType: 'multicoded', value: answers.map((a) => a.valueCoding) })
+            } else if (answer.valueBoolean !== undefined) {
+              detail.results.push({ param, resultType: 'boolean', value: answer.valueBoolean })
+            } else if (answer.valueDate !== undefined) {
+              detail.results.push({ param, resultType: 'date', value: answer.valueDate })
+            } else if (answer.valueQuantity !== undefined) {
               detail.results.push({ param, resultType: 'numeric', value: answer.valueQuantity.value, unit: answer.valueQuantity.unit })
             } else if (answer.valueCoding !== undefined) {
               detail.results.push({ param, resultType: 'coded', value: answer.valueCoding })

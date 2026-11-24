@@ -34,7 +34,7 @@ Select **Add test**. The test sheet opens.
 
 ![Choose Add test to enter one test by hand.](test-catalog-guide-add-menu.png)
 
-The sheet runs from top to bottom in this order: **LOINC**, **Basic information**, **Specimen types**, **Result parameters**, **Reference ranges** and **This lab**. Basic information holds the Test code, name, short name, category, the two turnaround times and review. When LOINC is loaded, pick the LOINC code first. It fills the empty fields below it. [Fill a test from LOINC](#fill-a-test-from-loinc) explains what it fills. The steps below fill the same fields by hand.
+The sheet runs from top to bottom in this order: **LOINC**, **Additional codings**, **Basic information**, **Specimen types**, **Result parameters**, **Reference ranges** and **This lab**. Basic information holds the Test code, name, short name, category, the two turnaround times and review. When LOINC is loaded, pick the LOINC code first. It fills the empty fields below it. [Fill a test from LOINC](#fill-a-test-from-loinc) explains what it fills. The steps below fill the same fields by hand.
 
 ### 4. Enter the Test code
 
@@ -289,7 +289,9 @@ Choose Edit from the test row menu. Tick the fields this test produces under its
 
 ### 2. Choose each result type
 
-Choose **Numeric**, **Coded** or **Text** for each selected result field. A coded field also needs its configured value set. The example uses Numeric.
+Choose the type for each selected result field: **numeric**, **coded**, **text**, **yes/no**, **date** or **several answers**. A coded field and a several-answers field also need their configured value set. The example uses numeric.
+
+In reports, a yes/no result reads `true` or `false`, and a date result reads as the date. A several-answers result gives one result row for each answer chosen.
 
 ![Choose Numeric, Coded or Text for the result field.](test-catalog-guide-parameter-type.png)
 
@@ -350,6 +352,39 @@ Open the test sheet dots menu and select **Save**.
 ![Save stores the selected result fields and reference bands.](test-catalog-guide-parameter-save.png)
 
 **Expected result:** The selected fields, result types and reference bands are saved with the test.
+
+## Set a field's limits and order
+
+Use this when a field may be left empty, when a value must stay inside limits, or to change the order of the fields.
+
+1. Open the test row dots menu and select **Edit**.
+2. Open the dots beside a ticked field's type, under **Result parameters**.
+3. Select **Required** to switch it off when the field may be left empty. A ticked field is required until you switch it off.
+4. Select **Settings**. The **Field settings** sheet opens. Only numeric, text and date fields have it.
+5. Fill the limits. A numeric field has **Minimum**, **Maximum** and **Decimal places**. A text field has **Minimum length** and **Maximum length**. A date field has **Dates allowed**: **Any date**, **Past dates only** or **Future dates only**.
+6. Open the **Field settings** dots menu and select **Apply**.
+7. Select **Move up** or **Move down** in a field's dots menu to change its place.
+8. Open the test sheet dots menu and select **Save**.
+
+**Expected result:** The sheet shows the ticked fields in the saved order, then the unticked ones. **Reference ranges** follows the same order. At the bench, a field that is not required is marked **Optional**, and its limits show under it. The bench shows the limits and does not refuse a value outside them. The lab plugin refuses it when the result is entered.
+
+## Limit a range by country, dates or pregnancy
+
+Use this when a range applies only in one country, only for a time, or only in pregnancy. Each range under **Reference ranges** has these fields below **Critical high**.
+
+1. Open the test row dots menu and select **Edit**.
+2. Choose the range's **Country** from the country list, or leave **none**.
+3. Pick **Valid from** and **Valid to** dates, or leave them empty.
+4. Choose **Pregnancy**: **pregnant** or **not pregnant**. Leave **any** for a range that does not depend on it.
+5. Choose **Source** and **Scope** to record where the range comes from.
+6. Open the test sheet dots menu and select **Save**.
+
+**Expected result:** The bench uses these fields to pick a range.
+
+- A range with a country fits only when it matches the lab's country. Set that in [Laboratory](/docs/laboratory). When the lab has no country set, the range is not picked by itself. Pick it at the bench.
+- A range does not fit before its **Valid from** date or after its **Valid to** date. The bench compares them with the result date, or today.
+- A pregnancy range is never picked by itself, because CE does not record whether a patient is pregnant. Pick it at the bench.
+- **Source** and **Scope** are labels only. They do not change which range fits.
 
 ## Set the turnaround time and review
 
@@ -420,6 +455,21 @@ Use this when the test needs a result field that is not in the result dictionary
 7. Open the test sheet dots menu and select **Save**.
 
 **Expected result:** The new field is ticked on the test with the type you chose, and it appears in **Result fields**. A code that is already in the dictionary is refused. Give another code, or tick the field that is there.
+
+## Add another code for the test
+
+Use this when another code system names the same test, such as a national procedure code. Only an install that owns its catalog can add one.
+
+1. Open the test sheet with **Add test** or **Edit**.
+2. Open the dots beside **Additional codings**, below **LOINC**, and select **Add coding**.
+3. Choose the **System**. The list shows the code systems loaded on this install, except LOINC. The test has its own LOINC field.
+4. Type part of the code or name in **Code** and pick it.
+5. Choose the **Purpose**: **Additional**, **Indication**, **Procedure** or **Category**.
+6. Type a **Note** if you need one.
+7. Open the **Add coding** dots menu and select **Save**.
+8. Open the test sheet dots menu and select **Save**.
+
+**Expected result:** The coding shows under **Additional codings**, with its system, code and purpose. Its dots menu has **Edit** and **Remove**. An order for this test carries the LOINC code first, then the Test code, then each additional coding. The CSV export holds them in the `codings` column as a JSON list, and import reads that column back. The same system and code twice on one test is refused.
 
 ## Link a received test code to the catalog
 
@@ -647,6 +697,10 @@ Retiring a test hides it from the default active list. It can be restored. Catal
 **A pick adds no result field.** The test already had a result field, or the code is a panel. Use **Use LOINC's result field** or **Fill from panel** in the Result parameters dots menu.
 
 **A range shows Not a UCUM unit.** The unit you kept is not in the UCUM list. It is saved as typed. Pick the same unit from the list if one exists.
+
+**A range with a country is never picked.** Set the lab's country in [Laboratory](/docs/laboratory). It must be the same country as the range's.
+
+**Settings is missing from a field's dots menu.** Only numeric, text and date fields have settings. **Required** and the move items are there for every field.
 
 **The page reports a stale warehouse copy.** Open Observed actions and choose Rebuild warehouse copy. The page reports a failure if it cannot rebuild.
 

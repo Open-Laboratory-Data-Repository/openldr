@@ -2393,7 +2393,7 @@ export {
   newTestId, TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM, TEST_CATEGORY_SYSTEM, TEST_CATEGORY_VALUE_SET, SPECIMEN_TYPE_VALUE_SET,
   LAB_TESTS_VALUE_SET, labTestsCompose, withLabTestsList,
   type TestCatalog, type CatalogTest, type CatalogTestInput, type CatalogListQuery, type CatalogListResult,
-  type LabSettingsInput, type SpecimenCoding,
+  type LabSettingsInput, type SpecimenCoding, CODING_PURPOSES, type CodingPurpose, type TestCoding, type TestCodingInput,
   type CatalogOptions, type CatalogCategoryOption, type CatalogSpecimenOption, type CatalogResultParamOption,
   type CatalogImportFile, type CatalogImportInput, type CatalogImportReport, type CatalogImportRefusal, type CatalogImportNote,
   type CatalogUnmatchedValue,

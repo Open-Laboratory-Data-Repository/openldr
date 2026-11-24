@@ -204,7 +204,7 @@ describe('openldr test-catalog params --set: field settings and range fields', (
 describe('openldr test-catalog set', () => {
   let out: string[];
   let err: string[];
-  const stored = { ...TEST, resultParams: [], expectedTatHours: 48, criticalTatHours: null, requiresVerification: true };
+  const stored = { ...TEST, resultParams: [], codings: [] as object[], expectedTatHours: 48, criticalTatHours: null, requiresVerification: true };
 
   beforeEach(() => {
     out = [];
@@ -236,7 +236,9 @@ describe('openldr test-catalog set', () => {
     expect(sent).not.toHaveProperty('resultParams');
     // No --test-code leaves the Test code as stored.
     expect(sent).not.toHaveProperty('testCode');
-    expect(out.join('')).toBe('Test code\tHIVVL\nexpected TAT\t48 h\ncritical TAT\t0.5 h\nrequires verification\tno\n');
+    expect(out.join('')).toBe('Test code\tHIVVL\nexpected TAT\t48 h\ncritical TAT\t0.5 h\nrequires verification\tno\ncodings\tnone\n');
+    // No --codings leaves them out, so the service keeps them.
+    expect(sent).not.toHaveProperty('codings');
     expect(mocks.recordAuditEvent.mock.calls[0][2]).toMatchObject({ action: 'test_catalog.update', entityId: 'HIVVL' });
     expect(close).toHaveBeenCalledTimes(1);
   });
@@ -264,6 +266,54 @@ describe('openldr test-catalog set', () => {
     resolve.mockResolvedValue(null);
     expect(await runTestCatalogSet('NOPE', { testCode: 'X', json: false })).toBe(1);
     expect(err.join('')).toContain('no such test: NOPE');
+  });
+
+  it('sends the codings a --codings file lists, through the same update, and prints them back', async () => {
+    const { update } = withTest();
+    const codings = [{ system: 'urn:test:cs:extra', code: 'X1', purpose: 'INDICATION', note: 'why' }];
+    const file = join(mkdtempSync(join(tmpdir(), 'tc-codings-')), 'codings.json');
+    writeFileSync(file, JSON.stringify(codings));
+    update.mockImplementation(async (_code: string, input: Record<string, unknown>) => ({
+      ...stored, ...input, codings: [{ system: 'urn:test:cs:extra', code: 'X1', display: 'Extra one', purpose: 'INDICATION', note: 'why' }],
+    }));
+    expect(await runTestCatalogSet('HIVVL', { codings: file, json: false })).toBe(0);
+    expect(update.mock.calls[0][1].codings).toEqual(codings);
+    expect(out.join('')).toContain('codings\turn:test:cs:extra X1 (INDICATION)\n');
+    expect(mocks.recordAuditEvent.mock.calls[0][2]).toMatchObject({ action: 'test_catalog.update', entityId: 'HIVVL' });
+  });
+
+  it('refuses a --codings file that cannot be read or is not a JSON list, before opening a context', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tc-codings-'));
+    const notList = join(dir, 'one.json');
+    writeFileSync(notList, JSON.stringify({ system: 'urn:test:cs:extra', code: 'X1' }));
+    const notJson = join(dir, 'bad.json');
+    writeFileSync(notJson, 'X1');
+    expect(await runTestCatalogSet('HIVVL', { codings: notList, json: false })).toBe(1);
+    expect(await runTestCatalogSet('HIVVL', { codings: notJson, json: false })).toBe(1);
+    expect(await runTestCatalogSet('HIVVL', { codings: join(dir, 'missing.json'), json: false })).toBe(1);
+    expect(err.join('').match(/--codings must be a JSON file holding a list of codings/g)).toHaveLength(3);
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+
+  it('reports the refusal of a LOINC coding in words that point to the LOINC field', async () => {
+    const update = vi.fn().mockRejectedValue(new Error('Coding 1 is a LOINC code. A test has one LOINC code: put it in the LOINC field.'));
+    mocks.createAppContext.mockResolvedValue({ testCatalog: { resolve: vi.fn().mockResolvedValue(stored), update }, close: vi.fn().mockResolvedValue(undefined) });
+    const file = join(mkdtempSync(join(tmpdir(), 'tc-codings-')), 'codings.json');
+    writeFileSync(file, JSON.stringify([{ system: 'http://loinc.org', code: '2345-7' }]));
+    expect(await runTestCatalogSet('HIVVL', { codings: file, json: false })).toBe(1);
+    expect(update.mock.calls[0][1].codings).toEqual([{ system: 'http://loinc.org', code: '2345-7' }]);
+    expect(err.join('')).toContain('put it in the LOINC field');
+  });
+
+  it('hands a coding the service refuses to it, and reports its refusal', async () => {
+    const update = vi.fn().mockRejectedValue(new Error('Coding 1: X9 is not in urn:test:cs:extra.'));
+    const close = vi.fn().mockResolvedValue(undefined);
+    mocks.createAppContext.mockResolvedValue({ testCatalog: { resolve: vi.fn().mockResolvedValue(stored), update }, close });
+    const file = join(mkdtempSync(join(tmpdir(), 'tc-codings-')), 'codings.json');
+    writeFileSync(file, JSON.stringify([{ system: 'urn:test:cs:extra', code: 'X9' }]));
+    expect(await runTestCatalogSet('HIVVL', { codings: file, json: false })).toBe(1);
+    expect(err.join('')).toContain('Coding 1: X9 is not in urn:test:cs:extra.');
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it('clears a TAT given as none', async () => {

@@ -73,3 +73,21 @@ describe('projectResource and unauthorised results', () => {
     expect(UNAUTHORISED_RESULT_STATUSES).toEqual(['preliminary', 'registered']);
   });
 });
+
+// Plan B, call 6: no schema change. A yes/no lands as ST with true or false, a date as DT with the ISO date.
+describe('projectObservation yes/no and date results', () => {
+  const result = (extra: Record<string, unknown>) => ({ resourceType: 'Observation', id: 'o5', status: 'final', code: { coding: [{ code: 'GROWTH' }] }, ...extra });
+
+  it('lands valueBoolean as ST with the text true or false', () => {
+    expect(projectObservation(result({ valueBoolean: true }), {})).toMatchObject({ result_type: 'ST', text_value: 'true', numeric_value: null, coded_value: null });
+    expect(projectObservation(result({ valueBoolean: false }), {})).toMatchObject({ result_type: 'ST', text_value: 'false' });
+  });
+
+  it('lands valueDateTime as DT with the date as its text', () => {
+    expect(projectObservation(result({ valueDateTime: '2026-11-20' }), {})).toMatchObject({ result_type: 'DT', text_value: '2026-11-20', numeric_value: null });
+  });
+
+  it('leaves a result with no value as before', () => {
+    expect(projectObservation(result({}), {})).toMatchObject({ result_type: null, text_value: null });
+  });
+});

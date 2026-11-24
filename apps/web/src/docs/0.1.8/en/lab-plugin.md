@@ -43,7 +43,11 @@ Limit each site user to their facility with `openldr users scope <user> --facili
 
 When a reviewer authorises a result, the plugin sends CE one ServiceRequest for the test, a Specimen for each sample, one Observation per result parameter, and a Provenance that says who authorised it. Each Observation is `final`. It carries the value and unit, the flag in `interpretation`, and the range in `referenceRange`, with the range's name as its `text`. Each record's `subject` is the patient's CE record. CE stores them like records from any other source, and its warehouse fills `lab_requests` and `lab_results`, so the results show in reports and dashboards.
 
-The plugin shows the Test code to people. It sends the test as a coding with the system `urn:openldr:codesystem:test-catalog:test-code` and the Test code, beside the LOINC coding when one is linked. It also sends the fixed id as a coding in `urn:openldr:codesystem:test-catalog`.
+The plugin shows the Test code to people. It sends the test as a coding with the system `urn:openldr:codesystem:test-catalog:test-code` and the Test code. The LOINC coding comes first when one is linked, then the Test code, then the test's additional codings, then the fixed id as a coding in `urn:openldr:codesystem:test-catalog`.
+
+A yes/no result goes as `valueBoolean` and a date as `valueDateTime`. A field with several answers sends one Observation per answer. In the warehouse, a yes/no lands as the text `true` or `false`, a date as the date, and several answers as one row each.
+
+The plugin refuses an empty required field and a value outside the field's limits set in the test catalog. An optional field may stay empty. Use the plugin released with this CE. An older plugin treats yes/no, date and several-answer fields as text and refuses them.
 
 A rejected test reaches CE once its rejection is final, at once when it is rejected without a redraw or when its redraw order is linked. It reaches CE as a `revoked` ServiceRequest with the rejection reason, which fills `lab_requests.rejection_code` and `rejection_reason`.
 

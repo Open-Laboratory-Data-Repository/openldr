@@ -34,7 +34,7 @@ Sélectionnez **Add test**. Le panneau du test s'ouvre.
 
 ![Choisissez Add test pour saisir un test manuellement.](test-catalog-guide-add-menu.png)
 
-Le panneau se lit de haut en bas dans cet ordre : **LOINC**, **Informations de base**, **Types de prélèvement**, **Paramètres de résultat**, **Valeurs de référence** et **Ce laboratoire**. Informations de base contient le code du test, le nom, le nom court, la catégorie, les deux délais de rendu et la vérification. Lorsque LOINC est chargé, choisissez d'abord le code LOINC. Il remplit les champs vides en dessous. [Remplir un examen depuis LOINC](#remplir-un-examen-depuis-loinc) explique ce qu'il remplit. Les étapes ci-dessous remplissent les mêmes champs à la main.
+Le panneau se lit de haut en bas dans cet ordre : **LOINC**, **Codages supplémentaires**, **Informations de base**, **Types de prélèvement**, **Paramètres de résultat**, **Valeurs de référence** et **Ce laboratoire**. Informations de base contient le code du test, le nom, le nom court, la catégorie, les deux délais de rendu et la vérification. Lorsque LOINC est chargé, choisissez d'abord le code LOINC. Il remplit les champs vides en dessous. [Remplir un examen depuis LOINC](#remplir-un-examen-depuis-loinc) explique ce qu'il remplit. Les étapes ci-dessous remplissent les mêmes champs à la main.
 
 ### 4. Saisir le code du test
 
@@ -289,7 +289,9 @@ Choisissez Edit dans le menu de ligne. Cochez les champs produits par ce test so
 
 ### 2. Choisir chaque type de résultat
 
-Choisissez **Numeric**, **Coded** ou **Text** pour chaque champ sélectionné. Un champ codé exige aussi son jeu de valeurs configuré. L'exemple utilise Numeric.
+Choisissez le type de chaque champ sélectionné : **numérique**, **codé**, **texte**, **oui/non**, **date** ou **plusieurs réponses**. Un champ codé et un champ à plusieurs réponses exigent aussi leur jeu de valeurs configuré. L'exemple utilise numérique.
+
+Dans les rapports, un résultat oui/non se lit `true` ou `false`, et un résultat date se lit comme la date. Un résultat à plusieurs réponses donne une ligne de résultat par réponse choisie.
 
 ![Choisissez Numeric, Coded ou Text pour le champ de résultat.](test-catalog-guide-parameter-type.png)
 
@@ -350,6 +352,39 @@ Ouvrez les points du panneau de test et sélectionnez **Save**.
 ![Save enregistre les champs de résultat et les intervalles sélectionnés.](test-catalog-guide-parameter-save.png)
 
 **Résultat attendu :** les champs, types de résultat et intervalles de référence sélectionnés sont enregistrés avec le test.
+
+## Régler les limites et l'ordre d'un champ
+
+Faites-le quand un champ peut rester vide, quand une valeur doit rester dans des limites, ou pour changer l'ordre des champs.
+
+1. Ouvrez le menu à points de la ligne du test et sélectionnez **Modifier**.
+2. Ouvrez les points à côté du type d'un champ coché, sous **Paramètres de résultat**.
+3. Sélectionnez **Obligatoire** pour le désactiver quand le champ peut rester vide. Un champ coché est obligatoire tant que vous ne le désactivez pas.
+4. Sélectionnez **Paramètres**. Le panneau **Paramètres du champ** s'ouvre. Seuls les champs numérique, texte et date l'ont.
+5. Remplissez les limites. Un champ numérique a **Minimum**, **Maximum** et **Décimales**. Un champ texte a **Longueur minimale** et **Longueur maximale**. Un champ date a **Dates permises** : **Toute date**, **Dates passées seulement** ou **Dates futures seulement**.
+6. Ouvrez les points de **Paramètres du champ** et sélectionnez **Appliquer**.
+7. Sélectionnez **Monter** ou **Descendre** dans les points d'un champ pour changer sa place.
+8. Ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** le panneau affiche les champs cochés dans l'ordre enregistré, puis les champs non cochés. **Valeurs de référence** suit le même ordre. À la paillasse, un champ non obligatoire est marqué comme facultatif, et ses limites s'affichent dessous. La paillasse affiche les limites et ne refuse pas une valeur en dehors. Le plugin laboratoire la refuse à la saisie du résultat.
+
+## Limiter un intervalle par pays, dates ou grossesse
+
+Faites-le quand un intervalle ne vaut que dans un pays, que pour une période, ou que pendant la grossesse. Chaque intervalle sous **Valeurs de référence** a ces champs sous **Seuil critique haut**.
+
+1. Ouvrez le menu à points de la ligne du test et sélectionnez **Modifier**.
+2. Choisissez le **Pays** de l'intervalle dans la liste des pays, ou laissez **aucune**.
+3. Choisissez les dates **Valable du** et **Valable au**, ou laissez-les vides.
+4. Choisissez **Grossesse** : **enceinte** ou **pas enceinte**. Laissez **toutes** pour un intervalle qui n'en dépend pas.
+5. Choisissez **Source** et **Portée** pour noter d'où vient l'intervalle.
+6. Ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** la paillasse utilise ces champs pour choisir un intervalle.
+
+- Un intervalle avec un pays ne convient que s'il correspond au pays du laboratoire. Réglez-le dans [Laboratoire](/docs/laboratory). Si le laboratoire n'a pas de pays, l'intervalle n'est pas choisi tout seul. Choisissez-le à la paillasse.
+- Un intervalle ne convient pas avant sa date **Valable du** ni après sa date **Valable au**. La paillasse les compare à la date du résultat, ou à aujourd'hui.
+- Un intervalle de grossesse n'est jamais choisi tout seul, car CE n'enregistre pas si une patiente est enceinte. Choisissez-le à la paillasse.
+- **Source** et **Portée** sont de simples étiquettes. Elles ne changent pas l'intervalle qui convient.
 
 ## Définir le délai de rendu et la vérification
 
@@ -420,6 +455,21 @@ Faites-le quand l'examen a besoin d'un champ de résultat qui n'est pas encore d
 7. Ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
 
 **Résultat attendu :** le nouveau champ est coché sur l'examen avec le type choisi, et il apparaît dans **Champs de résultat**. Un code déjà présent dans le dictionnaire est refusé. Donnez un autre code, ou cochez le champ existant.
+
+## Ajouter un autre code pour l'examen
+
+Faites-le quand un autre système de codes désigne le même examen, comme un code national d'acte. Seule une installation qui possède son catalogue peut en ajouter.
+
+1. Ouvrez le panneau de l'examen avec **Ajouter un examen** ou **Modifier**.
+2. Ouvrez les points à côté de **Codages supplémentaires**, sous **LOINC**, et sélectionnez **Ajouter un codage**.
+3. Choisissez le **Système**. La liste affiche les systèmes de codes chargés sur cette installation, sauf LOINC. L'examen a son propre champ LOINC.
+4. Saisissez une partie du code ou du nom dans **Code** et choisissez-le.
+5. Choisissez l'**Usage** : **Supplémentaire**, **Indication**, **Procédure** ou **Catégorie**.
+6. Saisissez une **Note** si besoin.
+7. Ouvrez les points de **Ajouter un codage** et sélectionnez **Enregistrer**.
+8. Ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** le codage s'affiche sous **Codages supplémentaires**, avec son système, son code et son usage. Ses points ont **Modifier** et **Retirer**. Une demande pour cet examen porte d'abord le code LOINC, puis le code du test, puis chaque codage supplémentaire. L'export CSV les met dans la colonne `codings` sous forme de liste JSON, et l'import relit cette colonne. Le même système et le même code deux fois sur un examen sont refusés.
 
 ## Relier un code de test reçu au catalogue
 
@@ -647,6 +697,10 @@ Retirer un test le masque de la liste active par défaut. Il peut être restaur�
 **Un choix n'ajoute aucun champ de résultat.** L'examen avait déjà un champ de résultat, ou le code est un panel. Utilisez **Utiliser le champ de résultat de LOINC** ou **Remplir depuis le panel** dans les points de Paramètres de résultat.
 
 **Un intervalle affiche Pas une unité UCUM.** L'unité gardée n'est pas dans la liste UCUM. Elle est enregistrée telle que saisie. Choisissez la même unité dans la liste si elle existe.
+
+**Un intervalle avec un pays n'est jamais choisi.** Réglez le pays du laboratoire dans [Laboratoire](/docs/laboratory). Ce doit être le même pays que celui de l'intervalle.
+
+**Paramètres manque dans les points d'un champ.** Seuls les champs numérique, texte et date ont des paramètres. **Obligatoire** et les déplacements sont là pour chaque champ.
 
 **La page signale une copie d'entrepôt périmée.** Ouvrez les actions de Observed et choisissez Rebuild warehouse copy. La page signale un échec si la reconstruction est impossible.
 

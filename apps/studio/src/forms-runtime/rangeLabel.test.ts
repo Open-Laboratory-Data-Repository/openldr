@@ -36,4 +36,27 @@ describe('range labels', () => {
     expect(sexLabel({ code: 'other', labels: {} }, 'fr')).toBe('other');
     expect(rangeLabel(band({ sex: 'female' }), sexes, { ...RANGE_EN, language: 'fr' })).toBe('Femme');
   });
+
+  // Plan B, Task 3: pregnancy, country and valid dates say who and when a range is for.
+  it('names pregnancy, country and valid dates after sex and age', () => {
+    expect(criteriaLabel(band({ sex: 'female', ageLow: 15, pregnancy: 'pregnant' }), sexes, RANGE_EN)).toBe('Female 15+ years, pregnant');
+    expect(criteriaLabel(band({ pregnancy: 'not-pregnant' }), sexes, RANGE_EN)).toBe('not pregnant');
+    expect(criteriaLabel(band({ country: 'TZA' }), sexes, RANGE_EN)).toBe('TZA');
+    expect(criteriaLabel(band({ validFrom: '2026-01-01', validTo: '2026-12-31' }), sexes, RANGE_EN)).toBe('valid 2026-01-01 to 2026-12-31');
+    expect(criteriaLabel(band({ validFrom: '2026-01-01' }), sexes, RANGE_EN)).toBe('valid from 2026-01-01');
+    expect(criteriaLabel(band({ validTo: '2026-12-31' }), sexes, RANGE_EN)).toBe('valid until 2026-12-31');
+    expect(criteriaLabel(band({ sex: 'female', pregnancy: 'pregnant', country: 'TZA', validFrom: '2026-01-01' }), sexes, RANGE_EN))
+      .toBe('Female, pregnant, TZA, valid from 2026-01-01');
+  });
+
+  it('takes the pregnancy and validity words from the caller', () => {
+    expect(criteriaLabel(band({ pregnancy: 'pregnant', validTo: '2026-12-31' }), sexes, { pregnant: 'enceinte', validTo: "valable jusqu'au {to}" }))
+      .toBe("enceinte, valable jusqu'au 2026-12-31");
+  });
+
+  it('reads a range with no pregnancy, country or dates as before', () => {
+    expect(criteriaLabel(band({ sex: 'female', ageLow: 15 }), sexes, RANGE_EN)).toBe('Female 15+ years');
+    expect(criteriaLabel(band({}), sexes, RANGE_EN)).toBe('Default');
+  });
 });
+

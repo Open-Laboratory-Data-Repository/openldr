@@ -15,7 +15,7 @@ import {
 import { CONTROLLED_VALUE_SETS } from './facility-controlled-fields';
 import type { AuditDetails } from './record-audit';
 import {
-  CATALOG_EXPORT_COLUMNS, catalogExportRow,
+  CATALOG_EXPORT_COLUMNS, catalogExportRow, readCodingsCell,
   CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS, checkColumnMap, matchCategory, matchSpecimen,
   readCatalogRows, readHoursCell, readYesNoCell, splitSpecimens, suggestCatalogColumns, valueKey,
   type CatalogColumnMap, type CatalogValueMap, type CategoryAnswer,
@@ -69,6 +69,31 @@ export interface SpecimenCoding {
   code: string;
 }
 
+/** What an additional coding on a test is for. Corlix's names (plan B, call 10). Only recorded: nothing
+ *  in CE reads the purpose. */
+export const CODING_PURPOSES = ['ADDITIONAL', 'INDICATION', 'PROCEDURE', 'CATEGORY'] as const;
+export type CodingPurpose = (typeof CODING_PURPOSES)[number];
+
+/** A code from another loaded system that also names this test, such as a SNOMED procedure. */
+export interface TestCoding {
+  system: string;
+  code: string;
+  /** The concept's name in its system, read when the coding is saved. */
+  display: string | null;
+  purpose: CodingPurpose;
+  note: string | null;
+}
+
+/** A coding as a save sends it. The display is read from the system, so one sent here is a fallback.
+ *  The purpose defaults to ADDITIONAL. */
+export interface TestCodingInput {
+  system: string;
+  code: string;
+  display?: string | null;
+  purpose?: string | null;
+  note?: string | null;
+}
+
 export interface CatalogTest {
   /** The internal id. It never changes. */
   code: string;
@@ -81,6 +106,8 @@ export interface CatalogTest {
   /** The result parameters this test yields, in the order the operator wrote them. */
   resultParams: TestResultParam[];
   loinc: string | null;
+  /** Codes from other loaded systems that also name this test, in the order the operator wrote them. */
+  codings: TestCoding[];
   /** false when the test is retired. */
   active: boolean;
   /** Hours from receipt to release the lab aims for, or null when none is set. */
@@ -121,6 +148,8 @@ export interface CatalogTestInput {
   /** Left out keeps what is stored. An empty list clears it. */
   resultParams?: TestResultParam[];
   loinc?: string | null;
+  /** Left out keeps what is stored. An empty list clears it. */
+  codings?: TestCodingInput[];
   /** false retires the test. Retiring is reversible. Defaults to true. */
   active?: boolean;
   /** A positive number of hours. Left out keeps what is stored. null clears it. */
@@ -171,6 +200,9 @@ export interface CatalogOptions {
   ucum: { systemId: string; system: string } | null;
   /** The sexes a range may name, with labels, so the studio names no code (named reference ranges). */
   sexes: SexOption[];
+  /** The countries a range may name: the list a save checks a range's country against. Here, so a
+   *  catalog editor needs no reports.view (the lab identity route) to pick one. Empty when unreadable. */
+  countries: Array<{ code: string; display: string | null }>;
 }
 
 /** A file read for import: its table, and CE's guess at which column feeds which field. */
@@ -290,7 +322,7 @@ export interface TestCatalog {
    *  catalog are ignored. Empty means there is nothing to narrow by (test catalog S4). */
   specimensFor(tests: Array<{ system: string; code: string }>): Promise<CatalogSpecimenOption[]>;
   /** The codings an order writes in front of each catalog test's own (test identity spec, call 7):
-   *  its LOINC when it has an active link, then its Test code. Keyed `system|code` of the test, so by
+   *  its LOINC when it has an active link, then its Test code, then its additional codings (plan B, call 10). Keyed `system|code` of the test, so by
    *  the id. Codings outside the catalog, and ids with no test, are left out. */
   orderCodingsFor(tests: Array<{ system: string; code: string }>): Promise<Map<string, Array<{ system: string; code: string }>>>;
   /** Each test's result parameters, with each parameter's unit, display and the band that fits this
@@ -376,6 +408,27 @@ function toCodings(value: unknown): SpecimenCoding[] {
     .map((c: SpecimenCoding) => ({ system: c.system, code: c.code }));
 }
 
+/** A test's stored codings. An entry that is not a system and a code is skipped; an unknown purpose
+ *  reads as ADDITIONAL. */
+function toTestCodings(value: unknown): TestCoding[] {
+  const parsed = parseJson(value);
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .filter((c) => !!c && typeof c === 'object' && typeof c.system === 'string' && typeof c.code === 'string')
+    .map((c: Record<string, unknown>) => ({
+      system: c.system as string,
+      code: c.code as string,
+      display: typeof c.display === 'string' ? c.display : null,
+      purpose: CODING_PURPOSES.includes(c.purpose as CodingPurpose) ? c.purpose as CodingPurpose : 'ADDITIONAL',
+      note: typeof c.note === 'string' && c.note !== '' ? c.note : null,
+    }));
+}
+
+/** A coding as it is stored: the note only when there is one. */
+function storedCoding(c: TestCoding): Record<string, unknown> {
+  return { system: c.system, code: c.code, display: c.display, purpose: c.purpose, ...(c.note !== null ? { note: c.note } : {}) };
+}
+
 /** A stored TAT, or null when it is missing or not a positive number. */
 function readHours(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
@@ -424,6 +477,7 @@ function toTest(c: ConceptRow, loinc: string | null, lab: LabRow | undefined): C
     specimenTypes: toCodings(p.specimenTypes),
     resultParams: parseResultParams(p.resultParams),
     loinc,
+    codings: toTestCodings(p.codings),
     expectedTatHours: readHours(p.expectedTatHours),
     criticalTatHours: readHours(p.criticalTatHours),
     // Only false is stored, so a test written before these fields reads true.
@@ -449,6 +503,8 @@ type ValidTest = {
   /** undefined means the input left them out, so the stored ones are kept. */
   resultParams: TestResultParam[] | undefined;
   loinc: string | null;
+  /** undefined means the input left them out, so the stored ones are kept. */
+  codings: TestCoding[] | undefined;
   active: boolean;
   /** undefined means the input left it out, so the stored value is kept. */
   expectedTatHours: number | null | undefined;
@@ -467,6 +523,10 @@ interface CheckContext {
   knownLoinc: Set<string>;
   /** The codes of CE's country value set, which a range's country must be one of. */
   countries: Set<string>;
+  /** The urls of the coding systems loaded here, which a coding's system must be one of. */
+  codingSystems: Set<string>;
+  /** The codings asked about that their system holds, keyed system|code, with the concept's name. */
+  knownCodings: Map<string, string | null>;
 }
 
 /** A row the import will write. */
@@ -487,7 +547,8 @@ function sameTest(a: CatalogTest, b: ValidTest): boolean {
     && a.specimenTypes.map(codingKey).join('\n') === b.specimenTypes.map(codingKey).join('\n')
     && (b.expectedTatHours === undefined || a.expectedTatHours === b.expectedTatHours)
     && (b.criticalTatHours === undefined || a.criticalTatHours === b.criticalTatHours)
-    && (b.requiresVerification === undefined || a.requiresVerification === b.requiresVerification);
+    && (b.requiresVerification === undefined || a.requiresVerification === b.requiresVerification)
+    && (b.codings === undefined || JSON.stringify(a.codings) === JSON.stringify(b.codings));
 }
 
 function isLoincLink(m: TermMapping): boolean {
@@ -805,6 +866,47 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     }
   }
 
+  /**
+   * A test's codings as sent, checked (plan B, call 10). The system must be loaded here and hold the
+   * code; the catalog's own systems are refused, because an order already carries the Test code and
+   * the id. The name is read from the system, so it follows the concept. Two codings may not share a
+   * system and code.
+   */
+  function checkCodings(codings: unknown, ctx: CheckContext): TestCoding[] | undefined {
+    if (codings === undefined) return undefined;
+    if (!Array.isArray(codings)) throw invalid('Codings must be a list.');
+    const out: TestCoding[] = [];
+    const seen = new Set<string>();
+    codings.forEach((raw: unknown, i: number) => {
+      const where = `Coding ${i + 1}`;
+      const c = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+      const system = typeof c.system === 'string' ? c.system.trim() : '';
+      const code = typeof c.code === 'string' ? c.code.trim() : '';
+      if (!system) throw invalid(`${where} needs a system.`);
+      if (!code) throw invalid(`${where} needs a code.`);
+      if (system === TEST_CATALOG_SYSTEM || system === TEST_CODE_SYSTEM) {
+        throw invalid(`${where}: ${system} holds the catalog's own codes, so it cannot be an additional coding.`);
+      }
+      // A test has one LOINC code, its mapping (review I1), so ServiceRequest.code never carries two.
+      if (system === LOINC_SYSTEM) throw invalid(`${where} is a LOINC code. A test has one LOINC code: put it in the LOINC field.`);
+      if (!ctx.codingSystems.has(system)) throw invalid(`${where} names the system ${system}, which is not loaded on this install.`);
+      const key = `${system}|${code}`;
+      if (!ctx.knownCodings.has(key)) throw invalid(`${where}: ${code} is not in ${system}.`);
+      const purpose = c.purpose === undefined || c.purpose === null || c.purpose === '' ? 'ADDITIONAL' : c.purpose;
+      if (!CODING_PURPOSES.includes(purpose as CodingPurpose)) {
+        throw invalid(`${where} has the purpose ${JSON.stringify(purpose)}. Use ADDITIONAL, INDICATION, PROCEDURE or CATEGORY.`);
+      }
+      if (seen.has(key)) throw invalid(`${where} repeats ${system} ${code}.`);
+      seen.add(key);
+      const sent = typeof c.display === 'string' ? clean(c.display) : null;
+      out.push({
+        system, code, display: ctx.knownCodings.get(key) ?? sent, purpose: purpose as CodingPurpose,
+        note: typeof c.note === 'string' ? clean(c.note) : null,
+      });
+    });
+    return out;
+  }
+
   /** A TAT as sent: undefined and null pass through, anything else must be a positive number of hours. */
   function checkHours(what: string, value: unknown): number | null | undefined {
     if (value === undefined || value === null) return value;
@@ -904,13 +1006,25 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (requiresVerification !== undefined && typeof requiresVerification !== 'boolean') {
       throw invalid('Requires verification must be true or false.');
     }
+    const codings = checkCodings(input.codings, ctx);
     return {
-      testCode, display, shortName: clean(input.shortName), category, specimenTypes, resultParams, loinc, active: input.active ?? true,
+      testCode, display, shortName: clean(input.shortName), category, specimenTypes, resultParams, loinc, codings, active: input.active ?? true,
       expectedTatHours, criticalTatHours, requiresVerification,
     };
   }
 
-  async function loadCheckContext(loincCodes: string[]): Promise<CheckContext> {
+  /** The codings a save names, as sent, so the context can look up only those. */
+  function codingsAsked(codings: unknown): Array<{ system: string; code: string }> {
+    if (!Array.isArray(codings)) return [];
+    return codings.flatMap((raw: unknown) => {
+      const c = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+      const system = typeof c.system === 'string' ? c.system.trim() : '';
+      const code = typeof c.code === 'string' ? c.code.trim() : '';
+      return system && code ? [{ system, code }] : [];
+    });
+  }
+
+  async function loadCheckContext(loincCodes: string[], codings: Array<{ system: string; code: string }> = []): Promise<CheckContext> {
     const [categories, specimens, params, loaded, countries] = await Promise.all([
       expandEntries(TEST_CATEGORY_VALUE_SET), expandEntries(SPECIMEN_TYPE_VALUE_SET),
       expandEntries(RESULT_PARAM_VALUE_SET), loincLoaded(),
@@ -931,15 +1045,34 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         for (const f of found) knownLoinc.add(f.code);
       }
     }
+    // Only the systems and codes asked about are read, so a save with no codings reads nothing more.
+    const codingSystems = new Set<string>();
+    const knownCodings = new Map<string, string | null>();
+    const systems = [...new Set(codings.map((c) => c.system))];
+    if (systems.length) {
+      const rows = await db.selectFrom('coding_systems').select('url').where('url', 'in', systems).execute();
+      for (const r of rows) if (r.url) codingSystems.add(r.url);
+      for (const system of codingSystems) {
+        const wantedCodes = [...new Set(codings.filter((c) => c.system === system).map((c) => c.code))];
+        for (let i = 0; i < wantedCodes.length; i += LOINC_LOOKUP_CHUNK) {
+          const found = await db.selectFrom('terminology_concepts').select(['code', 'display'])
+            .where('system', '=', system).where('code', 'in', wantedCodes.slice(i, i + LOINC_LOOKUP_CHUNK))
+            // A DRAFT concept is a stub, such as one an earlier mapping left, not a real code. NULL counts.
+            .where((eb) => eb.or([eb('status', 'is', null), eb('status', '!=', 'DRAFT')]))
+            .execute();
+          for (const f of found) knownCodings.set(`${system}|${f.code}`, f.display ?? null);
+        }
+      }
+    }
     return {
       categories, specimens, resultParams: new Set(params.map((p) => p.code)), loincLoaded: loaded, knownLoinc,
-      countries: new Set(countries.map((c) => c.code)),
+      countries: new Set(countries.map((c) => c.code)), codingSystems, knownCodings,
     };
   }
 
   async function validate(input: CatalogTestInput): Promise<ValidTest> {
     const loinc = clean(input.loinc);
-    return checkTest(input, await loadCheckContext(loinc ? [loinc] : []));
+    return checkTest(input, await loadCheckContext(loinc ? [loinc] : [], codingsAsked(input.codings)));
   }
 
   async function storedConcept(code: string): Promise<{ properties: unknown } | undefined> {
@@ -973,6 +1106,11 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (t.resultParams !== undefined) {
       delete next.resultParams;
       if (t.resultParams.length) next.resultParams = t.resultParams;
+    }
+    // The same for codings: undefined keeps them, an empty list clears.
+    if (t.codings !== undefined) {
+      delete next.codings;
+      if (t.codings.length) next.codings = t.codings.map(storedCoding);
     }
     if (t.expectedTatHours !== undefined) {
       delete next.expectedTatHours;
@@ -1086,10 +1224,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   }
 
   async function options(): Promise<CatalogOptions> {
-    const [categories, specimenTypes, resultParams] = await Promise.all([
+    const [categories, specimenTypes, resultParams, countries] = await Promise.all([
       expandEntries(TEST_CATEGORY_VALUE_SET),
       expandEntries(SPECIMEN_TYPE_VALUE_SET),
       expandEntries(RESULT_PARAM_VALUE_SET),
+      // As the save reads it: an unreadable list offers none rather than failing the sheet.
+      expandEntries(CONTROLLED_VALUE_SETS.country).catch(() => []),
     ]);
     let loinc: CatalogOptions['loinc'] = null;
     if (await loincLoaded()) {
@@ -1104,6 +1244,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       loinc,
       ucum: ucumRow ? { systemId: ucumRow.id, system: UCUM_SYSTEM } : null,
       sexes: SEX_OPTIONS,
+      countries: countries.map(({ code, display }) => ({ code, display })).sort(byLabel),
     };
   }
 
@@ -1181,7 +1322,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       .where('system', '=', TEST_CATALOG_SYSTEM).execute()).map((r) => [r.code, r.properties as unknown]));
     // Each earlier Test code and the test it still names on earlier orders.
     const byPrevious = new Map(all.flatMap((t) => previousTestCodesOf(storedByCode.get(t.code)).map((c) => [testCodeKey(c), t] as const)));
-    const ctx = await loadCheckContext(rows.flatMap((r) => (r.values.loinc ? [r.values.loinc] : [])));
+    // A codings cell is JSON. One that does not read is refused on its row below.
+    const codingCells = new Map(rows.map((r) => [r.line, readCodingsCell(r.values.codings)]));
+    const ctx = await loadCheckContext(
+      rows.flatMap((r) => (r.values.loinc ? [r.values.loinc] : [])),
+      [...codingCells.values()].flatMap((c) => (c === 'bad' ? [] : codingsAsked(c))),
+    );
     const answers = input.valueMap ?? { categories: [], specimens: [] };
     const toAdd = await newCategories(answers.categories);
     // A row may use a category this import adds.
@@ -1298,6 +1444,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         if (read === 'bad') problems.push(`Requires verification "${v.requiresVerification}" must be yes or no.`);
         else requiresVerification = read;
       }
+      const codings = codingCells.get(line);
+      if (codings === 'bad') problems.push(`Codings "${v.codings}" must be a JSON list of codings.`);
       if (problems.length) {
         report.refused.push({ line, code, reason: problems.join(' ') });
         continue;
@@ -1316,6 +1464,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         ...(expectedTatHours !== undefined ? { expectedTatHours } : {}),
         ...(criticalTatHours !== undefined ? { criticalTatHours } : {}),
         ...(requiresVerification !== undefined ? { requiresVerification } : {}),
+        // The cell is checked as sent, as a route body or a CLI file is (checkCodings).
+        ...(codings !== undefined && codings !== 'bad' ? { codings: codings as TestCodingInput[] } : {}),
       };
       let test: ValidTest;
       try {
@@ -1442,6 +1592,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       return [`${TEST_CATALOG_SYSTEM}|${c.code}`, [
         ...(link ? [{ system: LOINC_SYSTEM, code: link }] : []),
         { system: TEST_CODE_SYSTEM, code: testCodeOf(c.code, c.properties) },
+        // Plan B, call 10: the additional codings after the Test code, so the first coding, which the
+        // warehouse keeps as panel_code, does not change.
+        // A LOINC coding left in stored data is dropped: the LOINC link above is the test's one LOINC.
+        ...toTestCodings(((parseJson(c.properties) ?? {}) as Record<string, unknown>).codings)
+          .filter((k) => k.system !== LOINC_SYSTEM)
+          .map((k) => ({ system: k.system, code: k.code })),
       ]];
     }));
   }

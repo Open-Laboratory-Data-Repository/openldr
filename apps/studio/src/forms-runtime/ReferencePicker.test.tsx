@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ReferencePicker } from './ReferencePicker';
+import { useState } from 'react';
+import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
 
 // ⛔ Do not add a per-call `{ timeout: N }` to any `findBy*`/`waitFor` in this file.
 // `setupTests.ts` already raises the default async-utility budget to 15000ms
@@ -327,4 +328,26 @@ describe('ReferencePicker: catalog tests', () => {
     await user.click(screen.getByText('Haemoglobin'));
     expect(onChange).toHaveBeenCalledWith({ system: 'urn:openldr:codesystem:test-catalog', code: 'tst-0123456789abcdef', display: 'Haemoglobin' });
   });
+
+  // Carried into plan B, Task 3: the chosen chip reads the Test code too, never the id.
+  it('shows the Test code on the chosen chip, and only the name for a saved answer with none in hand', async () => {
+    vi.mocked(referenceSearch).mockResolvedValue({
+      kind: 'coding',
+      rows: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'tst-0123456789abcdef', display: 'Haemoglobin', testCode: 'HB' }],
+      total: 1,
+    });
+    const user = userEvent.setup();
+    function Host() {
+      const [value, setValue] = useState<ReferenceValue[] | null>([{ system: 'urn:openldr:codesystem:test-catalog', code: 'tst-fedcba9876543210', display: 'Glucose' }]);
+      return <ReferencePicker field={testsField} formDefinitionId="f1" multiple value={value} onChange={(v) => setValue(v as ReferenceValue[] | null)} />;
+    }
+    render(<Host />);
+    expect(screen.getByText('Glucose')).toBeInTheDocument();
+    expect(screen.queryByText('tst-fedcba9876543210')).not.toBeInTheDocument();
+    await user.type(screen.getByRole('combobox'), 'hb');
+    await user.click(await screen.findByText('Haemoglobin'));
+    expect(screen.getByText('HB')).toBeInTheDocument();
+    expect(screen.queryByText('tst-0123456789abcdef')).not.toBeInTheDocument();
+  });
 });
+

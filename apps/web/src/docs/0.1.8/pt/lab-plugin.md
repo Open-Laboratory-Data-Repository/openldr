@@ -43,7 +43,11 @@ Limite cada utilizador de local à sua unidade com `openldr users scope <user> -
 
 Quando um validador valida um resultado, o plugin envia ao CE um ServiceRequest para a análise, um Specimen para cada amostra, uma Observation por parâmetro de resultado, e uma Provenance que diz quem o validou. Cada Observation é `final`. Leva o valor e a unidade, o sinalizador em `interpretation`, e o intervalo em `referenceRange`, com o nome do intervalo como `text`. O `subject` de cada registo é a ficha do paciente no CE. O CE guarda-os como os registos de qualquer outra fonte, e o seu armazém preenche `lab_requests` e `lab_results`, por isso os resultados aparecem nos relatórios e painéis.
 
-O plugin mostra o código de teste às pessoas. Envia o teste como uma codificação com o sistema `urn:openldr:codesystem:test-catalog:test-code` e o código de teste, ao lado da codificação LOINC quando há uma. Envia também o identificador fixo como codificação em `urn:openldr:codesystem:test-catalog`.
+O plugin mostra o código de teste às pessoas. Envia o teste como uma codificação com o sistema `urn:openldr:codesystem:test-catalog:test-code` e o código de teste. A codificação LOINC vem primeiro quando há uma, depois o código de teste, depois as codificações adicionais do teste, depois o identificador fixo como codificação em `urn:openldr:codesystem:test-catalog`.
+
+Um resultado sim/não segue como `valueBoolean` e uma data como `valueDateTime`. Um campo de várias respostas envia uma Observation por resposta. No armazém, um sim/não chega como o texto `true` ou `false`, uma data como a data, e várias respostas como uma linha cada.
+
+O plugin recusa um campo obrigatório vazio e um valor fora dos limites do campo definidos no catálogo de testes. Um campo opcional pode ficar vazio. Use o plugin publicado com este CE. Um plugin mais antigo trata os campos sim/não, data e de várias respostas como texto e recusa-os.
 
 Uma análise rejeitada chega ao CE quando a rejeição é definitiva: logo, se for rejeitada sem nova colheita, ou quando o seu pedido de nova colheita é ligado. Chega como um ServiceRequest `revoked` com o motivo da rejeição, que preenche `lab_requests.rejection_code` e `rejection_reason`.
 

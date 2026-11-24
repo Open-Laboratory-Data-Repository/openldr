@@ -34,6 +34,7 @@ const STEP_TITLE: Record<Step, string> = {
 // id is the test's internal id, as an export writes it. code is the Test code.
 const FIELDS: CatalogImportField[] = [
   'id', 'code', 'name', 'shortName', 'loinc', 'category', 'specimenTypes', 'expectedTatHours', 'criticalTatHours', 'requiresVerification',
+  'codings',
 ];
 const NO_ANSWERS: CatalogValueMap = { categories: [], specimens: [] };
 /** Radix Select cannot hold an empty value, so these stand in for "no choice" in the pickers only. */

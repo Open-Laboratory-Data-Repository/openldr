@@ -94,6 +94,13 @@ const resultParam = z.object({
   ...(p.maxLength != null ? { maxLength: p.maxLength } : {}),
   ...(p.dateLimit != null && p.dateLimit !== 'any' ? { dateLimit: p.dateLimit } : {}),
 }));
+// An additional coding (plan B, call 10). Only the shape is checked here. The service refuses a blank
+// system or code, a system not loaded, a code not in it, an unknown purpose and a repeat, in the words
+// the CLI and an import also get.
+const testCoding = z.object({
+  system: z.string(), code: z.string(),
+  display: z.string().nullish(), purpose: z.string().nullish(), note: z.string().nullish(),
+});
 const testInput = z.object({
   // The national code. Required on create; left out of an update, the stored one stays. The test's
   // id is the :code in the path and never changes.
@@ -104,6 +111,8 @@ const testInput = z.object({
   specimenTypes: z.array(coding).optional(),
   resultParams: z.array(resultParam).optional(),
   loinc: z.string().nullish(),
+  // Left out keeps the stored codings. An empty list clears them.
+  codings: z.array(testCoding).optional(),
   active: z.boolean().optional(),
   // Hours. A number is required here; the service refuses one that is not positive, so the CLI and an
   // import refuse the same values in the same words.

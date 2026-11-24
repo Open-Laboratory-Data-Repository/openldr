@@ -84,7 +84,14 @@ export function EntrySheet({ entryId, onClose }: { entryId: string | null; onClo
               ) : (
                 <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3">
                   {entry.answers.map((a, i) => (
-                    <Fragment key={`${a.fieldId}-${i}`}><Row label={a.label}>{a.value}</Row></Fragment>
+                    <Fragment key={`${a.fieldId}-${i}`}>
+                      <Row label={a.label}>
+                        {/* A yes/no is stored as true or false and shown in the reader's language. */}
+                        {a.parts
+                          ? a.parts.map((p) => (typeof p === 'boolean' ? t(p ? 'forms.entryYes' : 'forms.entryNo') : p)).join(', ')
+                          : a.value}
+                      </Row>
+                    </Fragment>
                   ))}
                 </div>
               )}

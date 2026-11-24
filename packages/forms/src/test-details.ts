@@ -36,14 +36,17 @@ export interface ResultBandRef {
   scope?: 'global' | 'national' | 'facility'
 }
 
-/** Mirrors @openldr/bootstrap's ResultType. parseTestDetails reads a type it does not carry yet
- *  (boolean, date, multicoded) as text. */
+/** Mirrors @openldr/bootstrap's ResultType. parseTestDetails reads a type it does not know as text. */
 export type TypedResultType = 'numeric' | 'coded' | 'text' | 'boolean' | 'date' | 'multicoded'
+
+const RESULT_TYPES: readonly TypedResultType[] = ['numeric', 'coded', 'text', 'boolean', 'date', 'multicoded']
 
 export interface TypedResult {
   param: { system: string; code: string }
   resultType: TypedResultType
-  value: number | string | ResultCoding | null
+  /** A number for numeric, a coding for coded, true or false for boolean, a YYYY-MM-DD string for
+   *  date, one or more codings for multicoded, and a string for text. Null when nothing is typed. */
+  value: number | string | boolean | ResultCoding | ResultCoding[] | null
   unit?: string | null
   band?: ResultBandRef | null
 }
@@ -64,6 +67,22 @@ function coding(value: unknown): ResultCoding | null {
   return { system: c.system, code: c.code, ...(typeof c.display === 'string' ? { display: c.display } : {}) }
 }
 
+/** The value read for its type. A value of the wrong kind reads as nothing typed. */
+function valueFor(resultType: TypedResultType, raw: unknown): TypedResult['value'] {
+  switch (resultType) {
+    case 'coded': return coding(raw)
+    case 'numeric': return typeof raw === 'number' ? raw : null
+    case 'boolean': return typeof raw === 'boolean' ? raw : null
+    // A FHIR date, so the Observation's valueDateTime is one too.
+    case 'date': return typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null
+    case 'multicoded': {
+      const codings = (Array.isArray(raw) ? raw : []).flatMap((c) => { const one = coding(c); return one ? [one] : [] })
+      return codings.length > 0 ? codings : null
+    }
+    default: return typeof raw === 'string' ? raw : null
+  }
+}
+
 export function parseTestDetails(value: unknown): TestDetailsAnswer {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const out: TestDetailsAnswer = {}
@@ -79,12 +98,8 @@ export function parseTestDetails(value: unknown): TestDetailsAnswer {
         const entry = r as Record<string, unknown>
         const param = coding(entry.param)
         if (!param) return []
-        const resultType = entry.resultType === 'numeric' || entry.resultType === 'coded' ? entry.resultType : 'text'
-        const value = resultType === 'coded'
-          ? coding(entry.value)
-          : resultType === 'numeric'
-            ? (typeof entry.value === 'number' ? entry.value : null)
-            : (typeof entry.value === 'string' ? entry.value : null)
+        const resultType = (RESULT_TYPES as readonly unknown[]).includes(entry.resultType) ? entry.resultType as TypedResultType : 'text'
+        const value = valueFor(resultType, entry.value)
         const typed: TypedResult = { param: { system: param.system, code: param.code }, resultType, value }
         if (typeof entry.unit === 'string') typed.unit = entry.unit
         if (entry.band && typeof entry.band === 'object') typed.band = entry.band as TypedResult['band']
@@ -119,8 +134,15 @@ export function testDetailItems(answer: TestDetailsAnswer): QuestionnaireRespons
       const link = `${key}#${result.param.system}|${result.param.code}`
       if (result.resultType === 'numeric' && typeof result.value === 'number') {
         item.push({ linkId: link, answer: [{ valueQuantity: { value: result.value, ...(result.unit ? { unit: result.unit } : {}) } }] })
-      } else if (result.resultType === 'coded' && typeof result.value === 'object') {
+      } else if (result.resultType === 'coded' && typeof result.value === 'object' && !Array.isArray(result.value)) {
         item.push({ linkId: link, answer: [{ valueCoding: fhirCoding(result.value as ResultCoding) }] })
+      } else if (result.resultType === 'multicoded' && Array.isArray(result.value)) {
+        // One answer per chosen code, so the response says each one in FHIR's own way.
+        item.push({ linkId: link, answer: result.value.map((c) => ({ valueCoding: fhirCoding(c) })) })
+      } else if (result.resultType === 'boolean' && typeof result.value === 'boolean') {
+        item.push({ linkId: link, answer: [{ valueBoolean: result.value }] })
+      } else if (result.resultType === 'date' && typeof result.value === 'string') {
+        item.push({ linkId: link, answer: [{ valueDate: result.value }] })
       } else if (typeof result.value === 'string') {
         item.push({ linkId: link, answer: [{ valueString: result.value }] })
       }

@@ -78,7 +78,7 @@ describe('FirstRunPage, step 1', () => {
     expect(screen.getByText('Step 1 of 3')).toBeInTheDocument();
     const name = await screen.findByLabelText('Laboratory name');
     expect(name).toHaveValue('Central Lab');
-    expect(button('Africa/Maputo')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Africa/Maputo' })).toBeInTheDocument();
     fireEvent.change(name, { target: { value: 'Mbeya Lab' } });
     fireEvent.click(button('Save'));
     expect(await screen.findByRole('heading', { name: 'Sample data' })).toBeInTheDocument();
@@ -92,9 +92,9 @@ describe('FirstRunPage, step 1', () => {
     vi.mocked(api.fetchLabIdentity).mockResolvedValue(identity({ 'lab.name': 'Central Lab', 'lab.timezone': '' }) as never);
     page();
     await screen.findByLabelText('Laboratory name');
-    fireEvent.click(button('Pacific/Fiji'));
+    fireEvent.click(screen.getByRole('combobox', { name: 'Pacific/Fiji' }));
     const list = within(await screen.findByRole('dialog'));
-    const options = list.getAllByRole('button');
+    const options = list.getAllByRole('option');
     expect(options[0]).toHaveTextContent('Pacific/Fiji');
     // The real list, from Intl.supportedValuesOf, with the browser zone only once.
     expect(options.length).toBeGreaterThan(300);

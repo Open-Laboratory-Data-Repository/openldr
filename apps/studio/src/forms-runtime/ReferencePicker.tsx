@@ -9,7 +9,11 @@ import { cn } from '@/lib/cn';
 
 export type ReferenceValue = CodingAnswer | EntityAnswer;
 
-interface Row { key: string; display: string; secondary: string | null; value: ReferenceValue }
+interface Row {
+  key: string; display: string; secondary: string | null; value: ReferenceValue;
+  /** A catalog test's Test code, shown on its chip once chosen. The answer keeps only the id. */
+  testCode?: string;
+}
 
 function toRows(res: ReferenceSearchResponse): Row[] {
   return res.kind === 'entity'
@@ -21,6 +25,7 @@ function toRows(res: ReferenceSearchResponse): Row[] {
         // A catalog test's row reads its Test code. Its code is the internal id, which stays the answer.
         key: `${r.system}|${r.code}`, display: r.display ?? r.code, secondary: r.testCode ?? r.code,
         value: { system: r.system, code: r.code, display: r.display },
+        ...(r.testCode ? { testCode: r.testCode } : {}),
       }));
 }
 
@@ -118,6 +123,9 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
   const narrowed = offered ?? narrowTo;
 
   const selected: ReferenceValue[] = value == null ? [] : Array.isArray(value) ? value : [value];
+  // The Test code of each test picked here, by key. A saved answer carries no Test code, so its chip
+  // shows the name alone (and the code only when it has no name, as before).
+  const [testCodes, setTestCodes] = useState<Record<string, string>>({});
 
   // Neither a stored form to scope the search to nor an explicit preview opt-in: there is no
   // endpoint this picker may legitimately call, so it degrades to a read-only state instead of
@@ -171,6 +179,8 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
   }, [open]);
 
   const pick = (row: Row): void => {
+    const testCode = row.testCode;
+    if (testCode) setTestCodes((m) => ({ ...m, [row.key]: testCode }));
     if (multiple) {
       if (!selected.some((s) => keyOf(s) === keyOf(row.value))) onChange([...selected, row.value]);
     } else {
@@ -242,7 +252,10 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
                 ? 'inline-flex items-center gap-1 rounded-md border border-input px-2 py-0.5 text-xs'
                 : 'flex w-full items-center justify-between gap-2 text-sm'}
             >
-              <TruncatedText text={labelOf(v)} className="min-w-0" />
+              <span className="flex min-w-0 items-center gap-1">
+                <TruncatedText text={labelOf(v)} className="min-w-0" />
+                {testCodes[keyOf(v)] && <span className="shrink-0 text-muted-foreground">{testCodes[keyOf(v)]}</span>}
+              </span>
               <Button
                 type="button" variant="ghost" size="icon"
                 aria-label={`Clear ${labelOf(v)}`}

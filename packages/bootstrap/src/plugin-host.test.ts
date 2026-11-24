@@ -334,6 +334,14 @@ describe('plugin host: ce_read', () => {
     expect(((await fns.ce_read({ op: 'testCatalog.list', input: {} })) as any).result.rows[0]).toMatchObject(fields);
   });
 
+  it('testCatalog.get answers the additional codings as the catalog gives them (plan B, Task 5)', async () => {
+    const codings = [{ system: 'urn:test:cs:extra', code: 'X1', display: 'Extra one', purpose: 'INDICATION', note: null }];
+    const test = { code: 'HB', codings, lab: {} };
+    const deps = fakeDeps({ testCatalog: { list: vi.fn(async () => ({ rows: [test], total: 1 })), get: vi.fn(async () => test) } as any });
+    const fns = createPluginHost(deps).forCall(plugin([{ kind: 'host:ce-read' }]), SITE);
+    expect(((await fns.ce_read({ op: 'testCatalog.get', input: { code: 'HB' } })) as any).result.codings).toEqual(codings);
+  });
+
   it('testCatalog.get finds a test by its id, and get and list answer its Test code beside it', async () => {
     const test = { code: 'tst-0123456789abcdef', testCode: 'HB', display: 'Haemoglobin', lab: {} };
     const get = vi.fn(async (c: string) => (c === test.code ? test : null));

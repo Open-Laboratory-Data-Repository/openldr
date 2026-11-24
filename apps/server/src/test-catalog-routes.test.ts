@@ -19,7 +19,7 @@ function memorySettings() {
 const TEST: CatalogTest = {
   code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
   specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD' }], resultParams: [], loinc: '25836-8', active: true,
-  expectedTatHours: 48, criticalTatHours: 72, requiresVerification: true,
+  expectedTatHours: 48, criticalTatHours: 72, requiresVerification: true, codings: [],
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
@@ -30,6 +30,7 @@ const OPTIONS: CatalogOptions = {
   loinc: null,
   ucum: { systemId: 'cs-ucum-seed', system: 'http://unitsofmeasure.org' },
   sexes: [{ code: 'female', labels: { en: 'Female', fr: 'Femme', pt: 'Feminino' } }],
+  countries: [{ code: 'TZA', display: 'Tanzania' }],
 };
 
 const REPORT: CatalogImportReport = {
@@ -209,6 +210,15 @@ describe('test catalog routes', () => {
       { method: 'setLabSettings', args: ['HIVVL', body] },
     ]);
     expect(audit).toMatchObject([{ action: 'test_catalog.lab_settings', entityType: 'test_catalog', entityId: 'HIVVL', before: TEST.lab, after: TEST.lab }]);
+  });
+
+  // The Test sheet's range country picker reads the list here. /api/settings/lab needs reports.view,
+  // which a catalog editor may not hold, so the list must come with terminology.view alone.
+  it('GET /api/test-catalog/options gives the country list to a catalog editor without reports.view', async () => {
+    const { ctx } = fakeCtx();
+    const res = await appWith(ctx, ['terminology.view']).inject({ method: 'GET', url: '/api/test-catalog/options' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().countries).toEqual([{ code: 'TZA', display: 'Tanzania' }]);
   });
 
   it('GET /api/test-catalog/options returns the picker choices and needs terminology.view', async () => {
@@ -531,6 +541,31 @@ describe('test catalog routes', () => {
     expect((await app.inject({ method: 'POST', url: '/api/test-catalog', payload: body })).statusCode).toBe(201);
     expect((await app.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL', payload: body })).statusCode).toBe(200);
     expect(calls.filter((c) => c.method !== 'get').map((c) => c.args.at(-1))).toEqual([body, body]);
+  });
+
+  it('carries the additional codings through a create and an update, and keeps them out when not sent', async () => {
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    const codings = [
+      { system: 'urn:test:cs:extra', code: 'X1', display: 'Extra one', purpose: 'INDICATION', note: 'why' },
+      { system: 'urn:test:cs:extra', code: 'X2' },
+    ];
+    const body = { testCode: 'HIVVL', display: 'HIV viral load', codings };
+    expect((await app.inject({ method: 'POST', url: '/api/test-catalog', payload: body })).statusCode).toBe(201);
+    expect((await app.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL', payload: body })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL', payload: { display: 'HIV viral load' } })).statusCode).toBe(200);
+    const sent = calls.filter((c) => c.method !== 'get').map((c) => c.args.at(-1) as { codings?: unknown });
+    expect(sent.map((s) => s.codings)).toEqual([codings, codings, undefined]);
+  });
+
+  it('refuses codings that are not a list of objects before the store', async () => {
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    for (const codings of ['X1', [{ code: 'X1' }], [{ system: 'urn:test:cs:extra', code: 5 }]]) {
+      const res = await app.inject({ method: 'POST', url: '/api/test-catalog', payload: { display: 'X', codings } });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(calls).toEqual([]);
   });
 
   it('refuses a turnaround time that is not a number, and a verification switch that is not a boolean, before the store', async () => {

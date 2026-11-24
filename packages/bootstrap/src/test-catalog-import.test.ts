@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   suggestCatalogColumns, checkColumnMap, readCatalogRows, splitSpecimens, valueKey,
-  matchCategory, matchSpecimen, catalogExportRow, CATALOG_EXPORT_HEADERS,
+  matchCategory, matchSpecimen, catalogExportRow, CATALOG_EXPORT_HEADERS, readCodingsCell,
   catalogColumnMapSchema, catalogValueMapSchema, readHoursCell, readYesNoCell,
 } from './test-catalog-import';
 import type { CatalogTest } from './test-catalog';
@@ -28,6 +28,7 @@ describe('suggestCatalogColumns', () => {
     expect(suggestCatalogColumns([...CATALOG_EXPORT_HEADERS])).toEqual({
       id: 'id', code: 'code', name: 'name', shortName: 'short_name', loinc: 'loinc', category: 'category', specimenTypes: 'specimen_types',
       expectedTatHours: 'expected_tat_hours', criticalTatHours: 'critical_tat_hours', requiresVerification: 'requires_verification',
+      codings: 'codings',
     });
   });
 
@@ -83,12 +84,27 @@ describe('catalogExportRow', () => {
       code: 'tst-0123456789abcdef', testCode: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL',
       specimenTypes: [{ system: LOCAL, code: 'BLD' }, { system: LOCAL, code: 'UR' }], resultParams: [],
       loinc: '25836-8', active: true, expectedTatHours: 0.5, criticalTatHours: null, requiresVerification: false,
+      codings: [
+        { system: 'urn:test:cs:extra', code: 'X1', display: 'Extra one', purpose: 'ADDITIONAL', note: null },
+        { system: 'urn:test:cs:extra', code: 'X2', display: null, purpose: 'CATEGORY', note: 'kept' },
+      ],
       lab: { enabled: true, specimenTypes: null, localDisplay: 'VL' },
     };
     expect(catalogExportRow(test)).toEqual({
       id: 'tst-0123456789abcdef', code: 'HIVVL', name: 'HIV viral load', short_name: '', loinc: '25836-8', category: 'MOL', specimen_types: 'BLD;UR',
       expected_tat_hours: '0.5', critical_tat_hours: '', requires_verification: 'no',
+      codings: '[{"system":"urn:test:cs:extra","code":"X1","display":"Extra one","purpose":"ADDITIONAL"},'
+        + '{"system":"urn:test:cs:extra","code":"X2","display":null,"purpose":"CATEGORY","note":"kept"}]',
     });
+    expect(catalogExportRow({ ...test, codings: [] }).codings).toBe('');
+  });
+
+  it('reads a codings cell as a JSON list, empty as none, and anything else as bad', () => {
+    expect(readCodingsCell(undefined)).toBeUndefined();
+    expect(readCodingsCell('')).toEqual([]);
+    expect(readCodingsCell('[{"system":"s","code":"c"}]')).toEqual([{ system: 's', code: 'c' }]);
+    expect(readCodingsCell('{"system":"s"}')).toBe('bad');
+    expect(readCodingsCell('X1')).toBe('bad');
   });
 });
 

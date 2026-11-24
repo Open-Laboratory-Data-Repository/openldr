@@ -24,8 +24,13 @@ export function projectObservation(r: Record<string, unknown>, prov: Provenance)
   const absent = codeable(r['dataAbsentReason']);
   const comparator = str(quantity?.['comparator']);
   const numericValue = num(quantity?.['value']);
-  const textValue = valueCc.text ?? str(r['valueString']);
-  const resultType = numericValue != null ? 'NM' : valueCc.code ? 'CE' : textValue ? 'ST' : null;
+  // Plan B, call 6: no schema change. A yes/no lands as ST with the text true or false, and a date
+  // as DT with the ISO date as its text.
+  const booleanValue = typeof r['valueBoolean'] === 'boolean' ? String(r['valueBoolean']) : null;
+  const dateValue = str(r['valueDateTime']);
+  const textValue = valueCc.text ?? str(r['valueString']) ?? booleanValue ?? dateValue;
+  const resultType = numericValue != null ? 'NM' : valueCc.code ? 'CE' : booleanValue !== null ? 'ST'
+    : dateValue !== null ? 'DT' : textValue ? 'ST' : null;
   return {
     id: String(r['id']),
     request_id: referenceId((r['basedOn'] as unknown[] | undefined)?.[0]),

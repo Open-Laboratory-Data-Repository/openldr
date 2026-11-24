@@ -21,6 +21,7 @@ export function MultiSelect({
   placeholder,
   removeLabel,
   className,
+  id,
   'aria-label': ariaLabel,
 }: {
   options: MultiSelectOption[];
@@ -31,6 +32,8 @@ export function MultiSelect({
   /** The remove action's accessible name for one chip. */
   removeLabel: (label: string) => string;
   className?: string;
+  /** Put on the add Select's trigger, so a `<Label htmlFor>` can name it. */
+  id?: string;
   'aria-label'?: string;
 }) {
   // A new key after each pick resets the add Select to its placeholder.
@@ -68,7 +71,7 @@ export function MultiSelect({
             setRound((r) => r + 1);
           }}
         >
-          <SelectTrigger aria-label={ariaLabel ?? placeholder} className="w-full min-w-0">
+          <SelectTrigger id={id} aria-label={ariaLabel ?? placeholder} className="w-full min-w-0">
             <SelectValue placeholder={placeholder} />
           </SelectTrigger>
           <SelectContent>

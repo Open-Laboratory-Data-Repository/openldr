@@ -140,11 +140,21 @@ Um `pluginRef` pertence ao identificador do plugin, não a uma instalação. Se 
 
 `testCatalog.get` e `testCatalog.list` respondem a cada teste com `code` e `testCode`. `code` é o identificador fixo do teste. Nunca muda: guarde-o e devolva-o ao CE. `testCode` é o código de teste nacional. Pode mudar, e um teste guardado antes desta mudança tem o mesmo valor que o seu `code`. Mostre `testCode` às pessoas.
 
+`testCatalog.get` responde também `codings`: outros códigos que nomeiam o teste, como um procedimento SNOMED. Cada um tem `system`, `code`, `display`, `purpose` (`ADDITIONAL`, `INDICATION`, `PROCEDURE` ou `CATEGORY`) e `note`. A lista está vazia quando o teste não tem nenhum.
+
 ### Parâmetros de resultado para um paciente
 
 `testCatalog.resultParams` dá os parâmetros de resultado de cada teste, com o intervalo de referência que serve a um paciente. Envie `{ "tests": [{ "system": "...", "code": "..." }], "patientRef": "p1...." }`. Precisa de `patients.view` ou `patients.find`, como as operações de paciente. Um paciente fora do limite de quem chama dá `NOT_FOUND`.
 
 A resposta é `{ "tests": [...], "sexes": [...] }`. Cada teste lista os seus `params`. Cada parâmetro tem a sua `unit`, o seu `display`, as suas `bands`, a `band` que serve ao paciente ou null, e `fits`, que vale `yes`, `no` ou `unknown` para cada intervalo, pela ordem. Um intervalo tem um `name` quando o laboratório lhe deu um. `sexes` dá cada código de sexo com o seu rótulo em en, fr e pt. O CE lê o sexo e a idade do paciente para escolher o intervalo. A resposta não os inclui.
+
+Cada parâmetro tem também o seu `resultType`: `numeric`, `coded`, `text`, `boolean`, `date` ou `multicoded`. `boolean` é uma resposta sim ou não. `multicoded` aceita uma ou mais respostas do `valueSetUrl` do parâmetro, como `coded` aceita uma. `required` diz se o campo tem de ser preenchido. Quando está ausente, o campo é obrigatório. Os limites de entrada só vêm no seu próprio tipo, e cada um está ausente quando não está definido:
+
+- `numeric`: `min`, `max` e `decimals`, as casas decimais a manter.
+- `text`: `minLength` e `maxLength`.
+- `date`: `dateLimit`, `past` ou `future`. Ausente quer dizer qualquer data.
+
+Um intervalo pode nomear um `country`. O país do laboratório, definido em Definições, Laboratório, decide `fits` para ele: `no` para outro país, e `unknown` enquanto o laboratório não tiver país.
 
 ## fhir_emit
 

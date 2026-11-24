@@ -1,6 +1,6 @@
 # Laboratory
 
-Laboratory stores the issuing laboratory name, address, contact details and logo used by report templates. It also sets the default facility register and the local time zone.
+Laboratory stores the issuing laboratory name, address, contact details and logo used by report templates. It also sets the default facility register, the local time zone and the country.
 
 Use your real laboratory details and approved logo. The pictures show a fictional laboratory in a test installation. No practice data is required. You need View settings to open the page and Edit general settings to save it.
 
@@ -50,7 +50,11 @@ For PostgreSQL or MySQL, enter a named time zone such as `Africa/Dar_es_Salaam`.
 
 ![Enter your named time zone on PostgreSQL or MySQL. Read the SQL Server exception below.](laboratory-guide-timezone.png)
 
-### 7. Save the details
+### 7. Choose the country
+
+Choose your laboratory's country in **Country**. The list comes from the country code list. A reference range that names a country fits only when it is this country. With no country set, the bench does not pick such a range by itself. [Test catalog](/docs/test-catalog) explains range fields. On a headless install, run `openldr settings lab set --country TZA`, with your own country code.
+
+### 8. Save the details
 
 Open the page dots at the top right and select **Save**.
 

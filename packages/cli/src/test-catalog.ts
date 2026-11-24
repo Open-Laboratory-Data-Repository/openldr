@@ -132,6 +132,8 @@ export interface TestCatalogSetOpts {
   expectedTat?: string;
   criticalTat?: string;
   requiresVerification?: string;
+  /** A JSON file holding the test's whole list of additional codings. An empty list clears them. */
+  codings?: string;
   json: boolean;
 }
 
@@ -152,7 +154,7 @@ export async function runTestCatalogSet(code: string, opts: TestCatalogSetOpts):
     else process.stderr.write(`test-catalog set failed: ${msg}\n`);
     return 1;
   };
-  const change: Pick<CatalogTestInput, 'testCode' | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification'> = {};
+  const change: Pick<CatalogTestInput, 'testCode' | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification' | 'codings'> = {};
   if (opts.testCode !== undefined) {
     if (!opts.testCode.trim()) return fail('--test-code needs a code');
     change.testCode = opts.testCode.trim();
@@ -172,16 +174,23 @@ export async function runTestCatalogSet(code: string, opts: TestCatalogSetOpts):
     if (key !== 'true' && key !== 'false') return fail(`--requires-verification must be true or false, not "${opts.requiresVerification}"`);
     change.requiresVerification = key === 'true';
   }
+  if (opts.codings !== undefined) {
+    // Only the shape is read here. The service checks each coding, as it does for the route and an import.
+    let parsed: unknown;
+    try { parsed = JSON.parse(readFileSync(opts.codings, 'utf8')); } catch { parsed = undefined; }
+    if (!Array.isArray(parsed)) return fail(`--codings must be a JSON file holding a list of codings, and ${opts.codings} is not`);
+    change.codings = parsed as CatalogTestInput['codings'];
+  }
   if (Object.keys(change).length === 0) {
-    return fail('give at least one of --test-code, --expected-tat, --critical-tat or --requires-verification');
+    return fail('give at least one of --test-code, --expected-tat, --critical-tat, --requires-verification or --codings');
   }
 
   const ctx = await createAppContext(loadConfig());
   try {
     const before = await ctx.testCatalog.resolve(code);
     if (!before) return fail(`no such test: ${code}`);
-    // Result parameters are left out, so the service keeps them. So is the Test code, unless
-    // --test-code gives one.
+    // Result parameters are left out, so the service keeps them. So are the Test code and the
+    // codings, unless --test-code or --codings gives them.
     const after = await ctx.testCatalog.update(before.code, {
       display: before.display, shortName: before.shortName, category: before.category,
       specimenTypes: before.specimenTypes, loinc: before.loinc, active: before.active, ...change,
@@ -194,6 +203,7 @@ export async function runTestCatalogSet(code: string, opts: TestCatalogSetOpts):
         `expected TAT\t${after.expectedTatHours === null ? 'none' : `${after.expectedTatHours} h`}`,
         `critical TAT\t${after.criticalTatHours === null ? 'none' : `${after.criticalTatHours} h`}`,
         `requires verification\t${after.requiresVerification ? 'yes' : 'no'}`,
+        `codings\t${after.codings.length === 0 ? 'none' : after.codings.map((c) => `${c.system} ${c.code} (${c.purpose})`).join(', ')}`,
       ].join('\n') + '\n');
     return 0;
   } catch (err) {

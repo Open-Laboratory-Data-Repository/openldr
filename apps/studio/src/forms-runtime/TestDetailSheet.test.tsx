@@ -257,4 +257,120 @@ describe('TestDetailSheet', () => {
     render(<TestDetailSheet test={test} params={[numeric]} detail={detail} sexes={sexes} copy={{ language: 'fr', range: 'Intervalle', ageFrom: 'dès {from} ans' }} onChange={() => {}} onClose={() => {}} />);
     expect(await screen.findByRole('combobox', { name: /intervalle haemoglobin/i })).toHaveTextContent('Femme dès 18 ans');
   });
+
+  // Plan B, Task 3: yes/no, date and several-answer fields, and the field settings (call 5: shown, never refused).
+  describe('new types and field settings', () => {
+    const P = 'urn:openldr:default_result';
+    const growth = { system: P, code: 'GROWTH', resultType: 'boolean' as const, valueSetUrl: null, bands: [], fits: [], unit: null, display: 'Growth', band: null };
+    const collected = { system: P, code: 'COLLECTED', resultType: 'date' as const, valueSetUrl: null, bands: [], fits: [], unit: null, display: 'Collected on', band: null, dateLimit: 'past' as const };
+    const markers = { system: P, code: 'MARKERS', resultType: 'multicoded' as const, valueSetUrl: 'urn:openldr:valueset:markers', bands: [], fits: [], unit: null, display: 'Markers', band: null };
+    const ESBL = { system: 'urn:openldr:cs:local', code: 'ESBL', display: 'ESBL' };
+    const CARB = { system: 'urn:openldr:cs:local', code: 'CARB', display: 'Carbapenemase' };
+    const last = (fn: ReturnType<typeof vi.fn>) => fn.mock.calls[fn.mock.calls.length - 1][0];
+
+    // Task 3 fix: a Select, so a touched yes/no can go back to not answered.
+    it('writes a yes/no field as true, then false, then back to not answered', async () => {
+      const user = userEvent.setup();
+      const writes: unknown[] = [];
+      function Host() {
+        const [current, setCurrent] = useState<typeof detail>(detail);
+        return <TestDetailSheet test={test} params={[growth]} detail={current} sexes={sexes}
+          onChange={(next) => { writes.push(next.results[0]?.value); setCurrent(next as typeof detail); }} onClose={() => {}} />;
+      }
+      render(<Host />);
+      const picker = await screen.findByLabelText('Growth');
+      expect(picker).toHaveTextContent('Not answered');
+      for (const choice of ['Yes', 'No', 'Not answered']) {
+        await user.click(screen.getByLabelText('Growth'));
+        await user.click(await screen.findByRole('option', { name: choice }));
+        expect(screen.getByLabelText('Growth')).toHaveTextContent(choice);
+      }
+      expect(writes).toEqual([true, false, null]);
+    });
+
+    it('takes the yes/no and choose-a-result words from the caller', async () => {
+      const user = userEvent.setup();
+      render(<TestDetailSheet test={test} params={[growth, coded]} detail={detail} sexes={sexes}
+        copy={{ yes: 'Oui', no: 'Non', notAnswered: 'Sans réponse', chooseResult: 'Choisir un résultat' }} onChange={() => {}} onClose={() => {}} />);
+      expect(await screen.findByLabelText('Growth')).toHaveTextContent('Sans réponse');
+      expect(screen.getByLabelText('Malaria RDT')).toHaveTextContent('Choisir un résultat');
+      await user.click(screen.getByLabelText('Growth'));
+      expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Oui', 'Non', 'Sans réponse']);
+    });
+
+    it('shows a saved date in the date picker, and the date limit without refusing', async () => {
+      const typed = { specimen: null, rejection: null, results: [
+        { param: { system: P, code: 'COLLECTED' }, resultType: 'date' as const, value: '2026-11-20' },
+      ] };
+      render(<TestDetailSheet test={test} params={[collected]} detail={typed} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
+      expect(await screen.findByLabelText('Collected on')).toHaveTextContent('20/11/2026');
+      expect(screen.getByText('Past dates only')).toBeInTheDocument();
+    });
+
+    it('writes each chosen answer of a several-answer field, from the value set the server named', async () => {
+      vi.mocked(expandValueSetByUrl).mockResolvedValue([ESBL, CARB]);
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const typed = { specimen: null, rejection: null, results: [
+        { param: { system: P, code: 'MARKERS' }, resultType: 'multicoded' as const, value: [ESBL] },
+      ] };
+      render(<TestDetailSheet test={test} params={[markers]} detail={typed} sexes={sexes} onChange={onChange} onClose={() => {}} />);
+      await waitFor(() => expect(expandValueSetByUrl).toHaveBeenCalledWith('urn:openldr:valueset:markers'));
+      expect(await screen.findByText('ESBL')).toBeInTheDocument();
+      await user.click(screen.getByLabelText('Markers'));
+      await user.click(await screen.findByRole('option', { name: 'Carbapenemase' }));
+      expect(last(onChange).results[0]).toMatchObject({ resultType: 'multicoded', value: [ESBL, CARB] });
+    });
+
+    it('writes no value once the last chosen answer is removed', async () => {
+      vi.mocked(expandValueSetByUrl).mockResolvedValue([ESBL]);
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const typed = { specimen: null, rejection: null, results: [
+        { param: { system: P, code: 'MARKERS' }, resultType: 'multicoded' as const, value: [ESBL] },
+      ] };
+      render(<TestDetailSheet test={test} params={[markers]} detail={typed} sexes={sexes} onChange={onChange} onClose={() => {}} />);
+      await user.click(await screen.findByRole('button', { name: 'Remove ESBL' }));
+      expect(last(onChange).results[0].value).toBeNull();
+    });
+
+    it('marks an optional field, and nothing on a field saved before field settings', async () => {
+      render(<TestDetailSheet test={test} params={[numeric, { ...text, required: false }]} detail={detail} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
+      await screen.findByLabelText('Haemoglobin');
+      expect(screen.getAllByText('Optional')).toHaveLength(1);
+      expect(screen.getByLabelText('Note').parentElement).toHaveTextContent('Optional');
+    });
+
+    it('shows the number and length limits, and still writes a value outside them', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      const limited = { ...numeric, bands: [], fits: [], band: null, min: 0, max: 5, decimals: 1 };
+      const short = { ...text, minLength: 2, maxLength: 10 };
+      render(<TestDetailSheet test={test} params={[limited, short]} detail={detail} sexes={sexes} onChange={onChange} onClose={() => {}} />);
+      expect(await screen.findByText('Allowed 0 to 5, decimal places: 1')).toBeInTheDocument();
+      expect(screen.getByText('2 to 10 characters')).toBeInTheDocument();
+      await user.type(screen.getByLabelText('Haemoglobin'), '9');
+      expect(last(onChange).results[0].value).toBe(9);
+    });
+
+    // Review focus 2: an absent pregnancy and "any" are the same band, and dates and country never
+    // decide which band was picked, as in findCatalogBand.
+    it('finds the picked range whatever its pregnancy any, dates or country say', async () => {
+      const typed = { specimen: null, rejection: null, results: [
+        { param: { system: numeric.system, code: 'HGB' }, resultType: 'numeric' as const, value: 12.5, unit: 'g/dL',
+          band: { ...LOWLAND, pregnancy: 'any', validTo: '2020-12-31', country: 'KEN' } },
+      ] };
+      render(<TestDetailSheet test={test} params={[numeric]} detail={typed as never} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
+      const picker = await screen.findByRole('combobox', { name: /range haemoglobin/i });
+      expect(picker).toHaveTextContent('Female 18+ years');
+    });
+
+    it('tells a range from one that differs only in its source', async () => {
+      const typed = { specimen: null, rejection: null, results: [
+        { param: { system: numeric.system, code: 'HGB' }, resultType: 'numeric' as const, value: 12.5, unit: 'g/dL', band: { ...LOWLAND, source: 'WHO' as const } },
+      ] };
+      render(<TestDetailSheet test={test} params={[numeric]} detail={typed} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
+      expect(await screen.findByRole('combobox', { name: /range haemoglobin/i })).toHaveTextContent('Choose a range');
+    });
+  });
 });

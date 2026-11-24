@@ -34,3 +34,21 @@ describe('an Observation holds one result value', () => {
     expect(validateResource({ ...base, valueString: 'Resistant', valueQuantity: { value: 6 } }).ok).toBe(false);
   });
 });
+
+// Plan B, Task 3: the bench writes a yes/no result as valueBoolean and a date result as valueDateTime.
+describe('an Observation holds a yes/no or a date result', () => {
+  it('accepts valueBoolean and a valueDateTime that is a date or a date and time', () => {
+    expect(Observation.safeParse({ ...base, valueBoolean: false }).success).toBe(true);
+    expect(Observation.safeParse({ ...base, valueDateTime: '2026-11-20' }).success).toBe(true);
+    expect(Observation.safeParse({ ...base, valueDateTime: '2026-11-20T08:30:00Z' }).success).toBe(true);
+  });
+
+  it('refuses a valueBoolean that is not true or false, and a valueDateTime that is not a date', () => {
+    expect(Observation.safeParse({ ...base, valueBoolean: 'yes' }).success).toBe(false);
+    expect(Observation.safeParse({ ...base, valueDateTime: '20/11/2026' }).success).toBe(false);
+  });
+
+  it('refuses valueBoolean beside valueDateTime', () => {
+    expect(Observation.safeParse({ ...base, valueBoolean: true, valueDateTime: '2026-11-20' }).success).toBe(false);
+  });
+});

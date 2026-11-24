@@ -185,6 +185,24 @@ describe('Settings → Laboratory', () => {
     await waitFor(() => expect(api.saveLabIdentity).toHaveBeenCalledWith(expect.objectContaining({ 'lab.country': 'TZA' })));
   });
 
+  // About 250 countries: the operator types to find one, and None clears the lab's country.
+  it('finds a country by typing, and None clears it to an empty value', async () => {
+    vi.mocked(api.fetchLabIdentity).mockResolvedValue({ ...META, values: { ...META.values, 'lab.country': 'KEN' } } as never);
+    vi.mocked(api.saveLabIdentity).mockResolvedValue(META.values as never);
+    render(<MemoryRouter><Laboratory /></MemoryRouter>);
+    await screen.findByDisplayValue('OpenLDR');
+    const picker = screen.getByRole('combobox', { name: /^country$/i });
+    await waitFor(() => expect(picker).toHaveTextContent('Kenya (KEN)'));
+
+    fireEvent.click(picker);
+    fireEvent.change(screen.getByPlaceholderText(/search countries/i), { target: { value: 'tanz' } });
+    expect(screen.queryByRole('option', { name: /Kenya/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Tanzania/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: /^none$/i }));
+    await save();
+    await waitFor(() => expect(api.saveLabIdentity).toHaveBeenCalledWith(expect.objectContaining({ 'lab.country': '' })));
+  });
+
   it('toasts the failure and keeps the page usable when the write fails', async () => {
     vi.mocked(api.saveLabIdentity).mockRejectedValue(new Error('boom'));
     render(<MemoryRouter><Laboratory /></MemoryRouter>);

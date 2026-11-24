@@ -114,7 +114,9 @@ function summaryValue(value: unknown): string | null {
 
 /** One answer on a saved form copy as display text: a quantity as its value and unit, anything else
  *  as the summary writes a single value, not cut short. */
-function answerText(answer: QuestionnaireResponseItemAnswer): string | null {
+function answerText(answer: QuestionnaireResponseItemAnswer): string | boolean | null {
+  // A yes/no stays true or false here, so the studio can say it in the reader's language.
+  if (typeof answer.valueBoolean === 'boolean') return answer.valueBoolean
   if (answer.valueQuantity?.value !== undefined) {
     return [answer.valueQuantity.value, answer.valueQuantity.unit].filter((v) => v !== undefined && v !== '').join(' ')
   }
@@ -122,16 +124,21 @@ function answerText(answer: QuestionnaireResponseItemAnswer): string | null {
 }
 
 /** The display text of every answer at or below this item, in order. */
-function partsOf(item: QuestionnaireResponseItem): string[] {
+function partsOf(item: QuestionnaireResponseItem): Array<string | boolean> {
   return [
-    ...(item.answer ?? []).map(answerText).filter((v): v is string => v !== null),
+    ...(item.answer ?? []).map(answerText).filter((v): v is string | boolean => v !== null),
     ...(item.item ?? []).flatMap(partsOf),
   ]
 }
 
 /** One row of the entry sheet. `fieldId` is the item's linkId; for a field inside a group it is the
  *  child's id. */
-export interface EntryAnswer { fieldId: string; label: string; value: string }
+export interface EntryAnswer {
+  fieldId: string; label: string; value: string
+  /** Each part of `value`, present only when one is a yes/no answer. A yes/no part is true or false,
+   *  so the reader shows it in its own language; `value` writes it as "true" or "false". */
+  parts?: Array<string | boolean>
+}
 
 /**
  * Every answered item of a saved form copy, in the order the copy holds them, which is the form's
@@ -145,8 +152,10 @@ export function entryAnswersOfResponse(schema: FormSchema, response: Questionnai
   const sections = new Set(schema.sections.map((s) => s.id))
   const labelOf = (item: QuestionnaireResponseItem): string => item.text?.trim() || fields.get(item.linkId)?.displayLabel || item.linkId
   const rows: EntryAnswer[] = []
-  const push = (fieldId: string, label: string, parts: string[]) => {
-    if (parts.length > 0) rows.push({ fieldId, label, value: parts.join(', ') })
+  const push = (fieldId: string, label: string, parts: Array<string | boolean>) => {
+    if (parts.length === 0) return
+    const value = parts.map(String).join(', ')
+    rows.push(parts.some((p) => typeof p === 'boolean') ? { fieldId, label, value, parts } : { fieldId, label, value })
   }
 
   const walk = (items: QuestionnaireResponseItem[] | undefined, prefix: string | null): void => {

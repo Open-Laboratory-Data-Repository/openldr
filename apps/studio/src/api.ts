@@ -2172,7 +2172,10 @@ export interface FormEntry {
   statusByName: string | null;
 }
 /** An entry with every answer of its saved form copy. Null answers: the copy could not be read. */
-export interface FormEntryDetail extends FormEntry { answers: { fieldId: string; label: string; value: string }[] | null }
+export interface FormEntryDetail extends FormEntry {
+  /** `parts` is present only when one part is a yes/no answer, which is true or false there. */
+  answers: { fieldId: string; label: string; value: string; parts?: Array<string | boolean> }[] | null;
+}
 /** `system` and `code` are the coding the facility picker saves for this facility. */
 export interface EntryFacility { id: string; system: string; code: string; name: string }
 /** The site rules for the form screen. `locked`: the user's limit covers one facility, `facility`.
@@ -2643,6 +2646,23 @@ export const ontologyPath = (id: string, code: string): Promise<OntologyBreadcru
 // ── Test catalog (test catalog S1 and S2) ──────────────────────────────────────
 // These types mirror @openldr/bootstrap's test-catalog.ts. The routes are apps/server/src/test-catalog-routes.ts.
 export interface CatalogSpecimenCoding { system: string; code: string }
+/** Must equal TEST_CATALOG_SYSTEM and TEST_CODE_SYSTEM in @openldr/bootstrap. A test's own codes, which
+ *  can never be one of its additional codings. */
+export const TEST_CATALOG_SYSTEM = 'urn:openldr:codesystem:test-catalog';
+export const TEST_CODE_SYSTEM = 'urn:openldr:codesystem:test-catalog:test-code';
+/** Must equal LOINC_SYSTEM in @openldr/terminology. A test's one LOINC code is its LOINC field, never a coding. */
+export const LOINC_SYSTEM_URL = 'http://loinc.org';
+/** What an additional coding is for (plan B, call 10). Must equal CODING_PURPOSES in @openldr/bootstrap. */
+export const CATALOG_CODING_PURPOSES = ['ADDITIONAL', 'INDICATION', 'PROCEDURE', 'CATEGORY'] as const;
+export type CatalogCodingPurpose = (typeof CATALOG_CODING_PURPOSES)[number];
+/** A code from another loaded system that also names a test. */
+export interface CatalogTestCoding {
+  system: string;
+  code: string;
+  display: string | null;
+  purpose: CatalogCodingPurpose;
+  note: string | null;
+}
 export interface CatalogTest {
   /** The internal id. It never changes. */
   code: string;
@@ -2655,6 +2675,8 @@ export interface CatalogTest {
   /** Bench result entry: the parameters this test yields. */
   resultParams: CatalogTestResultParam[];
   loinc: string | null;
+  /** Codes from other loaded systems that also name this test. */
+  codings: CatalogTestCoding[];
   /** false when the test is retired. */
   active: boolean;
   /** Hours from receipt to release the lab aims for, or null. */
@@ -2686,6 +2708,8 @@ export interface CatalogTestInput {
   /** Left out keeps what is stored. An empty list clears it. */
   resultParams?: CatalogTestResultParam[];
   loinc?: string | null;
+  /** Left out keeps what is stored. An empty list clears it. */
+  codings?: CatalogTestCoding[];
   active?: boolean;
   /** Left out keeps what is stored. null clears it. */
   expectedTatHours?: number | null;
@@ -2708,6 +2732,8 @@ export interface TestCatalogOptions {
   ucum?: { systemId: string; system: string } | null;
   /** The sexes a range may name, with labels by language, so the studio names no code. */
   sexes: CatalogSexOption[];
+  /** The countries a range may name. Here so a catalog editor needs no reports.view to read them. */
+  countries?: { code: string; display: string | null }[];
 }
 
 export function listTestCatalog(p: TestCatalogListParams = {}): Promise<TestCatalogListResult> {
@@ -2735,7 +2761,7 @@ export const setCatalogTestActive = (code: string, active: boolean): Promise<Cat
 // Mirrors of @openldr/bootstrap's test-catalog-import.ts and test-catalog.ts import types.
 export type CatalogImportField =
   | 'id' | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
-  | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification';
+  | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification' | 'codings';
 /** Which file column feeds each field, by header text. A field left out is not changed on existing tests. */
 export type CatalogColumnMap = Partial<Record<CatalogImportField, string>>;
 export type CatalogCategoryAnswer =

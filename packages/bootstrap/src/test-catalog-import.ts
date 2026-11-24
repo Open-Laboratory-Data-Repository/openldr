@@ -13,9 +13,10 @@ export const CATALOG_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 
 export type CatalogImportField =
   | 'id' | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
-  | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification';
+  | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification' | 'codings';
 export const CATALOG_IMPORT_FIELDS: readonly CatalogImportField[] = [
   'id', 'code', 'name', 'shortName', 'loinc', 'category', 'specimenTypes', 'expectedTatHours', 'criticalTatHours', 'requiresVerification',
+  'codings',
 ];
 
 /** Which file column feeds each field, by header text. A field left out is not read, so the import leaves it alone. */
@@ -59,6 +60,7 @@ const HEADER_NAMES: Record<CatalogImportField, readonly string[]> = {
   expectedTatHours: ['expectedtathours', 'expectedtat', 'tathours', 'tat'],
   criticalTatHours: ['criticaltathours', 'criticaltat'],
   requiresVerification: ['requiresverification', 'verification', 'verify'],
+  codings: ['codings', 'additionalcodings'],
 };
 
 function headerKey(header: string): string {
@@ -156,9 +158,23 @@ export function readYesNoCell(text: string): boolean | 'bad' {
   return 'bad';
 }
 
+/** A codings cell (plan B, call 10): a JSON list, left for the service to check. Empty is no codings.
+ *  undefined when the column is not mapped, and 'bad' when the text is not a JSON list. */
+export function readCodingsCell(text: string | undefined): unknown[] | undefined | 'bad' {
+  if (text === undefined) return undefined;
+  if (text === '') return [];
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : 'bad';
+  } catch {
+    return 'bad';
+  }
+}
+
 /** The export's columns. suggestCatalogColumns maps every one, so an export imports back as it is. */
 export const CATALOG_EXPORT_HEADERS = [
   'id', 'code', 'name', 'short_name', 'loinc', 'category', 'specimen_types', 'expected_tat_hours', 'critical_tat_hours', 'requires_verification',
+  'codings',
 ] as const;
 export const CATALOG_EXPORT_COLUMNS = CATALOG_EXPORT_HEADERS.map((h) => ({ key: h, label: h }));
 
@@ -174,6 +190,10 @@ export function catalogExportRow(t: CatalogTest): Record<string, string> {
     expected_tat_hours: t.expectedTatHours === null ? '' : String(t.expectedTatHours),
     critical_tat_hours: t.criticalTatHours === null ? '' : String(t.criticalTatHours),
     requires_verification: t.requiresVerification ? 'yes' : 'no',
+    // The note only when there is one, as the concept stores it.
+    codings: t.codings.length === 0 ? '' : JSON.stringify(t.codings.map((c) => ({
+      system: c.system, code: c.code, display: c.display, purpose: c.purpose, ...(c.note !== null ? { note: c.note } : {}),
+    }))),
   };
 }
 
@@ -191,6 +211,7 @@ export const catalogColumnMapSchema = z.object({
   expectedTatHours: headerText.optional(),
   criticalTatHours: headerText.optional(),
   requiresVerification: headerText.optional(),
+  codings: headerText.optional(),
 }).strict();
 
 export const catalogValueMapSchema = z.object({

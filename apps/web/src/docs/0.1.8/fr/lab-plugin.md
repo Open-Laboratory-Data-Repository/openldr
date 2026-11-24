@@ -43,7 +43,11 @@ Limitez chaque utilisateur de site à son établissement avec `openldr users sco
 
 Quand un valideur valide un résultat, le plugin envoie à CE un ServiceRequest pour l'analyse, un Specimen pour chaque échantillon, une Observation par paramètre de résultat, et une Provenance qui dit qui l'a validé. Chaque Observation est `final`. Elle porte la valeur et l'unité, le signalement dans `interpretation`, et l'intervalle dans `referenceRange`, avec le nom de l'intervalle comme `text`. Le `subject` de chaque enregistrement est la fiche du patient dans CE. CE les stocke comme les enregistrements de toute autre source, et son entrepôt remplit `lab_requests` et `lab_results`, donc les résultats apparaissent dans les rapports et tableaux de bord.
 
-Le plugin montre le code de test aux personnes. Il envoie le test comme un codage avec le système `urn:openldr:codesystem:test-catalog:test-code` et le code de test, à côté du codage LOINC quand il y en a un. Il envoie aussi l’identifiant fixe comme codage dans `urn:openldr:codesystem:test-catalog`.
+Le plugin montre le code de test aux personnes. Il envoie le test comme un codage avec le système `urn:openldr:codesystem:test-catalog:test-code` et le code de test. Le codage LOINC vient d'abord quand il y en a un, puis le code de test, puis les codages supplémentaires de l'examen, puis l’identifiant fixe comme codage dans `urn:openldr:codesystem:test-catalog`.
+
+Un résultat oui/non part en `valueBoolean` et une date en `valueDateTime`. Un champ à plusieurs réponses envoie une Observation par réponse. Dans l'entrepôt, un oui/non arrive comme le texte `true` ou `false`, une date comme la date, et plusieurs réponses comme une ligne chacune.
+
+Le plugin refuse un champ obligatoire vide et une valeur hors des limites du champ réglées dans le catalogue de tests. Un champ facultatif peut rester vide. Utilisez le plugin publié avec ce CE. Un plugin plus ancien traite les champs oui/non, date et à plusieurs réponses comme du texte et les refuse.
 
 Une analyse rejetée arrive dans CE quand son rejet est définitif : tout de suite si elle est rejetée sans nouveau prélèvement, ou quand sa demande de nouveau prélèvement est liée. Elle arrive comme un ServiceRequest `revoked` avec le motif du rejet, qui remplit `lab_requests.rejection_code` et `rejection_reason`.
 

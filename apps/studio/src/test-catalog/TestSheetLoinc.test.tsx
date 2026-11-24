@@ -51,7 +51,7 @@ const OPTIONS: api.TestCatalogOptions = {
 };
 const NEW_TEST = (over: Partial<api.CatalogTest> = {}): api.CatalogTest => ({
   code: 'T1', testCode: 'T1', display: 'Test one', shortName: null, category: null, specimenTypes: [],
-  resultParams: [], loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+  resultParams: [], loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true, codings: [],
   lab: { enabled: false, specimenTypes: null, localDisplay: null }, ...over,
 });
 
@@ -249,7 +249,8 @@ describe('TestSheet: Fill from panel', () => {
     await choose('result-params-menu', 'fill-from-panel');
     expect(screen.queryByRole('alertdialog')).toBeNull();
     const ids = [...document.querySelectorAll('[data-testid^="param-"]')].map((e) => e.getAttribute('data-testid'));
-    expect(ids.filter((id) => !id!.startsWith('param-menu-'))).toEqual(['param-HGB', 'param-2093-3', 'param-2571-8']);
+    // Plan B call 8: the ticked fields come first, in the test's order, then the unticked HGB.
+    expect(ids.filter((id) => !id!.startsWith('param-menu-'))).toEqual(['param-2093-3', 'param-2571-8', 'param-HGB']);
     expect([checked('param-2093-3'), checked('param-2571-8')]).toEqual([true, true]);
     expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
   });
