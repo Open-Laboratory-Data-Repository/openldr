@@ -224,6 +224,16 @@ describe('terminology admin store', () => {
       expect(page.rows[0].display).toBe('Ampicillin (updated)');
       expect(page.rows[0].status).toBe('DRAFT');
     });
+    it('search answers a LOINC concept\'s short name, class and unit from LOINC\'s own keys', async () => {
+      const { db, s } = await store();
+      // The keys `openldr terminology import loinc` writes (packages/terminology/src/loaders/loinc.ts).
+      await db.insertInto('terminology_concepts').values({
+        system: 'http://loinc.org', code: '2093-3', display: 'Cholesterol [Mass/volume] in Serum or Plasma', status: 'ACTIVE',
+        properties: JSON.stringify({ SHORTNAME: 'Cholest SerPl-mCnc', CLASS: 'CHEM', EXAMPLE_UCUM_UNITS: 'mg/dL' }) as never,
+      }).execute();
+      const row = (await s.terms.search('http://loinc.org', { limit: 10, offset: 0 })).rows[0];
+      expect([row?.shortName, row?.class, row?.unit]).toEqual(['Cholest SerPl-mCnc', 'CHEM', 'mg/dL']);
+    });
     it('search filters by text and status', async () => {
       const { s } = await store();
       await s.terms.create({ system: 'http://x', code: 'AMP', display: 'Ampicillin', status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null });

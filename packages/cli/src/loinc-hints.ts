@@ -24,12 +24,15 @@ export async function runLoincHints(code: string, opts: { json: boolean }): Prom
     if (!hints) { process.stdout.write(NOT_LOADED + '\n'); return 0; }
     const lines = [
       `${hints.code}  ${hints.display ?? ''}`,
+      ...(hints.shortName ? [`short name: ${hints.shortName}`] : []),
+      ...(hints.component ? [`component: ${hints.component}`] : []),
       `class: ${hints.class ?? 'none'}${hints.categorySuggestion ? ` (category ${hints.categorySuggestion.code})` : ' (no matching category)'}`,
       `result: ${hints.resultType}${hints.unit ? `, unit ${hints.unit}` : ''}`,
     ];
     for (const s of hints.specimens) {
       const match = s.specimenType ? `specimen type ${s.specimenType.code}${s.tick ? ', ticked' : ''}` : 'no specimen type matches';
-      lines.push(`specimen: SNOMED ${s.snomed}${s.display ? ` ${s.display}` : ''} (${s.equivalence}), ${match}`);
+      if (s.via === 'system-name') lines.push(`specimen: by name from LOINC system ${hints.systemPart ?? ''}, ${match}`);
+      else lines.push(`specimen: SNOMED ${s.snomed}${s.display ? ` ${s.display}` : ''} (${s.equivalence}), ${match}`);
     }
     for (const a of hints.answers) lines.push(`answer: ${a.code}  ${a.display}`);
     for (const m of hints.panelMembers) lines.push(`member: ${m.code}  ${m.display}${m.required ? ' (required)' : ''}`);

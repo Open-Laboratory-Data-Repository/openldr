@@ -21,6 +21,16 @@ const FACILITY_REGISTER_URL = 'urn:openldr:cs:facility-register:hfr';
  *  The harness hand-mocks ctx (no pg-mem DB available here), so we use a fake.
  *  @openldr/db is not a dep of @openldr/server — types are derived from AppContext.
  *  The LOINC publisher is pre-seeded to satisfy the "LOINC present" assertion. */
+/** A term's short name, class and unit from its properties, falling back to LOINC's own keys as
+ *  terminology-admin-store.ts does. */
+function termProps(p: Record<string, unknown>): { shortName: string | null; class: string | null; unit: string | null } {
+  return {
+    shortName: (p.shortName as string) ?? (p.SHORTNAME as string) ?? null,
+    class: (p.class as string) ?? (p.CLASS as string) ?? null,
+    unit: (p.unit as string) ?? (p.EXAMPLE_UCUM_UNITS as string) ?? null,
+  };
+}
+
 function buildFakeAdmin(): FakeAdmin {
   type PubRole = 'local' | 'standard' | 'external';
   type PubRow = { id: string; name: string; role: PubRole; icon: string | null; seeded: boolean; sortOrder: number };
@@ -158,15 +168,13 @@ function buildFakeAdmin(): FakeAdmin {
           const props = r.properties ?? {};
           if (existing) {
             Object.assign(existing, {
-              display: r.display, status: r.status, shortName: (props.shortName as string) ?? null,
-              class: (props.class as string) ?? null, unit: (props.unit as string) ?? null,
+              display: r.display, status: r.status, ...termProps(props),
               metadata: (props.metadata as Record<string, unknown>) ?? null,
             });
           } else {
             terms.push({
               system: r.system, code: r.code, display: r.display, status: r.status,
-              shortName: (props.shortName as string) ?? null, class: (props.class as string) ?? null,
-              unit: (props.unit as string) ?? null, replacedBy: null,
+              ...termProps(props), replacedBy: null,
               metadata: (props.metadata as Record<string, unknown>) ?? null, mappingCount: 0,
             });
           }

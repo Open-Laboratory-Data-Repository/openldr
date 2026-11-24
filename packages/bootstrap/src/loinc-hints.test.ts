@@ -18,7 +18,9 @@ const LOCAL = 'urn:openldr:cs:local';
 const SNOMED = 'http://snomed.info/sct';
 
 // The terminology context bootstrap builds (index.ts), over a migrated pg-mem db. Mirrors test-catalog.test.ts.
-async function build(opts: { loinc?: boolean; ontology?: boolean; failLinks?: number } = {}) {
+type Ontology = ReturnType<typeof createOntologyStore>;
+// `wrap` swaps in an ontology answer the fixture lacks (answers for a Nom code, no specimen link).
+async function build(opts: { loinc?: boolean; ontology?: boolean; failLinks?: number; wrap?: (o: Ontology) => Ontology } = {}) {
   const db = await makeMigratedDb();
   const fhirStore = createFhirStore(db);
   const store = createTerminologyStore(db, fhirStore);
@@ -67,7 +69,7 @@ async function build(opts: { loinc?: boolean; ontology?: boolean; failLinks?: nu
       return resultFields.link(code, loinc);
     },
   };
-  const hints = createLoincHints({ db, admin, ops, ontology, resultFields: flaky });
+  const hints = createLoincHints({ db, admin, ops, ontology: opts.wrap ? opts.wrap(ontology) : ontology, resultFields: flaky });
   return { db, admin, ops, hints, resultFields };
 }
 
@@ -89,11 +91,14 @@ describe('loincHints', () => {
     await expect(hints.hints('9999-9')).rejects.toMatchObject({ kind: 'not-found' });
   });
 
-  it('gives a numeric test its name, class, category and example unit', async () => {
+  it('gives a numeric test its name, short name, component, class, category, unit and field plan', async () => {
     const { hints } = await build();
     expect(await hints.hints('2093-3')).toEqual({
       code: '2093-3',
       display: 'Cholesterol [Mass/volume] in Serum or Plasma',
+      shortName: 'Cholest SerPl-mCnc',
+      component: 'Cholesterol',
+      systemPart: 'Ser/Plas',
       class: 'CHEM',
       categorySuggestion: { code: 'CHEM', display: 'Chemistry' },
       unit: 'mg/dL',
@@ -101,7 +106,57 @@ describe('loincHints', () => {
       specimens: [],
       answers: [],
       panelMembers: [],
+      field: { loinc: '2093-3', code: '2093-3', display: 'Cholesterol', resultType: 'numeric', unit: 'mg/dL', valueSetUrl: null, exists: false },
+      fieldProblem: null,
     });
+  });
+
+  it('marks the field as existing once it is made, and names a field already linked to the code', async () => {
+    const { hints } = await build();
+    await hints.resultFieldsFromLoinc(['2093-3']);
+    expect((await hints.hints('2093-3'))?.field).toMatchObject({ code: '2093-3', exists: true });
+
+    const other = await build();
+    await other.db.insertInto('terminology_concepts').values({
+      system: RESULT_PARAM_SYSTEM, code: 'CHOL', display: 'Cholesterol', status: 'ACTIVE',
+      properties: JSON.stringify({ result_role: 'result' }) as never,
+    }).execute();
+    await other.resultFields.link('CHOL', '2093-3');
+    expect((await other.hints.hints('2093-3'))?.field).toMatchObject({ loinc: '2093-3', code: 'CHOL', exists: true });
+  });
+
+  it('answers no field and the refusal when the field standing for the code is unusable', async () => {
+    const { hints, db } = await build();
+    await db.insertInto('terminology_concepts').values({
+      system: RESULT_PARAM_SYSTEM, code: '2093-3', display: 'Cholesterol', status: 'ACTIVE', properties: JSON.stringify({ result_role: 'metadata' }) as never,
+    }).execute();
+    const h = await hints.hints('2093-3');
+    expect(h?.field).toBeNull();
+    expect(h?.fieldProblem).toMatch(/result field 2093-3 stands for LOINC 2093-3 but its role is metadata/);
+  });
+
+  it('types a field by LOINC\'s scale: Nom is text even with answers, Ord is coded only with answers', async () => {
+    // The fixture has no answers for 6429-5 (Nom), so give it some.
+    const nomWithAnswers = await build({ wrap: (o) => ({ ...o, answerOptions: async (id, code) => code === '6429-5' ? [{ value: 'LA1', label: 'Cloudy' }] : o.answerOptions(id, code) }) });
+    expect((await nomWithAnswers.hints.hints('6429-5'))?.field).toMatchObject({ resultType: 'text', unit: null, valueSetUrl: null });
+    const { hints } = await build();
+    expect((await hints.hints('32789-0'))?.field).toEqual({
+      loinc: '32789-0', code: '32789-0', display: 'Viscosity', resultType: 'coded', unit: null,
+      valueSetUrl: 'urn:openldr:valueset:loinc-answers:32789-0', exists: false,
+    });
+    const ordNoAnswers = await build({ wrap: (o) => ({ ...o, answerOptions: async () => [] }) });
+    expect((await ordNoAnswers.hints.hints('32789-0'))?.field).toMatchObject({ resultType: 'text', valueSetUrl: null });
+  });
+
+  it('gives a panel no field of its own, and each member its field in panel order', async () => {
+    const { hints } = await build();
+    const panel = await hints.hints('24331-1');
+    expect(panel?.field).toBeNull();
+    expect(panel?.fieldProblem).toBeNull();
+    expect(panel?.panelMembers.map((m) => [m.code, m.field?.display, m.field?.resultType, m.fieldProblem])).toEqual([
+      ['2093-3', 'Cholesterol', 'numeric', null],
+      ['2571-8', 'Triglyceride', 'numeric', null],
+    ]);
   });
 
   it('suggests a category only when the test-category value set holds the class', async () => {
@@ -119,7 +174,7 @@ describe('loincHints', () => {
     const semen = await hints.hints('32789-0');
     expect(semen?.resultType).toBe('coded');
     expect(semen?.answers).toEqual([{ code: 'LA2', display: 'Clear' }, { code: 'LA1', display: 'Cloudy' }]);
-    expect((await hints.hints('24331-1'))?.panelMembers).toEqual([
+    expect((await hints.hints('24331-1'))?.panelMembers).toMatchObject([
       { code: '2093-3', display: 'Cholesterol', required: true },
       { code: '2571-8', display: 'Triglyceride', required: false },
     ]);
@@ -128,8 +183,8 @@ describe('loincHints', () => {
   it('shows SNOMED specimens as text until the lab maps a specimen type', async () => {
     const { hints } = await build();
     expect((await hints.hints('6429-5'))?.specimens).toEqual([
-      { snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: null, tick: false },
-      { snomed: '122555007', display: null, equivalence: 'narrower', specimenType: null, tick: false },
+      { snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: null, tick: false, via: 'snomed' },
+      { snomed: '122555007', display: null, equivalence: 'narrower', specimenType: null, tick: false, via: 'snomed' },
     ]);
   });
 
@@ -139,7 +194,7 @@ describe('loincHints', () => {
     const specimens = (await hints.hints('6429-5'))?.specimens;
     expect(specimens?.[0]).toEqual({
       snomed: '119297000', display: null, equivalence: 'equivalent',
-      specimenType: { system: LOCAL, code: 'BLD', display: 'Blood' }, tick: true,
+      specimenType: { system: LOCAL, code: 'BLD', display: 'Blood' }, tick: true, via: 'snomed',
     });
     expect(specimens?.[1]).toMatchObject({ snomed: '122555007', specimenType: null, tick: false });
   });
@@ -163,6 +218,29 @@ describe('loincHints', () => {
     expect(specimens[0]).toMatchObject({ snomed: '119297000', specimenType: { code: 'BLD' }, tick: false });
   });
 
+  it('matches LOINC\'s SYSTEM part to a specimen type\'s name when LOINC has no specimen link', async () => {
+    // 6429-5's SYSTEM is Bld. Without its SNOMED link, the name match is the only way in.
+    const { hints } = await build({ wrap: (o) => ({ ...o, specimenCodes: async () => [] }) });
+    expect((await hints.hints('6429-5'))?.specimens).toEqual([
+      { snomed: null, display: null, equivalence: null, specimenType: { system: LOCAL, code: 'BLD', display: 'Blood' }, tick: true, via: 'system-name' },
+    ]);
+  });
+
+  it('matches Ser/Plas to Serum and Plasma by name, and ticks neither', async () => {
+    const { hints, admin } = await build();
+    const vs = await admin.valueSets.getByUrl(SPECIMEN_TYPE_VALUE_SET);
+    const full = await admin.valueSets.get(vs!.id);
+    await admin.valueSets.save({ ...full, compose: { include: [...(full.compose.include ?? []), { system: LOCAL, concept: [{ code: 'SER', display: 'Serum' }, { code: 'PLAS', display: 'Plasma' }] }] } });
+    const specimens = (await hints.hints('2093-3'))?.specimens ?? [];
+    expect(specimens.map((s) => [s.specimenType?.code, s.via, s.tick])).toEqual([['SER', 'system-name', false], ['PLAS', 'system-name', false]]);
+  });
+
+  it('does not match by name when LOINC has a specimen link', async () => {
+    // 6429-5 has SNOMED links and Bld would match Blood by name, but the links decide.
+    const { hints } = await build();
+    expect((await hints.hints('6429-5'))?.specimens.every((s) => s.via === 'snomed')).toBe(true);
+  });
+
   it('ticks nothing when the one match is not equivalent', async () => {
     const { hints, admin } = await build();
     await admin.termMappings.create({ fromSystem: LOCAL, fromCode: 'BLD', toSystem: SNOMED, toCode: '122555007', toDisplay: null, mapType: 'SAME-AS', isActive: true });
@@ -183,7 +261,8 @@ describe('resultFieldsFromLoinc', () => {
     const row = await db.selectFrom('terminology_concepts').select(['display', 'properties'])
       .where('system', '=', RESULT_PARAM_SYSTEM).where('code', '=', '2093-3').executeTakeFirstOrThrow();
     const props = typeof row.properties === 'string' ? JSON.parse(row.properties) : row.properties;
-    expect([row.display, props]).toEqual(['Cholesterol [Mass/volume] in Serum or Plasma', { result_role: 'result', parm_units: 'mg/dL' }]);
+    // Named from LOINC's component, as the hint's field plan says.
+    expect([row.display, props]).toEqual(['Cholesterol', { result_role: 'result', parm_units: 'mg/dL' }]);
     const link = await db.selectFrom('term_mappings').select('to_code').where('from_system', '=', RESULT_PARAM_SYSTEM)
       .where('from_code', '=', '2093-3').where('is_active', '=', true).executeTakeFirstOrThrow();
     expect(link.to_code).toBe('2093-3');
@@ -237,6 +316,25 @@ describe('resultFieldsFromLoinc', () => {
     const answer = await hints.resultFieldsFromLoinc(['2093-3']);
     expect([answer.params.map((p) => p.code), answer.created, answer.reused]).toEqual([['CHOL'], [], ['CHOL']]);
     expect((await counts(db)).fields).toEqual(['CHOL']);
+  });
+
+  it('makes a field for a code missing from LOINC under the name it is given, unlinked', async () => {
+    const { hints, db } = await build();
+    await expect(hints.resultFieldsFromLoinc(['99999-9'])).rejects.toMatchObject({ kind: 'not-found' });
+    const answer = await hints.resultFieldsFromLoinc(['99999-9'], { names: { '99999-9': 'Some member' } });
+    expect(answer.params).toEqual([{ system: RESULT_PARAM_SYSTEM, code: '99999-9', resultType: 'text', valueSetUrl: null, bands: [] }]);
+    const row = await db.selectFrom('terminology_concepts').select('display')
+      .where('system', '=', RESULT_PARAM_SYSTEM).where('code', '=', '99999-9').executeTakeFirstOrThrow();
+    expect(row.display).toBe('Some member');
+    const links = await db.selectFrom('term_mappings').select('from_code').where('from_system', '=', RESULT_PARAM_SYSTEM).execute();
+    expect(links).toEqual([]);
+  });
+
+  it('names panel members from LOINC\'s component, as the hint does', async () => {
+    const { hints, db } = await build();
+    await hints.resultFieldsFromLoinc(['24331-1'], { panel: true });
+    const rows = await db.selectFrom('terminology_concepts').select(['code', 'display']).where('system', '=', RESULT_PARAM_SYSTEM).orderBy('code').execute();
+    expect(rows).toEqual([{ code: '2093-3', display: 'Cholesterol' }, { code: '2571-8', display: 'Triglyceride' }]);
   });
 
   it('refuses without LOINC, a code that is not a panel with --panel, and a central dictionary', async () => {

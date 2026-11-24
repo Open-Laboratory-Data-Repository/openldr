@@ -600,10 +600,21 @@ describe('test catalog routes', () => {
 
 describe('GET /api/test-catalog/loinc-hints/:code', () => {
   const HINTS: LoincHints = {
-    code: '6429-5', display: 'HIV culture of Blood', class: 'MICRO', categorySuggestion: { code: 'MICRO', display: 'Microbiology' },
+    code: '6429-5', display: 'HIV culture of Blood', shortName: 'HIV Bld Cult', component: 'Human immunodeficiency virus', systemPart: 'Bld',
+    class: 'MICRO', categorySuggestion: { code: 'MICRO', display: 'Microbiology' },
     unit: null, resultType: 'text',
-    specimens: [{ snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }, tick: true }],
-    answers: [], panelMembers: [],
+    specimens: [
+      { snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }, tick: true, via: 'snomed' },
+      { snomed: null, display: null, equivalence: null, specimenType: { system: 'urn:openldr:cs:local', code: 'UR', display: 'Urine' }, tick: false, via: 'system-name' },
+    ],
+    answers: [],
+    panelMembers: [{
+      code: '2093-3', display: 'Cholesterol', required: true,
+      field: { loinc: '2093-3', code: 'CHOL', display: 'Cholesterol', resultType: 'numeric', unit: 'mg/dL', valueSetUrl: null, exists: true },
+      fieldProblem: null,
+    }],
+    field: { loinc: '6429-5', code: '6429-5', display: 'Human immunodeficiency virus', resultType: 'text', unit: null, valueSetUrl: null, exists: false },
+    fieldProblem: null,
   };
   function hintsApp(impl: (code: string) => Promise<LoincHints | null>, capabilities?: string[]) {
     const { ctx } = fakeCtx();
@@ -617,6 +628,15 @@ describe('GET /api/test-catalog/loinc-hints/:code', () => {
     const res = await app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/6429-5' });
     expect([res.statusCode, res.json()]).toEqual([200, HINTS]);
     expect(asked).toEqual(['6429-5']);
+  });
+
+  it('carries the short name, component, SYSTEM part, field plans and how each specimen matched', async () => {
+    const res = await hintsApp(async () => HINTS, ['terminology.view']).app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/6429-5' });
+    const body = res.json() as LoincHints;
+    expect([body.shortName, body.component, body.systemPart, body.fieldProblem]).toEqual(['HIV Bld Cult', 'Human immunodeficiency virus', 'Bld', null]);
+    expect(body.field).toEqual(HINTS.field);
+    expect(body.specimens.map((s) => s.via)).toEqual(['snomed', 'system-name']);
+    expect(body.panelMembers[0]).toMatchObject({ field: { code: 'CHOL', exists: true }, fieldProblem: null });
   });
 
   it('answers JSON null when LOINC is not loaded', async () => {

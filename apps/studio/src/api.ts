@@ -2898,8 +2898,9 @@ export interface ResultFieldsFromLoincAnswer {
 /** null when LOINC or its ontology is not loaded here, so the sheet offers no hints. */
 export const getLoincHints = (code: string): Promise<LoincHints | null> =>
   apiGet<LoincHints | null>(`/api/test-catalog/loinc-hints/${encodeURIComponent(code)}`, 'read LOINC hints');
-export const resultFieldsFromLoinc = (codes: string[], panel = false): Promise<ResultFieldsFromLoincAnswer> =>
-  authFetch('/api/test-catalog/result-fields/from-loinc', jbody({ codes, panel }, 'POST'))
+/** `names` names a code missing from the loaded LOINC. */
+export const resultFieldsFromLoinc = (codes: string[], panel = false, names?: Record<string, string>): Promise<ResultFieldsFromLoincAnswer> =>
+  authFetch('/api/test-catalog/result-fields/from-loinc', jbody({ codes, panel, ...(names ? { names } : {}) }, 'POST'))
     .then((r) => okJson<ResultFieldsFromLoincAnswer>(r, 'add result fields from LOINC'));
 export const downloadResultFieldsCsv = (): Promise<void> =>
   downloadCsv('/api/test-catalog/result-fields/export', 'result-fields.csv', 'export result fields');

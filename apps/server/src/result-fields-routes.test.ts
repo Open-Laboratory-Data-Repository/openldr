@@ -114,6 +114,17 @@ describe('result fields routes', () => {
     })]);
   });
 
+  it('POST from-loinc passes the names for codes missing from LOINC', async () => {
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: ['99999-9'], names: { '99999-9': 'Some member' } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(calls).toEqual([{ method: 'resultFieldsFromLoinc', args: [['99999-9'], { panel: false, names: { '99999-9': 'Some member' } }] }]);
+    const bad = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: ['99999-9'], names: { '99999-9': 5 } } });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('POST from-loinc writes no audit row when it only reused fields', async () => {
     const reusedOnly = { params: FROM_LOINC.params, created: [], reused: ['CHOL'], valueSetsCreated: [] };
     const { ctx, audit } = fakeCtx({ resultFieldsFromLoinc: async () => reusedOnly });

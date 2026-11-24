@@ -16,13 +16,16 @@ vi.mock('@openldr/bootstrap', async (orig) => {
 import { runLoincHints, runResultFieldsFromLoinc } from './loinc-hints';
 
 const HINTS: LoincHints = {
-  code: '6429-5', display: 'HIV culture of Blood', class: 'MICRO', categorySuggestion: { code: 'MICRO', display: 'Microbiology' },
+  code: '6429-5', display: 'HIV culture of Blood', shortName: 'HIV Bld Cult', component: 'Human immunodeficiency virus', systemPart: 'Bld',
+  class: 'MICRO', categorySuggestion: { code: 'MICRO', display: 'Microbiology' },
   unit: null, resultType: 'text',
   specimens: [
-    { snomed: '119297000', display: 'Blood specimen', equivalence: 'equivalent', specimenType: { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }, tick: true },
-    { snomed: '122555007', display: null, equivalence: 'narrower', specimenType: null, tick: false },
+    { snomed: '119297000', display: 'Blood specimen', equivalence: 'equivalent', specimenType: { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }, tick: true, via: 'snomed' },
+    { snomed: '122555007', display: null, equivalence: 'narrower', specimenType: null, tick: false, via: 'snomed' },
   ],
   answers: [], panelMembers: [],
+  field: { loinc: '6429-5', code: '6429-5', display: 'Human immunodeficiency virus', resultType: 'text', unit: null, valueSetUrl: null, exists: false },
+  fieldProblem: null,
 };
 
 const FROM_PANEL: ResultFieldsFromLoincAnswer = {
@@ -44,17 +47,30 @@ function capture() {
 beforeEach(() => { vi.restoreAllMocks(); audit.length = 0; loincHints.hints.mockReset(); loincHints.resultFieldsFromLoinc.mockReset(); });
 
 describe('openldr test-catalog loinc-hints', () => {
-  it('prints the class, category, result type and each specimen with its match', async () => {
+  it('prints the short name, component, class, category, result type and each specimen with its match', async () => {
     loincHints.hints.mockResolvedValue(HINTS);
     const io = capture();
     expect(await runLoincHints('6429-5', { json: false })).toBe(0);
     expect(io.out()).toBe([
       '6429-5  HIV culture of Blood',
+      'short name: HIV Bld Cult',
+      'component: Human immunodeficiency virus',
       'class: MICRO (category MICRO)',
       'result: text',
       'specimen: SNOMED 119297000 Blood specimen (equivalent), specimen type BLD, ticked',
       'specimen: SNOMED 122555007 (narrower), no specimen type matches',
     ].join('\n') + '\n');
+  });
+
+  it('prints a specimen matched by name, and --json carries the short name and component', async () => {
+    const byName = { ...HINTS, specimens: [{ snomed: null, display: null, equivalence: null, specimenType: { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }, tick: true, via: 'system-name' as const }] };
+    loincHints.hints.mockResolvedValue(byName);
+    const io = capture();
+    expect(await runLoincHints('6429-5', { json: false })).toBe(0);
+    expect(io.out()).toContain('specimen: by name from LOINC system Bld, specimen type BLD, ticked\n');
+    expect(await runLoincHints('6429-5', { json: true })).toBe(0);
+    const json = JSON.parse(io.out().slice(io.out().indexOf('{')));
+    expect([json.shortName, json.component]).toEqual(['HIV Bld Cult', 'Human immunodeficiency virus']);
   });
 
   it('says how to load LOINC when there are no hints, and --json prints null', async () => {

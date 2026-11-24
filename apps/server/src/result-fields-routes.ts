@@ -17,7 +17,11 @@ const createBody = z.object({
   display: z.string().min(1).max(500),
   units: z.string().max(64).nullable().optional(),
 });
-const fromLoincBody = z.object({ codes: z.array(z.string().min(1)).min(1).max(200), panel: z.boolean().optional() });
+// `names` names a code missing from the loaded LOINC, as a panel member's name does.
+const fromLoincBody = z.object({
+  codes: z.array(z.string().min(1)).min(1).max(200), panel: z.boolean().optional(),
+  names: z.record(z.string(), z.string()).optional(),
+});
 
 export function registerResultFieldsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   if (!app.hasContentTypeParser('application/octet-stream')) {
@@ -76,7 +80,7 @@ export function registerResultFieldsRoutes(app: FastifyInstance<any, any, any, a
     const parsed = fromLoincBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'codes must be a list of 1 to 200 LOINC codes' });
     try {
-      const answer = await ctx.loincHints.resultFieldsFromLoinc(parsed.data.codes, { panel: parsed.data.panel === true });
+      const answer = await ctx.loincHints.resultFieldsFromLoinc(parsed.data.codes, { panel: parsed.data.panel === true, names: parsed.data.names });
       // A run that only reused fields changed nothing, so it writes no audit row.
       if (answer.created.length > 0 || answer.valueSetsCreated.length > 0) await recordAudit(ctx, req, {
         action: 'result_field.from_loinc', entityType: 'result_field', entityId: parsed.data.codes.join(','),

@@ -70,6 +70,20 @@ describe('loincRowToConcept', () => {
     expect(c.properties).toMatchObject({ EXAMPLE_UCUM_UNITS: 'mg/dL' });
   });
 
+  it('keeps LOINC\'s short name, and leaves it out when the row has none', () => {
+    const c = loincRowToConcept({ LOINC_NUM: '2093-3', LONG_COMMON_NAME: 'Cholesterol', SHORTNAME: 'Cholest SerPl-mCnc' });
+    expect(c.properties).toMatchObject({ SHORTNAME: 'Cholest SerPl-mCnc' });
+    expect(loincRowToConcept({ LOINC_NUM: '2093-3', LONG_COMMON_NAME: 'Cholesterol', SHORTNAME: '' }).properties).not.toHaveProperty('SHORTNAME');
+  });
+
+  it('keeps the short name from the LOINC fixture', async () => {
+    const fixture = join(__dirname, '..', 'ontology', 'adapters', '__fixtures__', 'loinc');
+    const s = memoryStore();
+    await loadLoinc(fixture, { acceptLicense: true }, s.store);
+    const chol = (s.concepts.flat() as Array<{ code: string; properties: Record<string, unknown> }>).find((c) => c.code === '2093-3');
+    expect(chol?.properties.SHORTNAME).toBe('Cholest SerPl-mCnc');
+  });
+
   it('throws a clean error (does not crash the process) when Loinc.csv is missing', async () => {
     const emptyDir = await mkdtemp(join(tmpdir(), 'openldr-loinc-empty-'));
     tempDirs.push(emptyDir);
