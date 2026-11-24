@@ -61,7 +61,7 @@ function liveStatus(state: SearchState, minQueryLength: number): string {
   }
 }
 
-export function TermPicker({ value, onChange, systemId, statuses, minQueryLength = DEFAULT_MIN_QUERY_LENGTH, id, ariaLabel, typed }: {
+export function TermPicker({ value, onChange, systemId, statuses, minQueryLength = DEFAULT_MIN_QUERY_LENGTH, id, ariaLabel, typed, detail }: {
   value: PickedTerm | null;
   onChange: (v: PickedTerm | null) => void;
   systemId: string;
@@ -76,6 +76,9 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
   /** Lets the typed text be used as it is, for a field that may hold a value outside the system (a
    *  range's unit). Offered when no result's code equals the text. Enter with no row highlighted uses it. */
   typed?: { label: (text: string) => string; onUse: (text: string) => void };
+  /** A muted second line under each result, such as LOINC's short name, class and unit. Null or
+   *  empty draws no line. Without it the rows look as they always have. */
+  detail?: (term: Term) => string | null;
 }): JSX.Element {
   const [query, setQuery] = useState('');
   const [state, setState] = useState<SearchState>({ kind: 'below-minimum' });
@@ -358,7 +361,16 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
                     className={`flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${i === active ? 'bg-accent ring-1 ring-inset ring-ring' : ''}`}
                   >
                     <span className="shrink-0 font-mono text-xs text-primary">{r.code}</span>
-                    <TruncatedText text={r.display ?? '—'} className="min-w-0 text-foreground" />
+                    {(() => {
+                      const line = detail?.(r);
+                      if (!line) return <TruncatedText text={r.display ?? '—'} className="min-w-0 text-foreground" />;
+                      return (
+                        <div className="flex min-w-0 flex-col">
+                          <TruncatedText text={r.display ?? '—'} className="min-w-0 text-foreground" />
+                          <span data-testid="term-detail" className="break-words text-xs text-muted-foreground">{line}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

@@ -2879,18 +2879,55 @@ export const createResultField = (i: { code?: string | null; display: string; un
   authFetch('/api/test-catalog/result-fields', jbody(i, 'POST')).then((r) => okJson<CreatedResultField>(r, 'add result field'));
 // Mirrors of @openldr/bootstrap's loinc-hints.ts (test catalog hints spec, calls 4 to 7).
 export interface LoincSpecimenHint {
-  snomed: string; display: string | null; equivalence: string;
+  /** Null on a match by name. */
+  snomed: string | null; display: string | null;
+  /** Null on a match by name. */
+  equivalence: string | null;
   specimenType: { system: string; code: string; display: string | null } | null;
   /** true only when this is the one exact match, so the sheet may tick it by itself. */
   tick: boolean;
+  /** LOINC's SNOMED link, or LOINC's SYSTEM part against the specimen type's name. */
+  via: 'snomed' | 'system-name';
+}
+/** The result field a LOINC code becomes on a test. */
+export interface LoincFieldPlan {
+  loinc: string;
+  /** The dictionary field that already stands for the code (CHOL for 2093-3), else the LOINC code. */
+  code: string;
+  /** LOINC's COMPONENT, else the long name, else the panel member name. */
+  display: string;
+  resultType: CatalogTestResultParam['resultType'];
+  /** Numeric only. */
+  unit: string | null;
+  /** Coded only. */
+  valueSetUrl: string | null;
+  /** True when `code` is already a dictionary field. False means Save makes it. */
+  exists: boolean;
+}
+export interface LoincPanelMemberHint {
+  code: string; display: string; required: boolean;
+  field: LoincFieldPlan | null;
+  /** Why `field` is null: the field standing for the code has another role or is retired. */
+  fieldProblem: string | null;
 }
 export interface LoincHints {
-  code: string; display: string | null; class: string | null;
+  code: string; display: string | null;
+  /** LOINC's SHORTNAME. */
+  shortName: string | null;
+  /** LOINC's COMPONENT. */
+  component: string | null;
+  /** LOINC's SYSTEM part, such as "Ser/Plas". */
+  systemPart: string | null;
+  class: string | null;
   categorySuggestion: { code: string; display: string | null } | null;
   unit: string | null; resultType: CatalogTestResultParam['resultType'];
   specimens: LoincSpecimenHint[];
   answers: Array<{ code: string; display: string }>;
-  panelMembers: Array<{ code: string; display: string | null; required: boolean }>;
+  panelMembers: LoincPanelMemberHint[];
+  /** Null for a panel, or when the existing field is unusable. */
+  field: LoincFieldPlan | null;
+  /** Why `field` is null on a code that is not a panel. */
+  fieldProblem: string | null;
 }
 export interface ResultFieldsFromLoincAnswer {
   params: CatalogTestResultParam[]; created: string[]; reused: string[]; valueSetsCreated: string[];

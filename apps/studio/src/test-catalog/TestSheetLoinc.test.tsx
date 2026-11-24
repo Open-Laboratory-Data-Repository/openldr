@@ -3,14 +3,25 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import '@/i18n';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
-// The LOINC picker is a search box. Here it is a button per code, so a test can pick one.
+// The LOINC picker is a search box. Here it is a button per code, so a test can pick one. It also
+// draws its second line for one sample term, so a test can read what the sheet passes as `detail`.
 vi.mock('@/terminology/TermPicker', () => ({
-  TermPicker: ({ onChange, ariaLabel }: { onChange: (v: { system: string; code: string; display: string | null } | null) => void; ariaLabel?: string }) => (
+  TermPicker: ({ onChange, ariaLabel, detail }: {
+    onChange: (v: { system: string; code: string; display: string | null } | null) => void; ariaLabel?: string;
+    detail?: (t: { shortName: string | null; class: string | null; unit: string | null }) => string | null;
+  }) => (
     <div>
       {['6429-5', '2093-3', '24331-1'].map((code) => (
         <button key={code} type="button" data-testid={`pick-${code}`} aria-label={ariaLabel} onClick={() => onChange({ system: 'http://loinc.org', code, display: null })}>{code}</button>
       ))}
+      {detail ? <span data-testid="detail-sample">{detail({ shortName: 'Cholest SerPl-mCnc', class: 'CHEM', unit: null })}</span> : null}
     </div>
+  ),
+}));
+// The LOINC tree. Here it is one button that picks 2093-3, as a click on a node would.
+vi.mock('@/terminology/ontology/OntologyBrowser', () => ({
+  OntologyBrowser: ({ onPick, codingSystemId }: { onPick: (n: { code: string; display: string }) => void; codingSystemId: string }) => (
+    <button type="button" data-testid={`browser-pick-${codingSystemId}`} onClick={() => onPick({ code: '2093-3', display: 'Cholesterol' })}>pick</button>
   ),
 }));
 vi.mock('@/api', async (orig) => {
@@ -40,24 +51,33 @@ const NEW_TEST = (over: Partial<api.CatalogTest> = {}): api.CatalogTest => ({
   lab: { enabled: false, specimenTypes: null, localDisplay: null }, ...over,
 });
 
-// The route's answers in task-4-report.md, for the fixture.
+// The route's answers in task-4-report.md, for the fixture, with Task 1's fields (loinc-hints.ts).
+const NO_FIELD = { shortName: null, component: null, systemPart: null, field: null, fieldProblem: null };
 const HIV: api.LoincHints = {
+  ...NO_FIELD,
   code: '6429-5', display: 'HIV identified in Blood by culture', class: 'MICRO',
   categorySuggestion: { code: 'MICRO', display: 'Microbiology' }, unit: null, resultType: 'text',
   specimens: [
-    { snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: { system: LOCAL, code: 'BLD', display: 'Blood' }, tick: true },
-    { snomed: '122555007', display: null, equivalence: 'narrower', specimenType: null, tick: false },
+    { snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: { system: LOCAL, code: 'BLD', display: 'Blood' }, tick: true, via: 'snomed' },
+    { snomed: '122555007', display: null, equivalence: 'narrower', specimenType: null, tick: false, via: 'snomed' },
   ],
   answers: [], panelMembers: [],
 };
 const CHOL: api.LoincHints = {
-  code: '2093-3', display: 'Cholesterol', class: 'CHEM', categorySuggestion: { code: 'CHEM', display: 'Chemistry' },
+  code: '2093-3', display: 'Cholesterol [Mass/volume] in Serum or Plasma', shortName: 'Cholest SerPl-mCnc',
+  component: 'Cholesterol', systemPart: 'Ser/Plas', class: 'CHEM', categorySuggestion: { code: 'CHEM', display: 'Chemistry' },
   unit: 'mg/dL', resultType: 'numeric', specimens: [], answers: [], panelMembers: [],
+  field: { loinc: '2093-3', code: '2093-3', display: 'Cholesterol', resultType: 'numeric', unit: 'mg/dL', valueSetUrl: null, exists: false },
+  fieldProblem: null,
 };
 const LIPID: api.LoincHints = {
+  ...NO_FIELD,
   code: '24331-1', display: 'Lipid panel', class: 'PANEL.CHEM', categorySuggestion: null, unit: null, resultType: 'text',
   specimens: [], answers: [],
-  panelMembers: [{ code: '2093-3', display: 'Cholesterol', required: true }, { code: '2571-8', display: 'Triglyceride', required: false }],
+  panelMembers: [
+    { code: '2093-3', display: 'Cholesterol', required: true, field: null, fieldProblem: null },
+    { code: '2571-8', display: 'Triglyceride', required: false, field: null, fieldProblem: null },
+  ],
 };
 const param = (code: string, over: Partial<api.CatalogTestResultParam> = {}): api.CatalogTestResultParam => (
   { system: RESULT, code, resultType: 'numeric', valueSetUrl: null, bands: [], ...over });
@@ -144,7 +164,7 @@ describe('TestSheet: LOINC hints fill empty fields', () => {
     await pickLoinc('2093-3');
     expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
     expect(screen.queryByTestId('param-6429-5')).toBeNull();
-    expect(screen.getByTestId('hint-result').textContent).toBe("LOINC's result field: Cholesterol (mg/dL).");
+    expect(screen.getByTestId('hint-result').textContent).toBe("LOINC's result field: Cholesterol [Mass/volume] in Serum or Plasma (mg/dL).");
     await choose('result-params-menu', 'use-loinc-field');
     expect(api.resultFieldsFromLoinc).toHaveBeenCalledTimes(1);
     expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['2093-3'], false);
@@ -158,9 +178,11 @@ describe('TestSheet: LOINC hints fill empty fields', () => {
     renderSheet(NEW_TEST({ category: 'CHEM', specimenTypes: [{ system: LOCAL, code: 'UR' }], resultParams: [kept] }));
     await pickLoinc('6429-5');
     expect(categoryText()).toBe('Chemistry');
-    expect(screen.getByTestId('hint-category').textContent).toBe('LOINC suggests Microbiology.');
+    expect(screen.getByTestId('hint-category').textContent).toBe('Microbiology, suggested');
     expect([checked('specimen-UR'), checked('specimen-BLD')]).toEqual([true, false]);
-    expect(screen.getByTestId('hint-specimens').textContent).toBe('LOINC suggests Blood, SNOMED 122555007.');
+    // Blood is marked on its own checkbox, so the line keeps only the SNOMED code no specimen type matched.
+    expect(screen.getByTestId('suggested-BLD')).toBeTruthy();
+    expect(screen.getByTestId('hint-specimens').textContent).toBe('LOINC suggests SNOMED 122555007.');
     expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
     expect(screen.getByTestId('hint-result').textContent).toBe("LOINC's result field: HIV identified in Blood by culture.");
     expect(await savedParams()).toEqual([kept]);
@@ -201,7 +223,8 @@ describe('TestSheet: Fill from panel', () => {
     expect(screen.queryByTestId('use-loinc-field')).toBeNull();
     await act(async () => { fireEvent.click(screen.getByTestId('fill-from-panel')); });
     expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['24331-1'], true);
-    expect(screen.getByText('Triglyceride')).toBeTruthy();
+    // Named in the field list. As a numeric field it also heads its own Reference ranges block.
+    expect(screen.getByTestId('param-2571-8').closest('label')!.textContent).toContain('Triglyceride');
     expect(toast.success).toHaveBeenCalledWith('1 result field from LOINC ticked on this test.');
     expect(await savedParams()).toEqual([param('HGB'), kept, param('2571-8')]);
   });
@@ -262,5 +285,112 @@ describe('TestSheet: hint lines on a phone', () => {
       expect(el.className).toContain('break-words');
       expect(el.parentElement!.className).toContain('min-w-0');
     }
+  });
+});
+
+function renderNew(options: api.TestCatalogOptions = OPTIONS) {
+  return render(<TestSheet target={{ kind: 'create' }} options={options} ownedHere onSaved={vi.fn()} onClose={vi.fn()} onOptionsChanged={vi.fn()} />);
+}
+const textbox = (name: string) => screen.getByRole('textbox', { name }) as HTMLInputElement;
+
+// Spec call 1, review focus 1.
+describe('TestSheet: a pick fills an empty name and short name', () => {
+  it("fills them from LOINC's long name and short name on a new test", async () => {
+    hintsFor({ '2093-3': CHOL });
+    renderNew();
+    await pickLoinc('2093-3');
+    expect(textbox('Name').value).toBe('Cholesterol [Mass/volume] in Serum or Plasma');
+    expect(textbox('Short name').value).toBe('Cholest SerPl-mCnc');
+  });
+
+  it('keeps a name and short name already typed', async () => {
+    hintsFor({ '2093-3': CHOL });
+    renderNew();
+    fireEvent.change(textbox('Name'), { target: { value: 'Total cholesterol' } });
+    fireEvent.change(textbox('Short name'), { target: { value: 'TCHOL' } });
+    await pickLoinc('2093-3');
+    expect(textbox('Name').value).toBe('Total cholesterol');
+    expect(textbox('Short name').value).toBe('TCHOL');
+  });
+});
+
+// Spec call 6.
+describe("TestSheet: LOINC's category, suggested", () => {
+  it('sets the suggested category in one click, and the button goes once they match', async () => {
+    hintsFor({ '6429-5': HIV });
+    renderSheet(NEW_TEST({ category: 'CHEM' }));
+    await pickLoinc('6429-5');
+    const button = screen.getByRole('button', { name: 'Microbiology, suggested' });
+    expect(button).toBe(screen.getByTestId('hint-category'));
+    await act(async () => { fireEvent.click(button); });
+    expect(categoryText()).toBe('Microbiology');
+    expect(screen.queryByTestId('hint-category')).toBeNull();
+  });
+
+  it('keeps a text line when no category here matches the class', async () => {
+    hintsFor({ '24331-1': LIPID });
+    renderSheet();
+    await pickLoinc('24331-1');
+    const hint = screen.getByTestId('hint-category');
+    expect(hint.tagName).not.toBe('BUTTON');
+    expect(hint.textContent).toBe('LOINC class PANEL.CHEM matches no category here.');
+  });
+});
+
+// Spec call 5.
+describe('TestSheet: suggested specimen types', () => {
+  const TWO: api.LoincHints = {
+    ...HIV,
+    specimens: [
+      { snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: { system: LOCAL, code: 'BLD', display: 'Blood' }, tick: false, via: 'snomed' },
+      { snomed: null, display: null, equivalence: null, specimenType: { system: LOCAL, code: 'UR', display: 'Urine' }, tick: false, via: 'system-name' },
+    ],
+  };
+
+  it('marks each matched, unticked specimen type, and ticking it removes the mark', async () => {
+    hintsFor({ '6429-5': TWO });
+    renderSheet();
+    await pickLoinc('6429-5');
+    // Two matches, so neither is ticked by itself.
+    expect([checked('specimen-BLD'), checked('specimen-UR')]).toEqual([false, false]);
+    expect(screen.getByTestId('suggested-BLD').textContent).toBe('suggested');
+    expect(screen.getByTestId('suggested-UR').textContent).toBe('suggested');
+    // Every match has a specimen type, so there is no line and no map advice.
+    expect(screen.queryByTestId('hint-specimens')).toBeNull();
+    expect(screen.queryByTestId('hint-specimens-map')).toBeNull();
+    fireEvent.click(screen.getByTestId('specimen-UR'));
+    expect(screen.queryByTestId('suggested-UR')).toBeNull();
+    expect(screen.getByTestId('suggested-BLD')).toBeTruthy();
+  });
+
+  it('marks nothing without hints', async () => {
+    hintsFor({});
+    renderSheet();
+    await pickLoinc('6429-5');
+    expect(screen.queryByTestId('suggested-BLD')).toBeNull();
+  });
+});
+
+// Spec call 7.
+describe('TestSheet: Browse LOINC and the search line', () => {
+  it('browses LOINC from the LOINC row menu, and a pick there fills the draft like a search pick', async () => {
+    hintsFor({ '2093-3': CHOL });
+    renderNew();
+    await choose('loinc-menu', 'browse-loinc');
+    await act(async () => { fireEvent.click(await screen.findByTestId('browser-pick-loinc-id')); });
+    expect(api.getLoincHints).toHaveBeenCalledWith('2093-3');
+    expect(textbox('Name').value).toBe('Cholesterol [Mass/volume] in Serum or Plasma');
+    expect(categoryText()).toBe('Chemistry');
+    expect(screen.queryByTestId('browser-pick-loinc-id')).toBeNull();
+  });
+
+  it('has no LOINC row menu when LOINC is not loaded here', () => {
+    renderNew({ ...OPTIONS, loinc: null });
+    expect(screen.queryByTestId('loinc-menu')).toBeNull();
+  });
+
+  it("gives each search result LOINC's short name, class and unit, skipping empty ones", () => {
+    renderNew();
+    expect(screen.getByTestId('detail-sample').textContent).toBe('Cholest SerPl-mCnc · CHEM');
   });
 });

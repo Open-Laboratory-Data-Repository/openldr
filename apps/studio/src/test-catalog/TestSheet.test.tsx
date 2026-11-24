@@ -540,3 +540,71 @@ describe('TestSheet: a range unit from UCUM', () => {
     expect(box.closest('.min-w-0')).not.toBeNull();
   });
 });
+
+// Spec section 2: the sheet reads top to bottom as Corlix's test editor does, LOINC first.
+describe('TestSheet: the order of its sections', () => {
+  const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+  const OWNED = ['LOINC', 'Basic information', 'Specimen types', 'Result parameters', 'Reference ranges', 'This lab'];
+
+  it('puts LOINC first on a new test', () => {
+    renderSheet();
+    expect(headings()).toEqual(OWNED);
+  });
+
+  it('puts LOINC first on a saved test', () => {
+    renderSheet({ target: { kind: 'edit', test: HIVVL } });
+    expect(headings()).toEqual(OWNED);
+  });
+
+  it('keeps the same order in the read-only view, with this lab last', () => {
+    renderSheet({ target: { kind: 'edit', test: HIVVL }, ownedHere: false });
+    expect(headings()).toEqual(['LOINC', 'Basic information', 'Specimen types', 'This lab']);
+  });
+
+  it('puts the code and name under Basic information, after the LOINC code', () => {
+    renderSheet();
+    const [loinc, basic] = screen.getAllByRole('heading', { level: 3 });
+    const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(before(loinc, screen.getByRole('textbox', { name: 'LOINC code' }))).toBe(true);
+    expect(before(screen.getByRole('textbox', { name: 'LOINC code' }), basic)).toBe(true);
+    expect(before(basic, screen.getByRole('textbox', { name: 'Code' }))).toBe(true);
+  });
+});
+
+describe('TestSheet: the Reference ranges section', () => {
+  const WITH_UNIT: api.TestCatalogOptions = {
+    ...OPTIONS,
+    resultParams: [
+      { system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin', units: 'g/dL' },
+      { system: 'urn:openldr:default_result', code: 'GRP', display: 'Blood group' },
+    ],
+  };
+  const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  const rangesHeading = () => screen.getByRole('heading', { level: 3, name: 'Reference ranges' });
+
+  it('shows a ticked numeric field under Reference ranges, and Add range there starts with its unit', async () => {
+    const test: api.CatalogTest = { ...HIVVL, resultParams: [
+      { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [] },
+      { system: 'urn:openldr:default_result', code: 'GRP', resultType: 'coded', valueSetUrl: null, bands: [] },
+    ] };
+    renderSheet({ target: { kind: 'edit', test }, options: WITH_UNIT });
+    // The field list stays in Result parameters, above the ranges.
+    expect(before(screen.getByTestId('param-HGB'), rangesHeading())).toBe(true);
+    const sub = screen.getByTestId('ranges-HGB');
+    expect(before(rangesHeading(), sub)).toBe(true);
+    expect(sub.textContent).toContain('Haemoglobin');
+    // A coded field has no ranges, so no sub-heading.
+    expect(screen.queryByTestId('ranges-GRP')).toBeNull();
+    expect(before(rangesHeading(), screen.getByTestId('param-menu-HGB'))).toBe(true);
+    await addBand('HGB');
+    const band = screen.getByTestId('band-HGB-1');
+    expect(before(sub, band)).toBe(true);
+    expect(screen.getByRole('textbox', { name: /unit for HGB band 1/i })).toHaveValue('g/dL');
+  });
+
+  it('says to tick a numeric field when no ticked field can have ranges', () => {
+    renderSheet({ target: { kind: 'edit', test: HIVVL }, options: WITH_UNIT });
+    expect(screen.getByText('Tick a numeric result field to give it reference ranges.')).toBeInTheDocument();
+    expect(screen.queryByTestId('ranges-HGB')).toBeNull();
+  });
+});
