@@ -186,6 +186,9 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   const [loincFills, setLoincFills] = useState<LoincAdded[]>([]);
   // A panel fill on a test that has fields waits here for Replace, Add or Cancel.
   const [fillAsk, setFillAsk] = useState<{ loinc: string; plans: LoincFieldPlan[] } | null>(null);
+  // New fields a record let go of because the operator unticked them. Ticked again, they are a hand tick,
+  // so no pick takes them back, and they are still made on Save.
+  const [keptPlans, setKeptPlans] = useState<LoincFieldPlan[]>([]);
   const hintsAsked = useRef(0);
   // The draft as last drawn, for the steps that run after a request comes back.
   const draftNow = useRef(draft);
@@ -215,6 +218,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     setAddedParams([]);
     setLoincPick(null);
     setLoincFills([]);
+    setKeptPlans([]);
+    setFillAsk(null);
   }, [target]);
 
   // A saved code shows its hints, but fills nothing: only a code picked here fills empty fields. Keyed
@@ -240,13 +245,27 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     }
   }
 
-  // A plan carries no system. Every result field is in the one result dictionary, so a new param takes
-  // its system, and Save puts the server's answer in its place.
+  // A plan carries no system. A field the sheet knows takes its own system. A new one takes the system of
+  // the dictionary's fields, or none on an install with no field yet, and Save puts the server's in place.
   const fieldSystem = options.resultParams[0]?.system ?? '';
+  const knownSystem = (code: string): string | undefined => knownParams.find((o) => o.code === code)?.system;
+  const systemOf = (code: string): string => knownSystem(code) ?? fieldSystem;
+
+  /** An unticked field is no longer the LOINC pick's or a fill's (spec call 2): ticked again, it is a hand
+   *  tick and stays on another pick. A new field moves to keptPlans, so it keeps its row. */
+  function letGoOfLoinc(code: string): void {
+    const plan = [loincPick, ...loincFills].flatMap((r) => r?.newFields ?? []).find((p) => p.code === code);
+    if (plan) setKeptPlans((prev) => (prev.some((p) => p.code === code) ? prev : [...prev, plan]));
+    const strip = (r: LoincAdded): LoincAdded => ({
+      ...r, params: r.params.filter((c) => c !== code), newFields: r.newFields.filter((p) => p.code !== code),
+    });
+    setLoincPick((r) => (r ? strip(r) : r));
+    setLoincFills((prev) => prev.map(strip));
+  }
 
   /** Use LOINC's result field: put it on the draft as a pick does, and count it as the pick's. */
   function takeLoincField(h: LoincHints, plan: LoincFieldPlan): void {
-    const out = addFromLoinc(draftNow.current.resultParams, [plan], 'add', fieldSystem);
+    const out = addFromLoinc(draftNow.current.resultParams, [plan], 'add', systemOf);
     set({ resultParams: out.params });
     const rec = loincRecord(h.code, [plan], out.added);
     const last = loincPickNow.current;
@@ -274,13 +293,14 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
 
   function applyFill(loinc: string, plans: LoincFieldPlan[], mode: 'add' | 'replace'): void {
     setFillAsk(null);
-    const out = addFromLoinc(draftNow.current.resultParams, plans, mode, fieldSystem);
+    const out = addFromLoinc(draftNow.current.resultParams, plans, mode, systemOf);
     set({ resultParams: out.params });
     const rec = loincRecord(loinc, plans, out.added);
     if (mode === 'replace') {
       // Replace took every param off the draft, so no earlier record has anything left to take back.
       setLoincPick(null);
       setLoincFills([rec]);
+      setKeptPlans([]);
     } else {
       setLoincFills((prev) => [...prev, rec]);
     }
@@ -320,7 +340,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     // The draft read here may not show the drop above yet, so drop again. It takes nothing twice.
     const params = dropLoincAdded(d.resultParams, last);
     if (h.field && h.panelMembers.length === 0 && params.length === 0) {
-      const out = addFromLoinc(params, [h.field], 'add', fieldSystem);
+      const out = addFromLoinc(params, [h.field], 'add', systemOf);
       patch.resultParams = out.params;
       setLoincPick(loincRecord(h.code, [h.field], out.added));
     }
@@ -335,7 +355,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   // The new fields a pick or fill put on the draft, not in the dictionary until Save makes them. Shown in
   // the field list by the plan's name, with its unit for a new range.
   const pendingFields: LoincFieldPlan[] = [];
-  for (const plan of [...(loincPick?.newFields ?? []), ...loincFills.flatMap((f) => f.newFields)]) {
+  for (const plan of [...(loincPick?.newFields ?? []), ...loincFills.flatMap((f) => f.newFields), ...keptPlans]) {
     if (!knownParams.some((o) => o.code === plan.code) && !pendingFields.some((p) => p.code === plan.code)) pendingFields.push(plan);
   }
   const paramOptions: ParamOption[] = [
@@ -344,7 +364,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   ];
   const isPending = (code: string) => pendingFields.some((p) => p.code === code);
   const loincFieldOffer = hints && hints.panelMembers.length === 0 && hints.field
-    && !(loincPick?.loinc === hints.code && loincPick.params.includes(hints.field.code)) ? hints.field : null;
+    && !draft.resultParams.some((p) => p.code === hints.field!.code) ? hints.field : null;
   /** Show these new dictionary fields and tick their parameters, keeping any already ticked as they are. */
   const takeParams = (fields: ParamOption[], params: CatalogTestResultParam[]): void => {
     setAddedParams((prev) => [...prev, ...fields.filter((f) => !prev.some((p) => p.code === f.code))]);
@@ -415,13 +435,16 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
           const answer = await resultFieldsFromLoinc(
             making.map((p) => p.loinc), false, Object.fromEntries(making.map((p) => [p.loinc, p.display])),
           );
-          const systemOf = (code: string) => answer.params.find((a) => a.code === code)?.system;
+          const answerSystem = (code: string) => answer.params.find((a) => a.code === code)?.system;
           resultParams = resultParams.map((p) => {
-            const system = systemOf(p.code);
+            const system = answerSystem(p.code);
             return system ? { ...p, system } : p;
           });
-          made = making.map((p) => ({ system: systemOf(p.code) ?? fieldSystem, code: p.code, display: p.display, units: p.unit }));
+          made = making.map((p) => ({ system: answerSystem(p.code) ?? fieldSystem, code: p.code, display: p.display, units: p.unit }));
         }
+        // A param put on the draft before the install had any field holds no system. If the options were
+        // read again since (after an Add field), the field is known now: take its system from there.
+        resultParams = resultParams.map((p) => (p.system ? p : { ...p, system: knownSystem(p.code) ?? p.system }));
         const input: CatalogTestInput = {
           display: draft.display,
           shortName: draft.shortName.trim() || null,
@@ -443,6 +466,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
           setAddedParams((prev) => [...prev, ...made.filter((f) => !prev.some((p) => p.code === f.code))]);
           setLoincPick((p) => (p ? { ...p, newFields: [] } : p));
           setLoincFills((prev) => prev.map((f) => ({ ...f, newFields: [] })));
+          setKeptPlans([]);
           onOptionsChanged?.();
         }
       }
@@ -706,7 +730,10 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                           <Checkbox
                             data-testid={`param-${p.code}`}
                             checked={!!chosen}
-                            onCheckedChange={(c) => set({ resultParams: toggleParam(draft.resultParams, p, !!c) })}
+                            onCheckedChange={(c) => {
+                              if (!c) letGoOfLoinc(p.code);
+                              set({ resultParams: toggleParam(draft.resultParams, p, !!c) });
+                            }}
                           />
                           <span className="min-w-0 flex-1 break-words text-foreground">{p.display ?? p.code}</span>
                           {chosen && isPending(p.code) ? (

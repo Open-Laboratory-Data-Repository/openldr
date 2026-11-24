@@ -14,25 +14,25 @@ describe('addFromLoinc', () => {
       resultType: 'coded', valueSetUrl: 'urn:mine',
       bands: [{ name: null, low: 0, high: 5, unit: 'mmol/L', sex: null, ageLow: null, ageHigh: null }],
     });
-    const out = addFromLoinc([param('HGB'), kept], [plan('2093-3'), plan('2571-8', { resultType: 'text' })], 'add', RESULT);
+    const out = addFromLoinc([param('HGB'), kept], [plan('2093-3'), plan('2571-8', { resultType: 'text' })], 'add', () => RESULT);
     expect(out.params).toEqual([param('HGB'), kept, param('2571-8', { resultType: 'text' })]);
     expect(out.added).toEqual(['2571-8']);
   });
 
   it("builds the param from the plan's code, type and value set", () => {
-    const out = addFromLoinc([], [plan('5778-6', { code: 'COL', resultType: 'coded', valueSetUrl: 'urn:loinc-answers:5778-6' })], 'add', RESULT);
+    const out = addFromLoinc([], [plan('5778-6', { code: 'COL', resultType: 'coded', valueSetUrl: 'urn:loinc-answers:5778-6' })], 'add', () => RESULT);
     expect(out.params).toEqual([param('COL', { resultType: 'coded', valueSetUrl: 'urn:loinc-answers:5778-6' })]);
     expect(out.added).toEqual(['COL']);
   });
 
   it('in replace mode leaves only the plans, in order', () => {
-    const out = addFromLoinc([param('HGB'), param('2093-3', { resultType: 'text' })], [plan('2093-3'), plan('2571-8')], 'replace', RESULT);
+    const out = addFromLoinc([param('HGB'), param('2093-3', { resultType: 'text' })], [plan('2093-3'), plan('2571-8')], 'replace', () => RESULT);
     expect(out.params).toEqual([param('2093-3'), param('2571-8')]);
     expect(out.added).toEqual(['2093-3', '2571-8']);
   });
 
   it('adds a code once when two plans name it', () => {
-    const out = addFromLoinc([], [plan('2093-3'), plan('2093-3')], 'add', RESULT);
+    const out = addFromLoinc([], [plan('2093-3'), plan('2093-3')], 'add', () => RESULT);
     expect(out.added).toEqual(['2093-3']);
   });
 });

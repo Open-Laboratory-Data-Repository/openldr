@@ -177,13 +177,15 @@ describe('TestSheet: LOINC hints fill empty fields', () => {
     expect(await savedParams()).toEqual([kept]);
   });
 
-  it("Use LOINC's result field keeps a parameter already ticked, its value set included", async () => {
+  it("offers no Use LOINC's result field when the test already holds it, and keeps that param as it is", async () => {
     hintsFor({ '2093-3': CHOL });
     const kept = param('2093-3', { resultType: 'coded', valueSetUrl: 'urn:openldr:valueset:mine' });
     renderSheet(NEW_TEST({ loinc: '2093-3', resultParams: [kept] }));
     await waitFor(() => expect(api.getLoincHints).toHaveBeenCalledWith('2093-3'));
-    await choose('result-params-menu', 'use-loinc-field');
-    expect(toast.success).toHaveBeenCalledWith("LOINC's result fields are already on this test.");
+    await openMenu('result-params-menu');
+    expect(screen.getByTestId('add-field')).toBeTruthy();
+    expect(screen.queryByTestId('use-loinc-field')).toBeNull();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(await savedParams()).toEqual([kept]);
     expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
   });
@@ -562,6 +564,51 @@ describe("TestSheet: LOINC's result field goes into the unsaved test", () => {
     await saveNew();
     expect(toast.error).toHaveBeenCalledWith('LOINC is not loaded');
     expect(api.createCatalogTest).not.toHaveBeenCalled();
+  });
+
+  it('a field the pick added, unticked and ticked again by hand, stays on another pick and is still made', async () => {
+    hintsFor({ '2093-3': CHOL, '2571-8': TRIG });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));
+    vi.mocked(api.createCatalogTest).mockResolvedValue(NEW_TEST());
+    renderNew();
+    await pickLoinc('2093-3');
+    fireEvent.click(screen.getByTestId('param-2093-3'));
+    expect(checked('param-2093-3')).toBe(false);
+    fireEvent.click(screen.getByTestId('param-2093-3'));
+    await pickLoinc('2571-8');
+    expect(checked('param-2093-3')).toBe(true);
+    expect(screen.getByTestId('new-2093-3')).toBeTruthy();
+    // Cholesterol is a hand tick now, so the new pick adds nothing.
+    expect(screen.queryByTestId('param-2571-8')).toBeNull();
+    await saveNew();
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['2093-3'], false, { '2093-3': 'Cholesterol' });
+    expect(vi.mocked(api.createCatalogTest).mock.calls[0][0].resultParams).toEqual([param('2093-3')]);
+  });
+
+  it("on an install with no result field yet, Save sends the server's system to the test", async () => {
+    hintsFor({ '2093-3': CHOL });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));
+    vi.mocked(api.createCatalogTest).mockResolvedValue(NEW_TEST());
+    renderNew({ ...OPTIONS, resultParams: [] });
+    await pickLoinc('2093-3');
+    await saveNew();
+    expect(vi.mocked(api.createCatalogTest).mock.calls[0][0].resultParams).toEqual([param('2093-3')]);
+  });
+
+  it('a param with no system takes the system of the field the options now hold', async () => {
+    hintsFor({ '2093-3': CHOL });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));
+    vi.mocked(api.createCatalogTest).mockRejectedValueOnce(new Error('taken')).mockResolvedValueOnce(NEW_TEST());
+    const target = { kind: 'create' as const };
+    const empty = { ...OPTIONS, resultParams: [] };
+    const view = render(<TestSheet target={target} options={empty} ownedHere onSaved={vi.fn()} onClose={vi.fn()} />);
+    await pickLoinc('2093-3');
+    await saveNew();
+    // The page read the choices again (an Add field), and the made field is in them now.
+    view.rerender(<TestSheet target={target} options={{ ...empty, resultParams: [{ system: RESULT, code: '2093-3', display: 'Cholesterol', units: 'mg/dL' }] }} ownedHere onSaved={vi.fn()} onClose={vi.fn()} />);
+    await saveNew();
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.createCatalogTest).mock.calls[1][0].resultParams).toEqual([param('2093-3')]);
   });
 
   // Review focus 3.

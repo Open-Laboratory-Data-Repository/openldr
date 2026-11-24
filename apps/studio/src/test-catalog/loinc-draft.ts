@@ -15,18 +15,18 @@ export interface LoincAdded {
 
 /** Put the plans' params on the draft. Add skips a code already there and keeps that param as it is (its
  *  type, value set and ranges). Replace drops every param first. `added` lists the codes put on the draft.
- *  `system` is the result dictionary's system, which a plan does not carry. */
+ *  `systemOf` gives a code's result dictionary system, which a plan does not carry. */
 export function addFromLoinc(
   params: CatalogTestResultParam[],
   plans: LoincFieldPlan[],
   mode: 'add' | 'replace',
-  system = '',
+  systemOf: (code: string) => string = () => '',
 ): { params: CatalogTestResultParam[]; added: string[] } {
   const next = mode === 'replace' ? [] : [...params];
   const added: string[] = [];
   for (const plan of plans) {
     if (next.some((p) => p.code === plan.code)) continue;
-    next.push({ system, code: plan.code, resultType: plan.resultType, valueSetUrl: plan.valueSetUrl, bands: [] });
+    next.push({ system: systemOf(plan.code), code: plan.code, resultType: plan.resultType, valueSetUrl: plan.valueSetUrl, bands: [] });
     added.push(plan.code);
   }
   return { params: next, added };
