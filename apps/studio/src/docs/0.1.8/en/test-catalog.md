@@ -191,7 +191,7 @@ The file has three columns for turnaround and review: `expected_tat_hours`, `cri
 
 ## Choose and map your test-list file
 
-Use an import when you have a list in CSV or Excel .xlsx format. A row matches a test by its internal id when the file has an **Internal id** column, else by its Test code. A row with a new Test code and no id adds a test. An import does not retire tests absent from the file or change local lab settings.
+Use an import when you have a list in CSV or Excel .xlsx format. A row matches a test by its internal id when the file has an **Internal id** column, else by its Test code. A row with a new Test code and no id adds a test. An id this catalog does not have, such as one in a file from another install, falls back to the Test code: the row updates the test with that Test code, or adds a new test with an id of its own. The review lists a note for each such row. An import does not retire tests absent from the file or change local lab settings.
 
 ### 1. Choose Import
 
@@ -618,7 +618,7 @@ On Windows, use `.\openldr.ps1` instead of `./openldr`. An install that loaded L
 
 A catalog received from central has read-only shared definitions. Local availability, local specimen choices and local names remain this lab's settings.
 
-Import accepts at most 5,000 rows and 5 MB. Excel import reads the first worksheet. Tests match by internal id, else by Test code. A file does not retire tests absent from it or change local settings.
+Import accepts at most 5,000 rows and 5 MB. Excel import reads the first worksheet. Tests match by internal id, else by Test code. An id from another install falls back to the Test code. A file does not retire tests absent from it or change local settings.
 
 Retiring a test hides it from the default active list. It can be restored. Catalog tests cannot be deleted. Use the Status filter when looking for retired tests.
 

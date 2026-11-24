@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { AppContext } from '@openldr/bootstrap';
+import { LAB_TESTS_VALUE_SET, TEST_CATALOG_SYSTEM, type AppContext } from '@openldr/bootstrap';
 import { resolveReferenceSource, type FormField, type ReferenceSource } from '@openldr/forms';
 import { ENTITY_TARGETS, type EntityRow, type EntitySearchResolver } from '@openldr/db';
 import { z } from 'zod';
@@ -20,7 +20,8 @@ const previewInput = z.object({
   offset: z.number().optional(),
 });
 
-export interface CodingRow { system: string; code: string; display: string | null }
+/** `testCode` is set on a catalog test's row: the Test code people read, while `code` stays its id. */
+export interface CodingRow { system: string; code: string; display: string | null; testCode?: string }
 export type ReferenceSearchResponse =
   | { kind: 'coding'; rows: CodingRow[]; total: number }
   | { kind: 'entity'; rows: EntityRow[]; total: number };
@@ -47,6 +48,20 @@ export function registerReferenceSearchRoutes(
     }
 
     if (q.length < MIN_QUERY) return { kind: 'coding', rows: [], total: 0 };
+
+    // The lab's test list is answered from the catalog's own list, whose search covers the Test code.
+    // $expand matches only the id and the name. Both list the active tests switched on here, under the
+    // lab's local name when it set one (labTestsCompose). The picked coding stays the id.
+    if (source.mode === 'valueset' && source.url === LAB_TESTS_VALUE_SET) {
+      const found = await ctx.testCatalog.list({ q, enabled: true, status: 'active', limit, offset });
+      return {
+        kind: 'coding',
+        rows: found.rows.map((t) => ({
+          system: TEST_CATALOG_SYSTEM, code: t.code, display: t.lab.localDisplay ?? t.display, testCode: t.testCode,
+        })),
+        total: found.total,
+      };
+    }
 
     if (source.mode === 'valueset') {
       const vs = await ctx.terminology.ops.expand(source.url, { filter: q, count: limit, offset });

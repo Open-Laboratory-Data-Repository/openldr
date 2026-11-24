@@ -191,7 +191,7 @@ O ficheiro tem três colunas para o tempo de resposta e a verificação: `expect
 
 ## Escolher e associar o ficheiro de testes
 
-Importe quando tiver uma lista CSV ou Excel .xlsx. Uma linha corresponde a um teste pelo identificador interno quando o ficheiro tem uma coluna **Identificador interno**, senão pelo código do teste. Uma linha com um código do teste novo e sem identificador acrescenta um teste. A importação não retira testes ausentes do ficheiro nem altera definições locais.
+Importe quando tiver uma lista CSV ou Excel .xlsx. Uma linha corresponde a um teste pelo identificador interno quando o ficheiro tem uma coluna **Identificador interno**, senão pelo código do teste. Uma linha com um código do teste novo e sem identificador acrescenta um teste. Um identificador que este catálogo não tem, por exemplo num ficheiro de outra instalação, dá lugar ao código do teste: a linha atualiza o teste com esse código, ou acrescenta um teste novo com identificador próprio. A revisão mostra uma nota para cada uma dessas linhas. A importação não retira testes ausentes do ficheiro nem altera definições locais.
 
 ### 1. Escolher Import
 
@@ -618,7 +618,7 @@ No Windows, use `.\openldr.ps1` em vez de `./openldr`. Uma instalação que carr
 
 Um catálogo recebido do central tem definições partilhadas de leitura. A disponibilidade, as escolhas de amostras e os nomes locais continuam a ser definições deste laboratório.
 
-A importação aceita até 5 000 linhas e 5 MB. A importação Excel lê a primeira folha. Os testes correspondem pelo identificador interno, senão pelo código do teste. Um ficheiro não retira testes ausentes nem altera definições locais.
+A importação aceita até 5 000 linhas e 5 MB. A importação Excel lê a primeira folha. Os testes correspondem pelo identificador interno, senão pelo código do teste. Um identificador de outra instalação dá lugar ao código do teste. Um ficheiro não retira testes ausentes nem altera definições locais.
 
 Retirar um teste oculta-o da lista ativa predefinida. Pode ser restaurado. Os testes do catálogo não podem ser eliminados. Use o filtro Status para encontrar testes retirados.
 

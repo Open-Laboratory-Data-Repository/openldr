@@ -277,6 +277,10 @@ function describeReport(report: CatalogImportReport, applied: boolean): string {
     lines.push('Refused:');
     for (const r of report.refused) lines.push(`  row ${r.line}${r.code ? `, ${r.code}` : ''}: ${r.reason}`);
   }
+  if (report.notes.length) {
+    lines.push('Notes:');
+    for (const n of report.notes) lines.push(`  row ${n.line}${n.code ? `, ${n.code}` : ''}: ${n.note}`);
+  }
   return lines.join('\n') + '\n';
 }
 

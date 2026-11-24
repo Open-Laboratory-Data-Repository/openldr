@@ -27,7 +27,7 @@ const FILE: api.CatalogImportFile = {
   suggested: { code: 'Test code', name: 'Test name', category: 'Category', specimenTypes: 'Specimens' },
 };
 const report = (over: Partial<api.CatalogImportReport> = {}): api.CatalogImportReport => ({
-  counts: { new: 1, changed: 0, unchanged: 0, refused: 0 }, refused: [],
+  counts: { new: 1, changed: 0, unchanged: 0, refused: 0 }, refused: [], notes: [],
   unmatched: { categories: [], specimens: [] }, categoriesToAdd: [], loincChecked: true, ...over,
 });
 const UNMATCHED = report({
@@ -170,6 +170,20 @@ describe('ImportCatalogSheet', () => {
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
     if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
     expect(await screen.findByTestId('import-apply')).toHaveAttribute('data-disabled');
+  });
+
+  // Test identity review I2: a row whose id names no test here is written, with a note.
+  it('lists the notes on written rows, such as an id from another install', async () => {
+    const note = 'The id tst-0123456789abcdef is not in this catalog, so the row adds a new test with an id of its own.';
+    vi.mocked(api.previewTestCatalogImport).mockResolvedValue(report({ notes: [{ line: 2, code: 'VL1', note }] }));
+    renderSheet();
+    await chooseFile('tests.csv');
+    await choose('import-next');
+    await choose('import-next');
+    await screen.findByText('Step 4 of 4: Review');
+    expect(screen.getByText('Notes on written rows')).toBeInTheDocument();
+    expect(screen.getByText(note)).toBeInTheDocument();
+    expect(screen.queryByText('Refused rows')).not.toBeInTheDocument();
   });
 
   it('shows a refusal from the server and stays on the step', async () => {

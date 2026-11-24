@@ -575,6 +575,7 @@ describe('test catalog: import preview', () => {
         { line: 5, code: null, reason: 'A test needs a Test code.' },
         { line: 6, code: 'HIVVL', reason: 'Test HIVVL is already on row 2 of this file.' },
       ],
+      notes: [],
       unmatched: { categories: [], specimens: [] },
       categoriesToAdd: [],
       loincChecked: false,
@@ -1415,7 +1416,7 @@ describe('test catalog: an internal id and a Test code', () => {
     expect(glu?.code).toMatch(ID);
   });
 
-  it('refuses a row with no Test code, an id that names no test, and a Test code another test or row holds', async () => {
+  it('refuses a row with no Test code and a Test code another test or row holds, and adds a row whose id names no test', async () => {
     const { catalog } = await buildCatalog({ realIds: true });
     const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
     await catalog.create({ testCode: 'GLU', display: 'Glucose' });
@@ -1432,11 +1433,10 @@ describe('test catalog: an internal id and a Test code', () => {
     });
     expect(report.refused).toEqual([
       { line: 2, code: null, reason: 'A test needs a Test code.' },
-      { line: 3, code: 'NEW', reason: 'No test has the id tst-0000000000000000. Leave the id empty to add a new test.' },
       { line: 4, code: 'GLU', reason: `Test code GLU is already used by Glucose (${(await catalog.findByTestCode('GLU'))?.code}).` },
       { line: 6, code: 'CRP', reason: 'Test code CRP is already on row 5 of this file.' },
     ]);
-    expect(report.counts).toEqual({ new: 1, changed: 0, unchanged: 0, refused: 4 });
+    expect(report.counts).toEqual({ new: 2, changed: 0, unchanged: 0, refused: 3 });
   });
 });
 
@@ -1456,11 +1456,27 @@ describe('test catalog: earlier Test codes', () => {
     // The test itself may go back, and HB is not listed twice.
     await catalog.update(hb.code, { testCode: 'HB', display: 'Haemoglobin' });
     expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HB', previousTestCodes: ['HGB'] });
+    // Earlier orders carry the code as it was spelt, so a spelling that differs only in case is kept
+    // for its test_map self row (test identity review, M1).
     await catalog.update(hb.code, { testCode: 'hgb', display: 'Haemoglobin' });
-    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'hgb', previousTestCodes: ['HB'] });
-    // A change of case only is the same code, so nothing is kept.
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'hgb', previousTestCodes: ['HGB', 'HB'] });
     await catalog.update(hb.code, { testCode: 'HGB', display: 'Haemoglobin' });
-    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HGB', previousTestCodes: ['HB'] });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HGB', previousTestCodes: ['HB', 'hgb'] });
+  });
+
+  it('keeps an earlier Test code that differs only in case, and publishes a self row for it', async () => {
+    const { db, admin, catalog } = await buildCatalog({ realIds: true });
+    const externalDb = await makeMigratedExternalDb();
+    const mapping = createTestMapping({ internalDb: db, externalDb, admin, logger: { warn: () => {} } });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await catalog.update(hb.code, { testCode: 'Hb', display: 'Haemoglobin' });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'Hb', previousTestCodes: ['HB'] });
+    // Uniqueness still ignores case: no other test may take hb.
+    await expect(catalog.create({ testCode: 'hb', display: 'Copy' })).rejects.toMatchObject({ kind: 'conflict' });
+    await mapping.publish({ apply: true });
+    const rows = await externalDb.selectFrom('test_map').select(['source_code', 'catalog_code'])
+      .where('source_system', '=', TEST_CODE_SYSTEM).orderBy('source_code').execute();
+    expect(rows).toEqual([{ source_code: 'HB', catalog_code: 'Hb' }, { source_code: 'Hb', catalog_code: 'Hb' }]);
   });
 
   it('keeps the earlier Test code when an import renames a test, and refuses a row that takes one', async () => {
@@ -1493,3 +1509,75 @@ describe('test catalog: earlier Test codes', () => {
   });
 });
 
+
+describe('test catalog: identity review fixes', () => {
+  const ID = /^tst-[0-9a-f]{16}$/;
+  const HEAD = ['id', 'code', 'name'];
+  const MAP = { id: 'id', code: 'code', name: 'name' };
+
+  // I2: an id that names no test here falls back to the Test code, else adds a new test with its own id.
+  it('imports a file exported from another install into a fresh catalog, with a note on each row', async () => {
+    const a = await buildCatalog({ realIds: true });
+    const hb = await a.catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    const glu = await a.catalog.create({ testCode: 'GLU', display: 'Glucose' });
+    const file = readCatalogImportFile(new TextEncoder().encode(await a.catalog.exportCsv()), 'csv');
+
+    const b = await buildCatalog({ realIds: true });
+    const report = await b.catalog.importApply({ table: file, columnMap: file.suggested });
+    expect(report.counts).toEqual({ new: 2, changed: 0, unchanged: 0, refused: 0 });
+    expect(report.notes).toEqual([
+      { line: 2, code: 'GLU', note: `The id ${glu.code} is not in this catalog, so the row adds a new test with an id of its own.` },
+      { line: 3, code: 'HB', note: `The id ${hb.code} is not in this catalog, so the row adds a new test with an id of its own.` },
+    ]);
+    const made = (await b.catalog.list(q())).rows;
+    expect(made.map((t) => t.testCode)).toEqual(['GLU', 'HB']);
+    for (const t of made) expect(t.code).toMatch(ID);
+    expect(made.map((t) => t.code)).not.toContain(hb.code);
+    expect(made.map((t) => t.code)).not.toContain(glu.code);
+  });
+
+  it('imports that file into a catalog that has one of its Test codes, and updates that test', async () => {
+    const a = await buildCatalog({ realIds: true });
+    const hb = await a.catalog.create({ testCode: 'HB', display: 'Haemoglobin, total' });
+    await a.catalog.create({ testCode: 'GLU', display: 'Glucose' });
+    const file = readCatalogImportFile(new TextEncoder().encode(await a.catalog.exportCsv()), 'csv');
+
+    const b = await buildCatalog({ realIds: true });
+    const own = await b.catalog.create({ testCode: 'hb', display: 'Haemoglobin' });
+    const report = await b.catalog.importApply({ table: file, columnMap: file.suggested });
+    expect(report.counts).toEqual({ new: 1, changed: 1, unchanged: 0, refused: 0 });
+    expect(report.notes).toContainEqual(
+      { line: 3, code: 'HB', note: `The id ${hb.code} is not in this catalog, so the row was matched on its Test code HB.` },
+    );
+    expect(await b.catalog.get(own.code)).toMatchObject({ testCode: 'HB', display: 'Haemoglobin, total' });
+    expect((await b.catalog.list(q())).total).toBe(2);
+  });
+
+  // M2: the catalog reads in Test code order, case ignored, then by id.
+  it('lists and exports tests in Test code order, not id order', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ testCode: 'A1', display: 'First by id' });
+    await catalog.update('A1', { testCode: 'ZZ', display: 'First by id' });
+    await catalog.create({ testCode: 'b2', display: 'Second' });
+    await catalog.create({ testCode: 'C3', display: 'Third' });
+    expect((await catalog.list(q())).rows.map((t) => t.testCode)).toEqual(['b2', 'C3', 'ZZ']);
+    const lines = (await catalog.exportCsv()).trim().split(/\r?\n/).slice(1);
+    expect(lines.map((l) => l.split(',')[1])).toEqual(['b2', 'C3', 'ZZ']);
+  });
+
+  // M7: a row that renames A from X to Y, then a row that gives X to B. X still names A's earlier orders.
+  it('refuses a later row that gives another test the code an earlier row renamed away', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const a = await catalog.create({ testCode: 'X', display: 'Test A' });
+    const b = await catalog.create({ testCode: 'B', display: 'Test B' });
+    const report = await catalog.importApply({
+      table: { headers: HEAD, rows: [[a.code, 'Y', 'Test A'], [b.code, 'X', 'Test B'], ['', 'X', 'Test C']] },
+      columnMap: MAP,
+    });
+    expect(report.counts).toEqual({ new: 0, changed: 1, unchanged: 0, refused: 2 });
+    expect(report.refused.map((r) => [r.line, r.code])).toEqual([[3, 'X'], [4, 'X']]);
+    expect(await catalog.get(a.code)).toMatchObject({ testCode: 'Y' });
+    expect(await catalog.get(b.code)).toMatchObject({ testCode: 'B' });
+    await expect(catalog.update(b.code, { testCode: 'X', display: 'Test B' })).rejects.toMatchObject({ kind: 'conflict' });
+  });
+});

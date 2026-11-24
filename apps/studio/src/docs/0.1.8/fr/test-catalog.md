@@ -191,7 +191,7 @@ Le fichier a trois colonnes pour le délai et la vérification : `expected_tat_h
 
 ## Choisir le fichier de tests et associer ses colonnes
 
-Importez une liste CSV ou Excel .xlsx. Une ligne correspond à un test par son identifiant interne quand le fichier a une colonne **Identifiant interne**, sinon par son code du test. Une ligne avec un nouveau code du test et sans identifiant ajoute un test. L'importation ne retire pas les tests absents du fichier et ne change pas les réglages locaux.
+Importez une liste CSV ou Excel .xlsx. Une ligne correspond à un test par son identifiant interne quand le fichier a une colonne **Identifiant interne**, sinon par son code du test. Une ligne avec un nouveau code du test et sans identifiant ajoute un test. Un identifiant absent de ce catalogue, par exemple dans un fichier venu d'une autre installation, laisse la place au code du test : la ligne met à jour le test qui a ce code, ou ajoute un nouveau test avec son propre identifiant. La revue affiche une note pour chacune de ces lignes. L'importation ne retire pas les tests absents du fichier et ne change pas les réglages locaux.
 
 ### 1. Choisir Import
 
@@ -618,7 +618,7 @@ Sous Windows, utilisez `.\openldr.ps1` au lieu de `./openldr`. Une installation 
 
 Un catalogue reçu du central a des définitions partagées en lecture seule. La disponibilité, les choix de prélèvements et les noms locaux restent les réglages de ce laboratoire.
 
-L'importation accepte au maximum 5 000 lignes et 5 Mo. Excel lit la première feuille. Les tests correspondent par identifiant interne, sinon par code du test. Un fichier ne retire pas les tests absents et ne change pas les réglages locaux.
+L'importation accepte au maximum 5 000 lignes et 5 Mo. Excel lit la première feuille. Les tests correspondent par identifiant interne, sinon par code du test. Un identifiant venu d'une autre installation laisse la place au code du test. Un fichier ne retire pas les tests absents et ne change pas les réglages locaux.
 
 Retirer un test le masque de la liste active par défaut. Il peut être restauré. Les tests du catalogue ne peuvent pas être supprimés. Utilisez le filtre Status pour trouver les tests retirés.
 

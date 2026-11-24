@@ -51,6 +51,8 @@ describe('test mapping: writes', () => {
     const byId = await mapping.set(DISA, 'CD4P', 'tst-1111111111111111');
     expect(await active(internalDb, 'CD4P')).toEqual([{ to_code: byId.after, map_type: 'SAME-AS' }]);
     expect(byId.after).toBe('tst-1111111111111111');
+    // The Test code rides along, so a door can print what people read (test identity review, M6).
+    expect([byCode.testCode, byId.testCode]).toEqual(['VL', 'CD4']);
   });
 
   it('set refuses a source in the Test code system: those are catalog tests already', async () => {

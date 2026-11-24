@@ -2391,7 +2391,7 @@ export {
   type TestCatalog, type CatalogTest, type CatalogTestInput, type CatalogListQuery, type CatalogListResult,
   type LabSettingsInput, type SpecimenCoding,
   type CatalogOptions, type CatalogCategoryOption, type CatalogSpecimenOption, type CatalogResultParamOption,
-  type CatalogImportFile, type CatalogImportInput, type CatalogImportReport, type CatalogImportRefusal,
+  type CatalogImportFile, type CatalogImportInput, type CatalogImportReport, type CatalogImportRefusal, type CatalogImportNote,
   type CatalogUnmatchedValue,
 } from './test-catalog';
 export * from './test-mapping';

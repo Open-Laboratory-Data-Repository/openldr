@@ -18,7 +18,8 @@ function toRows(res: ReferenceSearchResponse): Row[] {
         value: { reference: r.reference, display: r.display },
       }))
     : res.rows.map((r) => ({
-        key: `${r.system}|${r.code}`, display: r.display ?? r.code, secondary: r.code,
+        // A catalog test's row reads its Test code. Its code is the internal id, which stays the answer.
+        key: `${r.system}|${r.code}`, display: r.display ?? r.code, secondary: r.testCode ?? r.code,
         value: { system: r.system, code: r.code, display: r.display },
       }));
 }

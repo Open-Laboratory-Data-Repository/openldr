@@ -60,7 +60,8 @@ export async function runTestMappingSet(system: string, code: string, targetCode
       action: 'test_mapping.set', entityType: 'test_mapping', entityId: `${system}|${code}`,
       before: { catalogCode: change.before }, after: { catalogCode: change.after }, metadata: { level, rebuild: change.rebuild.ok },
     });
-    const done = level === 'result' ? `${code} now maps to result field ${targetCode}.` : `${code} now maps to ${targetCode}.`;
+    // People read the Test code. The audit above keeps the id.
+    const done = level === 'result' ? `${code} now maps to result field ${targetCode}.` : `${code} now maps to ${change.testCode ?? targetCode}.`;
     process.stdout.write(opts.json ? JSON.stringify(change, null, 2) + '\n' : `${done}\n`);
     staleWarning(change.rebuild);
     return 0;

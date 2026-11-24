@@ -1627,9 +1627,11 @@ export const fr: EnShape = {
       categoriesToAdd: 'Catégories à ajouter',
       nothingToApply: "Rien à appliquer : aucune ligne n'est nouvelle ou modifiée.",
       refusedTitle: 'Lignes refusées',
+      notesTitle: 'Notes sur les lignes écrites',
       colRow: 'Ligne',
       colCode: 'Code',
       colReason: 'Motif',
+      colNote: 'Note',
       applied: '{{new}} ajoutés, {{changed}} modifiés.',
     },
     sheet: {

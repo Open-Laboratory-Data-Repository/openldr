@@ -66,6 +66,8 @@ export function ImportCatalogSheet({ open, options, onClose, onImported }: {
   const [report, setReport] = useState<CatalogImportReport | null>(null);
   const [refusedPage, setRefusedPage] = useState(0);
   const [refusedPageSize, setRefusedPageSize] = useState(10);
+  const [notesPage, setNotesPage] = useState(0);
+  const [notesPageSize, setNotesPageSize] = useState(10);
   const [busy, setBusy] = useState(false);
 
   // Each opening starts over. Nothing is kept between imports.
@@ -79,6 +81,7 @@ export function ImportCatalogSheet({ open, options, onClose, onImported }: {
     setValueMap(NO_ANSWERS);
     setReport(null);
     setRefusedPage(0);
+    setNotesPage(0);
   }, [open]);
 
   const fail = (e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); };
@@ -129,6 +132,7 @@ export function ImportCatalogSheet({ open, options, onClose, onImported }: {
     try {
       setReport(await previewTestCatalogImport(i));
       setRefusedPage(0);
+      setNotesPage(0);
       setStep(to);
     } catch (e) {
       fail(e);
@@ -191,6 +195,7 @@ export function ImportCatalogSheet({ open, options, onClose, onImported }: {
   const headers = file ? [...new Set(file.headers.filter((h) => h !== ''))] : [];
   const unmatched = report?.unmatched ?? { categories: [], specimens: [] };
   const refusedRows = report?.refused.slice(refusedPage * refusedPageSize, (refusedPage + 1) * refusedPageSize) ?? [];
+  const noteRows = report?.notes.slice(notesPage * notesPageSize, (notesPage + 1) * notesPageSize) ?? [];
   const valueLabel = 'max-w-[40vw] break-words sm:max-w-[16rem]';
 
   return (
@@ -440,6 +445,38 @@ export function ImportCatalogSheet({ open, options, onClose, onImported }: {
                     total={report.refused.length}
                     onPageChange={setRefusedPage}
                     onPageSizeChange={(n) => { setRefusedPageSize(n); setRefusedPage(0); }}
+                  />
+                </>
+              )}
+              {report.notes.length > 0 && (
+                <>
+                  <div className="border-y border-border px-6 py-3 text-sm font-medium text-foreground">
+                    {t('testCatalog.import.notesTitle')}
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-16 pl-6">{t('testCatalog.import.colRow')}</TableHead>
+                        <TableHead>{t('testCatalog.import.colCode')}</TableHead>
+                        <TableHead className="pr-6">{t('testCatalog.import.colNote')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {noteRows.map((r) => (
+                        <TableRow key={`${r.line}`}>
+                          <TableCell className="pl-6">{r.line}</TableCell>
+                          <TableCell className="whitespace-nowrap font-mono text-xs">{r.code ?? t('testCatalog.none')}</TableCell>
+                          <TableCell className="pr-6">{r.note}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <TablePagination
+                    page={notesPage}
+                    pageSize={notesPageSize}
+                    total={report.notes.length}
+                    onPageChange={setNotesPage}
+                    onPageSizeChange={(n) => { setNotesPageSize(n); setNotesPage(0); }}
                   />
                 </>
               )}

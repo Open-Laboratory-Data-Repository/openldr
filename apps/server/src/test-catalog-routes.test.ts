@@ -33,7 +33,7 @@ const OPTIONS: CatalogOptions = {
 };
 
 const REPORT: CatalogImportReport = {
-  counts: { new: 1, changed: 0, unchanged: 0, refused: 0 }, refused: [],
+  counts: { new: 1, changed: 0, unchanged: 0, refused: 0 }, refused: [], notes: [],
   unmatched: { categories: [], specimens: [] }, categoriesToAdd: [{ code: 'VIRO', display: 'Virology' }], loincChecked: false,
 };
 

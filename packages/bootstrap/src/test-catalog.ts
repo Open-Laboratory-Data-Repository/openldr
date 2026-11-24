@@ -200,10 +200,20 @@ export interface CatalogUnmatchedValue {
   rows: number;
 }
 
+/** Something an import did with a row that the operator should know, though the row was not refused. */
+export interface CatalogImportNote {
+  /** The spreadsheet row. The header is row 1. */
+  line: number;
+  code: string | null;
+  note: string;
+}
+
 /** What an import will do (preview) or did (apply). Both are worked out by the same code. */
 export interface CatalogImportReport {
   counts: { new: number; changed: number; unchanged: number; refused: number };
   refused: CatalogImportRefusal[];
+  /** Rows written with a note, such as an id from another install that names no test here. */
+  notes: CatalogImportNote[];
   /** Every text that matched nothing on its own, answered or not, so the Values step can list it. */
   unmatched: { categories: CatalogUnmatchedValue[]; specimens: CatalogUnmatchedValue[] };
   /** The new categories the operator named that a written test uses. */
@@ -380,15 +390,13 @@ export function previousTestCodesOf(properties: unknown): string[] {
 }
 
 /** The earlier Test codes after a test's Test code goes from `from` to `to`: `from` is added when it is
- *  a different code, and `to` leaves the list, so going back never lists a code twice. Compared by
- *  testCodeKey. */
+ *  spelt differently, and `to` leaves the list, so going back never lists a code twice. Compared by exact
+ *  spelling: earlier orders carry the code as it was spelt, so "HB" stays when the code becomes "Hb", for
+ *  its test_map self row. Uniqueness between tests still compares by testCodeKey (refuseTakenTestCode). */
 function nextPreviousTestCodes(previous: string[], from: string | null, to: string): string[] {
   const out: string[] = [];
-  const seen = new Set<string>();
-  for (const c of from !== null && testCodeKey(from) !== testCodeKey(to) ? [...previous, from] : previous) {
-    const key = testCodeKey(c);
-    if (key === testCodeKey(to) || seen.has(key)) continue;
-    seen.add(key);
+  for (const c of from !== null && from !== to ? [...previous, from] : previous) {
+    if (c === to || out.includes(c)) continue;
     out.push(c);
   }
   return out;
@@ -509,6 +517,15 @@ function uniqueCodings(list: SpecimenCoding[]): SpecimenCoding[] {
   return out;
 }
 
+/** The catalog's order: Test code compared by testCodeKey, then id. Plain code-point order, as the database
+ *  sorted ids before, so it does not change with the server's locale. */
+function byTestCode(a: { code: string; testCode: string }, b: { code: string; testCode: string }): number {
+  const ka = testCodeKey(a.testCode);
+  const kb = testCodeKey(b.testCode);
+  if (ka !== kb) return ka < kb ? -1 : 1;
+  return a.code < b.code ? -1 : a.code > b.code ? 1 : 0;
+}
+
 /** Order picker choices by what the operator reads: the name, or the code when there is none. */
 function byLabel(a: { code: string; display: string | null }, b: { code: string; display: string | null }): number {
   return (a.display ?? a.code).localeCompare(b.display ?? b.code);
@@ -595,11 +612,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       links = links.where('from_code', '=', code);
       labs = labs.where('code', '=', code);
     }
-    // Codes are unique within the system, so ordering by code alone gives a stable page (AGENTS.md section 7).
-    const rows = await concepts.orderBy('code').execute();
+    const rows = await concepts.execute();
     const loincByCode = new Map((await links.execute()).map((l) => [l.from_code, l.to_code]));
     const labByCode = new Map((await labs.execute()).map((l) => [l.code, l as LabRow]));
-    return rows.map((r) => toTest(r, loincByCode.get(r.code) ?? null, labByCode.get(r.code)));
+    // People read the Test code, so the catalog sorts by it, case ignored. The id breaks a tie and is
+    // unique, so a page is stable (AGENTS.md section 7).
+    return rows.map((r) => toTest(r, loincByCode.get(r.code) ?? null, labByCode.get(r.code))).sort(byTestCode);
   }
 
   async function list(query: CatalogListQuery): Promise<CatalogListResult> {
@@ -634,10 +652,10 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
    *  so uniqueness is checked here rather than by an index. */
   async function testCodes(): Promise<Array<{ id: string; testCode: string; previous: string[]; display: string }>> {
     const rows = await db.selectFrom('terminology_concepts').select(['code', 'display', 'properties'])
-      .where('system', '=', TEST_CATALOG_SYSTEM).orderBy('code').execute();
+      .where('system', '=', TEST_CATALOG_SYSTEM).execute();
     return rows.map((r) => ({
       id: r.code, testCode: testCodeOf(r.code, r.properties), previous: previousTestCodesOf(r.properties), display: r.display ?? r.code,
-    }));
+    })).sort((a, b) => byTestCode({ code: a.id, testCode: a.testCode }, { code: b.id, testCode: b.testCode }));
   }
 
   async function findByTestCode(testCode: string): Promise<CatalogTest | null> {
@@ -1104,6 +1122,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     const report: CatalogImportReport = {
       counts: { new: 0, changed: 0, unchanged: 0, refused: 0 },
       refused: [],
+      notes: [],
       unmatched: { categories: [], specimens: [] },
       categoriesToAdd: [],
       loincChecked: ctx.loincLoaded,
@@ -1115,13 +1134,11 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
 
     for (const { line, values: v } of rows) {
       // A row names its test by id when it gives one, else by Test code (spec call 6). An id that names
-      // no test is refused: CE makes ids, a file never does.
+      // no test here, such as one from a file another install exported, falls back to the Test code. With
+      // no match the row adds a new test, whose id CE makes: a file never sets one (controller ruling I2).
       const id = v.id || null;
       const byId = id ? tests.get(id) : undefined;
-      if (id && !byId) {
-        report.refused.push({ line, code: v.code || null, reason: `No test has the id ${id}. Leave the id empty to add a new test.` });
-        continue;
-      }
+      const idNotHere = id !== null && !byId;
       // An unmapped code column keeps the Test code of the test the id names.
       const code = v.code === undefined ? byId?.testCode ?? null : v.code || null;
       if (!code) {
@@ -1224,6 +1241,14 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         if (!(err instanceof TestCatalogError)) throw err;
         report.refused.push({ line, code, reason: err.message });
         continue;
+      }
+      if (idNotHere) {
+        report.notes.push({
+          line, code,
+          note: before
+            ? `The id ${id} is not in this catalog, so the row was matched on its Test code ${code}.`
+            : `The id ${id} is not in this catalog, so the row adds a new test with an id of its own.`,
+        });
       }
       if (!before) {
         report.counts.new += 1;

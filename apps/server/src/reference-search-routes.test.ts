@@ -16,6 +16,7 @@ const FORM = {
       { id: 'loincById',  fieldType: 'reference', displayLabel: 'LOINC',   referenceTarget: 'cs-url-LOINC' },
       { id: 'sourceless', fieldType: 'reference', displayLabel: 'None' },
       { id: 'vaccine',    fieldType: 'reference', displayLabel: 'Vaccine', valueSetUrl: 'http://hl7.org/fhir/ValueSet/vaccine-code' },
+      { id: 'labTests',   fieldType: 'reference', displayLabel: 'Tests',   valueSetUrl: 'urn:openldr:valueset:lab-tests' },
     ],
   },
 };
@@ -40,13 +41,24 @@ const offsets: number[] = [];
 let opsExpand = vi.fn();
 /** Systems `terms.search` was actually called with, so the cs-url-* resolution can be asserted. */
 const searchedSystems: string[] = [];
+/** The catalog's list, which answers the lab's test list. */
+let catalogList = vi.fn();
 
 function makeApp(capabilities = ['forms.view', 'forms.edit'], mayOpen = true) {
   calls.length = 0;
   offsets.length = 0;
   searchedSystems.length = 0;
   opsExpand = vi.fn();
+  catalogList = vi.fn(async () => ({
+    rows: [{
+      code: 'tst-0123456789abcdef', testCode: 'HB', display: 'Haemoglobin',
+      lab: { enabled: true, specimenTypes: null, localDisplay: 'Hb (local)' },
+    }],
+    total: 1,
+    ownedHere: true,
+  }));
   const ctx = {
+    testCatalog: { list: catalogList },
     forms: { get: async (id: string) => (id === FORM.id ? FORM : id === DRAFT_FORM.id ? DRAFT_FORM : null) },
     formAccess: { mayOpen: async () => mayOpen },
     terminology: {
@@ -179,6 +191,20 @@ describe('reference search', () => {
 
   // Coding-path counterpart to the entity-path "under two characters" test above: a valueset-
   // bound field must also skip the store, not just the entity resolver.
+  // The Tests field binds the lab's test list. $expand matches only the id and the name, so a search
+  // by Test code found nothing and a row showed the id (test identity review, I1).
+  it('answers the lab test list from the catalog: it searches the Test code and names it on the row', async () => {
+    const res = await makeApp().inject({ method: 'GET', url: url('labTests', 'q=hb&limit=10&offset=5') });
+    expect(res.statusCode).toBe(200);
+    expect(catalogList).toHaveBeenCalledWith({ q: 'hb', enabled: true, status: 'active', limit: 10, offset: 5 });
+    expect(opsExpand).not.toHaveBeenCalled();
+    expect(res.json()).toEqual({
+      kind: 'coding',
+      rows: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'tst-0123456789abcdef', display: 'Hb (local)', testCode: 'HB' }],
+      total: 1,
+    });
+  });
+
   it('returns an empty result for a valueset-bound field under two characters, without hitting the terminology store', async () => {
     const res = await makeApp().inject({ method: 'GET', url: url('vaccine', 'q=d') });
     expect(res.json()).toEqual({ kind: 'coding', rows: [], total: 0 });

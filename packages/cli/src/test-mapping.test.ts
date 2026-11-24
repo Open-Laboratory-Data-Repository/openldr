@@ -65,6 +65,16 @@ describe('openldr test-catalog map', () => {
     expect(audit).toMatchObject([{ action: 'test_mapping.set', before: { catalogCode: null }, after: { catalogCode: 'VL' } }]);
   });
 
+  // Test identity review M6: the id is for the audit, people read the Test code.
+  it('set prints the Test code of the test it now maps to, even when given the id', async () => {
+    testMapping.set.mockResolvedValue({ system: DISA, code: 'HIVVL', before: null, after: 'tst-0123456789abcdef', testCode: 'VL', rebuild: REBUILT });
+    const io = capture();
+    expect(await runTestMappingSet(DISA, 'HIVVL', 'tst-0123456789abcdef', { json: false })).toBe(0);
+    expect(io.out()).toContain('HIVVL now maps to VL.');
+    expect(io.out()).not.toContain('tst-0123456789abcdef');
+    expect(audit).toMatchObject([{ after: { catalogCode: 'tst-0123456789abcdef' } }]);
+  });
+
   it('set says when the warehouse copy could not be rebuilt, and still exits 0', async () => {
     testMapping.set.mockResolvedValue({ system: DISA, code: 'HIVVL', before: null, after: 'VL', rebuild: { ok: false, error: 'boom' } });
     const io = capture();

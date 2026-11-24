@@ -139,6 +139,8 @@ export interface TestMappingChange {
   code: string;
   before: string | null;
   after: string | null;
+  /** The Test code of the test `after` names, set by a test-level set. `after` stays the id. */
+  testCode?: string;
   rebuild: RebuildOutcome;
 }
 
@@ -310,13 +312,18 @@ export function createTestMapping(deps: TestMappingDeps) {
     const self = ids.map((code) => row(MAP_TARGET_SYSTEM[level], code, code));
     // A test also maps from its Test code, which a new order leads with when it has no LOINC link, and
     // from each earlier Test code, which its earlier orders carry. All name the current Test code.
-    // Test codes, earlier ones included, are unique ignoring case. Should two ever match, current codes
-    // win over earlier ones and then the first id keeps it, so the key never collides.
+    // Orders carry a code as it was spelt, so each spelling of a test's codes gets its own row ("HB" and
+    // "Hb" both). Test codes, earlier ones included, are unique between tests ignoring case. Should two
+    // tests ever match, current codes win over earlier ones and then the first id keeps it.
     if (level === 'test') {
-      const taken = new Set<string>();
+      const owner = new Map<string, string>();
+      const spelt = new Set<string>();
       const add = (id: string, testCode: string): void => {
-        if (taken.has(testCodeKey(testCode))) return;
-        taken.add(testCodeKey(testCode));
+        const key = testCodeKey(testCode);
+        const held = owner.get(key);
+        if ((held !== undefined && held !== id) || spelt.has(testCode)) return;
+        owner.set(key, id);
+        spelt.add(testCode);
         self.push(row(TEST_CODE_SYSTEM, testCode, id));
       };
       for (const id of ids) add(id, targets.get(id)!.published);
@@ -493,18 +500,29 @@ export function createTestMapping(deps: TestMappingDeps) {
     return OWN_SYSTEMS[level].includes(system) ? `${system} codes are ${TARGET_NOUN[level]}s already and need no mapping` : null;
   }
 
-  /** The target a typed code names, keyed by id. A test is found by its Test code first, trimmed and
-   *  case ignored, then by its id, the rule TestCatalogService.resolve keeps. A field by its code. */
-  function findTarget(targets: Map<string, CatalogEntry>, typed: string, level: MapLevel): [string, CatalogEntry] | null {
-    if (level === 'test') {
-      const key = testCodeKey(typed);
-      for (const [id, entry] of targets) if (testCodeKey(entry.published) === key) return [id, entry];
+  /** Finds the target a typed code names, keyed by id. A test is found by its Test code first, trimmed
+   *  and case ignored, then by its id, the rule TestCatalogService.resolve keeps. A field by its code.
+   *  The Test code index is built once, so an import does not scan every test for each row. */
+  function targetFinder(targets: Map<string, CatalogEntry>, level: MapLevel): (typed: string) => [string, CatalogEntry] | null {
+    if (level !== 'test') {
+      return (typed) => {
+        const entry = targets.get(typed);
+        return entry ? [typed, entry] : null;
+      };
+    }
+    // The first id with a Test code keeps it, as the scan this replaces did.
+    const byKey = new Map<string, string>();
+    for (const [id, entry] of targets) {
+      const key = testCodeKey(entry.published);
+      if (!byKey.has(key)) byKey.set(key, id);
+    }
+    return (typed) => {
+      const hit = byKey.get(testCodeKey(typed));
+      if (hit !== undefined) return [hit, targets.get(hit)!];
       const id = typed.trim();
       const entry = targets.get(id);
       return entry ? [id, entry] : null;
-    }
-    const entry = targets.get(typed);
-    return entry ? [typed, entry] : null;
+    };
   }
 
   function assertSource(system: string, code: string, level: MapLevel): void {
@@ -542,7 +560,7 @@ export function createTestMapping(deps: TestMappingDeps) {
 
   async function set(system: string, code: string, targetCode: string, level: MapLevel = 'test'): Promise<TestMappingChange> {
     assertSource(system, code, level);
-    const found = findTarget(await readTargets(level), targetCode, level);
+    const found = targetFinder(await readTargets(level), level)(targetCode);
     if (!found) throw new TestCatalogError(`no ${TARGET_NOUN[level]} has code ${targetCode}`, 'invalid');
     const [targetId, entry] = found;
     const existing = await activeFor(system, code, level);
@@ -550,7 +568,7 @@ export function createTestMapping(deps: TestMappingDeps) {
     const before = existing.map((r) => r.to_code).sort(compare)[0] ?? null;
     // The mapping stores the id, so a later change of Test code keeps it.
     await writeMapping(system, code, targetId, entry.name, level);
-    return { system, code, before, after: targetId, rebuild: await rebuildNow() };
+    return { system, code, before, after: targetId, ...(level === 'test' ? { testCode: entry.published } : {}), rebuild: await rebuildNow() };
   }
 
   async function clear(system: string, code: string, level: MapLevel = 'test'): Promise<TestMappingChange> {
@@ -611,6 +629,7 @@ export function createTestMapping(deps: TestMappingDeps) {
     const unguard = (v: string): string => (/^'[=@+-]/.test(v) ? v.slice(1) : v);
 
     const targetsByCode = await readTargets(level);
+    const findTarget = targetFinder(targetsByCode, level);
     // One warehouse read per import. A code the warehouse holds with surrounding spaces is a different
     // code from its trimmed form, and a file cell cannot carry the spaces (readTableFile trims every cell).
     const observedCodes = new Map<string, Set<string>>();
@@ -658,7 +677,7 @@ export function createTestMapping(deps: TestMappingDeps) {
       let targetCode: string | null = null;
       if (targetCell !== '') {
         // By Test code first, then id, as map set finds it. The mapping stores the id.
-        const found = findTarget(targetsByCode, targetCell, level);
+        const found = findTarget(targetCell);
         if (!found) { refuse(line, system, code, `no ${noun} has code ${targetCell}`); continue; }
         targetCode = found[0];
       } else if (loinc !== '') {

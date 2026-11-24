@@ -2200,7 +2200,8 @@ export async function voidFormEntry(entryId: string, reason: string): Promise<Vo
 }
 
 // ── Reference search (form reference pickers) ────────────────────────────────────
-export interface CodingRow { system: string; code: string; display: string | null }
+/** `testCode` is set on a catalog test's row: the Test code people read, while `code` stays its id. */
+export interface CodingRow { system: string; code: string; display: string | null; testCode?: string }
 export interface EntityRow { reference: string; display: string; secondary: string | null }
 export type ReferenceSearchResponse =
   | { kind: 'coding'; rows: CodingRow[]; total: number }
@@ -2755,6 +2756,8 @@ export interface CatalogImportInput {
 export interface CatalogImportReport {
   counts: { new: number; changed: number; unchanged: number; refused: number };
   refused: { line: number; code: string | null; reason: string }[];
+  /** Rows written with a note, such as an id from another install that names no test here. */
+  notes: { line: number; code: string | null; note: string }[];
   unmatched: { categories: { text: string; rows: number }[]; specimens: { text: string; rows: number }[] };
   categoriesToAdd: { code: string; display: string }[];
   loincChecked: boolean;

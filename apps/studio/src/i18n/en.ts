@@ -1639,9 +1639,11 @@ export const en = {
       categoriesToAdd: 'Categories to add',
       nothingToApply: 'Nothing to apply: no row is new or changed.',
       refusedTitle: 'Refused rows',
+      notesTitle: 'Notes on written rows',
       colRow: 'Row',
       colCode: 'Code',
       colReason: 'Reason',
+      colNote: 'Note',
       applied: '{{new}} added, {{changed}} changed.',
     },
     sheet: {
