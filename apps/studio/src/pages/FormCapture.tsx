@@ -297,6 +297,7 @@ export function FormCapture() {
                 no: t('forms.entryNo'),
                 notAnswered: t('forms.entryNotAnswered'),
                 chooseDate: t('forms.entryChooseDate'),
+                chooseResult: t('forms.entryChooseResult'),
                 addAnswer: t('forms.entryAddAnswer'),
                 removeAnswer: t('forms.entryRemoveAnswer'),
               }}

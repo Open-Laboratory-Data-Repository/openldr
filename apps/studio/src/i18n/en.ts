@@ -644,6 +644,7 @@ export const en = {
     entryNo: 'No',
     entryNotAnswered: 'Not answered',
     entryChooseDate: 'Pick a date',
+    entryChooseResult: 'Choose a result',
     entryAddAnswer: 'Add a result',
     entryRemoveAnswer: 'Remove {label}',
     browseTitle: 'Browse all tests',

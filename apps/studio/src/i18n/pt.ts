@@ -640,6 +640,7 @@ export const pt: EnShape = {
     entryNo: 'Não',
     entryNotAnswered: 'Sem resposta',
     entryChooseDate: 'Escolher uma data',
+    entryChooseResult: 'Escolher um resultado',
     entryAddAnswer: 'Adicionar um resultado',
     entryRemoveAnswer: 'Remover {label}',
     browseTitle: 'Ver todos os exames',

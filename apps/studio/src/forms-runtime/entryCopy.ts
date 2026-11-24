@@ -19,6 +19,7 @@ export interface EntryCopy {
   no?: string;
   notAnswered?: string;
   chooseDate?: string;
+  chooseResult?: string;
   addAnswer?: string;
   /** "{label}" is the answer's name. */
   removeAnswer?: string;
@@ -39,6 +40,7 @@ export const ENTRY_EN: Required<EntryCopy> = {
   no: 'No',
   notAnswered: 'Not answered',
   chooseDate: 'Pick a date',
+  chooseResult: 'Choose a result',
   addAnswer: 'Add a result',
   removeAnswer: 'Remove {label}',
 };

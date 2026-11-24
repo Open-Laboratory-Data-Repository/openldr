@@ -249,7 +249,7 @@ describe('entryAnswersOfResponse', () => {
       { fieldId: 'num', label: 'Requisition', value: 'R1' },
       { fieldId: 'a', label: 'A', value: 'x'.repeat(100) },
       { fieldId: 'b', label: 'B', value: '2026-11-22' },
-      { fieldId: 'c', label: 'C', value: 'false' },
+      { fieldId: 'c', label: 'C', value: 'false', parts: [false] },
       { fieldId: 'd', label: 'D', value: 'Kibaha Health Centre' },
       { fieldId: 'e', label: 'E', value: '4' },
     ])
@@ -285,6 +285,24 @@ describe('entryAnswersOfResponse', () => {
       ] }] }],
     } as never
     expect(entryAnswersOfResponse(form, response)).toEqual([{ fieldId: 't', label: 'Results', value: 'Plasma, 40 copies/mL, DET' }])
+  })
+
+  // Task 3 fix: a yes/no answer keeps true or false in its parts, so the studio can say it in the
+  // reader's language. The stored value is still true or false.
+  it('gives a yes/no answer as true or false in its parts, and other answers with no parts', () => {
+    const CATALOG = 'urn:openldr:codesystem:test-catalog'
+    const response = { resourceType: 'QuestionnaireResponse', status: 'completed', item: [
+      { linkId: 't', item: [{ linkId: `${CATALOG}|CUL`, item: [
+        { linkId: `${CATALOG}|CUL#urn:openldr:default_result|GROWTH`, answer: [{ valueBoolean: false }] },
+        { linkId: `${CATALOG}|CUL#urn:openldr:default_result|NOTE`, answer: [{ valueString: 'clotted' }] },
+      ] }] },
+      { linkId: 'num', answer: [{ valueString: 'R1' }] },
+    ] }
+    const form = requisition([{ id: 't', displayLabel: 'Results', fieldType: 'testDetails', order: 1 }])
+    expect(entryAnswersOfResponse(form, response as never)).toEqual([
+      { fieldId: 't', label: 'Results', value: 'false, clotted', parts: [false, 'clotted'] },
+      { fieldId: 'num', label: expect.any(String), value: 'R1' },
+    ])
   })
 
   it('keeps the label the saved copy carries after the form is edited, and falls back to the form', () => {

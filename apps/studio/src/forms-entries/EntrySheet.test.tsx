@@ -23,6 +23,28 @@ describe('EntrySheet', () => {
     expect(api.getFormEntry).toHaveBeenCalledWith('e-1');
   });
 
+  // Task 3 fix: a yes/no answer reads in the page language, never as true or false.
+  it('shows a yes/no answer in the page language', async () => {
+    vi.spyOn(api, 'getFormEntry').mockResolvedValue(detail({
+      answers: [{ fieldId: 'g', label: 'Growth', value: 'true, false, clotted', parts: [true, false, 'clotted'] }],
+    }));
+    render(<EntrySheet entryId="e-1" onClose={() => {}} />);
+    expect(await screen.findByText('Yes, No, clotted')).toBeInTheDocument();
+    expect(screen.queryByText(/true/)).not.toBeInTheDocument();
+  });
+
+  it('shows a yes/no answer in French', async () => {
+    const { default: i18n } = await import('@/i18n');
+    await i18n.changeLanguage('fr');
+    try {
+      vi.spyOn(api, 'getFormEntry').mockResolvedValue(detail({ answers: [{ fieldId: 'g', label: 'Growth', value: 'false', parts: [false] }] }));
+      render(<EntrySheet entryId="e-1" onClose={() => {}} />);
+      expect(await screen.findByText('Non')).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
   it('shows who marked it in error by name, and why', async () => {
     vi.spyOn(api, 'getFormEntry').mockResolvedValue(detail({
       status: 'entered-in-error', statusBy: 'u-manager', statusByName: 'Mary Manager',

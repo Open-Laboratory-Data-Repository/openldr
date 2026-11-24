@@ -268,7 +268,8 @@ describe('TestDetailSheet', () => {
     const CARB = { system: 'urn:openldr:cs:local', code: 'CARB', display: 'Carbapenemase' };
     const last = (fn: ReturnType<typeof vi.fn>) => fn.mock.calls[fn.mock.calls.length - 1][0];
 
-    it('writes a yes/no field from a switch as true, then false', async () => {
+    // Task 3 fix: a Select, so a touched yes/no can go back to not answered.
+    it('writes a yes/no field as true, then false, then back to not answered', async () => {
       const user = userEvent.setup();
       const writes: unknown[] = [];
       function Host() {
@@ -277,13 +278,24 @@ describe('TestDetailSheet', () => {
           onChange={(next) => { writes.push(next.results[0]?.value); setCurrent(next as typeof detail); }} onClose={() => {}} />;
       }
       render(<Host />);
-      const toggle = await screen.findByRole('switch', { name: 'Growth' });
-      expect(screen.getByText('Not answered')).toBeInTheDocument();
-      await user.click(toggle);
-      expect(screen.getByText('Yes')).toBeInTheDocument();
-      await user.click(toggle);
-      expect(writes).toEqual([true, false]);
-      expect(screen.getByText('No')).toBeInTheDocument();
+      const picker = await screen.findByLabelText('Growth');
+      expect(picker).toHaveTextContent('Not answered');
+      for (const choice of ['Yes', 'No', 'Not answered']) {
+        await user.click(screen.getByLabelText('Growth'));
+        await user.click(await screen.findByRole('option', { name: choice }));
+        expect(screen.getByLabelText('Growth')).toHaveTextContent(choice);
+      }
+      expect(writes).toEqual([true, false, null]);
+    });
+
+    it('takes the yes/no and choose-a-result words from the caller', async () => {
+      const user = userEvent.setup();
+      render(<TestDetailSheet test={test} params={[growth, coded]} detail={detail} sexes={sexes}
+        copy={{ yes: 'Oui', no: 'Non', notAnswered: 'Sans réponse', chooseResult: 'Choisir un résultat' }} onChange={() => {}} onClose={() => {}} />);
+      expect(await screen.findByLabelText('Growth')).toHaveTextContent('Sans réponse');
+      expect(screen.getByLabelText('Malaria RDT')).toHaveTextContent('Choisir un résultat');
+      await user.click(screen.getByLabelText('Growth'));
+      expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Oui', 'Non', 'Sans réponse']);
     });
 
     it('shows a saved date in the date picker, and the date limit without refusing', async () => {

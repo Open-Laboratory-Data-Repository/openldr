@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { criteriaLabel, RANGE_EN, rangeLabel, type RangeCopy } from './rangeLabel';
 import { ENTRY_EN, fieldHint, type EntryCopy } from './entryCopy';
@@ -201,7 +200,7 @@ export function TestDetailSheet({ test, testCode, params, detail, sexes, copy, o
                   <Label htmlFor={keyOf(param)} className={hint ? TOP_LABEL : undefined}>{label}</Label>
                   <div>
                     <Select value={chosen} onValueChange={(v) => writeResult(param, options.find((o) => keyOf(o) === v) ?? null, null)}>
-                      <SelectTrigger id={keyOf(param)}><SelectValue placeholder="Choose a result" /></SelectTrigger>
+                      <SelectTrigger id={keyOf(param)}><SelectValue placeholder={words.chooseResult} /></SelectTrigger>
                       <SelectContent>
                         {options.map((o) => <SelectItem key={keyOf(o)} value={keyOf(o)}>{o.display ?? o.code}</SelectItem>)}
                       </SelectContent>
@@ -239,14 +238,22 @@ export function TestDetailSheet({ test, testCode, params, detail, sexes, copy, o
             }
             if (param.resultType === 'boolean') {
               const value = typeof current?.value === 'boolean' ? current.value : null;
+              // A Select, not a switch, so a touched answer can go back to not answered.
               return (
                 <Fragment key={keyOf(param)}>
                   <Label htmlFor={keyOf(param)} className={hint ? TOP_LABEL : undefined}>{label}</Label>
                   <div>
-                    <div className="flex h-9 items-center gap-2">
-                      <Switch id={keyOf(param)} aria-label={label} checked={value === true} onCheckedChange={(next) => writeResult(param, next, null)} />
-                      <span className="text-sm text-muted-foreground">{value === null ? words.notAnswered : value ? words.yes : words.no}</span>
-                    </div>
+                    <Select
+                      value={value === null ? 'none' : value ? 'yes' : 'no'}
+                      onValueChange={(v) => writeResult(param, v === 'yes' ? true : v === 'no' ? false : null, null)}
+                    >
+                      <SelectTrigger id={keyOf(param)} className="w-48"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">{words.yes}</SelectItem>
+                        <SelectItem value="no">{words.no}</SelectItem>
+                        <SelectItem value="none">{words.notAnswered}</SelectItem>
+                      </SelectContent>
+                    </Select>
                     {hintLine}
                   </div>
                 </Fragment>
