@@ -6,6 +6,24 @@
       "version": null,
       "entries": [
         {
+          "hash": "764173ad8",
+          "type": "fix",
+          "scope": "",
+          "title": "Summary type and 144's down keep a lab's own link"
+        },
+        {
+          "hash": "35c03c206",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Bone marrow links to its SNOMED code, and Serum or plasma is a specimen type"
+        },
+        {
+          "hash": "ed1f775d4",
+          "type": "fix",
+          "scope": "forms",
+          "title": "The entries list says yes or no in the reader's language"
+        },
+        {
           "hash": "02f7219b0",
           "type": "fix",
           "scope": "server",
