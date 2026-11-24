@@ -41,6 +41,17 @@ describe('TestDetailsField', () => {
     expect(screen.getByText('CD4 count')).toBeInTheDocument();
   });
 
+  // Test identity spec, call 8: the row shows the Test code the server answers. The coding keeps the id.
+  it('shows the Test code, not the id, once the server answers it', async () => {
+    vi.mocked(catalogResultParams).mockResolvedValue({
+      tests: [{ test: { system: CATALOG, code: 'tst-0123456789abcdef', testCode: 'VL' }, params: [] }],
+      rejectReasons: { order: [], test: [] }, sexes: [],
+    });
+    render(<TestDetailsField tests={[{ system: CATALOG, code: 'tst-0123456789abcdef', display: 'HIV viral load' }]} value={{}} onChange={() => {}} onRemoveTest={() => {}} patient={null} />);
+    await waitFor(() => expect(screen.getByText('VL')).toBeInTheDocument());
+    expect(screen.queryByText('tst-0123456789abcdef')).toBeNull();
+  });
+
   it('asks the server once for the chosen tests', async () => {
     render(<TestDetailsField tests={tests} value={{}} onChange={() => {}} onRemoveTest={() => {}} patient={{ reference: 'Patient/p1' }} />);
     await waitFor(() => expect(catalogResultParams).toHaveBeenCalledWith(

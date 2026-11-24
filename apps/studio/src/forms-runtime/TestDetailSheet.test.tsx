@@ -45,6 +45,16 @@ describe('TestDetailSheet', () => {
     expect(screen.getByLabelText('Note')).toBeInTheDocument();
   });
 
+  // Test identity spec, call 8: the sheet heads with the Test code. The coding keeps the id.
+  it('shows the Test code it is given in place of the id', async () => {
+    const byId = { ...test, code: 'tst-0123456789abcdef' };
+    render(<TestDetailSheet test={byId} testCode="FBC" params={[]} detail={detail} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
+    expect(await screen.findByText('FBC')).toBeInTheDocument();
+    expect(screen.queryByText('tst-0123456789abcdef')).toBeNull();
+    await waitFor(() => expect(catalogSpecimensFor).toHaveBeenCalled());
+    expect(JSON.stringify(vi.mocked(catalogSpecimensFor).mock.calls[0])).toContain('tst-0123456789abcdef');
+  });
+
   // Each parameter used to be its own grid, so each label column took that label's width and the
   // inputs started at a different place on every row. Found on the live sheet 2026-09-16.
   it('puts every label in one column, so the inputs line up', async () => {

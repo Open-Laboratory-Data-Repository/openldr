@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
-import { TestCatalogError, type AppContext } from '@openldr/bootstrap';
+import { createTestMapping, TEST_CATALOG_SYSTEM, TestCatalogError, type AppContext } from '@openldr/bootstrap';
+import { makeMigratedDb } from '@openldr/db/testing';
+import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import { registerTestMappingRoutes } from './test-mapping-routes';
 import './auth-plugin';
 
@@ -179,5 +181,32 @@ describe('test mapping routes', () => {
     expect((await appWith(ctx).inject({ method: 'GET', url: '/api/test-catalog/mappings/match' })).statusCode).toBe(400);
     const viewer = await appWith(ctx, ['terminology.view']).inject({ method: 'POST', url: '/api/test-catalog/mappings/match', payload: { system: DISA } });
     expect(viewer.statusCode).toBe(403);
+  });
+});
+
+// Over a real test mapping on pg-mem, so the wire shape is the service's own, not a fake's.
+describe('test mapping routes over a real test mapping', () => {
+  it('answers a catalog target by id and by Test code, in the Observed list and the target list', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await internalDb.insertInto('terminology_concepts').values({
+      system: TEST_CATALOG_SYSTEM, code: 'tst-0a1b2c3d4e5f6a7b', display: 'HIV viral load', status: 'ACTIVE',
+      properties: JSON.stringify({ testCode: 'VL' }) as never,
+    }).execute();
+    await internalDb.insertInto('term_mappings').values({
+      id: 'm1', from_system: DISA, from_code: 'HIVVL', to_system: TEST_CATALOG_SYSTEM, to_code: 'tst-0a1b2c3d4e5f6a7b',
+      to_display: null, map_type: 'SAME-AS', relationship: null, owner: null, is_active: true, managed_origin: null,
+    }).execute();
+    const testMapping = createTestMapping({ internalDb, externalDb, admin: {} as never, logger: { warn() {} } });
+    const ctx = { testMapping, audit: { record: async (e: unknown) => e }, logger: { error() {}, warn() {}, info() {} } } as unknown as AppContext;
+    const app = appWith(ctx);
+
+    const observed = await app.inject({ method: 'GET', url: '/api/test-catalog/mappings/observed' });
+    expect(observed.statusCode).toBe(200);
+    expect(observed.json().rows.map((r: { catalog: unknown }) => r.catalog)).toEqual([
+      { code: 'tst-0a1b2c3d4e5f6a7b', testCode: 'VL', name: 'HIV viral load', loinc: null },
+    ]);
+    const targets = await app.inject({ method: 'GET', url: '/api/test-catalog/mappings/targets' });
+    expect(targets.json()).toEqual({ targets: [{ code: 'tst-0a1b2c3d4e5f6a7b', testCode: 'VL', name: 'HIV viral load', loinc: null, retired: false }] });
   });
 });

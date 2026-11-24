@@ -19,13 +19,21 @@ describe('test mapping: pack plan and apply', () => {
     ]);
 
     expect(plan).toEqual({
-      mapped: [{ system: DISA, code: 'HIVVL', catalogCode: 'VL' }],
+      mapped: [{ system: DISA, code: 'HIVVL', catalogCode: 'VL', testCode: 'VL' }],
       kept: [{ system: DISA, code: 'POCVR' }],
       skipped: [
         { system: DISA, code: 'WW', reason: 'no catalog test is linked to LOINC 9999-9' },
         { system: DISA, code: 'X', reason: '2 catalog tests are linked to LOINC 1111-1' },
       ],
     });
+  });
+
+  // A preview shows people the Test code. catalogCode stays the id, which apply writes.
+  it('answers the Test code beside the id of each test it would map to', async () => {
+    const { internalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'tst-0123456789abcdef', 'HIV viral load', { loinc: '25836-8', testCode: 'HIVVL' });
+    const plan = await mapping.planPack([{ system: DISA, code: 'VLX', loinc: '25836-8' }]);
+    expect(plan.mapped).toEqual([{ system: DISA, code: 'VLX', catalogCode: 'tst-0123456789abcdef', testCode: 'HIVVL' }]);
   });
 
   // Review focus 1.

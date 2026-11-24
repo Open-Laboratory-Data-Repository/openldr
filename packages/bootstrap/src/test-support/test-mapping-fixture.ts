@@ -43,10 +43,12 @@ export async function buildMapping(opts: { now?: () => number } = {}) {
   return { internalDb, externalDb, admin, mapping, warnings, counter };
 }
 
-export async function seedCatalogTest(db: Kysely<InternalSchema>, code: string, display: string, opts: { category?: string; loinc?: string; status?: string } = {}) {
+/** `code` is the test's id. `testCode` is its Test code; left out, the test reads as one saved before
+ *  Test codes, whose Test code is its id. */
+export async function seedCatalogTest(db: Kysely<InternalSchema>, code: string, display: string, opts: { category?: string; loinc?: string; status?: string; testCode?: string } = {}) {
   await db.insertInto('terminology_concepts').values({
     system: TEST_CATALOG_SYSTEM, code, display, status: opts.status ?? 'ACTIVE',
-    properties: JSON.stringify({ category: opts.category ?? null }) as never,
+    properties: JSON.stringify({ category: opts.category ?? null, ...(opts.testCode ? { testCode: opts.testCode } : {}) }) as never,
   }).execute();
   if (opts.loinc) {
     await db.insertInto('term_mappings').values({

@@ -12,7 +12,7 @@ describe('LAB_IDENTITY_FIELDS', () => {
     // `lab.facilitySystem` joined the four letterhead keys: it is the same kind of fact — something
     // stated once about this installation rather than re-entered per record.
     expect(LAB_IDENTITY_KEYS).toEqual([
-      'lab.name', 'lab.address', 'lab.contact', 'lab.logo', 'lab.facilitySystem', 'lab.timezone',
+      'lab.name', 'lab.address', 'lab.contact', 'lab.logo', 'lab.facilitySystem', 'lab.timezone', 'lab.country',
     ]);
     expect(LAB_IDENTITY_FIELDS.every((f) => f.id.startsWith('lab.'))).toBe(true);
   });
@@ -25,7 +25,25 @@ describe('LAB_IDENTITY_FIELDS', () => {
     // `idFor` hashes the register URI into every facility's permanent id without normalising it, so
     // a typed label mints a second identity for one register — migration 082's defect.
     expect(LAB_IDENTITY_FIELDS.filter((f) => f.source).map((f) => [f.id, f.source]))
-      .toEqual([['lab.facilitySystem', 'facility-registers']]);
+      .toEqual([['lab.facilitySystem', 'facility-registers'], ['lab.country', 'country']]);
+  });
+
+  it('picks the country from the country value set', () => {
+    const country = LAB_IDENTITY_FIELDS.find((f) => f.id === 'lab.country');
+    expect(country?.valueSetUrl).toBe('urn:openldr:valueset:country');
+  });
+});
+
+describe('validateLabIdentityValue: lab.country', () => {
+  it('accepts an alpha-3 code and an empty value', () => {
+    expect(validateLabIdentityValue('lab.country', 'TZA')).toBeNull();
+    expect(validateLabIdentityValue('lab.country', '')).toBeNull();
+  });
+
+  it('refuses anything that is not three capital letters', () => {
+    for (const v of ['TZ', 'tza', 'TZA1', 'Tanzania', ' TZA']) {
+      expect(validateLabIdentityValue('lab.country', v)).toEqual({ key: 'lab.country', reason: 'invalid-country' });
+    }
   });
 });
 

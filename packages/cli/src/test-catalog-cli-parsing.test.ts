@@ -77,6 +77,11 @@ describe('test-catalog list: commander parsing', () => {
     expect(mocks.runTestCatalogSet).toHaveBeenCalledWith('HIVVL', { expectedTat: '48', criticalTat: '72', requiresVerification: 'false', json: false });
   });
 
+  it('hands set its --test-code', async () => {
+    await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', 'set', 'HB', '--test-code', 'HGB']);
+    expect(mocks.runTestCatalogSet).toHaveBeenLastCalledWith('HB', { testCode: 'HGB', json: false });
+  });
+
   it('reads params with no flags', async () => {
     await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', 'params', 'FBC']);
     expect(mocks.runTestCatalogParams).toHaveBeenCalledWith('FBC', { json: false });

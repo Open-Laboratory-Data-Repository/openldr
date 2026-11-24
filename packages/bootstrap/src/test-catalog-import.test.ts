@@ -26,7 +26,7 @@ describe('suggestCatalogColumns', () => {
 
   it('suggests every column of an export, so an export imports back with no mapping', () => {
     expect(suggestCatalogColumns([...CATALOG_EXPORT_HEADERS])).toEqual({
-      code: 'code', name: 'name', shortName: 'short_name', loinc: 'loinc', category: 'category', specimenTypes: 'specimen_types',
+      id: 'id', code: 'code', name: 'name', shortName: 'short_name', loinc: 'loinc', category: 'category', specimenTypes: 'specimen_types',
       expectedTatHours: 'expected_tat_hours', criticalTatHours: 'critical_tat_hours', requiresVerification: 'requires_verification',
     });
   });
@@ -80,13 +80,13 @@ describe('matching file text to the lists', () => {
 describe('catalogExportRow', () => {
   it('writes a test in the import layout, codes for category and specimens', () => {
     const test: CatalogTest = {
-      code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL',
+      code: 'tst-0123456789abcdef', testCode: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL',
       specimenTypes: [{ system: LOCAL, code: 'BLD' }, { system: LOCAL, code: 'UR' }], resultParams: [],
       loinc: '25836-8', active: true, expectedTatHours: 0.5, criticalTatHours: null, requiresVerification: false,
       lab: { enabled: true, specimenTypes: null, localDisplay: 'VL' },
     };
     expect(catalogExportRow(test)).toEqual({
-      code: 'HIVVL', name: 'HIV viral load', short_name: '', loinc: '25836-8', category: 'MOL', specimen_types: 'BLD;UR',
+      id: 'tst-0123456789abcdef', code: 'HIVVL', name: 'HIV viral load', short_name: '', loinc: '25836-8', category: 'MOL', specimen_types: 'BLD;UR',
       expected_tat_hours: '0.5', critical_tat_hours: '', requires_verification: 'no',
     });
   });

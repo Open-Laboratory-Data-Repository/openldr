@@ -80,8 +80,9 @@ export function TestCatalog() {
   const columns = useMemo<ColumnDef<CatalogTest>[]>(() => [
     {
       id: 'code', labelKey: 'testCatalog.col.code', type: 'text', defaultVisible: true, filterable: false, sortable: false,
+      // The Test code people read (test identity spec, call 8). The id keys the row and its actions.
       // A code never breaks across lines; the table's own frame scrolls sideways instead.
-      cellClassName: 'whitespace-nowrap font-mono text-xs', accessor: (r) => r.code,
+      cellClassName: 'whitespace-nowrap font-mono text-xs', accessor: (r) => r.testCode,
     },
     {
       id: 'name', labelKey: 'testCatalog.col.name', type: 'text', defaultVisible: true, filterable: false, sortable: false,
@@ -286,7 +287,7 @@ export function TestCatalog() {
                                   <Button
                                     variant="ghost" size="icon" className="h-8 w-8 shrink-0"
                                     data-testid={`test-actions-${r.code}`}
-                                    aria-label={t('testCatalog.actionsFor', { code: r.code })}
+                                    aria-label={t('testCatalog.actionsFor', { code: r.testCode })}
                                   >
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
@@ -299,7 +300,7 @@ export function TestCatalog() {
                                     data-testid={`test-switch-${r.code}`}
                                     onSelect={() => void runRowAction(
                                       () => setCatalogTestEnabled(r.code, !r.lab.enabled),
-                                      t(r.lab.enabled ? 'testCatalog.switchedOff' : 'testCatalog.switchedOn', { code: r.code }),
+                                      t(r.lab.enabled ? 'testCatalog.switchedOff' : 'testCatalog.switchedOn', { code: r.testCode }),
                                     )}
                                   >
                                     {r.lab.enabled ? t('testCatalog.switchOff') : t('testCatalog.switchOn')}
@@ -309,7 +310,7 @@ export function TestCatalog() {
                                       data-testid={`test-retire-${r.code}`}
                                       onSelect={() => void runRowAction(
                                         () => setCatalogTestActive(r.code, !r.active),
-                                        t(r.active ? 'testCatalog.retiredToast' : 'testCatalog.restoredToast', { code: r.code }),
+                                        t(r.active ? 'testCatalog.retiredToast' : 'testCatalog.restoredToast', { code: r.testCode }),
                                       )}
                                     >
                                       {r.active ? t('testCatalog.retire') : t('testCatalog.restore')}

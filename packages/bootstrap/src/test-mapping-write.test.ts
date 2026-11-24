@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TEST_CATALOG_SYSTEM, TestCatalogError } from './test-catalog';
+import { TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM, TestCatalogError } from './test-catalog';
 import { createCoalescedRunner, isTestMapRelevantRecord, mappingTouchesTestMap } from './test-mapping';
 import { buildMapping, seedCatalogTest, seedMapping } from './test-support/test-mapping-fixture';
 
@@ -34,6 +34,31 @@ describe('test mapping: writes', () => {
 
     expect(change.before).toBe('EID');
     expect(await active(internalDb, 'HIVVL')).toEqual([{ to_code: 'VL', map_type: 'SAME-AS' }]);
+  });
+
+  it('set finds the target by Test code first, ignoring case, then by id, and stores the id', async () => {
+    const { internalDb, externalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'tst-0a1b2c3d4e5f6a7b', 'HIV viral load', { testCode: 'VL' });
+    // A test whose id is another test's Test code: the Test code wins.
+    await seedCatalogTest(internalDb, 'vl', 'Old viral load', { testCode: 'OLDVL' });
+    await seedCatalogTest(internalDb, 'tst-1111111111111111', 'CD4 count', { testCode: 'CD4' });
+
+    const byCode = await mapping.set(DISA, 'HIVVL', ' vl ');
+    expect(byCode.after).toBe('tst-0a1b2c3d4e5f6a7b');
+    expect(await active(internalDb, 'HIVVL')).toEqual([{ to_code: 'tst-0a1b2c3d4e5f6a7b', map_type: 'SAME-AS' }]);
+    expect(await externalDb.selectFrom('test_map').select('catalog_code').where('source_system', '=', DISA).execute()).toEqual([{ catalog_code: 'VL' }]);
+
+    const byId = await mapping.set(DISA, 'CD4P', 'tst-1111111111111111');
+    expect(await active(internalDb, 'CD4P')).toEqual([{ to_code: byId.after, map_type: 'SAME-AS' }]);
+    expect(byId.after).toBe('tst-1111111111111111');
+    // The Test code rides along, so a door can print what people read (test identity review, M6).
+    expect([byCode.testCode, byId.testCode]).toEqual(['VL', 'CD4']);
+  });
+
+  it('set refuses a source in the Test code system: those are catalog tests already', async () => {
+    const { internalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    await expect(mapping.set(TEST_CODE_SYSTEM, 'VL', 'VL')).rejects.toMatchObject({ kind: 'invalid' });
   });
 
   it('set refuses an unknown catalog code as invalid', async () => {

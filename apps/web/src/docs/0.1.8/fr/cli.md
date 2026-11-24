@@ -133,7 +133,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `forms` | Liste les définitions de formulaires ; extrait les réponses d'une QuestionnaireResponse ; choisit les rôles qui peuvent ouvrir et soumettre un formulaire. |
 | `ingest` | Ingère un fichier par le pipeline (en option via un plugin). |
 | `facilities` | Importe un registre national d'établissements : `suggest-map`, `suggest-values`, `import` (correspondance des colonnes et des valeurs, voir **Établissements** dans la documentation du studio). |
-| `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue, `set` règle les délais et la vérification d'un examen, `loinc-hints` lit les suggestions d'un code LOINC, et `result-fields` relie, ajoute ou crée depuis LOINC des champs de résultat. |
+| `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue, `set` règle le code du test (`--test-code`), les délais et la vérification d'un examen, `loinc-hints` lit les suggestions d'un code LOINC, et `result-fields` relie, ajoute ou crée depuis LOINC des champs de résultat. |
 | `lab` | `requisitions rebuild --force` reconstruit l'index qui trouve une demande par son numéro de demande. Exige **Zone de danger**. |
 | `query` | Requêtes personnalisées : `export` les exporte dans un fichier JSON, `import` les importe depuis un fichier (`--force` remplace les noms existants et exige **Gérer les requêtes enregistrées** ; sans cette permission, un import ajoute les nouvelles requêtes sans groupe). |
 | `pipeline` | Examine les lots d'ingestion : `status`, `retry`, `logs`. |
@@ -403,6 +403,8 @@ Une réponse de catégorie est `"kind": "existing"` avec un `code`, ou `"kind": 
 
 ![Utiliser le catalogue avec vos codes.](guide:operator-cli-fr-14)
 
+La colonne `id` contient l'identifiant interne de chaque examen, qui ne change jamais. La colonne `code` contient son code du test, qui peut changer. Une importation associe une ligne par `id` quand le fichier en a un, sinon par le code du test. Un ancien code du test reste réservé à son examen.
+
 Associer les codes d'examen du laboratoire aux examens du catalogue. Voir **Associer les codes de test du laboratoire** dans le guide Catalogue des examens de l'application. Le système est une URN, comme le montre la colonne Système de l'onglet Observés. Pour les données DISA, c'est `urn:openldr:disa` :
 
 ### 15. Utiliser le catalogue avec vos codes
@@ -413,7 +415,7 @@ Associer les codes d'examen du laboratoire aux examens du catalogue. Voir **Asso
 
 ![Utiliser le catalogue avec vos codes.](guide:operator-cli-fr-15)
 
-- `map list` liste les codes d'examen du laboratoire présents dans l'entrepôt, avec leur correspondance dans le catalogue. `--status` accepte `unmapped`, `mapped`, `ambiguous` ou `all`. `--search`, `--limit` (de 1 à 200, 25 par défaut) et `--offset` filtrent et paginent la liste.
+- `map list` liste les codes d'examen du laboratoire présents dans l'entrepôt, avec leur correspondance dans le catalogue. Un examen du catalogue apparaît par son code du test. `--status` accepte `unmapped`, `mapped`, `ambiguous` ou `all`. `--search`, `--limit` (de 1 à 200, 25 par défaut) et `--offset` filtrent et paginent la liste.
 - `map set <system> <code> <catalog-code>` associe un code à un examen du catalogue.
 - `map clear <system> <code>` supprime une correspondance. La commande refuse de s'exécuter sans `--force`.
 - `map export` écrit en CSV chaque code observé et sa correspondance, dans le format que lit `map import`. `--out` nomme un fichier. Sans cette option, le CSV va vers la sortie standard.
@@ -486,7 +488,7 @@ Lire les suggestions d'un code LOINC, et créer des champs de résultat depuis L
 
 ![Lire les suggestions LOINC et créer des champs de résultat.](guide:operator-cli-fr-21)
 
-- `loinc-hints <code>` affiche le nom LOINC, la classe et la catégorie qui lui correspond, le type de résultat et l'unité, les prélèvements, les réponses et, pour un panel, ses examens membres. `--json` affiche la même chose en JSON. Sans LOINC et son ontologie, la commande indique qu'il n'y a aucune suggestion.
+- `loinc-hints <code>` affiche le nom LOINC, son nom court et son composant, la classe et la catégorie qui lui correspond, le type de résultat et l'unité, les prélèvements, les réponses et, pour un panel, ses examens membres. `--json` affiche la même chose en JSON. Sans LOINC et son ontologie, la commande indique qu'il n'y a aucune suggestion. Une installation qui a chargé LOINC avant l'ajout des noms courts n'affiche aucun nom court avant d'avoir relancé `terminology import loinc`.
 - `result-fields from-loinc <code...>` crée un champ de résultat pour chaque code. Avec `--panel`, il en crée un pour chaque examen membre de chaque panel. Un champ ou un jeu de réponses déjà présent est réutilisé, donc une nouvelle exécution ne crée rien de nouveau.
 - `result-fields add --display <texte>` ajoute un champ au dictionnaire des résultats. `--code` fixe son code. Sans lui, le code est fait à partir du nom, par exemple `HAEMOGLOBIN_A1C`. `--unit` fixe son unité UCUM. Un code déjà présent est refusé.
 - Aucune de ces commandes ne coche le champ sur un examen. Cochez-le dans le panneau de l'examen, ou avec `test-catalog params --set`. Un laboratoire qui reçoit son dictionnaire du central ne peut pas ajouter de champ.

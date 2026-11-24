@@ -25,6 +25,8 @@ const LabIdentityPatchSchema = z.object({
   // The civil timezone days are bucketed in for the monthly transmission grid. Rejected at write
   // time by validateLabIdentityValue when the runtime can't resolve it as an IANA zone.
   'lab.timezone': z.string().optional(),
+  // The lab's country (ISO 3166-1 alpha-3). labIdentity.set refuses a code not in the country value set.
+  'lab.country': z.string().optional(),
 }).strict();
 
 const FEATURE_FLAGS = { preHandler: requireCapability('settings.feature_flags') };
@@ -81,6 +83,7 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     fields: LAB_IDENTITY_FIELDS.map((f) => ({
       id: f.id, labelKey: f.labelKey, multiline: f.multiline ?? false,
       ...(f.source ? { source: f.source } : {}),
+      ...(f.valueSetUrl ? { valueSetUrl: f.valueSetUrl } : {}),
     })),
     values: await ctx.labIdentity.all(),
     logo: { maxBytes: LAB_LOGO_MAX_BYTES, mimeTypes: LAB_LOGO_MIME },

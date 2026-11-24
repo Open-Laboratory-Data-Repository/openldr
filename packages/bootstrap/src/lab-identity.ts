@@ -1,4 +1,6 @@
 import type { AppSettingStore } from '@openldr/db';
+import type { Operations } from '@openldr/terminology';
+import { CONTROLLED_VALUE_SETS } from './facility-controlled-fields';
 import {
   LAB_IDENTITY_FIELDS, LAB_IDENTITY_KEYS, toIdentityTokens, validateLabIdentityValue,
   type LabIdentity, type LabIdentityValidationError,
@@ -28,7 +30,35 @@ export async function labTimeZone(identity: Pick<LabIdentityService, 'tokens'> |
   }
 }
 
-export function createLabIdentity(store: AppSettingStore): LabIdentityService {
+/**
+ * The lab's country (ISO 3166-1 alpha-3), or null when none is set or the settings cannot be read.
+ * Read from `tokens()`, so the key is `country`. A reference range naming a country fits only this one
+ * (test catalog plan B, call 2).
+ */
+export async function labCountry(identity: Pick<LabIdentityService, 'tokens'> | null | undefined): Promise<string | null> {
+  try {
+    return (await identity?.tokens())?.country?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** The codes in CE's country value set (migration 073), for `createLabIdentity`'s `countries`. */
+export async function countryCodes(ops: Pick<Operations, 'expand'>): Promise<Set<string>> {
+  const vs = await ops.expand(CONTROLLED_VALUE_SETS.country, { count: 100_000 });
+  return new Set((vs.expansion?.contains ?? []).map((c) => c.code ?? '').filter((c) => c !== ''));
+}
+
+export interface LabIdentityOptions {
+  /**
+   * The codes `lab.country` may hold. When given, a country not in it is refused, and so is any
+   * country while the list cannot be read. Without it only the shape (three capital letters) is
+   * checked. Bootstrap always gives it.
+   */
+  countries?: () => Promise<Iterable<string>>;
+}
+
+export function createLabIdentity(store: AppSettingStore, opts: LabIdentityOptions = {}): LabIdentityService {
   async function all(): Promise<Record<string, string>> {
     const out: Record<string, string> = {};
     for (const key of LAB_IDENTITY_KEYS) {
@@ -49,6 +79,11 @@ export function createLabIdentity(store: AppSettingStore): LabIdentityService {
       for (const [key, value] of Object.entries(patch)) {
         const err = validateLabIdentityValue(key, value);
         if (err) errors.push(err);
+      }
+      const country = patch['lab.country'];
+      if (country && opts.countries && !errors.some((e) => e.key === 'lab.country')) {
+        const known = await opts.countries().then((c) => new Set(c)).catch(() => new Set<string>());
+        if (!known.has(country)) errors.push({ key: 'lab.country', reason: 'invalid-country' });
       }
       if (errors.length) return errors;
 

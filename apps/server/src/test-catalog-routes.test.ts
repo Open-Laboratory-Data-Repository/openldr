@@ -17,7 +17,7 @@ function memorySettings() {
 
 
 const TEST: CatalogTest = {
-  code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
+  code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
   specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD' }], resultParams: [], loinc: '25836-8', active: true,
   expectedTatHours: 48, criticalTatHours: 72, requiresVerification: true,
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
@@ -33,7 +33,7 @@ const OPTIONS: CatalogOptions = {
 };
 
 const REPORT: CatalogImportReport = {
-  counts: { new: 1, changed: 0, unchanged: 0, refused: 0 }, refused: [],
+  counts: { new: 1, changed: 0, unchanged: 0, refused: 0 }, refused: [], notes: [],
   unmatched: { categories: [], specimens: [] }, categoriesToAdd: [{ code: 'VIRO', display: 'Virology' }], loincChecked: false,
 };
 
@@ -120,7 +120,7 @@ describe('test catalog routes', () => {
     expect((await appWith(ctx, []).inject({ method: 'GET', url: '/api/test-catalog' })).statusCode).toBe(403);
     const viewer = appWith(ctx, ['terminology.view']);
     expect((await viewer.inject({ method: 'GET', url: '/api/test-catalog' })).statusCode).toBe(200);
-    expect((await viewer.inject({ method: 'POST', url: '/api/test-catalog', payload: { code: 'X', display: 'X' } })).statusCode).toBe(403);
+    expect((await viewer.inject({ method: 'POST', url: '/api/test-catalog', payload: { testCode: 'X', display: 'X' } })).statusCode).toBe(403);
     expect((await viewer.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL', payload: { display: 'X' } })).statusCode).toBe(403);
     expect((await viewer.inject({
       method: 'PUT', url: '/api/test-catalog/HIVVL/lab', payload: { enabled: true, specimenTypes: null, localDisplay: null },
@@ -129,7 +129,7 @@ describe('test catalog routes', () => {
 
   it('POST creates a test, answers 201 with it, and audits the create', async () => {
     const { ctx, calls, audit } = fakeCtx();
-    const body = { code: 'HIVVL', display: 'HIV viral load', loinc: '25836-8', specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD' }] };
+    const body = { testCode: 'HIVVL', display: 'HIV viral load', loinc: '25836-8', specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD' }] };
     const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog', payload: body });
     expect(res.statusCode).toBe(201);
     expect(res.json()).toEqual(TEST);
@@ -137,9 +137,31 @@ describe('test catalog routes', () => {
     expect(audit).toMatchObject([{ action: 'test_catalog.create', entityType: 'test_catalog', entityId: 'HIVVL', before: null, after: TEST }]);
   });
 
+  it('POST hands the store the Test code, audits under the new id and answers both', async () => {
+    const made = { ...TEST, code: 'tst-0123456789abcdef', testCode: 'HB', display: 'Haemoglobin' };
+    const { ctx, calls, audit } = fakeCtx({ create: async () => made });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog', payload: { testCode: 'HB', display: 'Haemoglobin' } });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ code: 'tst-0123456789abcdef', testCode: 'HB' });
+    expect(calls).toEqual([{ method: 'create', args: [{ testCode: 'HB', display: 'Haemoglobin' }] }]);
+    expect(audit).toMatchObject([{ entityId: 'tst-0123456789abcdef', metadata: { testCode: 'HB' } }]);
+  });
+
+  it('PUT /:code changes the Test code of the test the id names, and the audit names old and new', async () => {
+    const after = { ...TEST, testCode: 'VL' };
+    const { ctx, calls, audit } = fakeCtx({ update: async () => after });
+    const res = await appWith(ctx).inject({ method: 'PUT', url: '/api/test-catalog/HIVVL', payload: { testCode: 'VL', display: 'HIV viral load' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ code: 'HIVVL', testCode: 'VL' });
+    expect(calls.find((c) => c.method === 'update')?.args).toEqual(['HIVVL', { testCode: 'VL', display: 'HIV viral load' }]);
+    expect(audit).toMatchObject([{
+      action: 'test_catalog.update', entityId: 'HIVVL', before: TEST, after, metadata: { testCode: { from: 'HIVVL', to: 'VL' } },
+    }]);
+  });
+
   it('POST refuses a body with no name before the store', async () => {
     const { ctx, calls } = fakeCtx();
-    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog', payload: { code: 'X' } });
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog', payload: { testCode: 'X' } });
     expect(res.statusCode).toBe(400);
     expect(calls).toEqual([]);
   });
@@ -150,7 +172,7 @@ describe('test catalog routes', () => {
     ];
     for (const [kind, status] of cases) {
       const { ctx, audit } = fakeCtx({ create: async () => { throw new TestCatalogError(`refused: ${kind}`, kind); } });
-      const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog', payload: { code: 'X', display: 'X' } });
+      const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog', payload: { testCode: 'X', display: 'X' } });
       expect(res.statusCode).toBe(status);
       expect(res.json()).toEqual({ error: `refused: ${kind}`, kind });
       expect(audit).toEqual([]);
@@ -378,7 +400,7 @@ describe('test catalog routes', () => {
     }];
     const { ctx, calls } = fakeCtx();
     const app = appWith(ctx);
-    await app.inject({ method: 'POST', url: '/api/test-catalog', payload: { code: 'FBC', display: 'FBC', resultParams: params } });
+    await app.inject({ method: 'POST', url: '/api/test-catalog', payload: { testCode: 'FBC', display: 'FBC', resultParams: params } });
     const created = calls.find((c) => c.method === 'create');
     expect((created?.args[0] as { resultParams?: unknown }).resultParams).toEqual(params);
     await app.inject({ method: 'PUT', url: '/api/test-catalog/FBC', payload: { display: 'FBC', resultParams: [] } });
@@ -390,7 +412,7 @@ describe('test catalog routes', () => {
     const { ctx, calls } = fakeCtx();
     await appWith(ctx).inject({
       method: 'POST', url: '/api/test-catalog',
-      payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 12, high: 15 }] }] },
+      payload: { testCode: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 12, high: 15 }] }] },
     });
     const created = calls.find((c) => c.method === 'create');
     expect((created?.args[0] as { resultParams: Array<{ bands: unknown[] }> }).resultParams[0].bands[0]).toEqual({
@@ -402,7 +424,7 @@ describe('test catalog routes', () => {
     const { ctx, calls } = fakeCtx();
     await appWith(ctx).inject({
       method: 'POST', url: '/api/test-catalog',
-      payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [
+      payload: { testCode: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [
         { low: 12, high: 15, criticalLow: 7, criticalHigh: 20 }, { low: 12, high: 15, criticalLow: null },
       ] }] },
     });
@@ -418,7 +440,7 @@ describe('test catalog routes', () => {
     const app = appWith(ctx);
     await app.inject({
       method: 'POST', url: '/api/test-catalog',
-      payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [
+      payload: { testCode: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [
         { low: 12, high: 15, ageLow: 0, ageHigh: 28, ageUnit: 'd' }, { low: 12, high: 15, ageLow: 1, ageHigh: 12, ageUnit: 'mo' }, { low: 12, high: 15, ageLow: 18 },
       ] }] },
     });
@@ -428,15 +450,84 @@ describe('test catalog routes', () => {
     expect(Object.keys(bands[2])).not.toContain('ageUnit');
     const bad = await app.inject({
       method: 'POST', url: '/api/test-catalog',
-      payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 1, ageUnit: 'w' }] }] },
+      payload: { testCode: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 1, ageUnit: 'w' }] }] },
     });
     expect(bad.statusCode).toBe(400);
+  });
+
+  it('carries the field settings, the new types and the range fields through a create (plan B wire shape)', async () => {
+    const S = 'urn:openldr:default_result';
+    const params = [
+      { system: S, code: 'HGB', resultType: 'numeric', valueSetUrl: null, required: false, min: 0, max: 30, decimals: 1, bands: [{
+        name: null, low: 11, high: 14, unit: null, sex: null, ageLow: null, ageHigh: null,
+        pregnancy: 'pregnant', country: 'TZA', validFrom: '2026-01-01', validTo: '2026-12-31', source: 'WHO', scope: 'national',
+      }] },
+      { system: S, code: 'NOTE', resultType: 'text', valueSetUrl: null, bands: [], required: true, minLength: 2, maxLength: 200 },
+      { system: S, code: 'SEEN', resultType: 'date', valueSetUrl: null, bands: [], dateLimit: 'past' },
+      { system: S, code: 'POS', resultType: 'boolean', valueSetUrl: null, bands: [] },
+      { system: S, code: 'SYM', resultType: 'multicoded', valueSetUrl: 'urn:x:vs:symptoms', bands: [] },
+    ];
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog', payload: { testCode: 'FBC', display: 'FBC', resultParams: params } });
+    expect(res.statusCode).toBe(201);
+    const created = calls.find((c) => c.method === 'create');
+    expect((created?.args[0] as { resultParams?: unknown }).resultParams).toEqual(params);
+  });
+
+  it('adds no key for a field setting or range field not given, and drops pregnancy any and a null setting', async () => {
+    const { ctx, calls } = fakeCtx();
+    await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog',
+      payload: { testCode: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', min: null, bands: [
+        { low: 12, high: 15, pregnancy: 'any', country: null, validFrom: null, source: null, scope: null },
+      ] }] },
+    });
+    const created = calls.find((c) => c.method === 'create');
+    const [param] = (created?.args[0] as { resultParams: Array<Record<string, unknown> & { bands: object[] }> }).resultParams;
+    expect(Object.keys(param).sort()).toEqual(['bands', 'code', 'resultType', 'system', 'valueSetUrl']);
+    expect(param.bands[0]).toEqual({ name: null, low: 12, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null });
+  });
+
+  it('refuses a setting of another type, an unknown type, source, scope or pregnancy, and a bad date, before the store', async () => {
+    const S = 'urn:openldr:default_result';
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    for (const param of [
+      { system: S, code: 'NOTE', resultType: 'text', min: 1 },
+      { system: S, code: 'HGB', resultType: 'numeric', maxLength: 4 },
+      { system: S, code: 'SEEN', resultType: 'date', decimals: 2 },
+      { system: S, code: 'POS', resultType: 'boolean', dateLimit: 'past' },
+      { system: S, code: 'SEEN', resultType: 'date', dateLimit: 'yesterday' },
+      { system: S, code: 'ORG', resultType: 'organism' },
+      { system: S, code: 'HGB', resultType: 'numeric', bands: [{ source: 'Mayo' }] },
+      { system: S, code: 'HGB', resultType: 'numeric', bands: [{ scope: 'world' }] },
+      { system: S, code: 'HGB', resultType: 'numeric', bands: [{ pregnancy: 'yes' }] },
+      { system: S, code: 'HGB', resultType: 'numeric', bands: [{ validFrom: '1 Jan 2026' }] },
+    ]) {
+      const res = await app.inject({ method: 'POST', url: '/api/test-catalog', payload: { testCode: 'FBC', display: 'FBC', resultParams: [param] } });
+      expect(res.statusCode, JSON.stringify(param)).toBe(400);
+    }
+    expect(calls.filter((c) => c.method === 'create')).toEqual([]);
+  });
+
+  it('POST /result-params answers the field settings and the range fields as the catalog gives them', async () => {
+    const param = {
+      system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, required: false, min: 0, max: 30, decimals: 1,
+      bands: [{ name: null, low: 1, high: 2, unit: null, sex: null, ageLow: null, ageHigh: null, country: 'TZA', validFrom: '2026-01-01', source: 'WHO', scope: 'global', pregnancy: 'pregnant' }],
+      unit: 'g/dL', display: 'Haemoglobin', band: null, fits: ['unknown'],
+    };
+    const { ctx } = fakeCtx({ resultParamsFor: async () => [{ test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }, params: [param] }] });
+    const res = await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params', payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().tests[0].params[0]).toEqual(param);
   });
 
   it('carries the turnaround times and the verification switch through a create and an update', async () => {
     const { ctx, calls } = fakeCtx();
     const app = appWith(ctx);
-    const body = { code: 'HIVVL', display: 'HIV viral load', expectedTatHours: 0.5, criticalTatHours: null, requiresVerification: false };
+    const body = { testCode: 'HIVVL', display: 'HIV viral load', expectedTatHours: 0.5, criticalTatHours: null, requiresVerification: false };
     expect((await app.inject({ method: 'POST', url: '/api/test-catalog', payload: body })).statusCode).toBe(201);
     expect((await app.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL', payload: body })).statusCode).toBe(200);
     expect(calls.filter((c) => c.method !== 'get').map((c) => c.args.at(-1))).toEqual([body, body]);
@@ -555,7 +646,7 @@ describe('test catalog routes', () => {
     const res = await appWith(ctx, ['forms.view']).inject({ method: 'GET', url: '/api/test-catalog/browse?q=viral&limit=10' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
-      rows: [{ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: false }],
+      rows: [{ code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: false }],
       total: 1,
       system: 'urn:openldr:codesystem:test-catalog',
     });
@@ -570,7 +661,7 @@ describe('test catalog routes', () => {
     const body = res.json() as Record<string, unknown>;
     expect(body.ownedHere).toBeUndefined();
     expect(Object.keys(body.rows as object[]).length).toBe(1);
-    expect(Object.keys((body.rows as Record<string, unknown>[])[0])).toEqual(['code', 'display', 'category', 'enabled']);
+    expect(Object.keys((body.rows as Record<string, unknown>[])[0])).toEqual(['code', 'testCode', 'display', 'category', 'enabled']);
   });
 
   it('GET /browse needs forms.view, and refuses a bad filter before the store', async () => {
@@ -600,10 +691,21 @@ describe('test catalog routes', () => {
 
 describe('GET /api/test-catalog/loinc-hints/:code', () => {
   const HINTS: LoincHints = {
-    code: '6429-5', display: 'HIV culture of Blood', class: 'MICRO', categorySuggestion: { code: 'MICRO', display: 'Microbiology' },
+    code: '6429-5', display: 'HIV culture of Blood', shortName: 'HIV Bld Cult', component: 'Human immunodeficiency virus', systemPart: 'Bld',
+    class: 'MICRO', categorySuggestion: { code: 'MICRO', display: 'Microbiology' },
     unit: null, resultType: 'text',
-    specimens: [{ snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }, tick: true }],
-    answers: [], panelMembers: [],
+    specimens: [
+      { snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }, tick: true, via: 'snomed' },
+      { snomed: null, display: null, equivalence: null, specimenType: { system: 'urn:openldr:cs:local', code: 'UR', display: 'Urine' }, tick: false, via: 'system-name' },
+    ],
+    answers: [],
+    panelMembers: [{
+      code: '2093-3', display: 'Cholesterol', required: true,
+      field: { loinc: '2093-3', code: 'CHOL', display: 'Cholesterol', resultType: 'numeric', unit: 'mg/dL', valueSetUrl: null, exists: true },
+      fieldProblem: null,
+    }],
+    field: { loinc: '6429-5', code: '6429-5', display: 'Human immunodeficiency virus', resultType: 'text', unit: null, valueSetUrl: null, exists: false },
+    fieldProblem: null,
   };
   function hintsApp(impl: (code: string) => Promise<LoincHints | null>, capabilities?: string[]) {
     const { ctx } = fakeCtx();
@@ -617,6 +719,15 @@ describe('GET /api/test-catalog/loinc-hints/:code', () => {
     const res = await app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/6429-5' });
     expect([res.statusCode, res.json()]).toEqual([200, HINTS]);
     expect(asked).toEqual(['6429-5']);
+  });
+
+  it('carries the short name, component, SYSTEM part, field plans and how each specimen matched', async () => {
+    const res = await hintsApp(async () => HINTS, ['terminology.view']).app.inject({ method: 'GET', url: '/api/test-catalog/loinc-hints/6429-5' });
+    const body = res.json() as LoincHints;
+    expect([body.shortName, body.component, body.systemPart, body.fieldProblem]).toEqual(['HIV Bld Cult', 'Human immunodeficiency virus', 'Bld', null]);
+    expect(body.field).toEqual(HINTS.field);
+    expect(body.specimens.map((s) => s.via)).toEqual(['snomed', 'system-name']);
+    expect(body.panelMembers[0]).toMatchObject({ field: { code: 'CHOL', exists: true }, fieldProblem: null });
   });
 
   it('answers JSON null when LOINC is not loaded', async () => {

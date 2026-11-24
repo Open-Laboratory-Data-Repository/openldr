@@ -40,7 +40,8 @@ export async function runTestMappingList(opts: TestMappingListOpts): Promise<num
     const out = await ctx.testMapping.observed(parsed.query, level);
     if (opts.json) { process.stdout.write(JSON.stringify(out, null, 2) + '\n'); return 0; }
     const lines = out.rows.map((r) => {
-      const target = r.catalog ? `${r.catalog.code} ${r.catalog.name ?? ''}${r.catalog.loinc ? ` (LOINC ${r.catalog.loinc})` : ''}` : '';
+      // A catalog test reads by its Test code. A result field has none, so its code is shown.
+      const target = r.catalog ? `${r.catalog.testCode ?? r.catalog.code} ${r.catalog.name ?? ''}${r.catalog.loinc ? ` (LOINC ${r.catalog.loinc})` : ''}` : '';
       return `${r.system}  ${r.code}  ${r.requests}  ${r.status}${target ? `  ${target}` : ''}${r.centralManaged ? '  [central]' : ''}`;
     });
     process.stdout.write([...lines, `${out.rows.length} of ${out.total} code(s)`].join('\n') + '\n');
@@ -59,7 +60,8 @@ export async function runTestMappingSet(system: string, code: string, targetCode
       action: 'test_mapping.set', entityType: 'test_mapping', entityId: `${system}|${code}`,
       before: { catalogCode: change.before }, after: { catalogCode: change.after }, metadata: { level, rebuild: change.rebuild.ok },
     });
-    const done = level === 'result' ? `${code} now maps to result field ${targetCode}.` : `${code} now maps to ${targetCode}.`;
+    // People read the Test code. The audit above keeps the id.
+    const done = level === 'result' ? `${code} now maps to result field ${targetCode}.` : `${code} now maps to ${change.testCode ?? targetCode}.`;
     process.stdout.write(opts.json ? JSON.stringify(change, null, 2) + '\n' : `${done}\n`);
     staleWarning(change.rebuild);
     return 0;

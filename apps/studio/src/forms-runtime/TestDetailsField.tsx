@@ -79,6 +79,9 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
   }
   if (busy) return <LoadingState className="min-h-[8rem]" label={t.loading} />;
 
+  /** The Test code the server answered, else the coding's own code (the id, or a code from outside the catalog). */
+  const testCodeOf = (test: CodingAnswer): string =>
+    params.find((p) => keyOf(p.test) === keyOf(test))?.test.testCode ?? test.code;
   const paramsFor = (test: CodingAnswer): CatalogResultParam[] =>
     params.find((p) => keyOf(p.test) === keyOf(test))?.params ?? [];
   const detailFor = (test: CodingAnswer): TestDetail => value[keyOf(test)] ?? EMPTY_DETAIL;
@@ -101,14 +104,14 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
         <div key={keyOf(test)} className="flex items-start gap-3 border-b border-border p-3 last:border-b-0">
           <button type="button" className="min-w-0 flex-1 text-left" disabled={orderRejected} onClick={() => { if (!orderRejected) setOpenTest(keyOf(test)); }}>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">{test.code}</span>
-              <span className="text-sm font-medium">{test.display ?? test.code}</span>
+              <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">{testCodeOf(test)}</span>
+              <span className="text-sm font-medium">{test.display ?? testCodeOf(test)}</span>
             </div>
             <div className="mt-1 text-xs text-muted-foreground">{stateLine(test)}</div>
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label={`Actions for ${test.display ?? test.code}`}><MoreHorizontal className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label={`Actions for ${test.display ?? testCodeOf(test)}`}><MoreHorizontal className="h-4 w-4" /></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {orderRejected ? null : <DropdownMenuItem onClick={() => setOpenTest(keyOf(test))}>{t.open}</DropdownMenuItem>}
@@ -127,6 +130,7 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
       {open ? (
         <TestDetailSheet
           test={open}
+          testCode={testCodeOf(open)}
           params={paramsFor(open)}
           detail={detailFor(open)}
           sexes={sexes}

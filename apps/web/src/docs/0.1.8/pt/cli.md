@@ -133,7 +133,7 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 | `forms` | Lista definições de formulários; extrai respostas de um QuestionnaireResponse; escolhe as funções que podem abrir e submeter um formulário. |
 | `ingest` | Carrega um ficheiro através do pipeline (opcionalmente com um plugin). |
 | `facilities` | Importa um registo nacional de unidades: `suggest-map`, `suggest-values`, `import` (mapeamento de colunas e valores; consulte **Unidades** na Documentação do estúdio). |
-| `test-catalog` | O catálogo nacional de exames: `list` dos testes, `import` de uma lista a partir de CSV ou Excel, `export` em CSV, `enable` ou `disable` de um teste neste laboratório, e `retire` ou `restore` de um teste quando esta instalação é dona do catálogo, `set` dos tempos de resposta e da verificação de um teste, `loinc-hints` de um código LOINC, e `result-fields` para ligar, adicionar ou criar a partir do LOINC campos de resultado. |
+| `test-catalog` | O catálogo nacional de exames: `list` dos testes, `import` de uma lista a partir de CSV ou Excel, `export` em CSV, `enable` ou `disable` de um teste neste laboratório, e `retire` ou `restore` de um teste quando esta instalação é dona do catálogo, `set` do código do teste (`--test-code`), dos tempos de resposta e da verificação de um teste, `loinc-hints` de um código LOINC, e `result-fields` para ligar, adicionar ou criar a partir do LOINC campos de resultado. |
 | `lab` | `requisitions rebuild --force` reconstrói o índice que encontra um pedido pelo seu número de requisição. Exige **Zona de perigo**. |
 | `query` | Consultas personalizadas: `export` para um ficheiro JSON, `import` a partir de um (`--force` substitui os nomes existentes e exige **Gerir consultas guardadas**; sem essa permissão, uma importação acrescenta as novas consultas sem grupo). |
 | `pipeline` | Inspeciona lotes de ingestão: `status`, `retry`, `logs`. |
@@ -428,6 +428,8 @@ Uma resposta de categoria é `"kind": "existing"` com um `code`, ou `"kind": "ne
 
 ![Usar o catálogo com os seus códigos.](guide:operator-cli-pt-14)
 
+A coluna `id` tem o identificador interno de cada teste, que nunca muda. A coluna `code` tem o código do teste, que pode mudar. Uma importação associa uma linha pelo `id` quando o ficheiro o tem, senão pelo código do teste. Um código do teste anterior fica reservado para o seu teste.
+
 Associar códigos de testes do laboratório a testes do catálogo. Consulte **Associar códigos de teste do laboratório** no guia Catálogo de exames da aplicação. O sistema é um URN, tal como aparece na coluna System do separador Observados. Para dados DISA é `urn:openldr:disa`:
 
 ### 15. Usar o catálogo com os seus códigos
@@ -438,7 +440,7 @@ Associar códigos de testes do laboratório a testes do catálogo. Consulte **As
 
 ![Usar o catálogo com os seus códigos.](guide:operator-cli-pt-15)
 
-- `map list` lista os códigos de testes do laboratório no armazém, com o mapeamento para o catálogo. `--status` aceita `unmapped`, `mapped`, `ambiguous` ou `all`. `--search`, `--limit` (1 a 200, 25 por omissão) e `--offset` filtram e paginam a lista.
+- `map list` lista os códigos de testes do laboratório no armazém, com o mapeamento para o catálogo. Um teste do catálogo aparece pelo código do teste. `--status` aceita `unmapped`, `mapped`, `ambiguous` ou `all`. `--search`, `--limit` (1 a 200, 25 por omissão) e `--offset` filtram e paginam a lista.
 - `map set <system> <code> <catalog-code>` associa um código a um teste do catálogo.
 - `map clear <system> <code>` remove um mapeamento. Recusa correr sem `--force`.
 - `map export` escreve em CSV todos os códigos observados e o seu mapeamento, no formato que `map import` lê. `--out` indica um ficheiro. Sem ele, o CSV vai para a saída padrão.
@@ -511,7 +513,7 @@ Ler as sugestões de um código LOINC, e criar campos de resultado a partir do L
 
 ![Ler as sugestões LOINC e criar campos de resultado.](guide:operator-cli-pt-21)
 
-- `loinc-hints <code>` mostra o nome LOINC, a classe e a categoria que lhe corresponde, o tipo de resultado e a unidade, as amostras, as respostas e, para um painel, os seus testes membros. `--json` mostra o mesmo em JSON. Sem o LOINC e a sua ontologia, o comando diz que não há sugestões.
+- `loinc-hints <code>` mostra o nome LOINC, o seu nome curto e o seu componente, a classe e a categoria que lhe corresponde, o tipo de resultado e a unidade, as amostras, as respostas e, para um painel, os seus testes membros. `--json` mostra o mesmo em JSON. Sem o LOINC e a sua ontologia, o comando diz que não há sugestões. Uma instalação que carregou o LOINC antes de existirem os nomes curtos não mostra nome curto até executar de novo `terminology import loinc`.
 - `result-fields from-loinc <code...>` cria um campo de resultado para cada código. Com `--panel`, cria um para cada teste membro de cada painel. Um campo ou conjunto de respostas que já existe é reutilizado, por isso repetir não cria nada de novo.
 - `result-fields add --display <texto>` adiciona um campo ao dicionário de resultados. `--code` define o código. Sem ele, o código é feito a partir do nome, por exemplo `HAEMOGLOBIN_A1C`. `--unit` define a unidade UCUM. Um código que já existe é recusado.
 - Nenhum dos comandos marca o campo num teste. Marque-o no painel do exame, ou com `test-catalog params --set`. Um laboratório que recebe o dicionário do central não pode adicionar campos.

@@ -487,10 +487,12 @@ export interface LabIdentityField {
   id: string;
   labelKey: string;
   multiline: boolean;
-  /** Present when the field must be PICKED from a list rather than typed — today only
-   *  `facility-registers`. See `LAB_IDENTITY_FIELDS` (@openldr/config) for why free text is unsafe
-   *  for a register URI. */
-  source?: 'facility-registers';
+  /** Present when the field must be PICKED from a list rather than typed: `facility-registers`, or
+   *  `country` (the codes of `valueSetUrl`). See `LAB_IDENTITY_FIELDS` (@openldr/config) for why
+   *  free text is unsafe for a register URI. */
+  source?: 'facility-registers' | 'country';
+  /** For `source: 'country'`: the value set the picker lists. */
+  valueSetUrl?: string;
 }
 /** Field definitions come FROM the server: `@openldr/config` re-exports an env loader that reads
  *  process.env, so studio cannot import the registry (same reason feature flags work this way). */
@@ -2200,7 +2202,8 @@ export async function voidFormEntry(entryId: string, reason: string): Promise<Vo
 }
 
 // ── Reference search (form reference pickers) ────────────────────────────────────
-export interface CodingRow { system: string; code: string; display: string | null }
+/** `testCode` is set on a catalog test's row: the Test code people read, while `code` stays its id. */
+export interface CodingRow { system: string; code: string; display: string | null; testCode?: string }
 export interface EntityRow { reference: string; display: string; secondary: string | null }
 export type ReferenceSearchResponse =
   | { kind: 'coding'; rows: CodingRow[]; total: number }
@@ -2641,7 +2644,10 @@ export const ontologyPath = (id: string, code: string): Promise<OntologyBreadcru
 // These types mirror @openldr/bootstrap's test-catalog.ts. The routes are apps/server/src/test-catalog-routes.ts.
 export interface CatalogSpecimenCoding { system: string; code: string }
 export interface CatalogTest {
+  /** The internal id. It never changes. */
   code: string;
+  /** The national code people use. It can change. */
+  testCode: string;
   display: string;
   shortName: string | null;
   category: string | null;
@@ -2671,7 +2677,8 @@ export interface TestCatalogListParams {
   offset?: number;
 }
 export interface CatalogTestInput {
-  code?: string | null;
+  /** Required on create. Left out of an update, the stored one stays. */
+  testCode?: string | null;
   display: string;
   shortName?: string | null;
   category?: string | null;
@@ -2727,7 +2734,7 @@ export const setCatalogTestActive = (code: string, active: boolean): Promise<Cat
 // ── Test catalog import and export (test catalog S3) ──────────────────────────
 // Mirrors of @openldr/bootstrap's test-catalog-import.ts and test-catalog.ts import types.
 export type CatalogImportField =
-  | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
+  | 'id' | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
   | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification';
 /** Which file column feeds each field, by header text. A field left out is not changed on existing tests. */
 export type CatalogColumnMap = Partial<Record<CatalogImportField, string>>;
@@ -2751,6 +2758,8 @@ export interface CatalogImportInput {
 export interface CatalogImportReport {
   counts: { new: number; changed: number; unchanged: number; refused: number };
   refused: { line: number; code: string | null; reason: string }[];
+  /** Rows written with a note, such as an id from another install that names no test here. */
+  notes: { line: number; code: string | null; note: string }[];
   unmatched: { categories: { text: string; rows: number }[]; specimens: { text: string; rows: number }[] };
   categoriesToAdd: { code: string; display: string }[];
   loincChecked: boolean;
@@ -2787,10 +2796,12 @@ export type MapLevel = 'test' | 'result';
 export type ObservedStatus = 'unmapped' | 'mapped' | 'ambiguous';
 export interface ObservedTestCode {
   system: string; code: string; description: string | null; requests: number; lastSeen: string | null;
-  status: ObservedStatus; catalog: { code: string; name: string | null; loinc: string | null } | null; centralManaged: boolean;
+  /** `catalog.code` is the id a mapping stores. `testCode` is a catalog test's Test code; a result field has none. */
+  status: ObservedStatus; catalog: { code: string; testCode?: string; name: string | null; loinc: string | null } | null; centralManaged: boolean;
 }
 export interface ObservedTestCodesResult { rows: ObservedTestCode[]; total: number; warehouse: { stale: boolean; error: string | null } }
-export interface MappingTarget { code: string; name: string | null; loinc: string | null; retired: boolean }
+/** `code` is the id a mapping stores. `testCode` is a catalog test's Test code; a result field has none. */
+export interface MappingTarget { code: string; testCode?: string; name: string | null; loinc: string | null; retired: boolean }
 export interface LevelPublishSummary {
   mapped: number;
   ambiguous: Array<{ system: string; code: string; catalogCodes: string[] }>;
@@ -2879,18 +2890,55 @@ export const createResultField = (i: { code?: string | null; display: string; un
   authFetch('/api/test-catalog/result-fields', jbody(i, 'POST')).then((r) => okJson<CreatedResultField>(r, 'add result field'));
 // Mirrors of @openldr/bootstrap's loinc-hints.ts (test catalog hints spec, calls 4 to 7).
 export interface LoincSpecimenHint {
-  snomed: string; display: string | null; equivalence: string;
+  /** Null on a match by name. */
+  snomed: string | null; display: string | null;
+  /** Null on a match by name. */
+  equivalence: string | null;
   specimenType: { system: string; code: string; display: string | null } | null;
   /** true only when this is the one exact match, so the sheet may tick it by itself. */
   tick: boolean;
+  /** LOINC's SNOMED link, or LOINC's SYSTEM part against the specimen type's name. */
+  via: 'snomed' | 'system-name';
+}
+/** The result field a LOINC code becomes on a test. */
+export interface LoincFieldPlan {
+  loinc: string;
+  /** The dictionary field that already stands for the code (CHOL for 2093-3), else the LOINC code. */
+  code: string;
+  /** LOINC's COMPONENT, else the long name, else the panel member name. */
+  display: string;
+  resultType: CatalogTestResultParam['resultType'];
+  /** Numeric only. */
+  unit: string | null;
+  /** Coded only. */
+  valueSetUrl: string | null;
+  /** True when `code` is already a dictionary field. False means Save makes it. */
+  exists: boolean;
+}
+export interface LoincPanelMemberHint {
+  code: string; display: string; required: boolean;
+  field: LoincFieldPlan | null;
+  /** Why `field` is null: the field standing for the code has another role or is retired. */
+  fieldProblem: string | null;
 }
 export interface LoincHints {
-  code: string; display: string | null; class: string | null;
+  code: string; display: string | null;
+  /** LOINC's SHORTNAME. */
+  shortName: string | null;
+  /** LOINC's COMPONENT. */
+  component: string | null;
+  /** LOINC's SYSTEM part, such as "Ser/Plas". */
+  systemPart: string | null;
+  class: string | null;
   categorySuggestion: { code: string; display: string | null } | null;
   unit: string | null; resultType: CatalogTestResultParam['resultType'];
   specimens: LoincSpecimenHint[];
   answers: Array<{ code: string; display: string }>;
-  panelMembers: Array<{ code: string; display: string | null; required: boolean }>;
+  panelMembers: LoincPanelMemberHint[];
+  /** Null for a panel, or when the existing field is unusable. */
+  field: LoincFieldPlan | null;
+  /** Why `field` is null on a code that is not a panel. */
+  fieldProblem: string | null;
 }
 export interface ResultFieldsFromLoincAnswer {
   params: CatalogTestResultParam[]; created: string[]; reused: string[]; valueSetsCreated: string[];
@@ -2898,8 +2946,9 @@ export interface ResultFieldsFromLoincAnswer {
 /** null when LOINC or its ontology is not loaded here, so the sheet offers no hints. */
 export const getLoincHints = (code: string): Promise<LoincHints | null> =>
   apiGet<LoincHints | null>(`/api/test-catalog/loinc-hints/${encodeURIComponent(code)}`, 'read LOINC hints');
-export const resultFieldsFromLoinc = (codes: string[], panel = false): Promise<ResultFieldsFromLoincAnswer> =>
-  authFetch('/api/test-catalog/result-fields/from-loinc', jbody({ codes, panel }, 'POST'))
+/** `names` names a code missing from the loaded LOINC. */
+export const resultFieldsFromLoinc = (codes: string[], panel = false, names?: Record<string, string>): Promise<ResultFieldsFromLoincAnswer> =>
+  authFetch('/api/test-catalog/result-fields/from-loinc', jbody({ codes, panel, ...(names ? { names } : {}) }, 'POST'))
     .then((r) => okJson<ResultFieldsFromLoincAnswer>(r, 'add result fields from LOINC'));
 export const downloadResultFieldsCsv = (): Promise<void> =>
   downloadCsv('/api/test-catalog/result-fields/export', 'result-fields.csv', 'export result fields');
@@ -2923,21 +2972,46 @@ export interface CatalogResultBand {
   ageUnit?: CatalogAgeUnit;
   /** Absent when the band sets none. The editor sends null for a limit it cleared, which the server drops. */
   criticalLow?: number | null; criticalHigh?: number | null;
+  /** Absent means any. A band that sets one fits as unknown, since CE holds no pregnancy status. */
+  pregnancy?: CatalogBandPregnancy;
+  /** ISO 3166-1 alpha-3. A band of another country than the lab's does not fit. */
+  country?: string;
+  /** YYYY-MM-DD. A result dated outside them does not fit. */
+  validFrom?: string; validTo?: string;
+  /** Labels only. */
+  source?: CatalogBandSource; scope?: CatalogBandScope;
+}
+export type CatalogBandPregnancy = 'pregnant' | 'not-pregnant';
+export type CatalogBandSource = 'WHO' | 'CLSI' | 'EUCAST' | 'national' | 'facility';
+export type CatalogBandScope = 'global' | 'national' | 'facility';
+export type CatalogResultType = 'numeric' | 'coded' | 'text' | 'boolean' | 'date' | 'multicoded';
+export type CatalogDateLimit = 'any' | 'past' | 'future';
+/** A field's settings, each absent when not set. Entry limits, not ranges. */
+export interface CatalogFieldSettings {
+  /** Absent means true. */
+  required?: boolean;
+  /** Numeric only. */
+  min?: number | null; max?: number | null; decimals?: number | null;
+  /** Text only. */
+  minLength?: number | null; maxLength?: number | null;
+  /** Date only. Absent means any. */
+  dateLimit?: CatalogDateLimit;
 }
 export interface CatalogSexOption { code: string; labels: Record<string, string> }
 /** Whether a range fits the patient on the order. Unknown means the record lacks the sex or age it names. */
 export type CatalogBandFit = 'yes' | 'no' | 'unknown';
-export interface CatalogResultParam {
-  system: string; code: string; resultType: 'numeric' | 'coded' | 'text'; valueSetUrl: string | null;
+export interface CatalogResultParam extends CatalogFieldSettings {
+  system: string; code: string; resultType: CatalogResultType; valueSetUrl: string | null;
   bands: CatalogResultBand[]; unit: string | null; display: string | null; band: CatalogResultBand | null;
   /** For each band, by index. */
   fits: CatalogBandFit[];
 }
-export interface CatalogTestParams { test: { system: string; code: string }; params: CatalogResultParam[] }
+/** `test.code` is the id the order keys on. `testCode` is the Test code people read, absent for an id with no test. */
+export interface CatalogTestParams { test: { system: string; code: string; testCode?: string }; params: CatalogResultParam[] }
 /** What a test STORES for one parameter. The route's CatalogResultParam adds the unit, display and
  *  matched band, which are read from the dictionary and never stored on the test. */
-export interface CatalogTestResultParam {
-  system: string; code: string; resultType: 'numeric' | 'coded' | 'text'; valueSetUrl: string | null;
+export interface CatalogTestResultParam extends CatalogFieldSettings {
+  system: string; code: string; resultType: CatalogResultType; valueSetUrl: string | null;
   bands: CatalogResultBand[];
 }
 export interface CatalogRejectReason { system: string; code: string; display: string | null }
@@ -2957,7 +3031,8 @@ export const catalogResultParams = (
   authFetch('/api/test-catalog/result-params', jbody({ tests, ...(patient ? { patient } : {}) }, 'POST'))
     .then((r) => okJson<CatalogResultParamsAnswer>(r, 'read result parameters'));
 
-export interface BrowseTest { code: string; display: string; category: string | null; enabled: boolean }
+/** `code` is the id an order stores. `testCode` is the Test code people read. */
+export interface BrowseTest { code: string; testCode: string; display: string; category: string | null; enabled: boolean }
 /** `system` is the catalog's coding system, sent by the server so the studio never names it. */
 export interface BrowseTestsAnswer { rows: BrowseTest[]; total: number; system: string }
 

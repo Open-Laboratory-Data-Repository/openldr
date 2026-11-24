@@ -49,6 +49,18 @@ describe('MapCodeSheet', () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
+  // Test identity spec, call 8: the picker shows the Test code. The mapping stores the id.
+  it('shows each catalog test by its Test code, and saves its id', async () => {
+    vi.mocked(api.getMappingTargets).mockResolvedValue([{ code: 'tst-0123456789abcdef', testCode: 'VL', name: 'HIV viral load', loinc: '25836-8', retired: false }]);
+    vi.mocked(api.setTestMapping).mockResolvedValue({ system: DISA, code: 'HIVVL', before: null, after: 'tst-0123456789abcdef', rebuild: REBUILT });
+    render(<MapCodeSheet target={{ ...ROW, status: 'mapped', catalog: { code: 'tst-0123456789abcdef', testCode: 'VL', name: 'HIV viral load', loinc: '25836-8' } }} onClose={vi.fn()} onSaved={vi.fn()} />);
+    expect(await screen.findByText('HIV viral load (VL, 25836-8)')).toBeTruthy();
+    expect(screen.queryByText(/tst-0123456789abcdef/)).toBeNull();
+    openMenu('map-sheet-menu');
+    await act(async () => { fireEvent.click(await screen.findByTestId('map-sheet-save')); });
+    await waitFor(() => expect(api.setTestMapping).toHaveBeenCalledWith(DISA, 'HIVVL', 'tst-0123456789abcdef', 'test'));
+  });
+
   it('a central mapping is read-only: no Save, a note instead', async () => {
     render(<MapCodeSheet target={{ ...ROW, centralManaged: true }} onClose={vi.fn()} onSaved={vi.fn()} />);
     expect(await screen.findByText('Central maps this code. A lab cannot change it.')).toBeTruthy();

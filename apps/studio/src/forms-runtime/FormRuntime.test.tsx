@@ -756,7 +756,7 @@ describe('FormRuntime', () => {
   it('adds the browsed test to the answer, beside what is already chosen', async () => {
     vi.mocked(catalogSpecimensFor).mockResolvedValue([]);
     vi.mocked(browseTestCatalog).mockResolvedValue({
-      rows: [{ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: true }],
+      rows: [{ code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: true }],
       total: 1,
       system: 'urn:openldr:codesystem:test-catalog',
     });

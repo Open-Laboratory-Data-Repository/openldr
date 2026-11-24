@@ -43,6 +43,8 @@ Limit each site user to their facility with `openldr users scope <user> --facili
 
 When a reviewer authorises a result, the plugin sends CE one ServiceRequest for the test, a Specimen for each sample, one Observation per result parameter, and a Provenance that says who authorised it. Each Observation is `final`. It carries the value and unit, the flag in `interpretation`, and the range in `referenceRange`, with the range's name as its `text`. Each record's `subject` is the patient's CE record. CE stores them like records from any other source, and its warehouse fills `lab_requests` and `lab_results`, so the results show in reports and dashboards.
 
+The plugin shows the Test code to people. It sends the test as a coding with the system `urn:openldr:codesystem:test-catalog:test-code` and the Test code, beside the LOINC coding when one is linked. It also sends the fixed id as a coding in `urn:openldr:codesystem:test-catalog`.
+
 A rejected test reaches CE once its rejection is final, at once when it is rejected without a redraw or when its redraw order is linked. It reaches CE as a `revoked` ServiceRequest with the rejection reason, which fills `lab_requests.rejection_code` and `rejection_reason`.
 
 CE takes these records only from a user with no facility limit, who also holds `patients.find` or `patients.view`. So a reviewer must see every facility. A rejection made by a site user limited to a facility waits in the plugin until a user with no limit acts, or a reviewer selects **Retry** in the **Review** tab.

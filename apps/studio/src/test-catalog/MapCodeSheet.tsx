@@ -46,9 +46,11 @@ export function MapCodeSheet({ target, level = 'test', onClose, onSaved }: {
     }
   };
 
+  // The value is the id the mapping stores. The label shows a catalog test's Test code; a result
+  // field has none, so its code.
   const options = targets.map((x) => ({
     value: x.code,
-    label: `${x.name ?? x.code} (${x.code}${x.loinc ? `, ${x.loinc}` : ''})${x.retired ? `, ${t('testCatalog.mapSheet.retired')}` : ''}`,
+    label: `${x.name ?? x.testCode ?? x.code} (${x.testCode ?? x.code}${x.loinc ? `, ${x.loinc}` : ''})${x.retired ? `, ${t('testCatalog.mapSheet.retired')}` : ''}`,
   }));
   const pickedName = targets.find((x) => x.code === picked)?.name ?? picked ?? '';
   const result = level === 'result';

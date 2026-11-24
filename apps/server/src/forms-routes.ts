@@ -54,13 +54,15 @@ function extractionContextFor(schema: FormSchema, answers: Record<string, unknow
 const ORDER_CODE_FHIR_PATH = 'ServiceRequest.code';
 
 /**
- * For each catalog test on the order, the LOINC coding the extractor writes in front of it (test
- * catalog S4, spec 4.5). The warehouse keeps an order's first coding (packages/db/src/relational/extract.ts),
- * so a LOINC-linked test still lands as LOINC. The catalog is asked only when an answer is a catalog test.
+ * For each catalog test on the order, the codings the extractor writes in front of it: the LOINC link
+ * when there is one (test catalog S4, spec 4.5), then the Test code (test identity spec, call 7). The
+ * warehouse keeps an order's first coding (packages/db/src/relational/extract.ts), so a test lands as
+ * LOINC, or as its Test code, never as the internal id. The catalog is asked only when an answer is a
+ * catalog test.
  */
 async function catalogCodingsBefore(
   ctx: AppContext, schema: FormSchema, answers: Record<string, unknown>,
-): Promise<ExtractionContext['codingBefore']> {
+): Promise<ExtractionContext['codingsBefore']> {
   const tests: Array<{ system: string; code: string }> = [];
   for (const field of schema.fields) {
     if (field.fhirPath !== ORDER_CODE_FHIR_PATH) continue;
@@ -70,7 +72,7 @@ async function catalogCodingsBefore(
     }
   }
   if (tests.length === 0) return undefined;
-  return ctx.testCatalog.loincCodingsFor(tests);
+  return ctx.testCatalog.orderCodingsFor(tests);
 }
 
 /**
@@ -530,8 +532,8 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
 
     const questionnaire = toQuestionnaire(f.schema);
     const extractionContext = extractionContextFor(f.schema, p.data.answers, submittedAt);
-    const codingBefore = await catalogCodingsBefore(ctx, f.schema, p.data.answers);
-    if (codingBefore) extractionContext.codingBefore = codingBefore;
+    const codingsBefore = await catalogCodingsBefore(ctx, f.schema, p.data.answers);
+    if (codingsBefore) extractionContext.codingsBefore = codingsBefore;
     if (matchedBands.size > 0) extractionContext.testBands = matchedBands;
     // Each test's order gets its fixed id from the picked facility's code (null when none was
     // picked), the requisition number and the test (lab slices 1b and 2, ruling 1), and each test's

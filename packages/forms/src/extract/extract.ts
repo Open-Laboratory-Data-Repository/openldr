@@ -28,12 +28,13 @@ export interface ExtractionContext {
   subject?: Reference
   authored?: string
   /**
-   * For an order's test answer coded `system|code`, a coding to write in front of the answer's own.
-   * The forms route fills it from the test catalog's LOINC links (test catalog S4), so an order still
-   * leads with LOINC and the warehouse, which keeps the first coding, keeps matching. Other callers
-   * leave it out.
+   * For an order's test answer coded `system|code`, the codings to write in front of the answer's
+   * own, in order. The forms route fills it from the test catalog: the LOINC link when there is one
+   * (test catalog S4), then the Test code (test identity spec, call 7). The warehouse keeps the first
+   * coding, so an order lands as LOINC, or as the Test code, never as the catalog's internal id.
+   * Other callers leave it out.
    */
-  codingBefore?: ReadonlyMap<string, Coding>
+  codingsBefore?: ReadonlyMap<string, readonly Coding[]>
   /**
    * For a result coded `testKey#paramSystem|paramCode`, the reference band that applied when it was
    * typed. A QuestionnaireResponse answer has nowhere to carry it, so the forms route supplies it
@@ -371,12 +372,13 @@ export const ServiceRequestExtractor: ResourceExtractor = {
     const requests: ServiceRequest[] = tests.length === 0
       ? [request]
       : tests.map(({ system, code, display }) => {
-          const before = ctx.codingBefore?.get(`${system}|${code}`)
+          const before = ctx.codingsBefore?.get(`${system}|${code}`) ?? []
           return {
             ...structuredClone(request),
+            // Keyed by the answer's own coding, the catalog id, so a saved order keeps its id.
             ...(ctx.orderIdFor ? { id: ctx.orderIdFor({ system, code }) } : {}),
             code: {
-              coding: [...(before ? [{ ...before }] : []), { system, code, ...(display ? { display } : {}) }],
+              coding: [...before.map((c) => ({ ...c })), { system, code, ...(display ? { display } : {}) }],
               ...(display ? { text: display } : {}),
             },
           }

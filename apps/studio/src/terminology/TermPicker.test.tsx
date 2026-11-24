@@ -31,6 +31,25 @@ describe('TermPicker', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ code: 'AMP', system: 'http://x' }));
   });
 
+  it('draws a muted second line under each result when given detail', async () => {
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [{ ...term('2093-3', 'Cholesterol'), shortName: 'Cholest SerPl-mCnc' }], total: 1 } as never);
+    render(<TermPicker value={null} onChange={vi.fn()} systemId="sys1" detail={(t) => t.shortName} />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'chol' } });
+    const option = await screen.findByRole('option');
+    expect(option.querySelector('[data-testid="term-detail"]')?.textContent).toBe('Cholest SerPl-mCnc');
+  });
+
+  it('draws no second line without detail, or when detail has nothing to say', async () => {
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [term('AMP', 'Ampicillin')], total: 1 } as never);
+    const { unmount } = render(<TermPicker value={null} onChange={vi.fn()} systemId="sys1" />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'amp' } });
+    expect((await screen.findByRole('option')).querySelector('[data-testid="term-detail"]')).toBeNull();
+    unmount();
+    render(<TermPicker value={null} onChange={vi.fn()} systemId="sys1" detail={() => null} />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'amp' } });
+    expect((await screen.findByRole('option')).querySelector('[data-testid="term-detail"]')).toBeNull();
+  });
+
   it('shows the selected value as a chip with a clear button', () => {
     const onChange = vi.fn();
     render(<TermPicker value={{ system: 'http://x', code: 'AMP', display: 'Ampicillin' }} onChange={onChange} systemId="sys1" />);

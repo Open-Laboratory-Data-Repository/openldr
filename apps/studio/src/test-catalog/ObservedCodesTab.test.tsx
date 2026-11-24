@@ -37,6 +37,16 @@ describe('ObservedCodesTab', () => {
     expect(vi.mocked(api.listObservedTestCodes)).toHaveBeenCalledWith({ level: 'test', status: 'all', q: undefined, limit: 25, offset: 0 });
   });
 
+  // Test identity spec, call 8: a catalog test reads by its Test code, not its internal id.
+  it('shows the catalog test by its Test code, not its id', async () => {
+    const row = { ...ROW, catalog: { code: 'tst-0123456789abcdef', testCode: 'VL', name: 'HIV viral load', loinc: '25836-8' } };
+    vi.mocked(api.listObservedTestCodes).mockResolvedValue({ rows: [row], total: 1, warehouse: { stale: false, error: null } });
+    render(<ObservedCodesTab canManage />);
+    await screen.findByTestId('observed-row-HIVVL');
+    expect(screen.getByText('VL · 25836-8')).toBeTruthy();
+    expect(screen.queryByText(/tst-0123456789abcdef/)).toBeNull();
+  });
+
   it('shows the striped empty state when there are no codes, and no table', async () => {
     vi.mocked(api.listObservedTestCodes).mockResolvedValue({ rows: [], total: 0, warehouse: { stale: false, error: null } });
     render(<ObservedCodesTab canManage />);

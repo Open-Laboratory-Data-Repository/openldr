@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
+import { makeMigratedExternalDb } from '@openldr/db/testing-external';
+import { createTestMapping } from './test-mapping';
 import {
   createFhirStore, createTerminologyStore, createTerminologyAdminStore,
   type InternalSchema, type ValueSetProjection,
@@ -8,11 +10,12 @@ import {
 import { createOperations, LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { createTerminologyBulkSync } from '@openldr/sync';
 import {
-  createTestCatalog, parseCatalogListQuery, catalogChangeAction, readCatalogImportFile, TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM,
+  createTestCatalog, newTestId, parseCatalogListQuery, catalogChangeAction, readCatalogImportFile, TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM, TEST_CODE_SYSTEM,
   LAB_TESTS_VALUE_SET, TEST_CATEGORY_VALUE_SET, withLabTestsList,
   type CatalogListQuery, type CatalogListResult, type CatalogTestInput, type CatalogImportInput,
 } from './test-catalog';
 import type { CatalogColumnMap } from './test-catalog-import';
+import { countryCodes, createLabIdentity, labCountry } from './lab-identity';
 
 const LOCAL = 'urn:openldr:cs:local';
 // Three of the four codes the seeded specimen-type ValueSet lists (migration 014).
@@ -22,7 +25,13 @@ const CSF = { system: LOCAL, code: 'CSF' };
 
 // The terminology context bootstrap builds (terminology-context.ts), over a migrated pg-mem db.
 // Mirrors reexpand-value-sets.test.ts.
-async function buildCatalog() {
+// Tests written before tests had their own id pass `legacyIds`, so a new test's id is its Test code,
+// as every test saved before the change reads. The tests of the id itself use the real one.
+async function buildCatalog(opts: {
+  realIds?: boolean; labCountry?: string | null;
+  /** Wires a real lab identity service, as bootstrap does. Given the catalog's ops so it can read the seeded country list. */
+  labIdentity?: (ops: ReturnType<typeof createOperations>) => () => Promise<string | null>;
+} = {}) {
   const db = await makeMigratedDb();
   const fhirStore = createFhirStore(db);
   const store = createTerminologyStore(db, fhirStore);
@@ -47,7 +56,10 @@ async function buildCatalog() {
     getResourceByUrl: (u) => store.getResourceByUrl(u),
     translate: (q) => store.translate(q),
   });
-  return { db, admin, catalog: createTestCatalog({ db, admin, ops }) };
+  const makeId = opts.realIds ? undefined : (testCode: string) => testCode;
+  const labCountry = opts.labIdentity ? { labCountry: opts.labIdentity(ops) }
+    : opts.labCountry === undefined ? {} : { labCountry: async () => opts.labCountry ?? null };
+  return { db, admin, ops, catalog: createTestCatalog({ db, admin, ops, ...(makeId ? { makeId } : {}), ...labCountry }) };
 }
 
 async function seedTest(
@@ -146,7 +158,7 @@ describe('test catalog: reads', () => {
 
     expect(await catalog.list(q())).toEqual({
       rows: [{
-        code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
+        code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
         resultParams: [],
         loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
         lab: { enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' },
@@ -226,11 +238,11 @@ describe('test catalog: writes', () => {
   it('creates a test with its properties and LOINC link', async () => {
     const { db, catalog } = await buildCatalog();
     const created = await catalog.create({
-      code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
+      testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
       specimenTypes: [BLD, UR, BLD], loinc: '25836-8',
     });
     expect(created).toEqual({
-      code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
+      code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
       resultParams: [],
       loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
       lab: { enabled: false, specimenTypes: null, localDisplay: null },
@@ -240,20 +252,18 @@ describe('test catalog: writes', () => {
     });
   });
 
-  it('gives a test with no national code its LOINC code', async () => {
-    const { catalog } = await buildCatalog();
-    expect((await catalog.create({ display: 'HIV viral load', loinc: '25836-8' })).code).toBe('25836-8');
-  });
-
   it('refuses a test it cannot store, and says why', async () => {
     const { catalog } = await buildCatalog();
     const cases: Array<[CatalogTestInput, string]> = [
-      [{ code: 'X', display: '  ' }, 'A test needs a name.'],
-      [{ display: 'No codes' }, 'A test needs a national code or a LOINC code.'],
-      [{ code: 'X', display: 'X', loinc: 'ABC' }, '"ABC" is not a LOINC code. LOINC codes look like 12345-6.'],
-      [{ code: 'X', display: 'X', category: 'NOPE' }, 'Category NOPE is not in the test category list.'],
+      [{ testCode: 'X', display: '  ' }, 'A test needs a name.'],
+      [{ display: 'No codes' }, 'A test needs a Test code.'],
+      // The LOINC code is a mapping, never the test's code.
+      [{ display: 'Only LOINC', loinc: '25836-8' }, 'A test needs a Test code.'],
+      [{ testCode: '  ', display: 'Blank' }, 'A test needs a Test code.'],
+      [{ testCode: 'X', display: 'X', loinc: 'ABC' }, '"ABC" is not a LOINC code. LOINC codes look like 12345-6.'],
+      [{ testCode: 'X', display: 'X', category: 'NOPE' }, 'Category NOPE is not in the test category list.'],
       [
-        { code: 'X', display: 'X', specimenTypes: [{ system: LOCAL, code: 'XYZ' }] },
+        { testCode: 'X', display: 'X', specimenTypes: [{ system: LOCAL, code: 'XYZ' }] },
         'Specimen XYZ (urn:openldr:cs:local) is not in the specimen type list.',
       ],
     ];
@@ -262,11 +272,11 @@ describe('test catalog: writes', () => {
     }
   });
 
-  it('refuses a code already in the catalog', async () => {
+  it('refuses a Test code already in the catalog', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
-    await expect(catalog.create({ code: 'HIVVL', display: 'Again' }))
-      .rejects.toMatchObject({ kind: 'conflict', message: 'Test HIVVL is already in the catalog.' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
+    await expect(catalog.create({ testCode: 'HIVVL', display: 'Again' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: 'Test code HIVVL is already used by HIV viral load (HIVVL).' });
   });
 
   it('checks a LOINC code against LOINC when LOINC is loaded', async () => {
@@ -274,23 +284,23 @@ describe('test catalog: writes', () => {
     await db.insertInto('terminology_concepts').values({
       system: LOINC_SYSTEM, code: '2345-7', display: 'Glucose', status: 'ACTIVE', properties: null,
     }).execute();
-    await expect(catalog.create({ code: 'VL', display: 'Viral load', loinc: '25836-8' }))
+    await expect(catalog.create({ testCode: 'VL', display: 'Viral load', loinc: '25836-8' }))
       .rejects.toMatchObject({ kind: 'invalid', message: 'LOINC code 25836-8 is not in the LOINC loaded on this install.' });
-    expect((await catalog.create({ code: 'GLU', display: 'Glucose', loinc: '2345-7' })).loinc).toBe('2345-7');
+    expect((await catalog.create({ testCode: 'GLU', display: 'Glucose', loinc: '2345-7' })).loinc).toBe('2345-7');
   });
 
   it('does not count the DRAFT stubs earlier links leave as a loaded LOINC', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'A', display: 'A', loinc: '25836-8' });
+    await catalog.create({ testCode: 'A', display: 'A', loinc: '25836-8' });
     const stub = await db.selectFrom('terminology_concepts').select('status')
       .where('system', '=', LOINC_SYSTEM).where('code', '=', '25836-8').executeTakeFirstOrThrow();
     expect(stub.status).toBe('DRAFT');
-    expect((await catalog.create({ code: 'B', display: 'B', loinc: '11111-1' })).loinc).toBe('11111-1');
+    expect((await catalog.create({ testCode: 'B', display: 'B', loinc: '11111-1' })).loinc).toBe('11111-1');
   });
 
-  it('edits the whole test, keeps keys it does not manage, and keeps the code', async () => {
+  it('edits the whole test, keeps keys it does not manage, and keeps the id', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD] });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD] });
     // A key set elsewhere, such as `meta` from the Terminology page's Metadata field.
     await db.updateTable('terminology_concepts')
       .set({ properties: JSON.stringify({ shortName: 'VL', category: 'MOL', specimenTypes: [BLD], meta: { owner: 'lab' } }) as never })
@@ -300,15 +310,15 @@ describe('test catalog: writes', () => {
     expect(updated).toMatchObject({ code: 'HIVVL', display: 'HIV-1 viral load', shortName: null, category: null, specimenTypes: [] });
     expect((await storedConcept(db, 'HIVVL')).properties).toEqual({ meta: { owner: 'lab' } });
 
-    await expect(catalog.update('HIVVL', { code: 'OTHER', display: 'x' }))
-      .rejects.toMatchObject({ kind: 'invalid', message: "A test's code cannot change once saved (HIVVL)." });
+    await expect(catalog.update('HIVVL', { testCode: null, display: 'x' }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'A test needs a Test code.' });
     await expect(catalog.update('NOPE', { display: 'x' }))
       .rejects.toMatchObject({ kind: 'not-found', message: 'Test NOPE is not in the catalog.' });
   });
 
   it('relinks and unlinks LOINC, keeping one active link', async () => {
     const { admin, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
     const active = async () => (await admin.termMappings.listOutgoing(TEST_CATALOG_SYSTEM, 'HIVVL'))
       .filter((m) => m.isActive).map((m) => m.toCode);
 
@@ -321,7 +331,7 @@ describe('test catalog: writes', () => {
 
   it('retires a test as DEPRECATED, and restores it', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
     expect((await catalog.update('HIVVL', { display: 'HIV viral load', active: false })).active).toBe(false);
     expect((await storedConcept(db, 'HIVVL')).status).toBe('DEPRECATED');
     expect(codes(await catalog.list(q()))).toEqual([]);
@@ -331,15 +341,15 @@ describe('test catalog: writes', () => {
 
   it('refuses to add or edit tests once the catalog came from central', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
     await markCentral(db);
-    await expect(catalog.create({ code: 'CD4', display: 'CD4 count' })).rejects.toMatchObject({ kind: 'central-managed' });
+    await expect(catalog.create({ testCode: 'CD4', display: 'CD4 count' })).rejects.toMatchObject({ kind: 'central-managed' });
     await expect(catalog.update('HIVVL', { display: 'Changed' })).rejects.toMatchObject({ kind: 'central-managed' });
   });
 
   it('signals every edit so labs pull it', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
     await catalog.update('HIVVL', { display: 'HIV-1 viral load' });
     const sys = await db.selectFrom('terminology_systems').select('generation')
       .where('url', '=', TEST_CATALOG_SYSTEM).executeTakeFirstOrThrow();
@@ -353,14 +363,14 @@ describe('test catalog: writes', () => {
 describe('test catalog: this lab', () => {
   it('switches a test on with a local name', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
     const t = await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: '  Viral load ' });
     expect(t.lab).toEqual({ enabled: true, specimenTypes: null, localDisplay: 'Viral load' });
   });
 
   it('lets a lab narrow the specimen list but never add to it', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
     expect((await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: [UR], localDisplay: null })).lab.specimenTypes)
       .toEqual([UR]);
     await expect(catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: [CSF], localDisplay: null })).rejects.toMatchObject({
@@ -379,7 +389,7 @@ describe('test catalog: this lab', () => {
 
   it('never signals a sync change for lab settings', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
     const count = async () => (await db.selectFrom('reference_change_log').select('seq').execute()).length;
     const before = await count();
     await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: 'Viral load' });
@@ -422,12 +432,12 @@ describe('test catalog: options and row changes', () => {
       { code: 'MOL', display: 'Molecular' },
       { code: 'SERO', display: 'Serology' },
     ]);
-    expect(o.specimenTypes).toEqual([
-      { system: LOCAL, code: 'BLD', display: 'Blood' },
-      { system: LOCAL, code: 'CSF', display: 'CSF' },
-      { system: LOCAL, code: 'SPT', display: 'Sputum' },
-      { system: LOCAL, code: 'UR', display: 'Urine' },
+    // 014's four, and the eleven migration 143 adds.
+    expect(o.specimenTypes.map((t) => t.display)).toEqual([
+      'Ascitic fluid', 'Blood', 'Bone marrow', 'CSF', 'Nasal swab', 'Plasma', 'Pleural fluid', 'Saliva',
+      'Serum', 'Sputum', 'Stool', 'Synovial fluid', 'Throat swab', 'Urine', 'Wound specimen',
     ]);
+    expect(o.specimenTypes[1]).toEqual({ system: LOCAL, code: 'BLD', display: 'Blood' });
     expect(o.sexes.map((s) => s.code)).toEqual(['male', 'female', 'other', 'unknown']);
     expect(o.loinc).toBeNull();
   });
@@ -447,7 +457,7 @@ describe('test catalog: options and row changes', () => {
 
   it('switches a test on and off and keeps the lab narrowed specimens and local name', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
     await catalog.setLabSettings('HIVVL', { enabled: false, specimenTypes: [UR], localDisplay: 'Viral load' });
     expect((await catalog.setEnabled('HIVVL', true)).lab).toEqual({ enabled: true, specimenTypes: [UR], localDisplay: 'Viral load' });
     expect((await catalog.setEnabled('HIVVL', false)).lab).toEqual({ enabled: false, specimenTypes: [UR], localDisplay: 'Viral load' });
@@ -455,13 +465,13 @@ describe('test catalog: options and row changes', () => {
 
   it('switches on a test the lab has never touched', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
     expect((await catalog.setEnabled('CD4', true)).lab).toEqual({ enabled: true, specimenTypes: null, localDisplay: null });
   });
 
   it('still switches a test on after central dropped a specimen the lab had kept', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD] });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD] });
     // The lab kept UR, which the catalog no longer lists, as after a later pull from central.
     await db.insertInto('test_catalog_lab_settings')
       .values({ code: 'HIVVL', enabled: false, specimen_types: JSON.stringify([UR]) }).execute();
@@ -470,7 +480,7 @@ describe('test catalog: options and row changes', () => {
 
   it('lets a lab that receives central catalog switch tests, and refuses an unknown test', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
     await markCentral(db);
     expect((await catalog.setEnabled('HIVVL', true)).lab.enabled).toBe(true);
     await expect(catalog.setEnabled('NOPE', true))
@@ -479,7 +489,7 @@ describe('test catalog: options and row changes', () => {
 
   it('never signals a sync change for a switch', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
     const count = async () => (await db.selectFrom('reference_change_log').select('seq').execute()).length;
     const before = await count();
     await catalog.setEnabled('HIVVL', true);
@@ -488,7 +498,7 @@ describe('test catalog: options and row changes', () => {
 
   it('retires and restores a test and changes nothing else', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
     expect(await catalog.setActive('HIVVL', false))
       .toMatchObject({ active: false, category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
     expect((await storedConcept(db, 'HIVVL')).status).toBe('DEPRECATED');
@@ -499,7 +509,7 @@ describe('test catalog: options and row changes', () => {
   it('retires a test whose LOINC code a later LOINC load does not hold', async () => {
     const { db, catalog } = await buildCatalog();
     // With no LOINC loaded, the link stubs a DRAFT 25836-8. Loading LOINC without it makes a full re-save fail.
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
     await db.insertInto('terminology_concepts').values({
       system: LOINC_SYSTEM, code: '2345-7', display: 'Glucose', status: 'ACTIVE', properties: null,
     }).execute();
@@ -510,7 +520,7 @@ describe('test catalog: options and row changes', () => {
 
   it('signals one sync change per real status change, and none when nothing changes', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
     const generation = async () => Number((await db.selectFrom('terminology_systems').select('generation')
       .where('url', '=', TEST_CATALOG_SYSTEM).executeTakeFirstOrThrow()).generation);
     expect(await generation()).toBe(1);
@@ -522,7 +532,7 @@ describe('test catalog: options and row changes', () => {
 
   it('refuses to retire an unknown test, or at a lab that receives central catalog', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
     await expect(catalog.setActive('NOPE', false)).rejects.toMatchObject({ kind: 'not-found' });
     await markCentral(db);
     await expect(catalog.setActive('HIVVL', false)).rejects.toMatchObject({ kind: 'central-managed' });
@@ -554,8 +564,8 @@ describe('test catalog: import preview', () => {
 
   it('counts new, changed, unchanged and refused rows, and writes nothing', async () => {
     const { db, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', specimenTypes: [BLD] });
-    await catalog.create({ code: 'CD4', display: 'CD4 count', category: 'HAEM' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', category: 'MOL', specimenTypes: [BLD] });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count', category: 'HAEM' });
     const generation = await catalogGeneration(db);
 
     const report = await catalog.importPreview(importInput([
@@ -569,9 +579,10 @@ describe('test catalog: import preview', () => {
     expect(report).toEqual({
       counts: { new: 1, changed: 1, unchanged: 1, refused: 2 },
       refused: [
-        { line: 5, code: null, reason: 'A test needs a national code or a LOINC code.' },
+        { line: 5, code: null, reason: 'A test needs a Test code.' },
         { line: 6, code: 'HIVVL', reason: 'Test HIVVL is already on row 2 of this file.' },
       ],
+      notes: [],
       unmatched: { categories: [], specimens: [] },
       categoriesToAdd: [],
       loincChecked: false,
@@ -584,7 +595,7 @@ describe('test catalog: import preview', () => {
   it('lists text that matched nothing, refuses its rows until answered, and adds a category the operator names', async () => {
     const { catalog } = await buildCatalog();
     const rows = [
-      ['VL1', 'Viral load 1', '', '', 'Virology', 'Plasma'],
+      ['VL1', 'Viral load 1', '', '', 'Virology', 'Semen'],
       ['VL2', 'Viral load 2', '', '', 'virology', 'Blood'],
     ];
 
@@ -594,16 +605,16 @@ describe('test catalog: import preview', () => {
       {
         line: 2, code: 'VL1',
         reason: 'Category "Virology" is not in the test category list. Choose a category for it. '
-          + 'Specimen "Plasma" is not in the specimen type list. Choose a specimen for it.',
+          + 'Specimen "Semen" is not in the specimen type list. Choose a specimen for it.',
       },
       { line: 3, code: 'VL2', reason: 'Category "virology" is not in the test category list. Choose a category for it.' },
     ]);
-    expect(unanswered.unmatched).toEqual({ categories: [{ text: 'Virology', rows: 2 }], specimens: [{ text: 'Plasma', rows: 1 }] });
+    expect(unanswered.unmatched).toEqual({ categories: [{ text: 'Virology', rows: 2 }], specimens: [{ text: 'Semen', rows: 1 }] });
 
     const answered = await catalog.importPreview(importInput(rows, {
       valueMap: {
         categories: [{ text: 'VIROLOGY', kind: 'new', code: 'VIRO', display: 'Virology' }],
-        specimens: [{ text: 'plasma', system: LOCAL, code: 'BLD' }],
+        specimens: [{ text: 'semen', system: LOCAL, code: 'BLD' }],
       },
     }));
     expect(answered.counts).toEqual({ new: 2, changed: 0, unchanged: 0, refused: 0 });
@@ -627,7 +638,7 @@ describe('test catalog: import preview', () => {
 
   it('leaves a field alone when its column is not mapped', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
     const report = await catalog.importPreview({
       table: { headers: ['code', 'name'], rows: [['HIVVL', 'HIV viral load']] },
       columnMap: { code: 'code', name: 'name' },
@@ -655,7 +666,7 @@ describe('test catalog: import preview', () => {
   it('does not check again a LOINC code the test already has', async () => {
     const { db, catalog } = await buildCatalog();
     // Linked before LOINC was loaded, so only a DRAFT stub stands behind the code.
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
     await db.insertInto('terminology_concepts').values({
       system: LOINC_SYSTEM, code: '2345-7', display: 'Glucose', status: 'ACTIVE', properties: null,
     }).execute();
@@ -704,7 +715,7 @@ describe('test catalog: import apply and export', () => {
 
   it('clears a field whose mapped cell is empty, and leaves an unmapped one alone', async () => {
     const { admin, catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
     const report = await catalog.importApply({
       table: { headers: ['code', 'name', 'short_name', 'loinc'], rows: [['HIVVL', 'HIV viral load', '', '']] },
       columnMap: { code: 'code', name: 'name', shortName: 'short_name', loinc: 'loinc' },
@@ -717,7 +728,7 @@ describe('test catalog: import apply and export', () => {
 
   it('never changes a test status or this lab settings', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
     await catalog.setEnabled('HIVVL', true);
     await catalog.setActive('HIVVL', false);
     await catalog.importApply(importInput([['HIVVL', 'HIV-1 viral load', '', '', '', '']]));
@@ -740,16 +751,16 @@ describe('test catalog: import apply and export', () => {
 
   it('exports the active tests in the import layout, and the export imports back unchanged', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR], loinc: '25836-8' });
-    await catalog.create({ code: 'CD4', display: 'CD4 count, absolute', category: 'HAEM' });
-    await catalog.create({ code: 'OLD', display: 'Old test' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR], loinc: '25836-8' });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count, absolute', category: 'HAEM' });
+    await catalog.create({ testCode: 'OLD', display: 'Old test' });
     await catalog.setActive('OLD', false);
 
     const csv = await catalog.exportCsv();
     expect(csv).toBe(
-      'code,name,short_name,loinc,category,specimen_types,expected_tat_hours,critical_tat_hours,requires_verification\n'
-      + 'CD4,"CD4 count, absolute",,,HAEM,,,,yes\n'
-      + 'HIVVL,HIV viral load,VL,25836-8,MOL,BLD;UR,,,yes\n',
+      'id,code,name,short_name,loinc,category,specimen_types,expected_tat_hours,critical_tat_hours,requires_verification\n'
+      + 'CD4,CD4,"CD4 count, absolute",,,HAEM,,,,yes\n'
+      + 'HIVVL,HIVVL,HIV viral load,VL,25836-8,MOL,BLD;UR,,,yes\n',
     );
     const file = readCatalogImportFile(new TextEncoder().encode(csv), 'csv');
     const report = await catalog.importPreview({ table: file, columnMap: file.suggested });
@@ -785,16 +796,16 @@ async function labList(ops: Operations, filter?: string): Promise<Array<[string,
 describe('test catalog: the lab test list', () => {
   it('lists nothing, not the whole catalog, when no test is switched on here', async () => {
     const { catalog, ops } = await buildWithLabList();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
-    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
     expect(await labList(ops)).toEqual([]);
   });
 
   it('lists the active tests switched on here, under the local name when there is one', async () => {
     const { catalog, ops } = await buildWithLabList();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
-    await catalog.create({ code: 'CD4', display: 'CD4 count' });
-    await catalog.create({ code: 'GLU', display: 'Glucose' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
+    await catalog.create({ testCode: 'GLU', display: 'Glucose' });
     await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: 'Viral load' });
     await catalog.setEnabled('CD4', true);
     expect(await labList(ops)).toEqual([['CD4', 'CD4 count'], ['HIVVL', 'Viral load']]);
@@ -802,7 +813,7 @@ describe('test catalog: the lab test list', () => {
 
   it('drops a retired test, even while it stays switched on', async () => {
     const { catalog, ops } = await buildWithLabList();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
     await catalog.setEnabled('HIVVL', true);
     await catalog.setActive('HIVVL', false);
     expect(await labList(ops)).toEqual([]);
@@ -810,8 +821,8 @@ describe('test catalog: the lab test list', () => {
 
   it('searches the local name, and the submit check accepts only listed tests', async () => {
     const { catalog, ops } = await buildWithLabList();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
-    await catalog.create({ code: 'GLU', display: 'Glucose' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ testCode: 'GLU', display: 'Glucose' });
     await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: 'Viral load' });
     expect(await labList(ops, 'viral')).toEqual([['HIVVL', 'Viral load']]);
     const check = (code: string) => ops.validateCode({ valueSetUrl: LAB_TESTS_VALUE_SET, code, system: TEST_CATALOG_SYSTEM });
@@ -847,8 +858,8 @@ describe('test catalog: what an order needs', () => {
 
   it('offers the specimens at least one chosen test accepts, by this lab narrower list', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
-    await catalog.create({ code: 'GLU', display: 'Glucose', specimenTypes: [BLD, CSF] });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
+    await catalog.create({ testCode: 'GLU', display: 'Glucose', specimenTypes: [BLD, CSF] });
     await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: [UR], localDisplay: null });
     expect(await catalog.specimensFor([test('HIVVL'), test('GLU')])).toEqual([
       { system: LOCAL, code: 'BLD', display: 'Blood' },
@@ -860,19 +871,32 @@ describe('test catalog: what an order needs', () => {
 
   it('offers nothing to narrow by for codings outside the catalog, or tests with no specimens', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
     expect(await catalog.specimensFor([{ system: LOINC_SYSTEM, code: '718-7' }])).toEqual([]);
     expect(await catalog.specimensFor([test('CD4'), test('NOPE')])).toEqual([]);
   });
 
-  it('names each catalog test LOINC coding, for tests with an active link only', async () => {
+  it('names the codings an order writes in front of each catalog test: LOINC when linked, then the Test code', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
-    await catalog.create({ code: 'CD4', display: 'CD4 count' });
-    await catalog.create({ code: 'GLU', display: 'Glucose', loinc: '2345-7' });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
+    await catalog.create({ testCode: 'GLU', display: 'Glucose', loinc: '2345-7' });
     await catalog.update('GLU', { display: 'Glucose', loinc: null });
-    const found = await catalog.loincCodingsFor([test('HIVVL'), test('CD4'), test('GLU'), { system: LOINC_SYSTEM, code: '718-7' }]);
-    expect([...found]).toEqual([[`${TEST_CATALOG_SYSTEM}|HIVVL`, { system: LOINC_SYSTEM, code: '25836-8' }]]);
+    const found = await catalog.orderCodingsFor([test('HIVVL'), test('CD4'), test('GLU'), test('NOPE'), { system: LOINC_SYSTEM, code: '718-7' }]);
+    expect([...found].sort(([a], [b]) => a.localeCompare(b))).toEqual([
+      [`${TEST_CATALOG_SYSTEM}|CD4`, [{ system: TEST_CODE_SYSTEM, code: 'CD4' }]],
+      [`${TEST_CATALOG_SYSTEM}|GLU`, [{ system: TEST_CODE_SYSTEM, code: 'GLU' }]],
+      [`${TEST_CATALOG_SYSTEM}|HIVVL`, [{ system: LOINC_SYSTEM, code: '25836-8' }, { system: TEST_CODE_SYSTEM, code: 'HIVVL' }]],
+    ]);
+  });
+
+  it('keys the codings by the id and names the Test code a test has now', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const made = await catalog.create({ testCode: 'VL', display: 'HIV viral load' });
+    expect(made.code).toMatch(/^tst-/);
+    await catalog.update(made.code, { display: 'HIV viral load', testCode: 'HIVVL2' });
+    const found = await catalog.orderCodingsFor([test(made.code)]);
+    expect([...found]).toEqual([[`${TEST_CATALOG_SYSTEM}|${made.code}`, [{ system: TEST_CODE_SYSTEM, code: 'HIVVL2' }]]]);
   });
 });
 
@@ -893,7 +917,7 @@ describe('test catalog: result parameters on a test', () => {
   it('keeps the parameters a save writes, bands and all', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
-    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [HGB] });
     expect((await catalog.get('FBC'))?.resultParams).toEqual([HGB]);
   });
 
@@ -918,14 +942,14 @@ describe('test catalog: result parameters on a test', () => {
 
   it('answers an empty list for a test that names none', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
     expect((await catalog.get('CD4'))?.resultParams).toEqual([]);
   });
 
   it('clears the parameters when a save sends an empty list, and keeps them when it sends none', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
-    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [HGB] });
     await catalog.update('FBC', { display: 'Full blood count' });
     expect((await catalog.get('FBC'))?.resultParams).toEqual([HGB]);
     await catalog.update('FBC', { display: 'Full blood count', resultParams: [] });
@@ -935,7 +959,7 @@ describe('test catalog: result parameters on a test', () => {
   it('refuses a parameter that is not in the reportable-result list', async () => {
     const { catalog } = await buildCatalog();
     await expect(catalog.create({
-      code: 'FBC', display: 'Full blood count',
+      testCode: 'FBC', display: 'Full blood count',
       resultParams: [{ ...HGB, code: 'NOT-A-PARAM' }],
     })).rejects.toMatchObject({ kind: 'invalid' });
   });
@@ -944,7 +968,7 @@ describe('test catalog: result parameters on a test', () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['MRDT']);
     await expect(catalog.create({
-      code: 'MAL', display: 'Malaria RDT',
+      testCode: 'MAL', display: 'Malaria RDT',
       resultParams: [{ system: 'urn:openldr:default_result', code: 'MRDT', resultType: 'coded', valueSetUrl: null, bands: [] }],
     })).rejects.toMatchObject({ kind: 'invalid' });
   });
@@ -954,7 +978,7 @@ describe('test catalog: result parameters on a test', () => {
   it('keeps a range name through a save', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
-    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ name: 'Highland women', low: 12, high: 16 })] }] });
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ name: 'Highland women', low: 12, high: 16 })] }] });
     expect((await catalog.get('FBC'))?.resultParams[0].bands[0].name).toBe('Highland women');
   });
 
@@ -962,7 +986,7 @@ describe('test catalog: result parameters on a test', () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
     await expect(catalog.create({
-      code: 'FBC', display: 'Full blood count',
+      testCode: 'FBC', display: 'Full blood count',
       resultParams: [{ ...HGB, bands: [range({ name: 'Highland', low: 12, high: 16 }), range({ name: 'highland', low: 11, high: 15 })] }],
     })).rejects.toMatchObject({ kind: 'invalid', message: 'HGB has two ranges named highland.' });
   });
@@ -974,7 +998,7 @@ describe('test catalog: result parameters on a test', () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
     await expect(catalog.create({
-      code: 'FBC', display: 'Full blood count',
+      testCode: 'FBC', display: 'Full blood count',
       resultParams: [{ ...HGB, bands: [range({ name: 'highland', low: 12, high: 16 }), range({ name: 'HIGHLAND', low: 11, high: 15 })] }],
     })).rejects.toMatchObject({ kind: 'invalid', message: 'HGB has two ranges named HIGHLAND.' });
   });
@@ -982,9 +1006,9 @@ describe('test catalog: result parameters on a test', () => {
   it('refuses a range whose low is above its high, or whose age from is above its age to', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
-    await expect(catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ low: 16, high: 12 })] }] }))
+    await expect(catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ low: 16, high: 12 })] }] }))
       .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1 has a low above its high.' });
-    await expect(catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ ageLow: 20, ageHigh: 15 })] }] }))
+    await expect(catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ ageLow: 20, ageHigh: 15 })] }] }))
       .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1 has an age from above its age to.' });
   });
 
@@ -992,7 +1016,7 @@ describe('test catalog: result parameters on a test', () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
     const withLimits = { ...HGB, bands: [range({ low: 12, high: 15, criticalLow: 7, criticalHigh: 20 }), range({ low: 11, criticalLow: 6 })] };
-    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [withLimits] });
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [withLimits] });
     const [stored] = (await catalog.get('FBC'))?.resultParams ?? [];
     expect(stored.bands[0]).toMatchObject({ low: 12, high: 15, criticalLow: 7, criticalHigh: 20 });
     expect(stored.bands[1]).toMatchObject({ low: 11, criticalLow: 6 });
@@ -1003,7 +1027,7 @@ describe('test catalog: result parameters on a test', () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
     let n = 0;
-    const save = (b: object) => catalog.create({ code: `FBC${++n}`, display: 'Full blood count', resultParams: [{ ...HGB, bands: [range(b)] }] });
+    const save = (b: object) => catalog.create({ testCode: `FBC${++n}`, display: 'Full blood count', resultParams: [{ ...HGB, bands: [range(b)] }] });
     await expect(save({ low: 12, high: 15, criticalLow: 13 }))
       .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1: the critical low limit must be at or below the low limit.' });
     await expect(save({ low: 12, high: 15, criticalHigh: 14 }))
@@ -1022,9 +1046,9 @@ describe('test catalog: result parameters on a test', () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
     const days = { ...range({ ageLow: 0, ageHigh: 28 }), ageUnit: 'days' } as never;
-    await expect(catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({}), days] }] }))
+    await expect(catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({}), days] }] }))
       .rejects.toMatchObject({ kind: 'invalid', message: 'FBC: HGB range 2 has the age unit "days". Use d (days), mo (months) or y (years).' });
-    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [HGB] });
     await expect(catalog.update('FBC', { display: 'Full blood count', resultParams: [{ ...HGB, bands: [days] }] }))
       .rejects.toMatchObject({ kind: 'invalid', message: 'FBC: HGB range 1 has the age unit "days". Use d (days), mo (months) or y (years).' });
   });
@@ -1032,7 +1056,7 @@ describe('test catalog: result parameters on a test', () => {
   it('refuses a range whose sex is not one of the Patient codes', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
-    await expect(catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ sex: 'woman' })] }] }))
+    await expect(catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ sex: 'woman' })] }] }))
       .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1 names woman, which is not a sex this install knows.' });
   });
 });
@@ -1050,10 +1074,10 @@ describe('test catalog: what a result sheet needs', () => {
   it('answers each test its parameters, with the band that fits the patient', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
-    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [HGB] });
     const answer = await catalog.resultParamsFor([test('FBC')], { sex: 'female', birthDate: '1996-01-01', at: Date.parse('2026-11-23T12:00:00Z') });
     expect(answer).toEqual([{
-      test: { system: TEST_CATALOG_SYSTEM, code: 'FBC' },
+      test: { system: TEST_CATALOG_SYSTEM, code: 'FBC', testCode: 'FBC' },
       params: [{
         ...HGB, unit: 'g/dL', display: 'HGB',
         band: { name: null, low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null },
@@ -1065,15 +1089,29 @@ describe('test catalog: what a result sheet needs', () => {
   it('answers a null band when no band fits, rather than a wrong one', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
-    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [HGB] });
     const answer = await catalog.resultParamsFor([test('FBC')], { sex: null, birthDate: null });
     expect(answer[0].params[0].band).toBeNull();
   });
 
   it('answers an empty parameter list for a test that names none', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'CD4', display: 'CD4 count' });
-    expect(await catalog.resultParamsFor([test('CD4')], {})).toEqual([{ test: { system: TEST_CATALOG_SYSTEM, code: 'CD4' }, params: [] }]);
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
+    expect(await catalog.resultParamsFor([test('CD4')], {})).toEqual([{ test: { system: TEST_CATALOG_SYSTEM, code: 'CD4', testCode: 'CD4' }, params: [] }]);
+  });
+
+  // The order screen shows the Test code. The coding it keys on stays the id.
+  it('answers each test its Test code beside its id', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const made = await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
+    expect(made.code).not.toBe('CD4');
+    expect(await catalog.resultParamsFor([test(made.code)], {}))
+      .toEqual([{ test: { system: TEST_CATALOG_SYSTEM, code: made.code, testCode: 'CD4' }, params: [] }]);
+  });
+
+  it('answers no Test code for an id with no test', async () => {
+    const { catalog } = await buildCatalog();
+    expect(await catalog.resultParamsFor([test('NOPE')], {})).toEqual([{ test: { system: TEST_CATALOG_SYSTEM, code: 'NOPE' }, params: [] }]);
   });
 
   it('ignores codings that are not catalog tests', async () => {
@@ -1087,7 +1125,7 @@ describe('test catalog: what a result sheet needs', () => {
     const neonatal = { name: null, low: 14, high: 22, unit: 'g/dL', sex: null, ageLow: 0, ageHigh: 28, ageUnit: 'd' as const };
     const infant = { name: null, low: 10, high: 14, unit: 'g/dL', sex: null, ageLow: 1, ageHigh: 12, ageUnit: 'mo' as const };
     const child = { name: null, low: 11, high: 14, unit: 'g/dL', sex: null, ageLow: 1, ageHigh: 5, ageUnit: 'y' as const };
-    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [neonatal, infant, child, ...HGB.bands] }] });
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [neonatal, infant, child, ...HGB.bands] }] });
     expect((await catalog.get('FBC'))?.resultParams[0].bands.map((b) => b.ageUnit)).toEqual(['d', 'mo', 'y', undefined, undefined]);
     const at = Date.parse('2026-11-23T12:00:00Z');
     const [newborn] = await catalog.resultParamsFor([test('FBC')], { sex: 'female', birthDate: '2026-11-23', at });
@@ -1101,7 +1139,7 @@ describe('test catalog: what a result sheet needs', () => {
   it('answers unknown for a range that names a fact the patient record lacks', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
-    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [HGB] });
     const answer = await catalog.resultParamsFor([test('FBC')], { sex: null, birthDate: null });
     expect(answer[0].params[0].fits).toEqual(['unknown', 'unknown']);
   });
@@ -1117,7 +1155,7 @@ describe('test catalog: turnaround times and verification', () => {
 
   it('stores them as concept properties through create and update, and keeps them when an update leaves them out', async () => {
     const { db, catalog } = await buildCatalog();
-    const created = await catalog.create({ code: 'HIVVL', display: 'HIV viral load', expectedTatHours: 0.5, criticalTatHours: 72, requiresVerification: false });
+    const created = await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', expectedTatHours: 0.5, criticalTatHours: 72, requiresVerification: false });
     expect(created).toMatchObject({ expectedTatHours: 0.5, criticalTatHours: 72, requiresVerification: false });
     expect((await storedConcept(db, 'HIVVL')).properties).toEqual({ expectedTatHours: 0.5, criticalTatHours: 72, requiresVerification: false });
 
@@ -1134,10 +1172,10 @@ describe('test catalog: turnaround times and verification', () => {
   it('refuses a TAT that is zero, negative or not a number, and a switch that is not a boolean', async () => {
     const { catalog } = await buildCatalog();
     for (const bad of [{ expectedTatHours: 0 }, { expectedTatHours: -2 }, { criticalTatHours: Number.NaN }, { criticalTatHours: '48' }]) {
-      await expect(catalog.create({ code: 'X', display: 'X', ...(bad as object) }))
+      await expect(catalog.create({ testCode: 'X', display: 'X', ...(bad as object) }))
         .rejects.toMatchObject({ kind: 'invalid', message: expect.stringContaining('must be a positive number of hours') });
     }
-    await expect(catalog.create({ code: 'X', display: 'X', requiresVerification: 'yes' as never }))
+    await expect(catalog.create({ testCode: 'X', display: 'X', requiresVerification: 'yes' as never }))
       .rejects.toMatchObject({ kind: 'invalid', message: 'Requires verification must be true or false.' });
     expect(await catalog.get('X')).toBeNull();
   });
@@ -1165,7 +1203,7 @@ describe('test catalog: turnaround times and verification', () => {
 
   it('imports and exports the three columns, and the export imports back unchanged', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'CD4', display: 'CD4 count', expectedTatHours: 99 });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count', expectedTatHours: 99 });
     const headers = ['code', 'name', 'expected_tat_hours', 'critical_tat_hours', 'requires_verification'];
     const file = readCatalogImportFile(new TextEncoder().encode(
       headers.join(',') + '\nHIVVL,HIV viral load,48,0.5,No\nCD4,CD4 count,,,yes\n',
@@ -1188,7 +1226,7 @@ describe('test catalog: turnaround times and verification', () => {
 
   it('leaves the three alone when their columns are not mapped', async () => {
     const { catalog } = await buildCatalog();
-    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', expectedTatHours: 48, requiresVerification: false });
+    await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', expectedTatHours: 48, requiresVerification: false });
     const report = await catalog.importApply(importInput([['HIVVL', 'HIV-1 viral load', '', '', '', '']]));
     expect(report.counts.changed).toBe(1);
     expect(await catalog.get('HIVVL')).toMatchObject({ display: 'HIV-1 viral load', expectedTatHours: 48, requiresVerification: false });
@@ -1208,5 +1246,470 @@ describe('test catalog: turnaround times and verification', () => {
       ['B', 'The expected turnaround time must be a positive number of hours, not -1.'],
       ['C', 'Requires verification "maybe" must be yes or no.'],
     ]);
+  });
+});
+
+describe('test catalog: an internal id and a Test code', () => {
+  const ID = /^tst-[0-9a-f]{16}$/;
+
+  it('makes ids of tst- and 16 hex characters, a new one each time', () => {
+    const a = newTestId();
+    const b = newTestId();
+    expect(a).toMatch(ID);
+    expect(b).toMatch(ID);
+    expect(a).not.toBe(b);
+  });
+
+  it('gives a new test its own id and stores the Test code as a property', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    const created = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    expect(created.code).toMatch(ID);
+    expect(created.testCode).toBe('HB');
+    expect((await storedConcept(db, created.code)).properties).toEqual({ testCode: 'HB' });
+    expect((await catalog.get(created.code))?.testCode).toBe('HB');
+  });
+
+  it('reads a test saved without a Test code by its concept code, and finds it by that code', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    await seedTest(db, 'CD4', 'CD4 count', { category: 'HAEM' });
+    expect((await catalog.get('CD4'))?.testCode).toBe('CD4');
+    expect(codes(await catalog.list(q({ q: 'cd4' })))).toEqual(['CD4']);
+    expect((await catalog.findByTestCode('CD4'))?.code).toBe('CD4');
+    // An edit that leaves the Test code out keeps it, and writes no property it does not need.
+    await catalog.update('CD4', { display: 'CD4 count, absolute', category: 'HAEM' });
+    expect((await storedConcept(db, 'CD4')).properties).toEqual({ category: 'HAEM' });
+    expect((await catalog.get('CD4'))?.testCode).toBe('CD4');
+  });
+
+  it('searches by Test code and by name', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await catalog.create({ testCode: 'GLU', display: 'Glucose' });
+    expect(codes(await catalog.list(q({ q: 'hb' })))).toEqual([hb.code]);
+    expect(codes(await catalog.list(q({ q: 'haemo' })))).toEqual([hb.code]);
+  });
+
+  it('refuses a Test code another test holds, counting a saved test by its concept code and a retired test', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    await seedTest(db, 'CD4', 'CD4 count', null);
+    await expect(catalog.create({ testCode: 'CD4', display: 'Again' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: 'Test code CD4 is already used by CD4 count (CD4).' });
+
+    const old = await catalog.create({ testCode: 'OLD', display: 'Old test' });
+    await catalog.setActive(old.code, false);
+    await expect(catalog.create({ testCode: 'OLD', display: 'New test' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: `Test code OLD is already used by Old test (${old.code}).` });
+
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await expect(catalog.update(hb.code, { testCode: 'CD4', display: 'Haemoglobin' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: 'Test code CD4 is already used by CD4 count (CD4).' });
+    // A test keeps its own Test code on an edit.
+    expect((await catalog.update(hb.code, { testCode: 'HB', display: 'Haemoglobin, total' })).testCode).toBe('HB');
+  });
+
+  it('changes a Test code and keeps the id, the lab settings, the LOINC link and the lab-code mappings', async () => {
+    const { admin, catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin', loinc: '718-7', specimenTypes: [BLD] });
+    await catalog.setLabSettings(hb.code, { enabled: true, specimenTypes: null, localDisplay: 'Hb' });
+    // A lab-code mapping, as test mapping writes it, points at the id.
+    await admin.termMappings.create({
+      fromSystem: 'urn:openldr:disa', fromCode: 'HGB', toSystem: TEST_CATALOG_SYSTEM, toCode: hb.code,
+      toDisplay: null, mapType: 'SAME-AS', isActive: true,
+    });
+
+    const changed = await catalog.update(hb.code, { testCode: 'HGB', display: 'Haemoglobin', loinc: '718-7', specimenTypes: [BLD] });
+    expect(changed).toMatchObject({ code: hb.code, testCode: 'HGB', loinc: '718-7', lab: { enabled: true, localDisplay: 'Hb' } });
+    expect((await catalog.findByTestCode('HGB'))?.code).toBe(hb.code);
+    expect(await catalog.findByTestCode('HB')).toBeNull();
+    const mapped = await admin.termMappings.listOutgoing('urn:openldr:disa', 'HGB');
+    expect(mapped.map((m) => m.toCode)).toEqual([hb.code]);
+    // The old Test code is not free: earlier orders still carry it (fix round 1 ruling).
+    await expect(catalog.create({ testCode: 'HB', display: 'Another' })).rejects.toMatchObject({ kind: 'conflict' });
+  });
+
+  it('resolves a Test code first, then an id', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    expect((await catalog.resolve('HB'))?.code).toBe(hb.code);
+    expect((await catalog.resolve(hb.code))?.code).toBe(hb.code);
+    expect(await catalog.resolve('NOPE')).toBeNull();
+    // Trimmed and case ignored.
+    expect((await catalog.resolve(' hb '))?.code).toBe(hb.code);
+    // A saved test whose Test code moved away from its id is still found by both.
+    await seedTest(db, 'GLU', 'Glucose', null);
+    await catalog.update('GLU', { testCode: 'GLUC', display: 'Glucose' });
+    expect((await catalog.resolve('GLU'))?.code).toBe('GLU');
+    expect((await catalog.resolve('gluc'))?.code).toBe('GLU');
+  });
+
+  it('compares Test codes trimmed and ignoring case, and keeps the one stored as typed', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await expect(catalog.create({ testCode: ' hb ', display: 'Again' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: `Test code HB is already used by Haemoglobin (${hb.code}).` });
+    const glu = await catalog.create({ testCode: 'Glu', display: 'Glucose' });
+    expect(glu.testCode).toBe('Glu');
+    await expect(catalog.update(glu.code, { testCode: 'hb', display: 'Glucose' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: `Test code HB is already used by Haemoglobin (${hb.code}).` });
+    expect((await catalog.findByTestCode('GLU'))?.code).toBe(glu.code);
+  });
+
+  it('refuses a Test code that is another test id, and lets a test use its own id', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    await seedTest(db, 'GLU', 'Glucose', null);
+    await catalog.update('GLU', { testCode: 'GLUC', display: 'Glucose' });
+    // GLU is no longer a Test code, but it is still the id of the test that had it.
+    await expect(catalog.create({ testCode: 'glu', display: 'Glucose, fasting' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: 'Test code glu is the id of another test, Glucose (GLU).' });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await expect(catalog.update(hb.code, { testCode: 'GLU', display: 'Haemoglobin' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: 'Test code GLU is the id of another test, Glucose (GLU).' });
+    await expect(catalog.create({ testCode: hb.code.toUpperCase(), display: 'Copy' }))
+      .rejects.toMatchObject({ kind: 'conflict' });
+    // The test itself may go back to its own id.
+    expect((await catalog.update('GLU', { testCode: 'glu', display: 'Glucose' })).testCode).toBe('glu');
+    // Now GLU's Test code is its own id again, so a row giving it to another test names the holder.
+    const report = await catalog.importPreview({
+      table: { headers: ['id', 'code', 'name'], rows: [[hb.code, 'GLU', 'Haemoglobin']] },
+      columnMap: { id: 'id', code: 'code', name: 'name' },
+    });
+    expect(report.refused).toEqual([
+      { line: 2, code: 'GLU', reason: 'Test code glu is already used by Glucose (GLU).' },
+    ]);
+  });
+
+  it('exports an id column beside the Test code, and an edited Test code imports back onto the same test', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    const csv = await catalog.exportCsv();
+    expect(csv).toBe(
+      'id,code,name,short_name,loinc,category,specimen_types,expected_tat_hours,critical_tat_hours,requires_verification\n'
+      + `${hb.code},HB,Haemoglobin,,,,,,,yes\n`,
+    );
+    const edited = csv.replace(`${hb.code},HB,`, `${hb.code},HGB,`);
+    const file = readCatalogImportFile(new TextEncoder().encode(edited), 'csv');
+    expect(file.suggested).toMatchObject({ id: 'id', code: 'code' });
+    const report = await catalog.importApply({ table: file, columnMap: file.suggested });
+    expect(report.counts).toEqual({ new: 0, changed: 1, unchanged: 0, refused: 0 });
+    expect((await catalog.list(q())).rows.map((t) => [t.code, t.testCode])).toEqual([[hb.code, 'HGB']]);
+  });
+
+  it('matches a row on its Test code trimmed and ignoring case, and makes no second test', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    const report = await catalog.importApply(importInput([['hb', 'Haemoglobin, total', '', '', '', '']]));
+    expect(report.counts).toEqual({ new: 0, changed: 1, unchanged: 0, refused: 0 });
+    expect((await catalog.list(q())).rows.map((t) => [t.code, t.display])).toEqual([[hb.code, 'Haemoglobin, total']]);
+  });
+
+  it('refuses an import row whose Test code is another test id', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    await seedTest(db, 'GLU', 'Glucose', null);
+    await catalog.update('GLU', { testCode: 'GLUC', display: 'Glucose' });
+    const report = await catalog.importPreview(importInput([['glu', 'Glucose, fasting', '', '', '', '']]));
+    expect(report.refused).toEqual([{ line: 2, code: 'glu', reason: 'Test code glu is the id of another test, Glucose (GLU).' }]);
+  });
+
+  it('matches a row with no id on its Test code, and makes a new test with its own id for a new one', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    const report = await catalog.importApply(importInput([
+      ['HB', 'Haemoglobin, total', '', '', '', ''],
+      ['GLU', 'Glucose', '', '', '', ''],
+    ]));
+    expect(report.counts).toEqual({ new: 1, changed: 1, unchanged: 0, refused: 0 });
+    expect((await catalog.get(hb.code))?.display).toBe('Haemoglobin, total');
+    const glu = await catalog.findByTestCode('GLU');
+    expect(glu?.code).toMatch(ID);
+  });
+
+  it('refuses a row with no Test code and a Test code another test or row holds, and adds a row whose id names no test', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await catalog.create({ testCode: 'GLU', display: 'Glucose' });
+    const headers = ['id', 'code', 'name'];
+    const report = await catalog.importPreview({
+      table: { headers, rows: [
+        ['', '', 'No code'],
+        ['tst-0000000000000000', 'NEW', 'Made-up id'],
+        [hb.code, 'GLU', 'Haemoglobin'],
+        ['', 'CRP', 'C-reactive protein'],
+        ['', 'CRP', 'C-reactive protein again'],
+      ] },
+      columnMap: { id: 'id', code: 'code', name: 'name' },
+    });
+    expect(report.refused).toEqual([
+      { line: 2, code: null, reason: 'A test needs a Test code.' },
+      { line: 4, code: 'GLU', reason: `Test code GLU is already used by Glucose (${(await catalog.findByTestCode('GLU'))?.code}).` },
+      { line: 6, code: 'CRP', reason: 'Test code CRP is already on row 5 of this file.' },
+    ]);
+    expect(report.counts).toEqual({ new: 2, changed: 0, unchanged: 0, refused: 3 });
+  });
+});
+
+describe('test catalog: earlier Test codes', () => {
+  it('keeps each earlier Test code once, never the current one, and refuses it to another test', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await catalog.update(hb.code, { testCode: 'HGB', display: 'Haemoglobin' });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HGB', previousTestCodes: ['HB'] });
+
+    // HB still means this test's earlier orders, so no other test may take it, in any case.
+    await expect(catalog.create({ testCode: 'hb', display: 'Copy' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: 'Test code hb was used by Haemoglobin (' + hb.code + ') before. Earlier orders still carry it.' });
+    const glu = await catalog.create({ testCode: 'GLU', display: 'Glucose' });
+    await expect(catalog.update(glu.code, { testCode: 'HB', display: 'Glucose' })).rejects.toMatchObject({ kind: 'conflict' });
+
+    // The test itself may go back, and HB is not listed twice.
+    await catalog.update(hb.code, { testCode: 'HB', display: 'Haemoglobin' });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HB', previousTestCodes: ['HGB'] });
+    // Earlier orders carry the code as it was spelt, so a spelling that differs only in case is kept
+    // for its test_map self row (test identity review, M1).
+    await catalog.update(hb.code, { testCode: 'hgb', display: 'Haemoglobin' });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'hgb', previousTestCodes: ['HGB', 'HB'] });
+    await catalog.update(hb.code, { testCode: 'HGB', display: 'Haemoglobin' });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HGB', previousTestCodes: ['HB', 'hgb'] });
+  });
+
+  it('keeps an earlier Test code that differs only in case, and publishes a self row for it', async () => {
+    const { db, admin, catalog } = await buildCatalog({ realIds: true });
+    const externalDb = await makeMigratedExternalDb();
+    const mapping = createTestMapping({ internalDb: db, externalDb, admin, logger: { warn: () => {} } });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await catalog.update(hb.code, { testCode: 'Hb', display: 'Haemoglobin' });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'Hb', previousTestCodes: ['HB'] });
+    // Uniqueness still ignores case: no other test may take hb.
+    await expect(catalog.create({ testCode: 'hb', display: 'Copy' })).rejects.toMatchObject({ kind: 'conflict' });
+    await mapping.publish({ apply: true });
+    const rows = await externalDb.selectFrom('test_map').select(['source_code', 'catalog_code'])
+      .where('source_system', '=', TEST_CODE_SYSTEM).orderBy('source_code').execute();
+    expect(rows).toEqual([{ source_code: 'HB', catalog_code: 'Hb' }, { source_code: 'Hb', catalog_code: 'Hb' }]);
+  });
+
+  it('keeps the earlier Test code when an import renames a test, and refuses a row that takes one', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    const columnMap = { id: 'id', code: 'code', name: 'name' };
+    const renamed = await catalog.importApply({ table: { headers: ['id', 'code', 'name'], rows: [[hb.code, 'HGB', 'Haemoglobin']] }, columnMap });
+    expect(renamed.counts.changed).toBe(1);
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HGB', previousTestCodes: ['HB'] });
+
+    const taken = await catalog.importPreview({ table: { headers: ['id', 'code', 'name'], rows: [['', 'HB', 'Another']] }, columnMap });
+    expect(taken.refused).toEqual([
+      { line: 2, code: 'HB', reason: `Test code HB was used by Haemoglobin (${hb.code}) before. Earlier orders still carry it.` },
+    ]);
+  });
+
+  it('publishes a test_map self row for each earlier Test code, all naming the current one', async () => {
+    const { db, admin, catalog } = await buildCatalog({ realIds: true });
+    const externalDb = await makeMigratedExternalDb();
+    const mapping = createTestMapping({ internalDb: db, externalDb, admin, logger: { warn: () => {} } });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await catalog.update(hb.code, { testCode: 'HGB', display: 'Haemoglobin' });
+    await mapping.publish({ apply: true });
+    const rows = await externalDb.selectFrom('test_map').select(['source_system', 'source_code', 'catalog_code'])
+      .where('source_system', '=', TEST_CODE_SYSTEM).orderBy('source_code').execute();
+    expect(rows).toEqual([
+      { source_system: TEST_CODE_SYSTEM, source_code: 'HB', catalog_code: 'HGB' },
+      { source_system: TEST_CODE_SYSTEM, source_code: 'HGB', catalog_code: 'HGB' },
+    ]);
+  });
+});
+
+
+describe('test catalog: identity review fixes', () => {
+  const ID = /^tst-[0-9a-f]{16}$/;
+  const HEAD = ['id', 'code', 'name'];
+  const MAP = { id: 'id', code: 'code', name: 'name' };
+
+  // I2: an id that names no test here falls back to the Test code, else adds a new test with its own id.
+  it('imports a file exported from another install into a fresh catalog, with a note on each row', async () => {
+    const a = await buildCatalog({ realIds: true });
+    const hb = await a.catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    const glu = await a.catalog.create({ testCode: 'GLU', display: 'Glucose' });
+    const file = readCatalogImportFile(new TextEncoder().encode(await a.catalog.exportCsv()), 'csv');
+
+    const b = await buildCatalog({ realIds: true });
+    const report = await b.catalog.importApply({ table: file, columnMap: file.suggested });
+    expect(report.counts).toEqual({ new: 2, changed: 0, unchanged: 0, refused: 0 });
+    expect(report.notes).toEqual([
+      { line: 2, code: 'GLU', note: `The id ${glu.code} is not in this catalog, so the row adds a new test with an id of its own.` },
+      { line: 3, code: 'HB', note: `The id ${hb.code} is not in this catalog, so the row adds a new test with an id of its own.` },
+    ]);
+    const made = (await b.catalog.list(q())).rows;
+    expect(made.map((t) => t.testCode)).toEqual(['GLU', 'HB']);
+    for (const t of made) expect(t.code).toMatch(ID);
+    expect(made.map((t) => t.code)).not.toContain(hb.code);
+    expect(made.map((t) => t.code)).not.toContain(glu.code);
+  });
+
+  it('imports that file into a catalog that has one of its Test codes, and updates that test', async () => {
+    const a = await buildCatalog({ realIds: true });
+    const hb = await a.catalog.create({ testCode: 'HB', display: 'Haemoglobin, total' });
+    await a.catalog.create({ testCode: 'GLU', display: 'Glucose' });
+    const file = readCatalogImportFile(new TextEncoder().encode(await a.catalog.exportCsv()), 'csv');
+
+    const b = await buildCatalog({ realIds: true });
+    const own = await b.catalog.create({ testCode: 'hb', display: 'Haemoglobin' });
+    const report = await b.catalog.importApply({ table: file, columnMap: file.suggested });
+    expect(report.counts).toEqual({ new: 1, changed: 1, unchanged: 0, refused: 0 });
+    expect(report.notes).toContainEqual(
+      { line: 3, code: 'HB', note: `The id ${hb.code} is not in this catalog, so the row was matched on its Test code HB.` },
+    );
+    expect(await b.catalog.get(own.code)).toMatchObject({ testCode: 'HB', display: 'Haemoglobin, total' });
+    expect((await b.catalog.list(q())).total).toBe(2);
+  });
+
+  // M2: the catalog reads in Test code order, case ignored, then by id.
+  it('lists and exports tests in Test code order, not id order', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ testCode: 'A1', display: 'First by id' });
+    await catalog.update('A1', { testCode: 'ZZ', display: 'First by id' });
+    await catalog.create({ testCode: 'b2', display: 'Second' });
+    await catalog.create({ testCode: 'C3', display: 'Third' });
+    expect((await catalog.list(q())).rows.map((t) => t.testCode)).toEqual(['b2', 'C3', 'ZZ']);
+    const lines = (await catalog.exportCsv()).trim().split(/\r?\n/).slice(1);
+    expect(lines.map((l) => l.split(',')[1])).toEqual(['b2', 'C3', 'ZZ']);
+  });
+
+  // M7: a row that renames A from X to Y, then a row that gives X to B. X still names A's earlier orders.
+  it('refuses a later row that gives another test the code an earlier row renamed away', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const a = await catalog.create({ testCode: 'X', display: 'Test A' });
+    const b = await catalog.create({ testCode: 'B', display: 'Test B' });
+    const report = await catalog.importApply({
+      table: { headers: HEAD, rows: [[a.code, 'Y', 'Test A'], [b.code, 'X', 'Test B'], ['', 'X', 'Test C']] },
+      columnMap: MAP,
+    });
+    expect(report.counts).toEqual({ new: 0, changed: 1, unchanged: 0, refused: 2 });
+    expect(report.refused.map((r) => [r.line, r.code])).toEqual([[3, 'X'], [4, 'X']]);
+    expect(await catalog.get(a.code)).toMatchObject({ testCode: 'Y' });
+    expect(await catalog.get(b.code)).toMatchObject({ testCode: 'B' });
+    await expect(catalog.update(b.code, { testCode: 'X', display: 'Test B' })).rejects.toMatchObject({ kind: 'conflict' });
+  });
+});
+
+describe('test catalog: field settings, more types and range fields (plan B, Task 1)', () => {
+  const S = 'urn:openldr:default_result';
+  const HGB = { system: S, code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null, bands: [] as object[] };
+  const range = (b: object) => ({ name: null, low: null, high: null, unit: null, sex: null, ageLow: null, ageHigh: null, ...b });
+  const test = (code: string) => ({ system: TEST_CATALOG_SYSTEM, code });
+
+  async function refuses(param: object, message: string) {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB', 'NOTE', 'SEEN', 'SYM']);
+    await expect(catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [param as never] }))
+      .rejects.toMatchObject({ kind: 'invalid', message });
+  }
+
+  it('keeps the field settings, the new types and the range fields through a save', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB', 'NOTE', 'SEEN', 'POS', 'SYM']);
+    const params = [
+      { ...HGB, required: false, min: 0, max: 30, decimals: 1, bands: [range({
+        low: 11, high: 14, pregnancy: 'pregnant', country: 'TZA', validFrom: '2026-01-01', validTo: '2026-12-31', source: 'WHO', scope: 'national',
+      })] },
+      { system: S, code: 'NOTE', resultType: 'text' as const, valueSetUrl: null, bands: [], minLength: 2, maxLength: 200 },
+      { system: S, code: 'SEEN', resultType: 'date' as const, valueSetUrl: null, bands: [], dateLimit: 'past' as const },
+      { system: S, code: 'POS', resultType: 'boolean' as const, valueSetUrl: null, bands: [] },
+      { system: S, code: 'SYM', resultType: 'multicoded' as const, valueSetUrl: 'urn:x:vs:symptoms', bands: [] },
+    ];
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: params as never });
+    expect((await catalog.get('FBC'))?.resultParams).toEqual(params);
+  });
+
+  it('refuses a min above the max, and negative or fractional decimals', async () => {
+    await refuses({ ...HGB, min: 10, max: 5 }, 'HGB has a minimum above its maximum.');
+    await refuses({ ...HGB, decimals: -1 }, 'HGB: decimals must be a whole number, 0 or more.');
+    await refuses({ ...HGB, decimals: 1.5 }, 'HGB: decimals must be a whole number, 0 or more.');
+  });
+
+  it('refuses a minimum length above the maximum length, and a negative length', async () => {
+    const NOTE = { system: S, code: 'NOTE', resultType: 'text', valueSetUrl: null, bands: [] };
+    await refuses({ ...NOTE, minLength: 10, maxLength: 5 }, 'NOTE has a minimum length above its maximum length.');
+    await refuses({ ...NOTE, maxLength: -1 }, 'NOTE: the maximum length must be a whole number, 0 or more.');
+  });
+
+  it('refuses a date limit it does not know, and a setting of another type', async () => {
+    const SEEN = { system: S, code: 'SEEN', resultType: 'date', valueSetUrl: null, bands: [] };
+    await refuses({ ...SEEN, dateLimit: 'yesterday' }, 'SEEN has the date limit "yesterday". Use any, past or future.');
+    await refuses({ ...SEEN, min: 1 }, 'SEEN is a date field, so it cannot have min.');
+    await refuses({ ...HGB, maxLength: 4 }, 'HGB is a numeric field, so it cannot have maxLength.');
+  });
+
+  it('refuses required that is not true or false', async () => {
+    await refuses({ ...HGB, required: 'yes' }, 'HGB: required must be true or false.');
+  });
+
+  it('refuses a multicoded param without a value set', async () => {
+    await refuses({ system: S, code: 'SYM', resultType: 'multicoded', valueSetUrl: null, bands: [] }, 'SYM is a several-answer result and needs a value set.');
+  });
+
+  it('refuses a country not in the country value set, valid dates the wrong way round, and an unknown source or scope', async () => {
+    await refuses({ ...HGB, bands: [range({ country: 'XXX' })] }, 'HGB range 1 names the country XXX, which is not in the country list.');
+    await refuses({ ...HGB, bands: [range({ validFrom: '2026-06-01', validTo: '2026-01-01' })] }, 'HGB range 1 is valid from a date after its valid to date.');
+    await refuses({ ...HGB, bands: [range({ validFrom: '2026-02-30' })] }, 'HGB range 1 has the valid from date "2026-02-30". Use a date such as 2026-01-31.');
+    await refuses({ ...HGB, bands: [range({ source: 'Mayo' })] }, 'HGB range 1 has the source "Mayo". Use WHO, CLSI, EUCAST, national or facility.');
+    await refuses({ ...HGB, bands: [range({ scope: 'world' })] }, 'HGB range 1 has the scope "world". Use global, national or facility.');
+    await refuses({ ...HGB, bands: [range({ pregnancy: 'yes' })] }, 'HGB range 1 has the pregnancy "yes". Use pregnant, not-pregnant or any.');
+  });
+
+  it('accepts a country from the country value set', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ country: 'TZA' })] }] as never });
+    expect((await catalog.get('FBC'))?.resultParams[0].bands[0].country).toBe('TZA');
+  });
+
+  it('passes the lab country into the fit', async () => {
+    const at = Date.parse('2026-11-23T12:00:00Z');
+    const bands = [range({ low: 1, country: 'TZA' }), range({ low: 2, country: 'KEN' }), range({ low: 3 })];
+    for (const [labCountry, fits, low] of [
+      ['TZA', ['yes', 'no', 'yes'], 1], ['KEN', ['no', 'yes', 'yes'], 2], [null, ['unknown', 'unknown', 'yes'], 3],
+    ] as const) {
+      const { db, catalog } = await buildCatalog({ labCountry });
+      await seedResultParams(db, ['HGB']);
+      await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands }] as never });
+      const [answer] = await catalog.resultParamsFor([test('FBC')], { sex: null, birthDate: null, at });
+      expect(answer.params[0].fits).toEqual(fits);
+      expect(answer.params[0].band?.low).toBe(low);
+    }
+  });
+
+  it('uses the country saved in the lab settings', async () => {
+    const rows = new Map<string, string>();
+    const appStore = {
+      get: async (k: string) => (rows.has(k) ? { key: k, value: rows.get(k)!, updatedAt: '', updatedBy: null } : undefined),
+      set: async (k: string, v: string) => { rows.set(k, v); },
+    } as never;
+    let identity: ReturnType<typeof createLabIdentity> | null = null;
+    const { db, catalog } = await buildCatalog({
+      labIdentity: (ops) => {
+        identity = createLabIdentity(appStore, { countries: () => countryCodes(ops) });
+        return () => labCountry(identity);
+      },
+    });
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ low: 1, country: 'TZA' }), range({ low: 3 })] }] as never });
+    expect(await identity!.set({ 'lab.country': 'XXX' }, 'tester')).toEqual([{ key: 'lab.country', reason: 'invalid-country' }]);
+    expect(await identity!.set({ 'lab.country': 'KEN' }, 'tester')).toEqual([]);
+    const [answer] = await catalog.resultParamsFor([test('FBC')], {});
+    expect(answer.params[0].fits).toEqual(['no', 'yes']);
+  });
+
+  it('answers a band with no country when the catalog has no country dependency', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ low: 1, country: 'TZA' }), range({ low: 3 })] }] as never });
+    const [answer] = await catalog.resultParamsFor([test('FBC')], {});
+    expect(answer.params[0].fits).toEqual(['unknown', 'yes']);
+  });
+
+  it('answers the field settings to the bench', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, required: false, min: 0, decimals: 2 }] as never });
+    const [answer] = await catalog.resultParamsFor([test('FBC')], {});
+    expect(answer.params[0]).toMatchObject({ required: false, min: 0, decimals: 2 });
   });
 });

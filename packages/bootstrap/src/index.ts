@@ -75,7 +75,7 @@ import { checkForActivity, copyForActivity, createActivityService, type Activity
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createValidationStrictness, type ValidationStrictness } from './validation-settings';
-import { createLabIdentity, labTimeZone, type LabIdentityService } from './lab-identity';
+import { countryCodes, createLabIdentity, labCountry, labTimeZone, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createUpdateCheck, type UpdateCheck } from './update-check';
 export * from './update-check';
@@ -1273,6 +1273,9 @@ const reporting: ReportingApi = {
   const testCatalog = createTestCatalog({
     db: termDb, admin: termAdmin, ops: terminology.ops,
     onChanged: () => { void testMapping.requestRebuild(); },
+    // LAZY on purpose: `labIdentity` is built further down this function. The arrow runs only when a
+    // bench asks for parameters, after createAppContext has returned.
+    labCountry: () => labCountry(labIdentity),
   });
   // A changed LOINC link changes the loinc column of test_map's result rows.
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
@@ -1468,7 +1471,8 @@ const reporting: ReportingApi = {
   const featureFlags = createFeatureFlags(appSettings);
   const numberSettings = createNumberSettings(appSettings);
   const validationStrictness: ValidationStrictness = createValidationStrictness(appSettings);
-  const labIdentity = createLabIdentity(appSettings);
+  // The country list is read on each save that sets a country, so a list loaded later counts.
+  const labIdentity = createLabIdentity(appSettings, { countries: () => countryCodes(terminology.ops) });
   // Reads/writes the discrete `update.*` keys. Built on every context — the CLI reads the same
   // state — but NOTHING polls from here; the API server process arms the timer (see
   // apps/server/src/index.ts), the way every other background runner is armed.
@@ -2350,7 +2354,7 @@ export { createFeatureFlags } from './feature-flags';
 export { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog, type CatalogGroup, type PluginCapabilityMeta } from './capability-catalog';
 export { createConnectorDialectLookup, dialectFor } from './connector-sql-service';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
-export { createLabIdentity, labTimeZone, type LabIdentityService } from './lab-identity';
+export { countryCodes, createLabIdentity, labCountry, labTimeZone, type LabIdentityOptions, type LabIdentityService } from './lab-identity';
 export { createNumberSettings } from './number-settings';
 export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
@@ -2385,13 +2389,13 @@ export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
 export { importFacilities, resolveKnownNationalSystem } from './facility-import';
 export {
-  createTestCatalog, parseCatalogListQuery, catalogChangeAction, catalogImportAudit, readCatalogImportFile, TestCatalogError,
-  TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM, TEST_CATEGORY_VALUE_SET, SPECIMEN_TYPE_VALUE_SET,
+  createTestCatalog, parseCatalogListQuery, catalogChangeAction, catalogImportAudit, catalogUpdateAudit, readCatalogImportFile, TestCatalogError,
+  newTestId, TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM, TEST_CATEGORY_SYSTEM, TEST_CATEGORY_VALUE_SET, SPECIMEN_TYPE_VALUE_SET,
   LAB_TESTS_VALUE_SET, labTestsCompose, withLabTestsList,
   type TestCatalog, type CatalogTest, type CatalogTestInput, type CatalogListQuery, type CatalogListResult,
   type LabSettingsInput, type SpecimenCoding,
   type CatalogOptions, type CatalogCategoryOption, type CatalogSpecimenOption, type CatalogResultParamOption,
-  type CatalogImportFile, type CatalogImportInput, type CatalogImportReport, type CatalogImportRefusal,
+  type CatalogImportFile, type CatalogImportInput, type CatalogImportReport, type CatalogImportRefusal, type CatalogImportNote,
   type CatalogUnmatchedValue,
 } from './test-catalog';
 export * from './test-mapping';
@@ -2409,7 +2413,9 @@ export * from './patient-duplicates';
 export * from './patient-mask';
 export {
   AGE_UNITS, BIRTHDATE_ESTIMATED_EXTENSION, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, ageIn, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, patientBandKey,
+  ALL_TYPE_SETTINGS, BAND_PREGNANCIES, BAND_SCOPES, BAND_SOURCES, DATE_LIMITS, RESULT_TYPES, isIsoDate, needsValueSet, settingsOf,
   type AgeUnit, type BandFit, type BandPatient, type SexOption, type TestResultParam, type ResultBand, type ResultType,
+  type BandPregnancy, type BandScope, type BandSource, type DateLimit, type TypeSetting,
 } from './result-params';
 export {
   CATALOG_IMPORT_FIELDS, CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS,

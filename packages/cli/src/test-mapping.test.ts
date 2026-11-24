@@ -49,12 +49,30 @@ describe('openldr test-catalog map', () => {
     expect(io.out()).toContain(`${DISA}  HIVVL  2  mapped  VL HIV viral load (LOINC 25836-8)`);
   });
 
+  it('list shows a catalog test by its Test code, not its id', async () => {
+    testMapping.observed.mockResolvedValue({ rows: [{ system: DISA, code: 'HIVVL', description: null, requests: 2, lastSeen: null, status: 'mapped', catalog: { code: 'tst-0123456789abcdef', testCode: 'VL', name: 'HIV viral load', loinc: null }, centralManaged: false }], total: 1, warehouse: { stale: false, error: null } });
+    const io = capture();
+    expect(await runTestMappingList({ json: false })).toBe(0);
+    expect(io.out()).toContain(`${DISA}  HIVVL  2  mapped  VL HIV viral load`);
+    expect(io.out()).not.toContain('tst-0123456789abcdef');
+  });
+
   it('set writes, audits as cli, and prints the change', async () => {
     testMapping.set.mockResolvedValue({ system: DISA, code: 'HIVVL', before: null, after: 'VL', rebuild: REBUILT });
     const io = capture();
     expect(await runTestMappingSet(DISA, 'HIVVL', 'VL', { json: false })).toBe(0);
     expect(io.out()).toContain('HIVVL now maps to VL.');
     expect(audit).toMatchObject([{ action: 'test_mapping.set', before: { catalogCode: null }, after: { catalogCode: 'VL' } }]);
+  });
+
+  // Test identity review M6: the id is for the audit, people read the Test code.
+  it('set prints the Test code of the test it now maps to, even when given the id', async () => {
+    testMapping.set.mockResolvedValue({ system: DISA, code: 'HIVVL', before: null, after: 'tst-0123456789abcdef', testCode: 'VL', rebuild: REBUILT });
+    const io = capture();
+    expect(await runTestMappingSet(DISA, 'HIVVL', 'tst-0123456789abcdef', { json: false })).toBe(0);
+    expect(io.out()).toContain('HIVVL now maps to VL.');
+    expect(io.out()).not.toContain('tst-0123456789abcdef');
+    expect(audit).toMatchObject([{ after: { catalogCode: 'tst-0123456789abcdef' } }]);
   });
 
   it('set says when the warehouse copy could not be rebuilt, and still exits 0', async () => {

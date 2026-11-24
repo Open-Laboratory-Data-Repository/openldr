@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
-  catalogChangeAction, catalogImportAudit, catalogImportInputSchema, parseCatalogListQuery, readCatalogImportFile,
+  catalogChangeAction, catalogImportAudit, catalogImportInputSchema, catalogUpdateAudit, parseCatalogListQuery, readCatalogImportFile,
   CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, labTimeZone, patientBandKey, type AppContext, type BandPatient,
+  ALL_TYPE_SETTINGS, BAND_PREGNANCIES, BAND_SCOPES, BAND_SOURCES, DATE_LIMITS, RESULT_TYPES, isIsoDate, settingsOf,
 } from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
@@ -23,6 +24,10 @@ const TEST_REJECT_VALUE_SET = 'urn:openldr:valueset:test-reject-reason';
 const importFormat = z.enum(['csv', 'xlsx']);
 
 const coding = z.object({ system: z.string().min(1), code: z.string().min(1) });
+// z.enum wants a non-empty tuple. The lists live in bootstrap, so the route and the service agree.
+const oneOf = <T extends string>(list: readonly T[]) => z.enum(list as unknown as [T, ...T[]]);
+const isoDate = z.string().refine(isIsoDate, { message: 'Use a date such as 2026-01-31.' });
+
 // A reference band. Every edge is optional: a band naming neither sex nor age is the catch-all. The
 // name must be declared here, or zod drops it before the service sees it.
 const band = z.object({
@@ -32,15 +37,33 @@ const band = z.object({
   // The unit of the age window. Left out means years, so a range sent as before keeps its meaning.
   ageUnit: z.enum(['d', 'mo', 'y']).nullish(),
   criticalLow: z.number().nullish(), criticalHigh: z.number().nullish(),
+  // Range fields (spec 2026-11-24-loinc-pick-parity, call 10). Any pregnancy is the same as none. The service checks the
+  // country against CE's country list.
+  pregnancy: oneOf([...BAND_PREGNANCIES, 'any' as const]).nullish(),
+  country: z.string().nullish(),
+  validFrom: isoDate.nullish(), validTo: isoDate.nullish(),
+  source: oneOf(BAND_SOURCES).nullish(), scope: oneOf(BAND_SCOPES).nullish(),
 });
 // zod strips what it does not declare, so a parameter list left out of this schema would vanish
 // between the sheet and the service without a word. Found live 2026-09-16.
 const resultParam = z.object({
   system: z.string().min(1),
   code: z.string().min(1),
-  resultType: z.enum(['numeric', 'coded', 'text']),
+  resultType: oneOf(RESULT_TYPES),
   valueSetUrl: z.string().nullish(),
   bands: z.array(band).optional(),
+  // Field settings (call 8). Each belongs to one type; the refine below refuses the others.
+  required: z.boolean().nullish(),
+  min: z.number().nullish(), max: z.number().nullish(),
+  decimals: z.number().int().min(0).nullish(),
+  minLength: z.number().int().min(0).nullish(), maxLength: z.number().int().min(0).nullish(),
+  dateLimit: oneOf(DATE_LIMITS).nullish(),
+}).superRefine((p, rc) => {
+  const own = settingsOf(p.resultType);
+  for (const key of ALL_TYPE_SETTINGS) {
+    if (p[key] == null || (key === 'dateLimit' && p[key] === 'any')) continue;
+    if (!own.includes(key)) rc.addIssue({ code: 'custom', path: [key], message: `${p.code} is a ${p.resultType} field, so it cannot have ${key}.` });
+  }
 }).transform((p) => ({
   system: p.system,
   code: p.code,
@@ -54,10 +77,27 @@ const resultParam = z.object({
     // Optional on the band, so a limit not given adds no key.
     ...(b.criticalLow != null ? { criticalLow: b.criticalLow } : {}),
     ...(b.criticalHigh != null ? { criticalHigh: b.criticalHigh } : {}),
+    // The same for pregnancy, country, valid dates, source and scope. Any pregnancy adds no key.
+    ...(b.pregnancy != null && b.pregnancy !== 'any' ? { pregnancy: b.pregnancy } : {}),
+    ...(b.country != null && b.country.trim() !== '' ? { country: b.country } : {}),
+    ...(b.validFrom != null ? { validFrom: b.validFrom } : {}),
+    ...(b.validTo != null ? { validTo: b.validTo } : {}),
+    ...(b.source != null ? { source: b.source } : {}),
+    ...(b.scope != null ? { scope: b.scope } : {}),
   })),
+  // A setting not given adds no key, so a param saved before them reads back unchanged.
+  ...(p.required != null ? { required: p.required } : {}),
+  ...(p.min != null ? { min: p.min } : {}),
+  ...(p.max != null ? { max: p.max } : {}),
+  ...(p.decimals != null ? { decimals: p.decimals } : {}),
+  ...(p.minLength != null ? { minLength: p.minLength } : {}),
+  ...(p.maxLength != null ? { maxLength: p.maxLength } : {}),
+  ...(p.dateLimit != null && p.dateLimit !== 'any' ? { dateLimit: p.dateLimit } : {}),
 }));
 const testInput = z.object({
-  code: z.string().nullish(),
+  // The national code. Required on create; left out of an update, the stored one stays. The test's
+  // id is the :code in the path and never changes.
+  testCode: z.string().nullish(),
   display: z.string(),
   shortName: z.string().nullish(),
   category: z.string().nullish(),
@@ -164,7 +204,10 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
     try {
       const created = await ctx.testCatalog.create(parsed.data);
-      await recordAudit(ctx, req, { action: 'test_catalog.create', entityType: 'test_catalog', entityId: created.code, before: null, after: created });
+      await recordAudit(ctx, req, {
+        action: 'test_catalog.create', entityType: 'test_catalog', entityId: created.code, before: null, after: created,
+        metadata: { testCode: created.testCode },
+      });
       return reply.code(201).send(created);
     } catch (err) {
       return replyCatalogError(err, reply);
@@ -178,7 +221,8 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     try {
       const before = await ctx.testCatalog.get(code);
       const updated = await ctx.testCatalog.update(code, parsed.data);
-      await recordAudit(ctx, req, { action: 'test_catalog.update', entityType: 'test_catalog', entityId: code, before, after: updated });
+      // `openldr test-catalog set` records the same entry, a changed Test code named old and new.
+      await recordAudit(ctx, req, catalogUpdateAudit(code, before, updated));
       return reply.send(updated);
     } catch (err) {
       return replyCatalogError(err, reply);
@@ -296,7 +340,7 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
     const result = await ctx.testCatalog.list(parsed.query);
     return reply.send({
-      rows: result.rows.map((t) => ({ code: t.code, display: t.display, category: t.category, enabled: t.lab.enabled })),
+      rows: result.rows.map((t) => ({ code: t.code, testCode: t.testCode, display: t.display, category: t.category, enabled: t.lab.enabled })),
       total: result.total,
       system: TEST_CATALOG_SYSTEM,
     });

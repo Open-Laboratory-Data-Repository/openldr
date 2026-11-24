@@ -25,11 +25,24 @@ export interface ResultBandRef {
   ageLow: number | null
   ageHigh: number | null
   ageUnit?: BandAgeUnit
+  /** Pregnancy, country, valid dates, source and scope, each absent when not set. Absent pregnancy means any. */
+  pregnancy?: 'pregnant' | 'not-pregnant'
+  /** ISO 3166-1 alpha-3. */
+  country?: string
+  /** YYYY-MM-DD. */
+  validFrom?: string
+  validTo?: string
+  source?: 'WHO' | 'CLSI' | 'EUCAST' | 'national' | 'facility'
+  scope?: 'global' | 'national' | 'facility'
 }
+
+/** Mirrors @openldr/bootstrap's ResultType. parseTestDetails reads a type it does not carry yet
+ *  (boolean, date, multicoded) as text. */
+export type TypedResultType = 'numeric' | 'coded' | 'text' | 'boolean' | 'date' | 'multicoded'
 
 export interface TypedResult {
   param: { system: string; code: string }
-  resultType: 'numeric' | 'coded' | 'text'
+  resultType: TypedResultType
   value: number | string | ResultCoding | null
   unit?: string | null
   band?: ResultBandRef | null

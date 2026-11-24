@@ -1,3 +1,4 @@
+import type { RefObject } from 'react';
 import type { OntologyType } from '../../api';
 import {
   Sheet,
@@ -17,6 +18,8 @@ interface Props {
   mode?: 'browse' | 'picker';
   onPick: (node: { code: string; display: string }) => void;
   title?: string;
+  /** Where focus goes when this sheet closes. Radix would aim at a menu item that opened it, which is gone. */
+  returnFocusTo?: RefObject<HTMLElement>;
 }
 
 export function OntologyPickerDialog({
@@ -28,15 +31,19 @@ export function OntologyPickerDialog({
   mode = 'picker',
   onPick,
   title,
+  returnFocusTo,
 }: Props): JSX.Element {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[920px] overflow-hidden p-0 sm:max-w-[920px]">
+      <SheetContent
+        className="w-[920px] overflow-hidden p-0 sm:max-w-[920px]"
+        onCloseAutoFocus={(e) => { if (returnFocusTo?.current) { e.preventDefault(); returnFocusTo.current.focus(); } }}
+      >
         <SheetHeader className="border-b border-border px-3 py-2">
           <SheetTitle className="text-sm">{title ?? `Browse ${systemName}`}</SheetTitle>
           <SheetDescription className="sr-only">Browse ontology terms and select a target concept.</SheetDescription>
         </SheetHeader>
-        <div className="h-[calc(100vh-3.25rem)]">
+        <div className="h-[calc(100dvh-3.25rem)]">
           <OntologyBrowser
             key={codingSystemId}
             codingSystemId={codingSystemId}

@@ -305,3 +305,26 @@ describe('ReferencePicker: narrowed by the chosen tests (test catalog S4)', () =
     expect(catalogSpecimensFor).not.toHaveBeenCalled();
   });
 });
+
+// A catalog test's row names its Test code, not its id, and picking it still answers with the id
+// (test identity review, I1).
+describe('ReferencePicker: catalog tests', () => {
+  const testsField = { id: 'tests', displayLabel: 'Tests', fieldType: 'reference', valueSetUrl: 'urn:openldr:valueset:lab-tests' } as never;
+
+  it('shows the Test code on the row and picks the id', async () => {
+    vi.mocked(referenceSearch).mockResolvedValue({
+      kind: 'coding',
+      rows: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'tst-0123456789abcdef', display: 'Haemoglobin', testCode: 'HB' }],
+      total: 1,
+    });
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<ReferencePicker field={testsField} formDefinitionId="f1" multiple={false} value={null} onChange={onChange} />);
+
+    await user.type(screen.getByRole('combobox'), 'hb');
+    await waitFor(() => expect(screen.getByText('HB')).toBeInTheDocument());
+    expect(screen.queryByText('tst-0123456789abcdef')).not.toBeInTheDocument();
+    await user.click(screen.getByText('Haemoglobin'));
+    expect(onChange).toHaveBeenCalledWith({ system: 'urn:openldr:codesystem:test-catalog', code: 'tst-0123456789abcdef', display: 'Haemoglobin' });
+  });
+});

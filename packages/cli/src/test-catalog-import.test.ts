@@ -38,6 +38,7 @@ import { runTestCatalogExport, runTestCatalogImport } from './test-catalog';
 const REPORT = {
   counts: { new: 1, changed: 1, unchanged: 3, refused: 1 },
   refused: [{ line: 5, code: 'X1', reason: 'Specimen "Plasma" is not in the specimen type list. Choose a specimen for it.' }],
+  notes: [{ line: 3, code: 'HB', note: 'The id tst-0123456789abcdef is not in this catalog, so the row was matched on its Test code HB.' }],
   unmatched: { categories: [{ text: 'Virology', rows: 2 }], specimens: [{ text: 'Plasma', rows: 1 }] },
   categoriesToAdd: [{ code: 'VIRO', display: 'Virology' }],
   loincChecked: false,
@@ -92,6 +93,8 @@ describe('openldr test-catalog import and export', () => {
       'Specimen text with no match: "Plasma" (1 row)',
       'Refused:',
       '  row 5, X1: Specimen "Plasma" is not in the specimen type list. Choose a specimen for it.',
+      'Notes:',
+      '  row 3, HB: The id tst-0123456789abcdef is not in this catalog, so the row was matched on its Test code HB.',
       '',
     ].join('\n'));
     expect(mocks.close).toHaveBeenCalledTimes(1);

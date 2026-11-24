@@ -27,28 +27,58 @@ const RETIRED_STATUSES = new Set(['DEPRECATED', 'DISABLED']);
 /** The value set a coded field from LOINC takes its answers from. One per LOINC code. */
 export const LOINC_ANSWERS_VALUE_SET_PREFIX = 'urn:openldr:valueset:loinc-answers:';
 
-/** One SNOMED specimen LOINC names for a code, and the lab's specimen type it matches, if any. */
+/** One SNOMED specimen LOINC names for a code, and the lab's specimen type it matches, if any. Or, when
+ *  LOINC links no specimen to the code, a specimen type whose name matches LOINC's SYSTEM part. */
 export interface LoincSpecimenHint {
-  snomed: string;
+  /** The SNOMED code. Null on a match by name. */
+  snomed: string | null;
   /** The SNOMED display when SNOMED is loaded here. Null otherwise. */
   display: string | null;
-  /** LOINC's equivalence for the map: 'equivalent', 'narrower' and so on. */
-  equivalence: string;
+  /** LOINC's equivalence for the map: 'equivalent', 'narrower' and so on. Null on a match by name. */
+  equivalence: string | null;
   /** The lab's specimen type whose code is this SNOMED code, or which the local map translates to it. */
   specimenType: CatalogSpecimenOption | null;
   /** True on the one match the sheet may tick by itself: the only match, and an equivalent one. */
   tick: boolean;
+  /** How the match was found: LOINC's SNOMED link, or LOINC's SYSTEM part against the specimen type's name. */
+  via: 'snomed' | 'system-name';
+}
+
+/** The result field a LOINC code becomes on a test. */
+export interface LoincFieldPlan {
+  loinc: string;
+  /** The dictionary field that already stands for the code (may be another code, CHOL for 2093-3), else the LOINC code. */
+  code: string;
+  /** LOINC's COMPONENT ("HIV 1 RNA"); the long name, then the panel member name, when it has none. */
+  display: string;
+  /** Qn is numeric, Ord with answers is coded, anything else is text (spec call 3). */
+  resultType: ResultType;
+  /** LOINC's example unit. Numeric only. */
+  unit: string | null;
+  /** Coded only: `${LOINC_ANSWERS_VALUE_SET_PREFIX}${loinc}`. */
+  valueSetUrl: string | null;
+  /** True when `code` is already a dictionary field. False means Save makes it. */
+  exists: boolean;
 }
 
 export interface LoincPanelMemberHint {
   code: string;
   display: string;
   required: boolean;
+  field: LoincFieldPlan | null;
+  /** Why `field` is null: the field standing for the code has another role or is retired. */
+  fieldProblem: string | null;
 }
 
 export interface LoincHints {
   code: string;
   display: string | null;
+  /** LOINC's SHORTNAME, or a terms CSV's shortName. */
+  shortName: string | null;
+  /** LOINC's COMPONENT. */
+  component: string | null;
+  /** LOINC's SYSTEM part, such as "Ser/Plas". */
+  systemPart: string | null;
   /** LOINC's CLASS, such as CHEM. */
   class: string | null;
   /** The lab's test category whose code or display equals the class. Null when none does. */
@@ -62,6 +92,10 @@ export interface LoincHints {
   answers: Array<{ code: string; display: string }>;
   /** Member tests when the code is a panel, in LOINC's order. Empty otherwise. */
   panelMembers: LoincPanelMemberHint[];
+  /** The result field this code becomes. Null for a panel, or when the existing field is unusable. */
+  field: LoincFieldPlan | null;
+  /** Why `field` is null on a code that is not a panel: the refusal that existingField gives. */
+  fieldProblem: string | null;
 }
 
 export interface ResultFieldsFromLoincAnswer {
@@ -116,21 +150,62 @@ export function createLoincHints(deps: LoincHintsDeps) {
     return (vs.expansion?.contains ?? []).map((c) => ({ system: c.system ?? '', code: c.code ?? '', display: c.display ?? null }));
   }
 
-  // Both import doors write the class and unit under different keys: `openldr terminology import loinc`
-  // keeps LOINC's column names (loaders/loinc.ts), a terms CSV writes class and unit (terms-csv.ts).
+  // Both import doors write LOINC's facts under different keys: `openldr terminology import loinc` keeps
+  // LOINC's column names (loaders/loinc.ts), a terms CSV writes class, unit, shortName and a metadata
+  // object (terms-csv.ts).
+  const meta = (props: Record<string, unknown>) => (props.metadata ?? {}) as Record<string, unknown>;
   const classOf = (props: Record<string, unknown>) => text(props.CLASS) ?? text(props.class);
   const unitOf = (props: Record<string, unknown>) => text(props.EXAMPLE_UCUM_UNITS) ?? text(props.unit);
-  const scaleOf = (props: Record<string, unknown>) => text(props.SCALE_TYP)
-    ?? text((props.metadata as Record<string, unknown> | undefined)?.scaleType);
+  const shortNameOf = (props: Record<string, unknown>) => text(props.SHORTNAME) ?? text(props.shortName);
+  const componentOf = (props: Record<string, unknown>) => text(props.COMPONENT) ?? text(meta(props).component);
+  const systemPartOf = (props: Record<string, unknown>) => text(props.SYSTEM) ?? text(meta(props).loincSystem);
+  const scaleOf = (props: Record<string, unknown>) => text(props.SCALE_TYP) ?? text(meta(props).scaleType);
 
+  /** Spec call 3, as Corlix: Qn is numeric, Ord with an answer list is coded, anything else is text. */
   function resultTypeOf(props: Record<string, unknown>, answers: unknown[]): ResultType {
-    if (answers.length > 0) return 'coded';
-    return scaleOf(props) === 'Qn' || unitOf(props) !== null ? 'numeric' : 'text';
+    const scale = scaleOf(props)?.toLowerCase();
+    if (scale === 'qn') return 'numeric';
+    if (scale === 'ord' && answers.length > 0) return 'coded';
+    return 'text';
   }
 
-  async function specimenHints(systemId: string, code: string): Promise<LoincSpecimenHint[]> {
+  /**
+   * Corlix's fallback when LOINC links no specimen to the code: a specimen type whose name equals LOINC's
+   * SYSTEM part, or which the part contains, compared lowercase. This is wider than Corlix's `includes`,
+   * because LOINC writes abbreviations. Each piece of the part split on "/" also matches a name it starts
+   * ("Ser" for Serum), or a name with the same first letter that holds its letters in order ("Bld" for
+   * Blood). The letters-in-order match also hits names it should not ("Bld" for Bile fluid), so it only
+   * suggests. A match is ticked only when it is the only one and a piece equals the name or starts it.
+   */
+  async function specimensByName(systemPart: string | null): Promise<LoincSpecimenHint[]> {
+    if (systemPart === null) return [];
+    const part = systemPart.toLowerCase();
+    const pieces = part.split('/').map((p) => p.trim()).filter((p) => p !== '');
+    const abbreviates = (piece: string, name: string): boolean => {
+      if (name[0] !== piece[0]) return false;
+      let i = 0;
+      for (const ch of name) if (ch === piece[i]) i += 1;
+      return i === piece.length;
+    };
+    const types = await expandEntries(SPECIMEN_TYPE_VALUE_SET);
+    const out: LoincSpecimenHint[] = [];
+    let sure = false;
+    for (const t of types) {
+      const name = (t.display ?? '').trim().toLowerCase();
+      if (name === '') continue;
+      const starts = part === name || pieces.some((p) => name.startsWith(p));
+      if (starts || part.includes(name) || pieces.some((p) => abbreviates(p, name))) {
+        out.push({ snomed: null, display: null, equivalence: null, specimenType: t, tick: false, via: 'system-name' });
+        sure = starts;
+      }
+    }
+    if (out.length === 1 && sure) out[0]!.tick = true;
+    return out;
+  }
+
+  async function specimenHints(systemId: string, code: string, systemPart: string | null): Promise<LoincSpecimenHint[]> {
     const maps = await deps.ontology.specimenCodes(systemId, code);
-    if (maps.length === 0) return [];
+    if (maps.length === 0) return specimensByName(systemPart);
     const types = await expandEntries(SPECIMEN_TYPE_VALUE_SET);
     // Each specimen type's SNOMED codes through the lab's local map ($translate). The list is short.
     const translated = await Promise.all(types.map(async (t) => {
@@ -153,11 +228,11 @@ export function createLoincHints(deps: LoincHintsDeps) {
         const own = t.code === m.snomedCode;
         if (!own && !translated[i]!.any.has(m.snomedCode)) return;
         any = true;
-        const hint: LoincSpecimenHint = { snomed: m.snomedCode, display, equivalence: m.equivalence, specimenType: t, tick: false };
+        const hint: LoincSpecimenHint = { snomed: m.snomedCode, display, equivalence: m.equivalence, specimenType: t, tick: false, via: 'snomed' };
         if (own || translated[i]!.exact.has(m.snomedCode)) exactMatches.add(hint);
         out.push(hint);
       });
-      if (!any) out.push({ snomed: m.snomedCode, display, equivalence: m.equivalence, specimenType: null, tick: false });
+      if (!any) out.push({ snomed: m.snomedCode, display, equivalence: m.equivalence, specimenType: null, tick: false, via: 'snomed' });
     }
     // Ticked by itself only when exactly one specimen type matched, LOINC's map is equivalent, and the lab's
     // match is exact. Several matches are suggested and none is ticked (spec call 4).
@@ -174,25 +249,46 @@ export function createLoincHints(deps: LoincHintsDeps) {
     if (!systemId) return null;
     const c = await concept(code);
     if (!c) throw new TestCatalogError(`LOINC code ${code} is not in the LOINC loaded on this install.`, 'not-found');
+    const systemPart = systemPartOf(c.props);
     const [answers, members, specimens, categories] = await Promise.all([
       deps.ontology.answerOptions(systemId, code),
       deps.ontology.panelMembers(systemId, code),
-      specimenHints(systemId, code),
+      specimenHints(systemId, code, systemPart),
       expandEntries(TEST_CATEGORY_VALUE_SET),
     ]);
     const cls = classOf(c.props);
     const category = cls === null ? undefined : categories.find((o) => same(o.code, cls) || same(o.display, cls));
+    const panelMembers: LoincPanelMemberHint[] = [];
+    for (const m of members) {
+      panelMembers.push({ code: m.memberLoinc, display: m.displayName, required: m.required, ...(await fieldHint(systemId, m.memberLoinc, m.displayName)) });
+    }
+    // A panel is not a result field itself. Its members are.
+    const own = members.length > 0 ? { field: null, fieldProblem: null } : await fieldHint(systemId, code, null, { concept: c, answers });
     return {
       code,
       display: c.display,
+      shortName: shortNameOf(c.props),
+      component: componentOf(c.props),
+      systemPart,
       class: cls,
       categorySuggestion: category ? { code: category.code, display: category.display } : null,
       unit: unitOf(c.props),
       resultType: resultTypeOf(c.props, answers),
       specimens,
       answers: answers.map((a) => ({ code: a.value, display: a.label })),
-      panelMembers: members.map((m) => ({ code: m.memberLoinc, display: m.displayName, required: m.required })),
+      panelMembers,
+      ...own,
     };
+  }
+
+  /** A field plan for a hint. An unusable existing field gives no plan and its refusal, never a throw. */
+  async function fieldHint(systemId: string, loinc: string, fallbackName: string | null, loaded?: Loaded): Promise<{ field: LoincFieldPlan | null; fieldProblem: string | null }> {
+    try {
+      return { field: (await planField(systemId, loinc, fallbackName, loaded)).plan, fieldProblem: null };
+    } catch (err) {
+      if (err instanceof TestCatalogError && err.kind === 'invalid') return { field: null, fieldProblem: err.message };
+      throw err;
+    }
   }
 
   /** The code's active LOINC link, or null. */
@@ -208,7 +304,7 @@ export function createLoincHints(deps: LoincHintsDeps) {
    * field of another kind, or a retired one, is refused, since a test could not name it (the picker and
    * the save check offer only active fields whose result_role is result).
    */
-  async function existingField(loinc: string): Promise<{ code: string; needsLink: boolean } | null> {
+  async function existingField(loinc: string): Promise<{ code: string; needsLink: boolean; units: string | null } | null> {
     let row = await db.selectFrom('terminology_concepts').select(['code', 'status', 'properties'])
       .where('system', '=', RESULT_PARAM_SYSTEM).where('code', '=', loinc).executeTakeFirst();
     let needsLink = false;
@@ -225,14 +321,43 @@ export function createLoincHints(deps: LoincHintsDeps) {
         .where('system', '=', RESULT_PARAM_SYSTEM).where('code', '=', linked.from_code).executeTakeFirst();
       if (!row) return null;
     }
-    const role = text(propsOf(row.properties).result_role);
+    const fieldProps = propsOf(row.properties);
+    const role = text(fieldProps.result_role);
     if (role !== 'result') {
       throw invalid(`result field ${row.code} stands for LOINC ${loinc} but its role is ${role ?? 'not set'}, not result. Change its role or pick another code.`);
     }
     if (row.status !== null && RETIRED_STATUSES.has(row.status)) {
       throw invalid(`result field ${row.code} stands for LOINC ${loinc} but is retired (${row.status}). Make it active again first.`);
     }
-    return { code: row.code, needsLink };
+    return { code: row.code, needsLink, units: text(fieldProps.parm_units) };
+  }
+
+  /** A concept and its answers already read, so planField need not read them again. */
+  type Loaded = { concept: Awaited<ReturnType<typeof concept>>; answers: Array<{ value: string; label: string }> };
+
+  /**
+   * The one place a LOINC code's result field is worked out, so the hint, the sheet's draft and the
+   * saved field agree on name and type. `fallbackName` names a code missing from the loaded LOINC.
+   * Throws when the code is missing and has no name, or when the field standing for it is unusable.
+   */
+  async function planField(systemId: string, loinc: string, fallbackName: string | null, loaded?: Loaded) {
+    const c = loaded ? loaded.concept : await concept(loinc);
+    if (!c && fallbackName === null) throw new TestCatalogError(`LOINC code ${loinc} is not in the LOINC loaded on this install.`, 'not-found');
+    const props = c?.props ?? {};
+    const answers = loaded ? loaded.answers : await deps.ontology.answerOptions(systemId, loinc);
+    const existing = await existingField(loinc);
+    const resultType = resultTypeOf(props, answers);
+    const plan: LoincFieldPlan = {
+      loinc,
+      code: existing?.code ?? loinc,
+      display: componentOf(props) ?? c?.display ?? fallbackName ?? loinc,
+      resultType,
+      // A field already in the dictionary keeps its own unit. A new one takes LOINC's, numeric only.
+      unit: existing ? existing.units : resultType === 'numeric' ? unitOf(props) : null,
+      valueSetUrl: resultType === 'coded' ? `${LOINC_ANSWERS_VALUE_SET_PREFIX}${loinc}` : null,
+      exists: existing !== null,
+    };
+    return { plan, answers, inLoinc: c !== null, needsLink: existing?.needsLink ?? false };
   }
 
   async function ensureAnswers(loinc: string, answers: Array<{ value: string; label: string }>): Promise<{ url: string; created: boolean }> {
@@ -252,7 +377,7 @@ export function createLoincHints(deps: LoincHintsDeps) {
    * that already stands for a code is used as it is, and an answer set that already exists is kept, so
    * a second call makes nothing new (spec call 6).
    */
-  async function resultFieldsFromLoinc(rawCodes: string[], opts: { panel?: boolean } = {}): Promise<ResultFieldsFromLoincAnswer> {
+  async function resultFieldsFromLoinc(rawCodes: string[], opts: { panel?: boolean; names?: Record<string, string> } = {}): Promise<ResultFieldsFromLoincAnswer> {
     const asked = [...new Set(rawCodes.map((c) => c.trim()).filter((c) => c !== ''))];
     if (asked.length === 0) throw invalid('name at least one LOINC code');
     for (const c of asked) if (!LOINC_CODE.test(c)) throw invalid(`"${c}" is not a LOINC code. LOINC codes look like 12345-6.`);
@@ -265,7 +390,7 @@ export function createLoincHints(deps: LoincHintsDeps) {
     // Each wanted code with the name to give it when LOINC's concept has none.
     const wanted: Array<{ code: string; name: string | null }> = [];
     for (const c of asked) {
-      if (!opts.panel) { wanted.push({ code: c, name: null }); continue; }
+      if (!opts.panel) { wanted.push({ code: c, name: text(opts.names?.[c]) }); continue; }
       const members = await deps.ontology.panelMembers(systemId, c);
       if (members.length === 0) throw invalid(`LOINC code ${c} is not a panel, so it has no member tests.`);
       for (const m of members) wanted.push({ code: m.memberLoinc, name: m.displayName });
@@ -274,20 +399,15 @@ export function createLoincHints(deps: LoincHintsDeps) {
     const answer: ResultFieldsFromLoincAnswer = { params: [], created: [], reused: [], valueSetsCreated: [] };
     const seen = new Set<string>();
     const newRows: Array<{ code: string; display: string; units: string | null; inLoinc: boolean }> = [];
-    const planned: Array<{ code: string; fieldCode: string | null; type: ResultType; answers: Array<{ value: string; label: string }> }> = [];
+    const planned: Array<{ plan: LoincFieldPlan; answers: Array<{ value: string; label: string }> }> = [];
     const repairLinks: string[] = [];
     for (const w of wanted) {
       if (seen.has(w.code)) continue;
       seen.add(w.code);
-      const c = await concept(w.code);
-      if (!c && w.name === null) throw new TestCatalogError(`LOINC code ${w.code} is not in the LOINC loaded on this install.`, 'not-found');
-      const answers = await deps.ontology.answerOptions(systemId, w.code);
-      const props = c?.props ?? {};
-      const existing = await existingField(w.code);
-      const fieldCode = existing?.code ?? null;
-      if (existing?.needsLink && c !== null) repairLinks.push(existing.code);
-      if (fieldCode === null) newRows.push({ code: w.code, display: c?.display ?? w.name ?? w.code, units: unitOf(props), inLoinc: c !== null });
-      planned.push({ code: w.code, fieldCode, type: resultTypeOf(props, answers), answers });
+      const p = await planField(systemId, w.code, w.name);
+      if (p.needsLink && p.inLoinc) repairLinks.push(p.plan.code);
+      if (!p.plan.exists) newRows.push({ code: w.code, display: p.plan.display, units: p.plan.unit, inLoinc: p.inLoinc });
+      planned.push({ plan: p.plan, answers: p.answers });
     }
 
     // The stores here take no shared transaction, so the writes are ordered to be safe to re-run: the
@@ -308,16 +428,13 @@ export function createLoincHints(deps: LoincHintsDeps) {
     for (const r of newRows) if (r.inLoinc) await deps.resultFields.link(r.code, r.code);
     for (const code of repairLinks) await deps.resultFields.link(code, code);
 
-    for (const p of planned) {
-      const code = p.fieldCode ?? p.code;
-      if (p.fieldCode === null) answer.created.push(code); else answer.reused.push(code);
-      let valueSetUrl: string | null = null;
-      if (p.type === 'coded') {
-        const vs = await ensureAnswers(p.code, p.answers);
-        valueSetUrl = vs.url;
+    for (const { plan, answers } of planned) {
+      if (plan.exists) answer.reused.push(plan.code); else answer.created.push(plan.code);
+      if (plan.resultType === 'coded') {
+        const vs = await ensureAnswers(plan.loinc, answers);
         if (vs.created) answer.valueSetsCreated.push(vs.url);
       }
-      answer.params.push({ system: RESULT_PARAM_SYSTEM, code, resultType: p.type, valueSetUrl, bands: [] });
+      answer.params.push({ system: RESULT_PARAM_SYSTEM, code: plan.code, resultType: plan.resultType, valueSetUrl: plan.valueSetUrl, bands: [] });
     }
     return answer;
   }

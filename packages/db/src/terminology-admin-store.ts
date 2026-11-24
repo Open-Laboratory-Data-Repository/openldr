@@ -336,10 +336,12 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
   }
   function termRow(r: { system: string; code: string; display: string | null; status: string | null; properties: unknown }, mappingCount: number): Term {
     const p = (r.properties ?? {}) as Record<string, unknown>;
+    // `openldr terminology import loinc` keeps LOINC's column names (loaders/loinc.ts), so a LOINC term
+    // falls back to them. Only that loader writes these keys.
     return {
       system: r.system, code: r.code, display: r.display, status: r.status ?? 'ACTIVE',
-      shortName: (p.shortName as string) ?? null, class: (p.class as string) ?? null,
-      unit: (p.unit as string) ?? null, replacedBy: (p.replacedBy as string) ?? null,
+      shortName: (p.shortName as string) ?? (p.SHORTNAME as string) ?? null, class: (p.class as string) ?? (p.CLASS as string) ?? null,
+      unit: (p.unit as string) ?? (p.EXAMPLE_UCUM_UNITS as string) ?? null, replacedBy: (p.replacedBy as string) ?? null,
       metadata: (p.meta as Record<string, unknown>) ?? null, mappingCount,
     };
   }

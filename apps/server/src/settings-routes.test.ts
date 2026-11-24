@@ -62,7 +62,7 @@ function fakeCtx(syncEnabled = true) {
       appSettings,
       // The REAL service over the same fake store, so a route test proves the whole pipeline
       // (zod schema → labIdentity.set → validateLabIdentityValue), not a stub that always agrees.
-      labIdentity: createLabIdentity(appSettings as any),
+      labIdentity: createLabIdentity(appSettings as any, { countries: async () => ['TZA', 'KEN'] }),
       // Fake seal: prefix so a test can assert the stored value is the ENCRYPTED form, never plaintext.
       encryptSecret: (plain: string) => `enc:${plain}`,
       decryptSecret: (blob: string) => blob.replace(/^enc:/, ''),
@@ -164,6 +164,27 @@ describe('settings routes', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().details).toEqual([{ key: 'lab.timezone', reason: 'invalid-timezone' }]);
+  });
+
+  it('PUT /api/settings/lab saves lab.country and GET reads it back with the picker value set', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps), ['settings.edit_general', 'reports.view']);
+    const put = await app.inject({ method: 'PUT', url: '/api/settings/lab', payload: { 'lab.country': 'TZA' } });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()['lab.country']).toBe('TZA');
+    const get = await app.inject({ method: 'GET', url: '/api/settings/lab' });
+    expect(get.json().values['lab.country']).toBe('TZA');
+    expect(get.json().fields.find((f: { id: string }) => f.id === 'lab.country'))
+      .toEqual({ id: 'lab.country', labelKey: 'settings.laboratory.country', multiline: false, source: 'country', valueSetUrl: 'urn:openldr:valueset:country' });
+  });
+
+  it('PUT /api/settings/lab refuses a country not in the country value set without writing it', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({ method: 'PUT', url: '/api/settings/lab', payload: { 'lab.name': 'Muhimbili', 'lab.country': 'XXX' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().details).toEqual([{ key: 'lab.country', reason: 'invalid-country' }]);
+    expect((ctx as any).__settings.has('lab.name')).toBe(false);
   });
 
   it('PUT /api/settings/sync persists discrete keys, encrypts the secret, returns a secret-free view', async () => {

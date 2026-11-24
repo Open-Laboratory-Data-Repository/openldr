@@ -31,6 +31,8 @@ export function loincRowToConcept(row: Record<string, string>): ConceptRecord {
       // LOINC's example unit in UCUM. A result field made from this code starts with it (test catalog
       // hints). Left out when the row has none, so older imports read the same.
       ...(row.EXAMPLE_UCUM_UNITS ? { EXAMPLE_UCUM_UNITS: row.EXAMPLE_UCUM_UNITS } : {}),
+      // LOINC's short name, which a test picked from LOINC starts with. Left out when the row has none.
+      ...(row.SHORTNAME ? { SHORTNAME: row.SHORTNAME } : {}),
     },
   };
 }

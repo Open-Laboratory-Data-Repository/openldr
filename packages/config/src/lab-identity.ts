@@ -35,8 +35,19 @@ export interface LabIdentityFieldDefinition {
    * label mints a second identity for one register — the defect migration 082 had to clean up. A
    * value here must be a register that already exists on the install, never something typed.
    */
-  source?: 'facility-registers';
+  source?: 'facility-registers' | 'country';
+  /** For `source: 'country'`: the value set the picker lists. The server sends it to the studio, so
+   *  the studio never holds the URL itself. */
+  valueSetUrl?: string;
 }
+
+/** CE's country list (ISO 3166-1 alpha-3), seeded by migration 073. Bootstrap's
+ *  `CONTROLLED_VALUE_SETS.country` names the same set; a bootstrap test keeps the two equal. */
+export const LAB_COUNTRY_VALUE_SET = 'urn:openldr:valueset:country';
+
+/** The shape of a code in that list. Whether the code is IN the list is checked in bootstrap, which
+ *  can read the terminology service. */
+const ALPHA3 = /^[A-Z]{3}$/;
 
 /** Decoded-image ceiling for `lab.logo`. Generous for a letterhead mark at print resolution.
  *
@@ -97,6 +108,12 @@ export const LAB_IDENTITY_FIELDS: readonly LabIdentityFieldDefinition[] = [
    * The field's help text and docs/reports.md say so; see `settings.laboratory.timezoneHint`.
    */
   { id: 'lab.timezone', labelKey: 'settings.laboratory.timezone', maxLength: 100 },
+  /**
+   * The country this lab is in, as an ISO 3166-1 alpha-3 code from `LAB_COUNTRY_VALUE_SET`. A
+   * reference range that names a country fits only when it matches this one (test catalog plan B,
+   * calls 1 and 2). Picked from the list, never typed.
+   */
+  { id: 'lab.country', labelKey: 'settings.laboratory.country', maxLength: 3, source: 'country', valueSetUrl: LAB_COUNTRY_VALUE_SET },
 ];
 
 export const LAB_IDENTITY_KEYS = LAB_IDENTITY_FIELDS.map((f) => f.id);
@@ -106,7 +123,7 @@ export type LabIdentity = Record<string, string>;
 
 export interface LabIdentityValidationError {
   key: string;
-  reason: 'too-long' | 'not-a-data-uri' | 'unsupported-image-type' | 'unknown-key' | 'invalid-timezone';
+  reason: 'too-long' | 'not-a-data-uri' | 'unsupported-image-type' | 'unknown-key' | 'invalid-timezone' | 'invalid-country';
 }
 
 const DATA_URI = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/;
@@ -133,6 +150,10 @@ const DATA_URI = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/;
 export function validateLabIdentityValue(key: string, value: string): LabIdentityValidationError | null {
   const def = LAB_IDENTITY_FIELDS.find((f) => f.id === key);
   if (!def) return { key, reason: 'unknown-key' };
+  // Before the length check, so a wrong country always gets the reason that says what to fix.
+  if (key === 'lab.country') {
+    return value === '' || ALPHA3.test(value) ? null : { key, reason: 'invalid-country' };
+  }
   if (value.length > def.maxLength) return { key, reason: 'too-long' };
 
   if (key === 'lab.timezone') {

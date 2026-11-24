@@ -544,6 +544,7 @@ export function buildProgram(): Command {
     .option('--address <address>', 'postal address (use \n for line breaks)')
     .option('--contact <contact>', 'phone / email / accreditation line')
     .option('--timezone <tz>', 'IANA zone, e.g. Africa/Dar_es_Salaam — days are bucketed in this zone (empty string clears)')
+    .option('--country <code>', 'ISO 3166-1 alpha-3 code from the country value set, e.g. TZA (empty string clears)')
     .option('--logo-file <path>', 'PNG, JPEG or WebP file to store as the logo (empty string clears)')
     .option('--json', 'emit JSON', false)
     .action(async (o) => { process.exitCode = await runSettingsLabSet(o); });
@@ -685,7 +686,7 @@ export function buildProgram(): Command {
     });
   testCatalog
     .command('params <code>')
-    .description("List a test's result parameters, or replace them from a JSON file")
+    .description("List a test's result parameters, or replace them from a JSON file. <code> is a Test code or an id")
     .option('--set <file>', 'a JSON list of result parameters to write')
     .option('--json', 'emit JSON', false)
     .action(async (code: string, opts: { set?: string; json: boolean }) => {
@@ -700,7 +701,8 @@ export function buildProgram(): Command {
     });
   testCatalog
     .command('set <code>')
-    .description("Set a test's turnaround times and whether its results need verification (only where this install owns the catalog)")
+    .description("Set a test's Test code, turnaround times and whether its results need verification (only where this install owns the catalog). <code> is a Test code or an id")
+    .option('--test-code <code>', 'a new Test code, the national code (left out, the Test code stays)')
     .option('--expected-tat <hours>', 'hours from receipt to release the lab aims for, or none to clear')
     .option('--critical-tat <hours>', 'hours after which the test is overdue, or none to clear')
     .option('--requires-verification <true|false>', 'whether a result needs a second person to verify it')

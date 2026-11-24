@@ -214,7 +214,7 @@ const WHEN = 'a date, time, year or sync cursor';
 const PERSON = 'a name written into a record as is; refusing it through the app is a later task';
 const REASON: Record<string, string> = {
   '--seconds': 'a number of seconds',
-  '--expected-tat': 'a number of hours, or none', '--critical-tat': 'a number of hours, or none', '--requires-verification': CHOICE,
+  '--test-code': 'a test code', '--expected-tat': 'a number of hours, or none', '--critical-tat': 'a number of hours, or none', '--requires-verification': CHOICE,
   '--group': 'the name of a Query page group',
   newName: 'the name of a Query page group',
   item: 'a connector id or a dataset name',
@@ -284,7 +284,7 @@ const NOT_A_PATH: Record<string, string[]> = {
   'import check codes': ['plugin', 'copy', '--label', '--reason', '--laboratory'],
   'settings flags set': ['key', 'value'],
   'settings numbers set': ['key', 'value'],
-  'settings lab set': ['--name', '--address', '--contact', '--timezone'],
+  'settings lab set': ['--name', '--address', '--contact', '--timezone', '--country'],
   'settings sync set': ['field', 'value'],
   'settings validation set': ['level'],
   'settings danger': ['action'],
@@ -302,7 +302,7 @@ const NOT_A_PATH: Record<string, string[]> = {
   'test-catalog retire': ['code'],
   'test-catalog restore': ['code'],
   'test-catalog params': ['code'],
-  'test-catalog set': ['code', '--expected-tat', '--critical-tat', '--requires-verification'],
+  'test-catalog set': ['code', '--test-code', '--expected-tat', '--critical-tat', '--requires-verification'],
   'test-catalog map list': ['--status', '--search', '--limit', '--offset', '--level'],
   'test-catalog map set': ['system', 'code', 'target-code', '--level'],
   'test-catalog map clear': ['system', 'code', '--level'],

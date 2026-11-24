@@ -1,8 +1,10 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Badge } from '@/components/ui/badge';
+import { Divider } from '@/components/ui/bleed';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DecimalInput } from '@/components/ui/decimal-input';
@@ -13,26 +15,37 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { TermPicker } from '@/terminology/TermPicker';
+import { OntologyPickerDialog } from '@/terminology/ontology/OntologyPickerDialog';
 import {
   createCatalogTest, getLoincHints, resultFieldsFromLoinc, setCatalogLabSettings, termExists, updateCatalogTest,
-  type LoincHints,
+  type LoincFieldPlan, type LoincHints, type Term,
   type CatalogLabSettingsInput, type CatalogTestResultParam, type CatalogSpecimenCoding, type CatalogTest, type CatalogTestInput,
   type CatalogAgeUnit, type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
 import { criteriaLabel, sexLabel, type RangeCopy } from '@/forms-runtime/rangeLabel';
 import { AddResultFieldSheet } from './AddResultFieldSheet';
+import { addFromLoinc, dropLoincAdded, type LoincAdded } from './loinc-draft';
 
 // Test catalog S2 (spec 4.3): add or edit one test, and this lab's own settings for it. Copies
 // forms-builder/FieldEditorSheet.tsx (AGENTS.md section 5).
 
 export type TestSheetTarget = { kind: 'create' } | { kind: 'edit'; test: CatalogTest };
 
+/** A LOINC test code, such as 2093-3. The same rule as LOINC_CODE in @openldr/bootstrap's test-catalog.ts.
+ *  The LOINC tree also holds parts and class nodes, which are not test codes. */
+const LOINC_TEST_CODE = /^\d{1,7}-\d$/;
+
 /** Radix Select cannot hold an empty value, so "no category" is this sentinel in the picker only. */
 const NO_CATEGORY = '__none__';
 
 interface Draft {
-  code: string;
+  /** The national code people use (test identity spec, call 3). It can change; the id never does. */
+  testCode: string;
   display: string;
   shortName: string;
   category: string;
@@ -77,6 +90,11 @@ function addParams(list: CatalogTestResultParam[], params: CatalogTestResultPara
   return next;
 }
 
+/** The record of what a pick or a fill put on the draft. Only the plans it added can be made on Save. */
+function loincRecord(loinc: string, plans: LoincFieldPlan[], added: string[]): LoincAdded {
+  return { loinc, params: added, newFields: plans.filter((p) => !p.exists && added.includes(p.code)) };
+}
+
 function setParam(list: CatalogTestResultParam[], code: string, next: CatalogTestResultParam): CatalogTestResultParam[] {
   return list.map((p) => (p.code === code ? next : p));
 }
@@ -90,9 +108,14 @@ function toggle(list: CatalogSpecimenCoding[], item: CatalogSpecimenCoding, on: 
   return on ? [...without, { system: item.system, code: item.code }] : without;
 }
 
+/** The second line of a LOINC search result: short name, class and unit, the empty ones left out (spec call 7). */
+function loincDetail(term: Term): string | null {
+  return [term.shortName, term.class, term.unit].filter((v): v is string => !!v && v.trim() !== '').join(' · ') || null;
+}
+
 function draftFrom(test: CatalogTest | null): Draft {
   return {
-    code: test?.code ?? '',
+    testCode: test?.testCode ?? '',
     display: test?.display ?? '',
     shortName: test?.shortName ?? '',
     category: test?.category ?? '',
@@ -151,13 +174,29 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   // Result fields added from this sheet, shown until the page reads the choices again.
   const [addedParams, setAddedParams] = useState<ParamOption[]>([]);
   const [addingField, setAddingField] = useState(false);
+  // The LOINC tree, opened from the LOINC row's menu (spec call 7).
+  const [browsing, setBrowsing] = useState(false);
+  // The Browse item is gone once the menu closes, so focus comes back to the LOINC row's menu button.
+  const loincMenuButton = useRef<HTMLButtonElement>(null);
   // The menu item that opens Add field is gone once the menu closes, so focus comes back to the menu's button.
   const paramsMenuButton = useRef<HTMLButtonElement>(null);
   // What LOINC says about the test's code. Null when LOINC or its ontology is not loaded, and then the
   // sheet shows no hint and offers no LOINC action (spec, call 7).
   const [hints, setHints] = useState<LoincHints | null>(null);
-  /** The field codes from-loinc answered for a LOINC code. A reused field may have its own code (CHOL for 2093-3). */
-  const [loincTaken, setLoincTaken] = useState<{ loinc: string; codes: string[] } | null>(null);
+  // What the last LOINC pick put on the draft, and what each Fill from panel of that code put there.
+  // Another pick, or clearing the code, takes all of it back (spec call 2, plan call 4). A field ticked
+  // by hand is in no record, so it stays.
+  const [loincPick, setLoincPick] = useState<LoincAdded | null>(null);
+  const loincPickNow = useRef(loincPick);
+  loincPickNow.current = loincPick;
+  const [loincFills, setLoincFills] = useState<LoincAdded[]>([]);
+  const loincFillsNow = useRef(loincFills);
+  loincFillsNow.current = loincFills;
+  // A panel fill on a test that has fields waits here for Replace, Add or Cancel.
+  const [fillAsk, setFillAsk] = useState<{ loinc: string; plans: LoincFieldPlan[] } | null>(null);
+  // New fields a record let go of because the operator unticked them. Ticked again, they are a hand tick,
+  // so no pick takes them back, and they are still made on Save.
+  const [keptPlans, setKeptPlans] = useState<LoincFieldPlan[]>([]);
   const hintsAsked = useRef(0);
   // The draft as last drawn, for the steps that run after a request comes back.
   const draftNow = useRef(draft);
@@ -185,6 +224,10 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     setDraft(draftFrom(test));
     setSaved(test);
     setAddedParams([]);
+    setLoincPick(null);
+    setLoincFills([]);
+    setKeptPlans([]);
+    setFillAsk(null);
   }, [target]);
 
   // A saved code shows its hints, but fills nothing: only a code picked here fills empty fields. Keyed
@@ -210,33 +253,98 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     }
   }
 
-  /** Make or reuse LOINC's result fields and tick them. One already ticked keeps its type, value set and ranges. */
-  async function takeFromLoinc(h: LoincHints, panel: boolean): Promise<void> {
-    try {
-      const answer = await resultFieldsFromLoinc([h.code], panel);
-      setLoincTaken({ loinc: h.code, codes: answer.params.map((p) => p.code) });
-      const names = new Map<string, string | null>(panel ? h.panelMembers.map((m) => [m.code, m.display]) : [[h.code, h.display]]);
-      const ticked = draftNow.current.resultParams;
-      const fresh = answer.params.filter((p) => !ticked.some((k) => k.code === p.code));
-      takeParams(
-        answer.params.map((p) => ({ system: p.system, code: p.code, display: names.get(p.code) ?? p.code, units: panel ? null : h.unit })),
-        answer.params,
-      );
-      toast.success(fresh.length > 0
-        ? t('testCatalog.sheet.loincFieldsAdded', { count: fresh.length })
-        : t('testCatalog.sheet.loincFieldsKept'));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
-    }
+  // A plan carries no system. A field the sheet knows takes its own system. A new one takes the system of
+  // the dictionary's fields, or none on an install with no field yet, and Save puts the server's in place.
+  const fieldSystem = options.resultParams[0]?.system ?? '';
+  const knownSystem = (code: string): string | undefined => knownParams.find((o) => o.code === code)?.system;
+  const systemOf = (code: string): string => knownSystem(code) ?? fieldSystem;
+
+  /** LOINC's plan for a field code: a new field waiting for Save, the code's own field, or a panel member's. */
+  function loincPlanFor(code: string): LoincFieldPlan | undefined {
+    return [...pendingFields, ...(hints?.field ? [hints.field] : []), ...(hints?.panelMembers ?? []).flatMap((m) => (m.field ? [m.field] : []))]
+      .find((p) => p.code === code);
   }
 
-  /** A LOINC code picked here: fill an empty category and specimen from its hints, and leave the rest to the hint lines. */
+  /** An unticked field is no longer the LOINC pick's or a fill's (spec call 2): ticked again, it is a hand
+   *  tick and stays on another pick. A new field moves to keptPlans, so it keeps its row. */
+  function letGoOfLoinc(code: string): void {
+    const plan = [loincPick, ...loincFills].flatMap((r) => r?.newFields ?? []).find((p) => p.code === code);
+    if (plan) setKeptPlans((prev) => (prev.some((p) => p.code === code) ? prev : [...prev, plan]));
+    const strip = (r: LoincAdded): LoincAdded => ({
+      ...r, params: r.params.filter((c) => c !== code), newFields: r.newFields.filter((p) => p.code !== code),
+    });
+    setLoincPick((r) => (r ? strip(r) : r));
+    setLoincFills((prev) => prev.map(strip));
+  }
+
+  /** Use LOINC's result field: put it on the draft as a pick does, and count it as the pick's. */
+  function takeLoincField(h: LoincHints, plan: LoincFieldPlan): void {
+    const out = addFromLoinc(draftNow.current.resultParams, [plan], 'add', systemOf);
+    set({ resultParams: out.params });
+    const rec = loincRecord(h.code, [plan], out.added);
+    const last = loincPickNow.current;
+    setLoincPick(last && last.loinc === h.code
+      ? { loinc: h.code, params: [...last.params, ...rec.params], newFields: [...last.newFields, ...rec.newFields] }
+      : rec);
+    toast.success(out.added.length > 0
+      ? t('testCatalog.sheet.loincFieldsAdded', { count: out.added.length })
+      : t('testCatalog.sheet.loincFieldsKept'));
+  }
+
+  /** Fill from panel (spec call 4): into the draft only, like a pick (plan call 2). A test that has
+   *  fields is asked first whether to replace them or add the missing ones. */
+  function fillFromPanel(h: LoincHints): void {
+    const skipped = h.panelMembers.filter((m) => !m.field);
+    if (skipped.length > 0) {
+      const list = skipped.map((m) => (m.fieldProblem ? `${m.display} (${m.fieldProblem})` : m.display)).join(', ');
+      toast.error(t('testCatalog.sheet.panelSkipped', { list }));
+    }
+    const plans = h.panelMembers.flatMap((m) => (m.field ? [m.field] : []));
+    if (plans.length === 0) return;
+    if (draftNow.current.resultParams.length === 0) applyFill(h.code, plans, 'add');
+    else setFillAsk({ loinc: h.code, plans });
+  }
+
+  function applyFill(loinc: string, plans: LoincFieldPlan[], mode: 'add' | 'replace'): void {
+    setFillAsk(null);
+    const out = addFromLoinc(draftNow.current.resultParams, plans, mode, systemOf);
+    set({ resultParams: out.params });
+    const rec = loincRecord(loinc, plans, out.added);
+    if (mode === 'replace') {
+      // Replace took every param off the draft, so no earlier record has anything left to take back.
+      setLoincPick(null);
+      setLoincFills([rec]);
+      setKeptPlans([]);
+    } else {
+      setLoincFills((prev) => [...prev, rec]);
+    }
+    toast.success(out.added.length > 0
+      ? t('testCatalog.sheet.loincFieldsAdded', { count: out.added.length })
+      : t('testCatalog.sheet.loincFieldsKept'));
+  }
+
+  /** A LOINC code picked here, from the search or the tree: fill an empty name, short name, category and
+   *  specimen from its hints, and leave the rest to the hint lines. */
   async function pickLoinc(code: string): Promise<void> {
+    // Plan call 4: another pick, or clearing the code, first takes back what the last pick and the old
+    // code's panel fills added.
+    const last = [loincPickNow.current, ...loincFillsNow.current];
+    const dropAll = (list: CatalogTestResultParam[]) => last.reduce((acc, r) => dropLoincAdded(acc, r), list);
+    if (last.some((r) => r)) {
+      setDraft((d) => ({ ...d, resultParams: dropAll(d.resultParams) }));
+      setLoincPick(null);
+      setLoincFills([]);
+      loincPickNow.current = null;
+      loincFillsNow.current = [];
+    }
     set({ loinc: code });
     const h = await readHints(code);
     if (!h) return;
     const d = draftNow.current;
     const patch: Partial<Draft> = {};
+    // Spec call 1: LOINC's long common name and short name, only into empty fields.
+    if (d.display.trim() === '' && h.display) patch.display = h.display;
+    if (d.shortName.trim() === '' && h.shortName) patch.shortName = h.shortName;
     const category = h.categorySuggestion;
     if (d.category === '' && category && options.categories.some((c) => c.code === category.code)) patch.category = category.code;
     const ticks = h.specimens.filter((s) => s.tick && s.specimenType);
@@ -244,16 +352,37 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     if (d.specimens.length === 0 && only && options.specimenTypes.some((o) => sameCoding(o, only))) {
       patch.specimens = [{ system: only.system, code: only.code }];
     }
+    // Spec call 2, plan call 3: LOINC's result field, only on a test with no other result field, as
+    // Corlix seeds a field only on an empty list. A panel adds none; it offers Fill from panel. A new
+    // field is made on Save, never here.
+    // The draft read here may not show the drop above yet, so drop again. It takes nothing twice.
+    const params = dropAll(d.resultParams);
+    if (h.field && h.panelMembers.length === 0 && params.length === 0) {
+      const out = addFromLoinc(params, [h.field], 'add', systemOf);
+      patch.resultParams = out.params;
+      setLoincPick(loincRecord(h.code, [h.field], out.added));
+    }
     if (Object.keys(patch).length > 0) set(patch);
-    // A pick writes nothing. LOINC's result field is only a hint line until someone chooses Use LOINC's
-    // result field or Fill from panel from the Result parameters menu (spec call 6).
   }
 
   const isNew = saved === null;
-  const paramOptions: ParamOption[] = [
+  const knownParams: ParamOption[] = [
     ...options.resultParams,
     ...addedParams.filter((a) => !options.resultParams.some((o) => o.code === a.code)),
   ];
+  // The new fields a pick or fill put on the draft, not in the dictionary until Save makes them. Shown in
+  // the field list by the plan's name, with its unit for a new range.
+  const pendingFields: LoincFieldPlan[] = [];
+  for (const plan of [...(loincPick?.newFields ?? []), ...loincFills.flatMap((f) => f.newFields), ...keptPlans]) {
+    if (!knownParams.some((o) => o.code === plan.code) && !pendingFields.some((p) => p.code === plan.code)) pendingFields.push(plan);
+  }
+  const paramOptions: ParamOption[] = [
+    ...knownParams,
+    ...pendingFields.map((p) => ({ system: fieldSystem, code: p.code, display: p.display, units: p.unit })),
+  ];
+  const isPending = (code: string) => pendingFields.some((p) => p.code === code);
+  const loincFieldOffer = hints && hints.panelMembers.length === 0 && hints.field
+    && !draft.resultParams.some((p) => p.code === hints.field!.code) ? hints.field : null;
   /** Show these new dictionary fields and tick their parameters, keeping any already ticked as they are. */
   const takeParams = (fields: ParamOption[], params: CatalogTestResultParam[]): void => {
     setAddedParams((prev) => [...prev, ...fields.filter((f) => !prev.some((p) => p.code === f.code))]);
@@ -261,29 +390,59 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     onOptionsChanged?.();
   };
 
-  // The hint lines: what LOINC suggests that the draft does not already hold. Nothing when there are no hints.
+  // The hint lines and marks: what LOINC suggests that the draft does not already hold. Nothing when there
+  // are no hints, so a sheet without LOINC loaded looks as it did.
   const suggested = hints?.categorySuggestion ?? null;
-  const categoryHint = !hints || !hints.class || draft.category === suggested?.code ? null
+  const categoryDiffers = !!hints && !!hints.class && draft.category !== suggested?.code;
+  // A category the lab has becomes a one-click button (spec call 6). A class with none stays a text line.
+  const categoryButton = categoryDiffers && suggested && options.categories.some((c) => c.code === suggested.code) ? suggested : null;
+  const categoryHint = !categoryDiffers || categoryButton ? null
     : suggested ? t('testCatalog.sheet.hintCategory', { name: suggested.display ?? suggested.code })
-      : t('testCatalog.sheet.hintClass', { class: hints.class });
-  const untaken = (hints?.specimens ?? []).filter((s) => !s.specimenType || !draft.specimens.some((k) => sameCoding(k, s.specimenType!)));
-  const specimenHint = untaken.length === 0 ? null : t('testCatalog.sheet.hintSpecimens', {
-    names: untaken.map((s) => (s.specimenType ? s.specimenType.display ?? s.specimenType.code : s.display ?? `SNOMED ${s.snomed}`)).join(', '),
+      : t('testCatalog.sheet.hintClass', { class: hints!.class });
+  // Each matched specimen type is marked on its own checkbox (spec call 5), so the line keeps only the
+  // SNOMED codes no specimen type here matched.
+  const suggestedSpecimens = (hints?.specimens ?? []).flatMap((s) => (s.specimenType ? [s.specimenType] : []));
+  const unmatched = (hints?.specimens ?? []).filter((s) => !s.specimenType);
+  const unmatchedNames = unmatched.flatMap((s) => {
+    const name = s.display ?? (s.snomed ? `SNOMED ${s.snomed}` : null);
+    return name ? [name] : [];
   });
-  const specimenMapHint = untaken.some((s) => !s.specimenType);
+  const specimenHint = unmatchedNames.length === 0 ? null : t('testCatalog.sheet.hintSpecimens', { names: unmatchedNames.join(', ') });
+  const specimenMapHint = unmatched.length > 0;
   const resultHint = !hints ? null
     : hints.panelMembers.length > 0 ? t('testCatalog.sheet.hintPanel', { count: hints.panelMembers.length })
-      // Gone once the field is ticked: LOINC's own code, or the field from-loinc answered for it.
-      : draft.resultParams.some((p) => p.code === hints.code
-        || (loincTaken?.loinc === hints.code && loincTaken.codes.includes(p.code))) ? null
-        : t('testCatalog.sheet.hintResult', { name: hints.display ?? hints.code, unit: hints.unit ? ` (${hints.unit})` : '' });
+      // Gone once the field is ticked: LOINC's own code, or the field that stands for it (CHOL for 2093-3).
+      : draft.resultParams.some((p) => p.code === hints.code || p.code === hints.field?.code) ? null
+        : t('testCatalog.sheet.hintResult', { name: hints.field?.display ?? hints.display ?? hints.code, unit: hints.unit ? ` (${hints.unit})` : '' });
   // The lab chooses from the catalog list being edited here, or from central's list at a lab.
   const offered = ownedHere ? draft.specimens : saved?.specimenTypes ?? [];
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const specimenName = (s: CatalogSpecimenCoding) => options.specimenTypes.find((o) => sameCoding(o, s))?.display ?? s.code;
   const labTakes = (s: CatalogSpecimenCoding) => draft.labSpecimens === null || draft.labSpecimens.some((k) => sameCoding(k, s));
+  /** The internal id under the Test code, shown only when the two differ. A new test has no id yet. */
+  const idLine = (testCode: string) => (saved && saved.code !== testCode ? (
+    <span data-testid="test-internal-id" className="break-all font-mono text-xs text-muted-foreground">
+      {t('testCatalog.sheet.internalId', { id: saved.code })}
+    </span>
+  ) : null);
   const text = (value: string | null | undefined) => <div className="text-sm">{value || t('testCatalog.none')}</div>;
   const hours = (value: number | null | undefined) => text(value == null ? null : t('testCatalog.sheet.hours', { count: value }));
+  /** A section's title with its edge-to-edge rule above it, and an optional ⋯ menu at its right. The
+   *  rule is a direct child of the px-6 grid, so -mx-6 lands on the sheet's edges (AGENTS.md section 5). */
+  const section = (title: string, menu: ReactNode = null) => (
+    <>
+      <Divider className="col-span-2 -mx-6" />
+      <div className="col-span-2 flex min-h-8 items-center justify-between gap-2">
+        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        {menu}
+      </div>
+    </>
+  );
+  // Reference ranges, one sub-heading per ticked numeric field, in the field list's order.
+  const rangeFields = paramOptions.flatMap((p) => {
+    const chosen = draft.resultParams.find((r) => r.code === p.code);
+    return chosen && chosen.resultType === 'numeric' ? [{ p, chosen }] : [];
+  });
 
   async function save() {
     if (busy) return;
@@ -291,27 +450,63 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     try {
       let test = saved;
       if (ownedHere) {
+        // The ticked new fields are made first. An unticked one is never made. When the test save fails
+        // after this, the next Save asks again and the server reuses what it made (review focus 2).
+        const making = pendingFields.filter((p) => draft.resultParams.some((r) => r.code === p.code));
+        let resultParams = draft.resultParams;
+        let made: ParamOption[] = [];
+        if (making.length > 0) {
+          const answer = await resultFieldsFromLoinc(
+            making.map((p) => p.loinc), false, Object.fromEntries(making.map((p) => [p.loinc, p.display])),
+          );
+          // The answer is in the order asked. A field may come back under its own code when the server
+          // reused one that stands for the LOINC code (CHOL for 2093-3), so take its code and system.
+          const answered = new Map(making.map((p, i) => [p.code, answer.params[i]]));
+          resultParams = resultParams.map((p) => {
+            const a = answered.get(p.code);
+            return a ? { ...p, code: a.code, system: a.system } : p;
+          });
+          made = making.map((p) => {
+            const a = answered.get(p.code);
+            return { system: a?.system ?? fieldSystem, code: a?.code ?? p.code, display: p.display, units: p.unit };
+          });
+        }
+        // A param put on the draft before the install had any field holds no system. If the options were
+        // read again since (after an Add field), the field is known now: take its system from there.
+        resultParams = resultParams.map((p) => (p.system ? p : { ...p, system: knownSystem(p.code) ?? p.system }));
+        // A made field can come back under a code the test already holds (CHOL for 2093-3). Keep the
+        // first, the one already on the test with its type and ranges (plan A ledger N1).
+        resultParams = resultParams.filter((p, i, all) => all.findIndex((q) => q.code === p.code) === i);
         const input: CatalogTestInput = {
+          testCode: draft.testCode.trim(),
           display: draft.display,
           shortName: draft.shortName.trim() || null,
           category: draft.category || null,
           specimenTypes: draft.specimens,
-          resultParams: draft.resultParams,
+          resultParams,
           loinc: draft.loinc.trim() || null,
           active: draft.active,
           expectedTatHours: draft.expectedTatHours,
           criticalTatHours: draft.criticalTatHours,
           requiresVerification: draft.requiresVerification,
         };
-        test = test
-          ? await updateCatalogTest(test.code, input)
-          : await createCatalogTest({ ...input, code: draft.code.trim() || null });
+        // The path takes the id. A changed Test code travels in the body (spec call 4).
+        test = test ? await updateCatalogTest(test.code, input) : await createCatalogTest(input);
         setSaved(test);
+        if (made.length > 0) {
+          set({ resultParams });
+          // Now ordinary dictionary fields: shown as added, no longer marked new.
+          setAddedParams((prev) => [...prev, ...made.filter((f) => !prev.some((p) => p.code === f.code))]);
+          setLoincPick((p) => (p ? { ...p, newFields: [] } : p));
+          setLoincFills((prev) => prev.map((f) => ({ ...f, newFields: [] })));
+          setKeptPlans([]);
+          onOptionsChanged?.();
+        }
       }
       if (!test) return;
       const lab = labInput(draft, test.specimenTypes);
       if (!sameLab(lab, test.lab)) test = await setCatalogLabSettings(test.code, lab);
-      toast.success(t('testCatalog.sheet.saved', { code: test.code }));
+      toast.success(t('testCatalog.sheet.saved', { code: test.testCode }));
       onSaved();
       onClose();
     } catch (e) {
@@ -347,7 +542,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
                   data-testid="test-sheet-save"
-                  disabled={busy || (ownedHere && !draft.display.trim())}
+                  disabled={busy || (ownedHere && (!draft.display.trim() || !draft.testCode.trim()))}
                   onSelect={() => void save()}
                 >
                   {t('common.save')}
@@ -357,19 +552,80 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
             </DropdownMenu>
           </div>
           <div className="border-t border-border" />
+          {/* Corlix's order, top to bottom (spec section 2): LOINC code, additional codings, basic
+              information, specimen types, result parameters, reference ranges. "This lab" stays last.
+              The sections share this one grid, so every label sits in one column and lines up. LOINC is
+              one row with no title line of its own: LOINC | picker | ⋯ (operator, 2026-11-24). */}
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-6 py-4 text-sm">
-            {ownedHere && isNew ? (
+            {ownedHere ? (
               <>
-                <Label htmlFor="test-code" className="whitespace-nowrap">{t('testCatalog.sheet.code')}</Label>
-                <div className="flex flex-col gap-1">
-                  <Input id="test-code" value={draft.code} onChange={(e) => set({ code: e.target.value })} />
-                  <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.codeHint')}</span>
+                <Label htmlFor={options.loinc ? undefined : 'test-loinc'} className="whitespace-nowrap">
+                  {t('testCatalog.sheet.sectionLoinc')}
+                </Label>
+                {options.loinc ? (
+                  <div className="flex min-w-0 items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <TermPicker
+                        systemId={options.loinc.systemId}
+                        value={draft.loinc ? { system: options.loinc.system, code: draft.loinc, display: null } : null}
+                        onChange={(v) => { void pickLoinc(v?.code ?? ''); }}
+                        detail={loincDetail}
+                      />
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          ref={loincMenuButton}
+                          variant="ghost" size="icon" className="h-9 w-9 shrink-0"
+                          data-testid="loinc-menu" aria-label={t('testCatalog.sheet.loincActions')}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem data-testid="browse-loinc" onSelect={() => setBrowsing(true)}>
+                          {t('testCatalog.sheet.browseLoinc')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <Input id="test-loinc" value={draft.loinc} placeholder="12345-6" onChange={(e) => set({ loinc: e.target.value })} />
+                    <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.loincTyped')}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <Label className="whitespace-nowrap">{t('testCatalog.sheet.sectionLoinc')}</Label>
+                {text(saved?.loinc)}
+              </>
+            )}
+
+            {/* Plan B puts Additional codings here, between the LOINC code and Basic information (spec call 11). */}
+
+            {section(t('testCatalog.sheet.sectionBasic'))}
+            {/* Test identity spec, call 8: the Test code is the first field, editable on a saved test
+                too. The internal id sits under it, read-only, once it differs from the Test code. */}
+            {ownedHere ? (
+              <>
+                <Label htmlFor="test-code" className="whitespace-nowrap">{t('testCatalog.sheet.testCode')}</Label>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <Input id="test-code" required value={draft.testCode} onChange={(e) => set({ testCode: e.target.value })} />
+                  {draft.testCode.trim() === '' ? (
+                    <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.testCodeRequired')}</span>
+                  ) : null}
+                  {idLine(draft.testCode.trim())}
                 </div>
               </>
             ) : (
               <>
-                <Label className="whitespace-nowrap">{t('testCatalog.sheet.code')}</Label>
-                <div className="font-mono text-xs">{saved?.code}</div>
+                <Label className="whitespace-nowrap">{t('testCatalog.sheet.testCode')}</Label>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="break-all font-mono text-xs">{saved?.testCode}</div>
+                  {idLine(saved?.testCode ?? '')}
+                </div>
               </>
             )}
 
@@ -393,289 +649,17 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                       {options.categories.map((c) => <SelectItem key={c.code} value={c.code}>{c.display ?? c.code}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {categoryHint ? <span data-testid="hint-category" className="break-words text-xs text-muted-foreground">{categoryHint}</span> : null}
-                </div>
-
-                <Label htmlFor={options.loinc ? undefined : 'test-loinc'} className="whitespace-nowrap">
-                  {t('testCatalog.sheet.loinc')}
-                </Label>
-                {options.loinc ? (
-                  <TermPicker
-                    systemId={options.loinc.systemId}
-                    value={draft.loinc ? { system: options.loinc.system, code: draft.loinc, display: null } : null}
-                    onChange={(v) => { void pickLoinc(v?.code ?? ''); }}
-                  />
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    <Input id="test-loinc" value={draft.loinc} placeholder="12345-6" onChange={(e) => set({ loinc: e.target.value })} />
-                    <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.loincTyped')}</span>
-                  </div>
-                )}
-
-                <Label className="self-start whitespace-nowrap pt-1.5">{t('testCatalog.sheet.specimens')}</Label>
-                <div className="flex min-w-0 flex-col gap-1">
-                <div className="flex max-h-48 flex-col overflow-y-auto">
-                  {options.specimenTypes.map((s) => (
-                    <label
-                      key={`${s.system}|${s.code}`}
-                      className="flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-[rgba(70,130,180,0.08)]"
+                  {categoryButton ? (
+                    // Spec call 6: one click sets LOINC's category, as Corlix's suggested chip does.
+                    <Button
+                      type="button" variant="ghost" data-testid="hint-category"
+                      className="h-auto self-start whitespace-normal break-words p-0 text-left text-xs font-normal text-primary hover:bg-transparent hover:text-primary hover:underline"
+                      onClick={() => set({ category: categoryButton.code })}
                     >
-                      <Checkbox
-                        data-testid={`specimen-${s.code}`}
-                        checked={draft.specimens.some((k) => sameCoding(k, s))}
-                        onCheckedChange={(c) => set({ specimens: toggle(draft.specimens, s, !!c) })}
-                      />
-                      <span className="flex-1 text-foreground">{s.display ?? s.code}</span>
-                    </label>
-                  ))}
-                </div>
-                {specimenHint ? <span data-testid="hint-specimens" className="break-words px-2 text-xs text-muted-foreground">{specimenHint}</span> : null}
-                {specimenMapHint ? <span data-testid="hint-specimens-map" className="break-words px-2 text-xs text-muted-foreground">{t('testCatalog.sheet.hintSpecimenMap')}</span> : null}
-                </div>
-
-                {/* On a phone this section sits under its heading at full width: beside the heading, each range
-                    field was left about 108px and a range name was cut off (measured live at 375px). From sm up it
-                    keeps the label-left layout the rest of the sheet uses. */}
-                <Label className="col-span-2 self-start whitespace-nowrap pt-1.5 sm:col-span-1">{t('testCatalog.sheet.resultParams')}</Label>
-                <div className="col-span-2 flex flex-col gap-2 sm:col-span-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex min-w-0 flex-1 flex-col gap-1 pt-1.5">
-                      {paramOptions.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.noResultParams')}</span>
-                      ) : null}
-                      {resultHint ? <span data-testid="hint-result" className="break-words text-xs text-muted-foreground">{resultHint}</span> : null}
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          ref={paramsMenuButton}
-                          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
-                          data-testid="result-params-menu" aria-label={t('testCatalog.sheet.resultParamsActions')}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem data-testid="add-field" onSelect={() => setAddingField(true)}>
-                          {t('testCatalog.sheet.addField')}
-                        </DropdownMenuItem>
-                        {hints && hints.panelMembers.length === 0 ? (
-                          <DropdownMenuItem data-testid="use-loinc-field" onSelect={() => void takeFromLoinc(hints, false)}>
-                            {t('testCatalog.sheet.useLoincField')}
-                          </DropdownMenuItem>
-                        ) : null}
-                        {hints && hints.panelMembers.length > 0 ? (
-                          <DropdownMenuItem data-testid="fill-from-panel" onSelect={() => void takeFromLoinc(hints, true)}>
-                            {t('testCatalog.sheet.fillFromPanel')}
-                          </DropdownMenuItem>
-                        ) : null}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  {paramOptions.map((p) => {
-                    const chosen = draft.resultParams.find((r) => r.code === p.code);
-                    return (
-                      <div key={`${p.system}|${p.code}`} className="flex flex-col gap-1.5">
-                        <label className="flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-[rgba(70,130,180,0.08)]">
-                          <Checkbox
-                            data-testid={`param-${p.code}`}
-                            checked={!!chosen}
-                            onCheckedChange={(c) => set({ resultParams: toggleParam(draft.resultParams, p, !!c) })}
-                          />
-                          <span className="flex-1 text-foreground">{p.display ?? p.code}</span>
-                          <span className="font-mono text-xs text-muted-foreground">{p.code}</span>
-                        </label>
-                        {chosen ? (
-                          <div className="flex flex-col gap-1.5 sm:ml-8">
-                            {/* The indent is desktop-only. On a phone it cost the range fields 32px they cannot spare. */}
-                            <div className="flex items-center gap-2">
-                              <Select
-                                value={chosen.resultType}
-                                onValueChange={(v) => set({ resultParams: setParam(draft.resultParams, p.code, {
-                                  ...chosen, resultType: v as CatalogTestResultParam['resultType'], bands: v === 'numeric' ? chosen.bands : [],
-                                }) })}
-                              >
-                                <SelectTrigger className="h-8 w-36" aria-label={`Result type for ${p.code}`}><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="numeric">{t('testCatalog.sheet.typeNumeric')}</SelectItem>
-                                  <SelectItem value="coded">{t('testCatalog.sheet.typeCoded')}</SelectItem>
-                                  <SelectItem value="text">{t('testCatalog.sheet.typeText')}</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {chosen.resultType === 'numeric' ? (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      variant="ghost" size="icon" className="h-8 w-8"
-                                      data-testid={`param-menu-${p.code}`}
-                                      aria-label={t('testCatalog.sheet.paramActions', { code: p.code })}
-                                    >
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      data-testid={`add-band-${p.code}`}
-                                      // A new range starts with the result field's own unit (parm_units).
-                                      onSelect={() => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands: [...chosen.bands, { ...EMPTY_BAND, unit: p.units ?? null }] }) })}
-                                    >
-                                      {t('testCatalog.sheet.addBand')}
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              ) : null}
-                            </div>
-                            {chosen.resultType === 'numeric' && chosen.bands.map((band, i) => {
-                              const n = i + 1;
-                              const writeBands = (bands: CatalogResultBand[]) => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands }) });
-                              const setBand = (patch: Partial<CatalogResultBand>) => writeBands(chosen.bands.map((b, j) => (j === i ? { ...b, ...patch } : b)));
-                              const move = (by: number) => {
-                                const next = [...chosen.bands];
-                                [next[i], next[i + by]] = [next[i + by], next[i]];
-                                writeBands(next);
-                              };
-                              const id = (field: string) => `band-${p.code}-${n}-${field}`;
-                              const label = (field: string, key: string) => (
-                                <Label htmlFor={id(field)} className="whitespace-nowrap text-xs text-muted-foreground">{t(key)}</Label>
-                              );
-                              return (
-                                // A block with a visible word beside every field, label left and input right as elsewhere
-                                // in the studio (AGENTS.md section 5). On a phone the fields stack one per line, so a
-                                // filled low or high box never reads as a bare number. From sm up, two pairs per line.
-                                <div key={i} data-testid={`band-${p.code}-${n}`} className="rounded-md border border-border p-3 sm:relative sm:pr-11">
-                                  {/* On a phone the menu takes its own line at the top, so the fields keep the full width.
-                                      From sm up it sits in the corner, beside the Name line. Measured live at 375px: the
-                                      reserved corner left the inputs 44px wide. */}
-                                  <div className="-mt-1.5 mb-1 flex justify-end sm:absolute sm:right-1.5 sm:top-1.5 sm:mt-0 sm:mb-0">
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button
-                                          variant="ghost" size="icon" className="h-8 w-8"
-                                          data-testid={`band-menu-${p.code}-${n}`}
-                                          aria-label={t('testCatalog.sheet.bandActions', { code: p.code, n })}
-                                        >
-                                          <MoreHorizontal className="h-4 w-4" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end">
-                                        <DropdownMenuItem data-testid={`band-up-${p.code}-${n}`} disabled={i === 0} onSelect={() => move(-1)}>
-                                          {t('testCatalog.sheet.moveUp')}
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem data-testid={`band-down-${p.code}-${n}`} disabled={i === chosen.bands.length - 1} onSelect={() => move(1)}>
-                                          {t('testCatalog.sheet.moveDown')}
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                          data-testid={`band-remove-${p.code}-${n}`}
-                                          className="text-destructive focus:text-destructive"
-                                          onSelect={() => writeBands(chosen.bands.filter((_, j) => j !== i))}
-                                        >
-                                          {t('testCatalog.sheet.removeBand')}
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                  <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)]">
-                                    {label('name', 'testCatalog.sheet.bandName')}
-                                    <Input
-                                      id={id('name')}
-                                      className="h-8 sm:col-span-3"
-                                      aria-label={t('testCatalog.sheet.bandNameFor', { code: p.code, n })}
-                                      value={band.name ?? ''}
-                                      // An unnamed range is shown at the bench by who it is for, such as "up to 28 days".
-                                      placeholder={criteriaLabel(band, options.sexes, rangeCopy)}
-                                      onChange={(e) => setBand({ name: e.target.value === '' ? null : e.target.value })}
-                                    />
-                                    {(['low', 'high'] as const).map((edge) => (
-                                      <Fragment key={edge}>
-                                        {label(edge, edge === 'low' ? 'testCatalog.sheet.bandLow' : 'testCatalog.sheet.bandHigh')}
-                                        <DecimalInput
-                                          id={id(edge)}
-                                          className="h-8"
-                                          aria-label={`${edge} for ${p.code} band ${n}`}
-                                          value={band[edge]}
-                                          onValueChange={(v) => setBand({ [edge]: v })}
-                                        />
-                                      </Fragment>
-                                    ))}
-                                    {label('unit', 'testCatalog.sheet.bandUnit')}
-                                    {options.ucum ? (
-                                      <div className="flex min-w-0 flex-col gap-1">
-                                        <TermPicker
-                                          id={id('unit')}
-                                          ariaLabel={t('testCatalog.sheet.bandUnitFor', { code: p.code, n })}
-                                          systemId={options.ucum.systemId}
-                                          // UCUM has one-letter units: g, L, m.
-                                          minQueryLength={1}
-                                          value={band.unit ? { system: options.ucum.system, code: band.unit, display: null } : null}
-                                          onChange={(v) => { if (v) markUcum(v.code, true); setBand({ unit: v?.code ?? null }); }}
-                                          typed={{
-                                            label: (unit) => t('testCatalog.sheet.unitUseTyped', { unit }),
-                                            onUse: (unit) => { setBand({ unit }); void checkUcum(unit); },
-                                          }}
-                                        />
-                                        {band.unit && notUcum.has(band.unit) ? (
-                                          <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.notUcumUnit')}</span>
-                                        ) : null}
-                                      </div>
-                                    ) : (
-                                      <Input
-                                        id={id('unit')}
-                                        className="h-8"
-                                        aria-label={t('testCatalog.sheet.bandUnitFor', { code: p.code, n })}
-                                        value={band.unit ?? ''}
-                                        onChange={(e) => setBand({ unit: e.target.value || null })}
-                                      />
-                                    )}
-                                    {label('sex', 'testCatalog.sheet.bandSex')}
-                                    <Select value={band.sex ?? ANY_SEX} onValueChange={(v) => setBand({ sex: v === ANY_SEX ? null : v })}>
-                                      <SelectTrigger id={id('sex')} className="h-8" aria-label={t('testCatalog.sheet.bandSexFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value={ANY_SEX}>{t('testCatalog.sheet.bandAnySex')}</SelectItem>
-                                        {options.sexes.map((s) => <SelectItem key={s.code} value={s.code}>{sexLabel(s, i18n.language)}</SelectItem>)}
-                                      </SelectContent>
-                                    </Select>
-                                    {(['ageLow', 'ageHigh'] as const).map((edge) => (
-                                      <Fragment key={edge}>
-                                        {label(edge, edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFrom' : 'testCatalog.sheet.bandAgeTo')}
-                                        <DecimalInput
-                                          id={id(edge)}
-                                          className="h-8"
-                                          aria-label={t(edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFromFor' : 'testCatalog.sheet.bandAgeToFor', { code: p.code, n })}
-                                          value={band[edge]}
-                                          onValueChange={(v) => setBand({ [edge]: v })}
-                                        />
-                                      </Fragment>
-                                    ))}
-                                    {label('ageUnit', 'testCatalog.sheet.bandAgeUnit')}
-                                    <div className="sm:col-span-3">
-                                      <Select value={band.ageUnit ?? 'y'} onValueChange={(v) => setBand({ ageUnit: v as CatalogAgeUnit })}>
-                                        <SelectTrigger id={id('ageUnit')} className="h-8 sm:w-40" aria-label={t('testCatalog.sheet.bandAgeUnitFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                          {AGE_UNITS.map((u) => <SelectItem key={u.code} value={u.code}>{t(u.key)}</SelectItem>)}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    {(['criticalLow', 'criticalHigh'] as const).map((edge) => (
-                                      <Fragment key={edge}>
-                                        {label(edge, edge === 'criticalLow' ? 'testCatalog.sheet.bandCriticalLow' : 'testCatalog.sheet.bandCriticalHigh')}
-                                        <DecimalInput
-                                          id={id(edge)}
-                                          className="h-8"
-                                          aria-label={t(edge === 'criticalLow' ? 'testCatalog.sheet.bandCriticalLowFor' : 'testCatalog.sheet.bandCriticalHighFor', { code: p.code, n })}
-                                          value={band[edge] ?? null}
-                                          onValueChange={(v) => setBand({ [edge]: v })}
-                                        />
-                                      </Fragment>
-                                    ))}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+                      {t('testCatalog.sheet.categorySuggested', { name: categoryButton.display ?? categoryButton.code })}
+                    </Button>
+                  ) : null}
+                  {categoryHint ? <span data-testid="hint-category" className="break-words text-xs text-muted-foreground">{categoryHint}</span> : null}
                 </div>
 
                 <Label htmlFor="test-expected-tat" className="whitespace-nowrap">{t('testCatalog.sheet.expectedTat')}</Label>
@@ -710,6 +694,312 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                     />
                   </>
                 )}
+
+                {section(t('testCatalog.sheet.specimens'))}
+                <div className="col-span-2 flex min-w-0 flex-col gap-1">
+                  <div className="flex max-h-48 flex-col overflow-y-auto">
+                    {options.specimenTypes.map((s) => {
+                      const on = draft.specimens.some((k) => sameCoding(k, s));
+                      return (
+                        <label
+                          key={`${s.system}|${s.code}`}
+                          className="flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-[rgba(70,130,180,0.08)]"
+                        >
+                          <Checkbox
+                            data-testid={`specimen-${s.code}`}
+                            checked={on}
+                            onCheckedChange={(c) => set({ specimens: toggle(draft.specimens, s, !!c) })}
+                          />
+                          <span className="min-w-0 break-words text-foreground">{s.display ?? s.code}</span>
+                          {/* Spec call 5: a type LOINC matched but nobody ticked, marked as Corlix marks it. */}
+                          {!on && suggestedSpecimens.some((m) => sameCoding(m, s)) ? (
+                            <Badge variant="secondary" data-testid={`suggested-${s.code}`} className="shrink-0 px-1.5 py-0 text-[10px] font-normal">
+                              {t('testCatalog.sheet.suggested')}
+                            </Badge>
+                          ) : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {specimenHint ? <span data-testid="hint-specimens" className="break-words px-2 text-xs text-muted-foreground">{specimenHint}</span> : null}
+                  {specimenMapHint ? <span data-testid="hint-specimens-map" className="break-words px-2 text-xs text-muted-foreground">{t('testCatalog.sheet.hintSpecimenMap')}</span> : null}
+                </div>
+
+                {section(t('testCatalog.sheet.resultParams'), (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        ref={paramsMenuButton}
+                        variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                        data-testid="result-params-menu" aria-label={t('testCatalog.sheet.resultParamsActions')}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem data-testid="add-field" onSelect={() => setAddingField(true)}>
+                        {t('testCatalog.sheet.addField')}
+                      </DropdownMenuItem>
+                      {hints && loincFieldOffer ? (
+                        <DropdownMenuItem data-testid="use-loinc-field" onSelect={() => takeLoincField(hints, loincFieldOffer)}>
+                          {t('testCatalog.sheet.useLoincField')}
+                        </DropdownMenuItem>
+                      ) : null}
+                      {hints && hints.panelMembers.length > 0 ? (
+                        <DropdownMenuItem data-testid="fill-from-panel" onSelect={() => fillFromPanel(hints)}>
+                          {t('testCatalog.sheet.fillFromPanel')}
+                        </DropdownMenuItem>
+                      ) : null}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ))}
+                {/* Full width, so a field name and its type keep the room they need on a phone. */}
+                <div className="col-span-2 flex min-w-0 flex-col gap-2">
+                  {paramOptions.length === 0 || resultHint ? (
+                    <div className="flex min-w-0 flex-col gap-1">
+                      {paramOptions.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.noResultParams')}</span>
+                      ) : null}
+                      {resultHint ? <span data-testid="hint-result" className="break-words text-xs text-muted-foreground">{resultHint}</span> : null}
+                    </div>
+                  ) : null}
+                  {paramOptions.map((p) => {
+                    const chosen = draft.resultParams.find((r) => r.code === p.code);
+                    return (
+                      <div key={`${p.system}|${p.code}`} className="flex flex-col gap-1.5">
+                        <label className="flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-[rgba(70,130,180,0.08)]">
+                          <Checkbox
+                            data-testid={`param-${p.code}`}
+                            checked={!!chosen}
+                            onCheckedChange={(c) => {
+                              if (!c) {
+                                letGoOfLoinc(p.code);
+                                set({ resultParams: toggleParam(draft.resultParams, p, false) });
+                                return;
+                              }
+                              // A LOINC field ticked again keeps LOINC's type and answer list, not a plain number.
+                              const plan = loincPlanFor(p.code);
+                              set({ resultParams: plan
+                                ? addFromLoinc(draft.resultParams, [plan], 'add', systemOf).params
+                                : toggleParam(draft.resultParams, p, true) });
+                            }}
+                          />
+                          <span className="min-w-0 flex-1 break-words text-foreground">{p.display ?? p.code}</span>
+                          {chosen && isPending(p.code) ? (
+                            <Badge variant="secondary" data-testid={`new-${p.code}`} className="shrink-0 px-1.5 py-0 text-[10px] font-normal">
+                              {t('testCatalog.sheet.newWithTest')}
+                            </Badge>
+                          ) : null}
+                          <span className="font-mono text-xs text-muted-foreground">{p.code}</span>
+                        </label>
+                        {chosen ? (
+                          // The indent is desktop-only. On a phone it cost the fields 32px they cannot spare.
+                          // Plan B adds the field's own ⋯ (Required, Settings, Move) beside its type.
+                          <div className="flex items-center gap-2 sm:ml-8">
+                            <Select
+                              value={chosen.resultType}
+                              onValueChange={(v) => set({ resultParams: setParam(draft.resultParams, p.code, {
+                                ...chosen, resultType: v as CatalogTestResultParam['resultType'], bands: v === 'numeric' ? chosen.bands : [],
+                              }) })}
+                            >
+                              <SelectTrigger className="h-8 w-36" aria-label={`Result type for ${p.code}`}><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="numeric">{t('testCatalog.sheet.typeNumeric')}</SelectItem>
+                                <SelectItem value="coded">{t('testCatalog.sheet.typeCoded')}</SelectItem>
+                                <SelectItem value="text">{t('testCatalog.sheet.typeText')}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {section(t('testCatalog.sheet.sectionRanges'))}
+                {/* On a phone the ranges sit at full width: beside a label, each range field was left about
+                    108px and a range name was cut off (measured live at 375px). */}
+                <div className="col-span-2 flex min-w-0 flex-col gap-3">
+                  {rangeFields.length === 0 ? (
+                    <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.noRangeFields')}</span>
+                  ) : null}
+                  {rangeFields.map(({ p, chosen }) => (
+                    <div key={`${p.system}|${p.code}`} className="flex min-w-0 flex-col gap-1.5">
+                      <div data-testid={`ranges-${p.code}`} className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                          <h4 className="break-words font-medium text-foreground">{p.display ?? p.code}</h4>
+                          <span className="font-mono text-xs text-muted-foreground">{p.code}</span>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                              data-testid={`param-menu-${p.code}`}
+                              aria-label={t('testCatalog.sheet.paramActions', { code: p.code })}
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              data-testid={`add-band-${p.code}`}
+                              // A new range starts with the result field's own unit (parm_units).
+                              onSelect={() => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands: [...chosen.bands, { ...EMPTY_BAND, unit: p.units ?? null }] }) })}
+                            >
+                              {t('testCatalog.sheet.addBand')}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      {chosen.bands.map((band, i) => {
+                        const n = i + 1;
+                        const writeBands = (bands: CatalogResultBand[]) => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands }) });
+                        const setBand = (patch: Partial<CatalogResultBand>) => writeBands(chosen.bands.map((b, j) => (j === i ? { ...b, ...patch } : b)));
+                        const move = (by: number) => {
+                          const next = [...chosen.bands];
+                          [next[i], next[i + by]] = [next[i + by], next[i]];
+                          writeBands(next);
+                        };
+                        const id = (field: string) => `band-${p.code}-${n}-${field}`;
+                        const label = (field: string, key: string) => (
+                          <Label htmlFor={id(field)} className="whitespace-nowrap text-xs text-muted-foreground">{t(key)}</Label>
+                        );
+                        return (
+                          // A block with a visible word beside every field, label left and input right as elsewhere
+                          // in the studio (AGENTS.md section 5). On a phone the fields stack one per line, so a
+                          // filled low or high box never reads as a bare number. From sm up, two pairs per line.
+                          <div key={i} data-testid={`band-${p.code}-${n}`} className="rounded-md border border-border p-3 sm:relative sm:pr-11">
+                            {/* On a phone the menu takes its own line at the top, so the fields keep the full width.
+                                From sm up it sits in the corner, beside the Name line. Measured live at 375px: the
+                                reserved corner left the inputs 44px wide. */}
+                            <div className="-mt-1.5 mb-1 flex justify-end sm:absolute sm:right-1.5 sm:top-1.5 sm:mt-0 sm:mb-0">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost" size="icon" className="h-8 w-8"
+                                    data-testid={`band-menu-${p.code}-${n}`}
+                                    aria-label={t('testCatalog.sheet.bandActions', { code: p.code, n })}
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem data-testid={`band-up-${p.code}-${n}`} disabled={i === 0} onSelect={() => move(-1)}>
+                                    {t('testCatalog.sheet.moveUp')}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem data-testid={`band-down-${p.code}-${n}`} disabled={i === chosen.bands.length - 1} onSelect={() => move(1)}>
+                                    {t('testCatalog.sheet.moveDown')}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    data-testid={`band-remove-${p.code}-${n}`}
+                                    className="text-destructive focus:text-destructive"
+                                    onSelect={() => writeBands(chosen.bands.filter((_, j) => j !== i))}
+                                  >
+                                    {t('testCatalog.sheet.removeBand')}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)]">
+                              {label('name', 'testCatalog.sheet.bandName')}
+                              <Input
+                                id={id('name')}
+                                className="h-8 sm:col-span-3"
+                                aria-label={t('testCatalog.sheet.bandNameFor', { code: p.code, n })}
+                                value={band.name ?? ''}
+                                // An unnamed range is shown at the bench by who it is for, such as "up to 28 days".
+                                placeholder={criteriaLabel(band, options.sexes, rangeCopy)}
+                                onChange={(e) => setBand({ name: e.target.value === '' ? null : e.target.value })}
+                              />
+                              {(['low', 'high'] as const).map((edge) => (
+                                <Fragment key={edge}>
+                                  {label(edge, edge === 'low' ? 'testCatalog.sheet.bandLow' : 'testCatalog.sheet.bandHigh')}
+                                  <DecimalInput
+                                    id={id(edge)}
+                                    className="h-8"
+                                    aria-label={`${edge} for ${p.code} band ${n}`}
+                                    value={band[edge]}
+                                    onValueChange={(v) => setBand({ [edge]: v })}
+                                  />
+                                </Fragment>
+                              ))}
+                              {label('unit', 'testCatalog.sheet.bandUnit')}
+                              {options.ucum ? (
+                                <div className="flex min-w-0 flex-col gap-1">
+                                  <TermPicker
+                                    id={id('unit')}
+                                    ariaLabel={t('testCatalog.sheet.bandUnitFor', { code: p.code, n })}
+                                    systemId={options.ucum.systemId}
+                                    // UCUM has one-letter units: g, L, m.
+                                    minQueryLength={1}
+                                    value={band.unit ? { system: options.ucum.system, code: band.unit, display: null } : null}
+                                    onChange={(v) => { if (v) markUcum(v.code, true); setBand({ unit: v?.code ?? null }); }}
+                                    typed={{
+                                      label: (unit) => t('testCatalog.sheet.unitUseTyped', { unit }),
+                                      onUse: (unit) => { setBand({ unit }); void checkUcum(unit); },
+                                    }}
+                                  />
+                                  {band.unit && notUcum.has(band.unit) ? (
+                                    <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.notUcumUnit')}</span>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <Input
+                                  id={id('unit')}
+                                  className="h-8"
+                                  aria-label={t('testCatalog.sheet.bandUnitFor', { code: p.code, n })}
+                                  value={band.unit ?? ''}
+                                  onChange={(e) => setBand({ unit: e.target.value || null })}
+                                />
+                              )}
+                              {label('sex', 'testCatalog.sheet.bandSex')}
+                              <Select value={band.sex ?? ANY_SEX} onValueChange={(v) => setBand({ sex: v === ANY_SEX ? null : v })}>
+                                <SelectTrigger id={id('sex')} className="h-8" aria-label={t('testCatalog.sheet.bandSexFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={ANY_SEX}>{t('testCatalog.sheet.bandAnySex')}</SelectItem>
+                                  {options.sexes.map((s) => <SelectItem key={s.code} value={s.code}>{sexLabel(s, i18n.language)}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              {(['ageLow', 'ageHigh'] as const).map((edge) => (
+                                <Fragment key={edge}>
+                                  {label(edge, edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFrom' : 'testCatalog.sheet.bandAgeTo')}
+                                  <DecimalInput
+                                    id={id(edge)}
+                                    className="h-8"
+                                    aria-label={t(edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFromFor' : 'testCatalog.sheet.bandAgeToFor', { code: p.code, n })}
+                                    value={band[edge]}
+                                    onValueChange={(v) => setBand({ [edge]: v })}
+                                  />
+                                </Fragment>
+                              ))}
+                              {label('ageUnit', 'testCatalog.sheet.bandAgeUnit')}
+                              <div className="sm:col-span-3">
+                                <Select value={band.ageUnit ?? 'y'} onValueChange={(v) => setBand({ ageUnit: v as CatalogAgeUnit })}>
+                                  <SelectTrigger id={id('ageUnit')} className="h-8 sm:w-40" aria-label={t('testCatalog.sheet.bandAgeUnitFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {AGE_UNITS.map((u) => <SelectItem key={u.code} value={u.code}>{t(u.key)}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {(['criticalLow', 'criticalHigh'] as const).map((edge) => (
+                                <Fragment key={edge}>
+                                  {label(edge, edge === 'criticalLow' ? 'testCatalog.sheet.bandCriticalLow' : 'testCatalog.sheet.bandCriticalHigh')}
+                                  <DecimalInput
+                                    id={id(edge)}
+                                    className="h-8"
+                                    aria-label={t(edge === 'criticalLow' ? 'testCatalog.sheet.bandCriticalLowFor' : 'testCatalog.sheet.bandCriticalHighFor', { code: p.code, n })}
+                                    value={band[edge] ?? null}
+                                    onValueChange={(v) => setBand({ [edge]: v })}
+                                  />
+                                </Fragment>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
               </>
             ) : (
               <>
@@ -719,24 +1009,19 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                 {text(saved?.shortName)}
                 <Label className="whitespace-nowrap">{t('testCatalog.sheet.category')}</Label>
                 {text(saved?.category ? options.categories.find((c) => c.code === saved.category)?.display ?? saved.category : null)}
-                <Label className="whitespace-nowrap">{t('testCatalog.sheet.loinc')}</Label>
-                {text(saved?.loinc)}
-                <Label className="self-start whitespace-nowrap">{t('testCatalog.sheet.specimens')}</Label>
-                {text((saved?.specimenTypes ?? []).map(specimenName).join(', '))}
                 <Label className="whitespace-nowrap">{t('testCatalog.sheet.expectedTat')}</Label>
                 {hours(saved?.expectedTatHours)}
                 <Label className="whitespace-nowrap">{t('testCatalog.sheet.criticalTat')}</Label>
                 {hours(saved?.criticalTatHours)}
                 <Label className="whitespace-nowrap">{t('testCatalog.sheet.requiresVerification')}</Label>
                 {text(t((saved?.requiresVerification ?? true) ? 'testCatalog.sheet.yes' : 'testCatalog.sheet.no'))}
+
+                {section(t('testCatalog.sheet.specimens'))}
+                <div className="col-span-2 min-w-0 break-words">{text((saved?.specimenTypes ?? []).map(specimenName).join(', '))}</div>
               </>
             )}
 
-            {/* The catalog and lab fields share this one grid, so their labels share one column and
-                line up. The title row's borders bleed to the sheet edges (-mx-6 against the px-6). */}
-            <div className="col-span-2 -mx-6 border-y border-border px-6 py-3 font-medium text-foreground">
-              {t('testCatalog.sheet.thisLab')}
-            </div>
+            {section(t('testCatalog.sheet.thisLab'))}
 
             <Label className="whitespace-nowrap">{t('testCatalog.sheet.enabled')}</Label>
             <Switch
@@ -770,7 +1055,51 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
             <Input id="test-local-name" value={draft.localDisplay} onChange={(e) => set({ localDisplay: e.target.value })} />
           </div>
         </section>
-        {/* Inside the content, so Radix stacks the second sheet over this one. */}
+        {/* Inside the content, so Radix stacks these sheets over this one. */}
+        {options.loinc && ownedHere ? (
+          <OntologyPickerDialog
+            open={browsing}
+            onOpenChange={setBrowsing}
+            codingSystemId={options.loinc.systemId}
+            systemName="LOINC"
+            ontologyType="loinc"
+            mode="picker"
+            title={t('testCatalog.sheet.browseLoinc')}
+            returnFocusTo={loincMenuButton}
+            onPick={(node) => {
+              if (!LOINC_TEST_CODE.test(node.code)) {
+                toast.error(t('testCatalog.sheet.notLoincTestCode', { code: node.code }));
+                return;
+              }
+              void pickLoinc(node.code);
+            }}
+          />
+        ) : null}
+        {/* A confirm prompt with three answers, so a dialog, not a sheet (AGENTS.md section 5).
+            ConfirmDialog holds one action only. */}
+        <AlertDialog open={fillAsk !== null} onOpenChange={(o) => { if (!o) setFillAsk(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('testCatalog.sheet.fillFromPanelTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('testCatalog.sheet.fillFromPanelDescription')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="fill-cancel">{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                data-testid="fill-add" className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                onClick={() => { if (fillAsk) applyFill(fillAsk.loinc, fillAsk.plans, 'add'); }}
+              >
+                {t('testCatalog.sheet.fillAdd')}
+              </AlertDialogAction>
+              <AlertDialogAction
+                data-testid="fill-replace"
+                onClick={() => { if (fillAsk) applyFill(fillAsk.loinc, fillAsk.plans, 'replace'); }}
+              >
+                {t('testCatalog.sheet.fillReplace')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <AddResultFieldSheet
         open={addingField}
         ucum={options.ucum ?? null}

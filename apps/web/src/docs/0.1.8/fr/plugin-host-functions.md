@@ -138,6 +138,8 @@ La ligne d'un patient fusionné a aussi `replacedByPluginRef`, le `pluginRef` de
 
 Un `pluginRef` appartient à l'identifiant du plugin, pas à une installation. Si vous retirez un plugin puis en installez un sous le même identifiant, il peut ouvrir les refs que le premier a gardées. Une réinitialisation d'usine garde les liens en état de marche.
 
+`testCatalog.get` et `testCatalog.list` répondent pour chaque test avec `code` et `testCode`. `code` est l’identifiant fixe du test. Il ne change jamais : stockez-le et renvoyez-le à CE. `testCode` est le code de test national. Il peut changer, et un test enregistré avant ce changement a la même valeur que son `code`. Montrez `testCode` aux personnes.
+
 ### Paramètres de résultat pour un patient
 
 `testCatalog.resultParams` donne les paramètres de résultat de chaque test, avec l'intervalle de référence qui convient à un patient. Envoyez `{ "tests": [{ "system": "...", "code": "..." }], "patientRef": "p1...." }`. Il faut `patients.view` ou `patients.find`, comme pour les opérations patient. Un patient hors de la limite de l'appelant donne `NOT_FOUND`.

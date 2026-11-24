@@ -24,7 +24,7 @@ const OPTIONS: api.TestCatalogOptions = {
   sexes: [{ code: 'female', labels: { en: 'Female', fr: 'Femme', pt: 'Feminino' } }, { code: 'male', labels: { en: 'Male', fr: 'Homme', pt: 'Masculino' } }],
 };
 const HIVVL: api.CatalogTest = {
-  code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR],
+  code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR],
   resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
@@ -84,15 +84,15 @@ describe('TestSheet', () => {
   it('adds a test with its catalog fields, and leaves this lab settings alone when untouched', async () => {
     vi.mocked(api.createCatalogTest).mockResolvedValue({ ...HIVVL, shortName: 'VL', specimenTypes: [BLD] });
     const { onSaved, onClose } = renderSheet();
-    type('Code', 'HIVVL');
+    type('Test code', 'HIVVL');
     type('Name', 'HIV viral load');
     type('Short name', 'VL');
     await pickCategory(/molecular/i);
-    type('LOINC code', '25836-8');
+    type('LOINC', '25836-8');
     fireEvent.click(screen.getByTestId('specimen-BLD'));
     await save();
     expect(api.createCatalogTest).toHaveBeenCalledWith({
-      code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD],
+      testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD],
       resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
@@ -106,7 +106,7 @@ describe('TestSheet', () => {
     vi.mocked(api.setCatalogLabSettings)
       .mockResolvedValue({ ...HIVVL, lab: { enabled: true, specimenTypes: null, localDisplay: 'Viral load' } });
     renderSheet();
-    type('Code', 'HIVVL');
+    type('Test code', 'HIVVL');
     type('Name', 'HIV viral load');
     fireEvent.click(screen.getByRole('switch', { name: 'On at this lab' }));
     type('Local name', 'Viral load');
@@ -122,7 +122,7 @@ describe('TestSheet', () => {
       .mockRejectedValueOnce(new Error('save lab settings failed: 500'))
       .mockResolvedValueOnce({ ...HIVVL, lab: { enabled: true, specimenTypes: null, localDisplay: null } });
     const { onClose } = renderSheet();
-    type('Code', 'HIVVL');
+    type('Test code', 'HIVVL');
     type('Name', 'HIV viral load');
     fireEvent.click(screen.getByRole('switch', { name: 'On at this lab' }));
     await save();
@@ -135,19 +135,62 @@ describe('TestSheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('edits a test without letting its code change', async () => {
+  it('edits a saved test, sending its Test code, with the id in the path', async () => {
     vi.mocked(api.updateCatalogTest).mockResolvedValue({ ...HIVVL, display: 'HIV-1 viral load' });
     renderSheet({ target: { kind: 'edit', test: HIVVL } });
-    expect(screen.queryByRole('textbox', { name: 'Code' })).toBeNull();
-    expect(screen.getByText('HIVVL')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Test code' })).toHaveValue('HIVVL');
     type('Name', 'HIV-1 viral load');
     fireEvent.click(screen.getByRole('switch', { name: 'Active' }));
     await save();
     expect(api.updateCatalogTest).toHaveBeenCalledWith('HIVVL', {
-      display: 'HIV-1 viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR], resultParams: [],
+      testCode: 'HIVVL', display: 'HIV-1 viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR], resultParams: [],
       loinc: '25836-8', active: false, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
+  });
+
+  // Test identity spec, call 4: the Test code can change. The id in the path never does.
+  it("changes a saved test's Test code, keeps its id in the path, and names the new code", async () => {
+    const test = { ...HIVVL, code: 'tst-0123456789abcdef', testCode: 'HIVVL' };
+    vi.mocked(api.updateCatalogTest).mockResolvedValue({ ...test, testCode: 'VL' });
+    renderSheet({ target: { kind: 'edit', test } });
+    expect(screen.getByText('Internal id: tst-0123456789abcdef')).toBeInTheDocument();
+    type('Test code', '  VL ');
+    await save();
+    expect(api.updateCatalogTest).toHaveBeenCalledWith('tst-0123456789abcdef', expect.objectContaining({ testCode: 'VL' }));
+    expect(toast.success).toHaveBeenCalledWith('VL saved.');
+  });
+
+  it('shows no internal id line when the id is the Test code', () => {
+    renderSheet({ target: { kind: 'edit', test: HIVVL } });
+    expect(screen.queryByText(/Internal id/)).toBeNull();
+  });
+
+  it('puts Test code first in Basic information', () => {
+    renderSheet();
+    const labels = [...document.querySelectorAll('label')].map((l) => l.textContent);
+    // LOINC is the row above Basic information.
+    expect(labels.slice(0, 3)).toEqual(['LOINC', 'Test code', 'Name']);
+  });
+
+  it('keeps Save off while the Test code is empty, and says it is required', async () => {
+    renderSheet();
+    type('Name', 'HIV viral load');
+    type('Test code', '   ');
+    expect(screen.getByText('Required. Use the code from your national test list.')).toBeInTheDocument();
+    const trigger = screen.getByTestId('test-sheet-menu');
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(await screen.findByTestId('test-sheet-save')).toHaveAttribute('data-disabled');
+    await act(async () => { fireEvent.click(screen.getByTestId('test-sheet-save')); });
+    expect(api.createCatalogTest).not.toHaveBeenCalled();
+  });
+
+  it('shows the Test code and the id as text at a lab that receives central catalog', () => {
+    renderSheet({ target: { kind: 'edit', test: { ...HIVVL, code: 'tst-0123456789abcdef', testCode: 'HIVVL' } }, ownedHere: false });
+    expect(screen.queryByRole('textbox', { name: 'Test code' })).toBeNull();
+    expect(screen.getByText('HIVVL')).toBeInTheDocument();
+    expect(screen.getByText('Internal id: tst-0123456789abcdef')).toBeInTheDocument();
   });
 
   it('at a lab that receives central catalog, shows central fields as text and saves only this lab settings', async () => {
@@ -196,7 +239,7 @@ describe('TestSheet', () => {
 
   it('types a LOINC code, and says only its format is checked, when LOINC is not loaded here', () => {
     renderSheet();
-    expect(screen.getByRole('textbox', { name: 'LOINC code' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'LOINC' })).toBeInTheDocument();
     expect(screen.getByText('LOINC is not loaded here, so only the format is checked.')).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Search terms' })).toBeNull();
   });
@@ -204,13 +247,13 @@ describe('TestSheet', () => {
   it('searches LOINC when it is loaded here', () => {
     renderSheet({ options: { ...OPTIONS, loinc: { systemId: 'cs-url-LOINC', system: 'http://loinc.org' } } });
     expect(screen.getByRole('combobox', { name: 'Search terms' })).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'LOINC code' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'LOINC' })).toBeNull();
   });
 
   it('shows a server refusal and stays open', async () => {
     vi.mocked(api.createCatalogTest).mockRejectedValue(new Error('add test failed: Test HIVVL is already in the catalog.'));
     const { onClose } = renderSheet();
-    type('Code', 'HIVVL');
+    type('Test code', 'HIVVL');
     type('Name', 'HIV viral load');
     await save();
     expect(toast.error).toHaveBeenCalledWith('add test failed: Test HIVVL is already in the catalog.');
@@ -538,5 +581,76 @@ describe('TestSheet: a range unit from UCUM', () => {
     const grid = box.closest('.grid') as HTMLElement;
     expect(grid.className).toMatch(/(^| )grid-cols-\[auto_minmax\(0,1fr\)\]( |$)/);
     expect(box.closest('.min-w-0')).not.toBeNull();
+  });
+});
+
+// Spec section 2: the sheet reads top to bottom as Corlix's test editor does, LOINC first. LOINC is one
+// row (label, picker, menu) with no title line, so the titled sections start at Basic information.
+describe('TestSheet: the order of its sections', () => {
+  const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+  const OWNED = ['Basic information', 'Specimen types', 'Result parameters', 'Reference ranges', 'This lab'];
+  const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  const basic = () => screen.getByRole('heading', { level: 3, name: 'Basic information' });
+
+  it('puts the LOINC row first on a new test, with no title line of its own', () => {
+    renderSheet();
+    expect(headings()).toEqual(OWNED);
+    const loinc = screen.getByRole('textbox', { name: 'LOINC' });
+    expect(before(loinc, basic())).toBe(true);
+    expect(before(basic(), screen.getByRole('textbox', { name: 'Test code' }))).toBe(true);
+    // The rule between the LOINC row and Basic information still bleeds to the sheet edges.
+    expect(basic().parentElement!.previousElementSibling!.className).toContain('-mx-6');
+  });
+
+  it('puts the LOINC row first on a saved test', () => {
+    renderSheet({ target: { kind: 'edit', test: HIVVL } });
+    expect(headings()).toEqual(OWNED);
+    expect(before(screen.getByRole('textbox', { name: 'LOINC' }), basic())).toBe(true);
+  });
+
+  it('keeps the same order in the read-only view, with the LOINC row first and this lab last', () => {
+    renderSheet({ target: { kind: 'edit', test: HIVVL }, ownedHere: false });
+    expect(headings()).toEqual(['Basic information', 'Specimen types', 'This lab']);
+    const label = screen.getByText('LOINC', { selector: 'label' });
+    expect(label.nextElementSibling!.textContent).toBe('25836-8');
+    expect(before(label, basic())).toBe(true);
+  });
+});
+
+describe('TestSheet: the Reference ranges section', () => {
+  const WITH_UNIT: api.TestCatalogOptions = {
+    ...OPTIONS,
+    resultParams: [
+      { system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin', units: 'g/dL' },
+      { system: 'urn:openldr:default_result', code: 'GRP', display: 'Blood group' },
+    ],
+  };
+  const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  const rangesHeading = () => screen.getByRole('heading', { level: 3, name: 'Reference ranges' });
+
+  it('shows a ticked numeric field under Reference ranges, and Add range there starts with its unit', async () => {
+    const test: api.CatalogTest = { ...HIVVL, resultParams: [
+      { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [] },
+      { system: 'urn:openldr:default_result', code: 'GRP', resultType: 'coded', valueSetUrl: null, bands: [] },
+    ] };
+    renderSheet({ target: { kind: 'edit', test }, options: WITH_UNIT });
+    // The field list stays in Result parameters, above the ranges.
+    expect(before(screen.getByTestId('param-HGB'), rangesHeading())).toBe(true);
+    const sub = screen.getByTestId('ranges-HGB');
+    expect(before(rangesHeading(), sub)).toBe(true);
+    expect(sub.textContent).toContain('Haemoglobin');
+    // A coded field has no ranges, so no sub-heading.
+    expect(screen.queryByTestId('ranges-GRP')).toBeNull();
+    expect(before(rangesHeading(), screen.getByTestId('param-menu-HGB'))).toBe(true);
+    await addBand('HGB');
+    const band = screen.getByTestId('band-HGB-1');
+    expect(before(sub, band)).toBe(true);
+    expect(screen.getByRole('textbox', { name: /unit for HGB band 1/i })).toHaveValue('g/dL');
+  });
+
+  it('says to tick a numeric field when no ticked field can have ranges', () => {
+    renderSheet({ target: { kind: 'edit', test: HIVVL }, options: WITH_UNIT });
+    expect(screen.getByText('Tick a numeric result field to give it reference ranges.')).toBeInTheDocument();
+    expect(screen.queryByTestId('ranges-HGB')).toBeNull();
   });
 });

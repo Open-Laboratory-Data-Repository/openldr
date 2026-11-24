@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   createAppContext: vi.fn(),
-  get: vi.fn(),
+  resolve: vi.fn(),
   setEnabled: vi.fn(),
   setActive: vi.fn(),
   close: vi.fn(),
@@ -28,7 +28,7 @@ import { TestCatalogError } from '@openldr/bootstrap';
 import { runTestCatalogChange } from './test-catalog';
 
 const TEST = {
-  code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [], loinc: null,
+  code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [], loinc: null,
   active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
@@ -41,10 +41,10 @@ describe('openldr test-catalog enable | disable | retire | restore', () => {
     err = [];
     vi.spyOn(process.stdout, 'write').mockImplementation((s) => { out.push(String(s)); return true; });
     vi.spyOn(process.stderr, 'write').mockImplementation((s) => { err.push(String(s)); return true; });
-    mocks.get.mockResolvedValue(TEST);
+    mocks.resolve.mockResolvedValue(TEST);
     mocks.close.mockResolvedValue(undefined);
     mocks.createAppContext.mockResolvedValue({
-      testCatalog: { get: mocks.get, setEnabled: mocks.setEnabled, setActive: mocks.setActive },
+      testCatalog: { resolve: mocks.resolve, setEnabled: mocks.setEnabled, setActive: mocks.setActive },
       close: mocks.close,
     });
   });
@@ -84,6 +84,25 @@ describe('openldr test-catalog enable | disable | retire | restore', () => {
     }
     expect(mocks.setEnabled).toHaveBeenCalledWith('HIVVL', false);
     expect(mocks.setActive.mock.calls).toEqual([['HIVVL', false], ['HIVVL', true]]);
+  });
+
+  it('finds the test by Test code or id, and changes it by its id', async () => {
+    const test = { ...TEST, code: 'tst-0123456789abcdef', testCode: 'HB' };
+    mocks.resolve.mockResolvedValue(test);
+    mocks.setEnabled.mockResolvedValue({ ...test, lab: { ...test.lab, enabled: true } });
+    expect(await runTestCatalogChange('enable', 'HB', { json: false })).toBe(0);
+    expect(mocks.resolve).toHaveBeenCalledWith('HB');
+    expect(mocks.setEnabled).toHaveBeenCalledWith('tst-0123456789abcdef', true);
+    expect(out.join('')).toBe('HB is now on at this lab.\n');
+    expect(mocks.recordAuditEvent.mock.calls[0][2]).toMatchObject({ entityId: 'tst-0123456789abcdef' });
+  });
+
+  it('names a test it cannot find and changes nothing', async () => {
+    mocks.resolve.mockResolvedValue(null);
+    expect(await runTestCatalogChange('retire', 'NOPE', { json: false })).toBe(1);
+    expect(err.join('')).toBe('test-catalog retire failed: no such test: NOPE\n');
+    expect(mocks.setActive).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('prints the changed test as JSON with --json', async () => {
