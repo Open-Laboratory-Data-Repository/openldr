@@ -161,6 +161,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   const [addingField, setAddingField] = useState(false);
   // The LOINC tree, opened from the LOINC row's menu (spec call 7).
   const [browsing, setBrowsing] = useState(false);
+  // The Browse item is gone once the menu closes, so focus comes back to the LOINC row's menu button.
+  const loincMenuButton = useRef<HTMLButtonElement>(null);
   // The menu item that opens Add field is gone once the menu closes, so focus comes back to the menu's button.
   const paramsMenuButton = useRef<HTMLButtonElement>(null);
   // What LOINC says about the test's code. Null when LOINC or its ontology is not loaded, and then the
@@ -419,6 +421,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
+                          ref={loincMenuButton}
                           variant="ghost" size="icon" className="h-9 w-9 shrink-0"
                           data-testid="loinc-menu" aria-label={t('testCatalog.sheet.loincActions')}
                         >
@@ -884,6 +887,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
             ontologyType="loinc"
             mode="picker"
             title={t('testCatalog.sheet.browseLoinc')}
+            returnFocusTo={loincMenuButton}
             onPick={(node) => { void pickLoinc(node.code); }}
           />
         ) : null}

@@ -384,6 +384,14 @@ describe('TestSheet: Browse LOINC and the search line', () => {
     expect(screen.queryByTestId('browser-pick-loinc-id')).toBeNull();
   });
 
+  it('gives focus back to the LOINC menu button after a Browse pick', async () => {
+    hintsFor({ '2093-3': CHOL });
+    renderNew();
+    await choose('loinc-menu', 'browse-loinc');
+    await act(async () => { fireEvent.click(await screen.findByTestId('browser-pick-loinc-id')); });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('loinc-menu')));
+  });
+
   it('has no LOINC row menu when LOINC is not loaded here', () => {
     renderNew({ ...OPTIONS, loinc: null });
     expect(screen.queryByTestId('loinc-menu')).toBeNull();
