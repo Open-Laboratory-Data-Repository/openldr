@@ -163,7 +163,8 @@ export function BrowseTestsSheet({ onPick, onClose, copy }: {
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(r); } }}
                     className={cn(r.enabled ? 'cursor-pointer' : 'text-muted-foreground hover:bg-transparent')}
                   >
-                    <TableCell className="w-24 align-top font-mono text-xs">{r.code}</TableCell>
+                    {/* The Test code people read. The picked coding keeps the id (test identity spec, call 8). */}
+                    <TableCell className="w-24 align-top font-mono text-xs">{r.testCode}</TableCell>
                     <TableCell className="whitespace-normal break-words align-top">
                       <div>{r.display}</div>
                       {!r.enabled && <div className="text-xs">{t.notOffered}</div>}

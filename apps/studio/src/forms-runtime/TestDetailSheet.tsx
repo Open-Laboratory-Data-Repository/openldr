@@ -39,8 +39,10 @@ const sameBand = (a: CatalogResultBand, b: { name?: string | null } & Omit<Catal
   && a.sex === b.sex && a.ageLow === b.ageLow && a.ageHigh === b.ageHigh && (a.ageUnit ?? 'y') === (b.ageUnit ?? 'y')
   && (a.criticalLow ?? null) === (b.criticalLow ?? null) && (a.criticalHigh ?? null) === (b.criticalHigh ?? null);
 
-export function TestDetailSheet({ test, params, detail, sexes, copy, onChange, onClose }: {
+export function TestDetailSheet({ test, testCode, params, detail, sexes, copy, onChange, onClose }: {
   test: CodingAnswer;
+  /** The Test code to show. The coding's own code is the id the order keys on. */
+  testCode?: string;
   params: CatalogResultParam[];
   detail: TestDetail;
   /** The sex choices the server sent, for labelling unnamed ranges. */
@@ -107,8 +109,8 @@ export function TestDetailSheet({ test, params, detail, sexes, copy, onChange, o
       <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-2xl">
         <SheetHeader className="p-6 pb-4">
           <SheetTitle className="flex items-center gap-2">
-            <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">{test.code}</span>
-            <span>{test.display ?? test.code}</span>
+            <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">{testCode ?? test.code}</span>
+            <span>{test.display ?? testCode ?? test.code}</span>
           </SheetTitle>
         </SheetHeader>
 

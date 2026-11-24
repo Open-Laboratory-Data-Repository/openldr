@@ -2731,7 +2731,7 @@ export const setCatalogTestActive = (code: string, active: boolean): Promise<Cat
 // ── Test catalog import and export (test catalog S3) ──────────────────────────
 // Mirrors of @openldr/bootstrap's test-catalog-import.ts and test-catalog.ts import types.
 export type CatalogImportField =
-  | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
+  | 'id' | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
   | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification';
 /** Which file column feeds each field, by header text. A field left out is not changed on existing tests. */
 export type CatalogColumnMap = Partial<Record<CatalogImportField, string>>;
@@ -2791,10 +2791,12 @@ export type MapLevel = 'test' | 'result';
 export type ObservedStatus = 'unmapped' | 'mapped' | 'ambiguous';
 export interface ObservedTestCode {
   system: string; code: string; description: string | null; requests: number; lastSeen: string | null;
-  status: ObservedStatus; catalog: { code: string; name: string | null; loinc: string | null } | null; centralManaged: boolean;
+  /** `catalog.code` is the id a mapping stores. `testCode` is a catalog test's Test code; a result field has none. */
+  status: ObservedStatus; catalog: { code: string; testCode?: string; name: string | null; loinc: string | null } | null; centralManaged: boolean;
 }
 export interface ObservedTestCodesResult { rows: ObservedTestCode[]; total: number; warehouse: { stale: boolean; error: string | null } }
-export interface MappingTarget { code: string; name: string | null; loinc: string | null; retired: boolean }
+/** `code` is the id a mapping stores. `testCode` is a catalog test's Test code; a result field has none. */
+export interface MappingTarget { code: string; testCode?: string; name: string | null; loinc: string | null; retired: boolean }
 export interface LevelPublishSummary {
   mapped: number;
   ambiguous: Array<{ system: string; code: string; catalogCodes: string[] }>;
@@ -2975,7 +2977,8 @@ export interface CatalogResultParam {
   /** For each band, by index. */
   fits: CatalogBandFit[];
 }
-export interface CatalogTestParams { test: { system: string; code: string }; params: CatalogResultParam[] }
+/** `test.code` is the id the order keys on. `testCode` is the Test code people read, absent for an id with no test. */
+export interface CatalogTestParams { test: { system: string; code: string; testCode?: string }; params: CatalogResultParam[] }
 /** What a test STORES for one parameter. The route's CatalogResultParam adds the unit, display and
  *  matched band, which are read from the dictionary and never stored on the test. */
 export interface CatalogTestResultParam {
@@ -2999,7 +3002,8 @@ export const catalogResultParams = (
   authFetch('/api/test-catalog/result-params', jbody({ tests, ...(patient ? { patient } : {}) }, 'POST'))
     .then((r) => okJson<CatalogResultParamsAnswer>(r, 'read result parameters'));
 
-export interface BrowseTest { code: string; display: string; category: string | null; enabled: boolean }
+/** `code` is the id an order stores. `testCode` is the Test code people read. */
+export interface BrowseTest { code: string; testCode: string; display: string; category: string | null; enabled: boolean }
 /** `system` is the catalog's coding system, sent by the server so the studio never names it. */
 export interface BrowseTestsAnswer { rows: BrowseTest[]; total: number; system: string }
 

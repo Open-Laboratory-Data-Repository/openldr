@@ -133,7 +133,7 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `forms` | List form definitions; extract answers from a QuestionnaireResponse; set which roles may open and submit a form. |
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see **Facilities** in the studio's Docs). |
-| `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog, `set` a test's turnaround times and review, `loinc-hints` for a LOINC code, and `result-fields` to link, add or make result fields from LOINC. |
+| `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog, `set` a test's Test code (`--test-code`), turnaround times and review, `loinc-hints` for a LOINC code, and `result-fields` to link, add or make result fields from LOINC. |
 | `lab` | `requisitions rebuild --force` rebuilds the index that finds an order by its requisition number. Needs **Danger zone**. |
 | `query` | Custom queries: `export` them to a JSON file, `import` them from one (`--force` replaces existing names and needs **Manage saved queries**; without it, an import adds new queries with no group). |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
@@ -421,6 +421,8 @@ A category answer is `"kind": "existing"` with a `code`, or `"kind": "new"` with
 
 ![Use the catalog command for your own codes.](guide:operator-cli-en-14)
 
+The `id` column holds each test's internal id, which never changes. The `code` column holds its Test code, which can. An import matches a row on `id` when the file has one, else on the Test code. An earlier Test code stays reserved for its test.
+
 Map lab test codes to catalog tests. See **Mapping lab test codes** in the in-app Test catalog guide. The system is a URN, as shown in the System column of the Observed tab. For DISA data it is `urn:openldr:disa`:
 
 ### 15. Use the catalog command for your own codes
@@ -431,7 +433,7 @@ Map lab test codes to catalog tests. See **Mapping lab test codes** in the in-ap
 
 ![Use the catalog command for your own codes.](guide:operator-cli-en-15)
 
-- `map list` lists the lab test codes in the warehouse with their catalog mapping. `--status` takes `unmapped`, `mapped`, `ambiguous` or `all`. `--search`, `--limit` (1 to 200, 25 by default) and `--offset` narrow and page the list.
+- `map list` lists the lab test codes in the warehouse with their catalog mapping. A catalog test shows by its Test code. `--status` takes `unmapped`, `mapped`, `ambiguous` or `all`. `--search`, `--limit` (1 to 200, 25 by default) and `--offset` narrow and page the list.
 - `map set <system> <code> <catalog-code>` maps one code to a catalog test.
 - `map clear <system> <code>` removes a mapping. It refuses without `--force`.
 - `map export` writes every observed code and its mapping as CSV, in the layout `map import` reads. `--out` names a file. Without it the CSV goes to standard output.

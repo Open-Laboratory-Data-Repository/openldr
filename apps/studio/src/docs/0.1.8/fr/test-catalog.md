@@ -34,13 +34,15 @@ Sélectionnez **Add test**. Le panneau du test s'ouvre.
 
 ![Choisissez Add test pour saisir un test manuellement.](test-catalog-guide-add-menu.png)
 
-Le panneau se lit de haut en bas dans cet ordre : **LOINC**, **Informations de base**, **Types de prélèvement**, **Paramètres de résultat**, **Valeurs de référence** et **Ce laboratoire**. Informations de base contient le code, le nom, le nom court, la catégorie, les deux délais de rendu et la vérification. Lorsque LOINC est chargé, choisissez d'abord le code LOINC. Il remplit les champs vides en dessous. [Remplir un examen depuis LOINC](#remplir-un-examen-depuis-loinc) explique ce qu'il remplit. Les étapes ci-dessous remplissent les mêmes champs à la main.
+Le panneau se lit de haut en bas dans cet ordre : **LOINC**, **Informations de base**, **Types de prélèvement**, **Paramètres de résultat**, **Valeurs de référence** et **Ce laboratoire**. Informations de base contient le code du test, le nom, le nom court, la catégorie, les deux délais de rendu et la vérification. Lorsque LOINC est chargé, choisissez d'abord le code LOINC. Il remplit les champs vides en dessous. [Remplir un examen depuis LOINC](#remplir-un-examen-depuis-loinc) explique ce qu'il remplit. Les étapes ci-dessous remplissent les mêmes champs à la main.
 
-### 4. Saisir le code
+### 4. Saisir le code du test
 
-Saisissez le code stable de votre catalogue. L'exemple fictif utilise `EXAMPLE-ALPHA`. Laissez vide uniquement si le code LOINC doit devenir le code. Un code enregistré ne peut plus être changé.
+Saisissez le code de votre liste nationale des tests dans **Code du test**. Il est obligatoire. Enregistrer reste inactif tant qu'il est vide. L'exemple fictif utilise `EXAMPLE-ALPHA`.
 
-![Utilisez le code stable de votre catalogue. L'exemple utilise EXAMPLE-ALPHA.](test-catalog-guide-test-code.png)
+Le code du test peut changer plus tard. Chaque test a aussi un identifiant interne qui ne change jamais. LOINC est un champ à part. Il relie le test à la norme internationale, et sa recherche aide à remplir un nouveau test.
+
+![Saisissez le code du test de votre liste nationale. L'exemple utilise EXAMPLE-ALPHA.](test-catalog-guide-test-code.png)
 
 ### 5. Saisir le nom
 
@@ -114,11 +116,11 @@ Utilisez les réglages locaux si ce laboratoire affiche un autre nom ou accepte 
 
 ### 1. Choisir Edit
 
-Ouvrez les points de la ligne et sélectionnez **Edit**. Le code enregistré apparaît sans champ modifiable.
+Ouvrez les points de la ligne et sélectionnez **Edit**. Vous pouvez aussi changer le code du test ici. [Changer le code d'un test](#changer-le-code-d-un-test) l'explique.
 
 ![Edit ouvre le catalogue et les réglages locaux.](test-catalog-guide-edit-menu.png)
 
-![Un test existant garde son code. Corrigez son nom et les autres champs modifiables.](test-catalog-guide-fixed-code.png)
+![Un test enregistré garde son identifiant interne. Son code du test et les autres champs peuvent être corrigés.](test-catalog-guide-fixed-code.png)
 
 ### 2. Vérifier la disponibilité locale
 
@@ -146,6 +148,19 @@ Ouvrez les points du panneau et sélectionnez **Save**.
 
 **Résultat attendu :** les réglages du laboratoire sont enregistrés sans changer le code du test.
 
+## Changer le code d'un test
+
+Faites-le quand votre liste nationale donne un nouveau code à un test. Le test garde son identifiant interne, donc ses demandes, ses réglages locaux et ses associations restent avec lui.
+
+1. Ouvrez les points de la ligne et sélectionnez **Edit**.
+2. Dans **Informations de base**, remplacez la valeur de **Code du test**. L'exemple utilise `EXAMPLE-ALPHA-2`.
+3. Lisez la ligne en dessous. **Identifiant interne** donne l'identifiant, qui ne change pas.
+4. Ouvrez les points du panneau et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** le tableau montre le nouveau code du test. L'ancien code reste réservé à ce test. Les demandes arrivées avec lui comptent toujours pour ce test, et aucun autre test ne peut le prendre.
+
+Depuis la CLI, lancez `openldr test-catalog set EXAMPLE-ALPHA --test-code EXAMPLE-ALPHA-2`. La commande trouve un test par son code du test ou par son identifiant interne.
+
 ## Trouver et exporter des tests
 
 Recherchez avant de créer un autre test. Vous pouvez aussi exporter les tests actifs du catalogue pour examen ou importation ultérieure.
@@ -170,11 +185,13 @@ Effacez la recherche si elle est inutile. Ouvrez les points de Tests et sélecti
 
 **Résultat attendu :** le navigateur télécharge un CSV avec les colonnes comprises par l'assistant d'importation. L'export contient les tests actifs du catalogue, pas seulement une ligne visible.
 
+La colonne `id` contient l'identifiant interne de chaque test. La colonne `code` contient son code du test. Gardez la colonne `id` quand vous modifiez le fichier, pour qu'une importation puisse changer un code du test et retrouver quand même le test.
+
 Le fichier a trois colonnes pour le délai et la vérification : `expected_tat_hours`, `critical_tat_hours` et `requires_verification`. La vérification s'écrit `yes` ou `no`. Dans l'assistant d'importation, ces colonnes sont **Délai attendu (heures)**, **Délai critique (heures)** et **Vérification requise (yes/no)**. Une importation lit yes, no, true ou false. Une cellule de délai qui n'est pas un nombre fait refuser sa ligne.
 
 ## Choisir le fichier de tests et associer ses colonnes
 
-Importez une liste CSV ou Excel .xlsx. Les tests correspondent par code. L'importation ne retire pas les tests absents du fichier et ne change pas les réglages locaux.
+Importez une liste CSV ou Excel .xlsx. Une ligne correspond à un test par son identifiant interne quand le fichier a une colonne **Identifiant interne**, sinon par son code du test. Une ligne avec un nouveau code du test et sans identifiant ajoute un test. L'importation ne retire pas les tests absents du fichier et ne change pas les réglages locaux.
 
 ### 1. Choisir Import
 
@@ -601,7 +618,7 @@ Sous Windows, utilisez `.\openldr.ps1` au lieu de `./openldr`. Une installation 
 
 Un catalogue reçu du central a des définitions partagées en lecture seule. La disponibilité, les choix de prélèvements et les noms locaux restent les réglages de ce laboratoire.
 
-L'importation accepte au maximum 5 000 lignes et 5 Mo. Excel lit la première feuille. Les tests correspondent par code. Un fichier ne retire pas les tests absents et ne change pas les réglages locaux.
+L'importation accepte au maximum 5 000 lignes et 5 Mo. Excel lit la première feuille. Les tests correspondent par identifiant interne, sinon par code du test. Un fichier ne retire pas les tests absents et ne change pas les réglages locaux.
 
 Retirer un test le masque de la liste active par défaut. Il peut être restauré. Les tests du catalogue ne peuvent pas être supprimés. Utilisez le filtre Status pour trouver les tests retirés.
 
@@ -611,7 +628,9 @@ Retirer un test le masque de la liste active par défaut. Il peut être restaur�
 
 **Un nouveau test manque dans Lab order.** Vérifiez On at this lab. Créer ou importer un test ne l'active pas automatiquement.
 
-**L'importation refuse des lignes.** Lisez chaque raison dans Review. Revenez à Values pour les catégories ou prélèvements sans choix. Vérifiez Name et le code ou LOINC fournissant l'identité.
+**L'importation refuse des lignes.** Lisez chaque raison dans Review. Revenez à Values pour les catégories ou prélèvements sans choix. Vérifiez Name et le code du test. Chaque ligne a besoin d'un code du test.
+
+**Enregistrer dit qu'un code du test est déjà utilisé.** Un autre test a ce code, ou l'a eu avant. Un ancien code du test reste réservé à son test, pour que les demandes qui le portent comptent toujours. Choisissez un autre code.
 
 **Aucun paramètre de résultat n'apparaît.** Cette installation n'a aucun champ utilisable dans son dictionnaire. Chargez d'abord celui de votre système. Le dictionnaire d'exercice n'est qu'un exemple.
 

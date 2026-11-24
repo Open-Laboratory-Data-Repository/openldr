@@ -442,6 +442,9 @@ describe('TestSheet: Browse LOINC and the search line', () => {
 // Spec call 2, plan calls 2 to 4.
 describe("TestSheet: LOINC's result field goes into the unsaved test", () => {
   async function saveNew(): Promise<void> {
+    // A new test needs its Test code before Save is on.
+    const code = screen.getByRole('textbox', { name: 'Test code' }) as HTMLInputElement;
+    if (code.value === '') fireEvent.change(code, { target: { value: 'T1' } });
     await choose('test-sheet-menu', 'test-sheet-save');
   }
 
@@ -520,6 +523,20 @@ describe("TestSheet: LOINC's result field goes into the unsaved test", () => {
     await saveNew();
     expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
     expect(vi.mocked(api.createCatalogTest).mock.calls[0][0].resultParams).toEqual([param('CHOL')]);
+  });
+
+  // Plan A ledger N1: the server reused CHOL for 2093-3, and the test already holds CHOL. Save sends
+  // CHOL once, the one already on the test.
+  it('sends a param once when the made field comes back under a code the test already holds', async () => {
+    const options = { ...OPTIONS, resultParams: [...OPTIONS.resultParams, { system: RESULT, code: 'CHOL', display: 'Cholesterol', units: 'mg/dL' }] };
+    const band = { name: null, low: 1, high: 5, unit: 'mmol/L', sex: null, ageLow: null, ageHigh: null };
+    hintsFor({ '2093-3': CHOL });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('CHOL')]));
+    renderSheet(NEW_TEST({ loinc: '2093-3', resultParams: [param('CHOL', { bands: [band] })] }), options);
+    await waitFor(() => expect(api.getLoincHints).toHaveBeenCalled());
+    await choose('result-params-menu', 'use-loinc-field');
+    expect(checked('param-2093-3')).toBe(true);
+    expect(await savedParams()).toEqual([param('CHOL', { bands: [band] })]);
   });
 
   // Review focus 1.

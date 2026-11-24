@@ -44,7 +44,8 @@ const LOINC_TEST_CODE = /^\d{1,7}-\d$/;
 const NO_CATEGORY = '__none__';
 
 interface Draft {
-  code: string;
+  /** The national code people use (test identity spec, call 3). It can change; the id never does. */
+  testCode: string;
   display: string;
   shortName: string;
   category: string;
@@ -114,7 +115,7 @@ function loincDetail(term: Term): string | null {
 
 function draftFrom(test: CatalogTest | null): Draft {
   return {
-    code: test?.code ?? '',
+    testCode: test?.testCode ?? '',
     display: test?.display ?? '',
     shortName: test?.shortName ?? '',
     category: test?.category ?? '',
@@ -418,6 +419,12 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const specimenName = (s: CatalogSpecimenCoding) => options.specimenTypes.find((o) => sameCoding(o, s))?.display ?? s.code;
   const labTakes = (s: CatalogSpecimenCoding) => draft.labSpecimens === null || draft.labSpecimens.some((k) => sameCoding(k, s));
+  /** The internal id under the Test code, shown only when the two differ. A new test has no id yet. */
+  const idLine = (testCode: string) => (saved && saved.code !== testCode ? (
+    <span data-testid="test-internal-id" className="break-all font-mono text-xs text-muted-foreground">
+      {t('testCatalog.sheet.internalId', { id: saved.code })}
+    </span>
+  ) : null);
   const text = (value: string | null | undefined) => <div className="text-sm">{value || t('testCatalog.none')}</div>;
   const hours = (value: number | null | undefined) => text(value == null ? null : t('testCatalog.sheet.hours', { count: value }));
   /** A section's title with its edge-to-edge rule above it, and an optional ⋯ menu at its right. The
@@ -467,7 +474,11 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
         // A param put on the draft before the install had any field holds no system. If the options were
         // read again since (after an Add field), the field is known now: take its system from there.
         resultParams = resultParams.map((p) => (p.system ? p : { ...p, system: knownSystem(p.code) ?? p.system }));
+        // A made field can come back under a code the test already holds (CHOL for 2093-3). Keep the
+        // first, the one already on the test with its type and ranges (plan A ledger N1).
+        resultParams = resultParams.filter((p, i, all) => all.findIndex((q) => q.code === p.code) === i);
         const input: CatalogTestInput = {
+          testCode: draft.testCode.trim(),
           display: draft.display,
           shortName: draft.shortName.trim() || null,
           category: draft.category || null,
@@ -479,9 +490,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
           criticalTatHours: draft.criticalTatHours,
           requiresVerification: draft.requiresVerification,
         };
-        test = test
-          ? await updateCatalogTest(test.code, input)
-          : await createCatalogTest({ ...input, testCode: draft.code.trim() || null });
+        // The path takes the id. A changed Test code travels in the body (spec call 4).
+        test = test ? await updateCatalogTest(test.code, input) : await createCatalogTest(input);
         setSaved(test);
         if (made.length > 0) {
           set({ resultParams });
@@ -496,7 +506,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
       if (!test) return;
       const lab = labInput(draft, test.specimenTypes);
       if (!sameLab(lab, test.lab)) test = await setCatalogLabSettings(test.code, lab);
-      toast.success(t('testCatalog.sheet.saved', { code: test.code }));
+      toast.success(t('testCatalog.sheet.saved', { code: test.testCode }));
       onSaved();
       onClose();
     } catch (e) {
@@ -532,7 +542,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
                   data-testid="test-sheet-save"
-                  disabled={busy || (ownedHere && !draft.display.trim())}
+                  disabled={busy || (ownedHere && (!draft.display.trim() || !draft.testCode.trim()))}
                   onSelect={() => void save()}
                 >
                   {t('common.save')}
@@ -596,18 +606,26 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
             {/* Plan B puts Additional codings here, between the LOINC code and Basic information (spec call 11). */}
 
             {section(t('testCatalog.sheet.sectionBasic'))}
-            {ownedHere && isNew ? (
+            {/* Test identity spec, call 8: the Test code is the first field, editable on a saved test
+                too. The internal id sits under it, read-only, once it differs from the Test code. */}
+            {ownedHere ? (
               <>
-                <Label htmlFor="test-code" className="whitespace-nowrap">{t('testCatalog.sheet.code')}</Label>
-                <div className="flex flex-col gap-1">
-                  <Input id="test-code" value={draft.code} onChange={(e) => set({ code: e.target.value })} />
-                  <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.codeHint')}</span>
+                <Label htmlFor="test-code" className="whitespace-nowrap">{t('testCatalog.sheet.testCode')}</Label>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <Input id="test-code" required value={draft.testCode} onChange={(e) => set({ testCode: e.target.value })} />
+                  {draft.testCode.trim() === '' ? (
+                    <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.testCodeRequired')}</span>
+                  ) : null}
+                  {idLine(draft.testCode.trim())}
                 </div>
               </>
             ) : (
               <>
-                <Label className="whitespace-nowrap">{t('testCatalog.sheet.code')}</Label>
-                <div className="font-mono text-xs">{saved?.code}</div>
+                <Label className="whitespace-nowrap">{t('testCatalog.sheet.testCode')}</Label>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="break-all font-mono text-xs">{saved?.testCode}</div>
+                  {idLine(saved?.testCode ?? '')}
+                </div>
               </>
             )}
 

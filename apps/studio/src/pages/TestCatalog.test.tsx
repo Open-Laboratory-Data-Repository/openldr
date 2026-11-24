@@ -137,6 +137,22 @@ describe('Test catalog page', () => {
     await waitFor(() => expect(api.listTestCatalog).toHaveBeenLastCalledWith({ q: undefined, limit: 25, offset: 25 }));
   });
 
+  // Test identity spec, call 8: the table shows the Test code. The id keys the row and its actions.
+  it('shows the Test code under a Test code header, and acts on the id', async () => {
+    const renamed = { ...CD4, code: 'tst-0123456789abcdef', testCode: 'CD4' };
+    vi.mocked(api.listTestCatalog).mockResolvedValue({ rows: [renamed], total: 1, ownedHere: true });
+    vi.mocked(api.setCatalogTestEnabled).mockResolvedValue({ ...renamed, lab: { ...renamed.lab, enabled: true } });
+    renderPage();
+    const row = await screen.findByTestId('test-row-tst-0123456789abcdef');
+    expect(screen.getByRole('columnheader', { name: 'Test code' })).toBeInTheDocument();
+    expect(within(row).getByText('CD4')).toBeInTheDocument();
+    expect(within(row).queryByText('tst-0123456789abcdef')).toBeNull();
+    openMenu('test-actions-tst-0123456789abcdef');
+    fireEvent.click(await screen.findByTestId('test-switch-tst-0123456789abcdef'));
+    await waitFor(() => expect(api.setCatalogTestEnabled).toHaveBeenCalledWith('tst-0123456789abcdef', true));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('CD4 is on at this lab.'));
+  });
+
   it('switches a test on from the row menu, then reloads', async () => {
     vi.mocked(api.setCatalogTestEnabled).mockResolvedValue({ ...CD4, lab: { ...CD4.lab, enabled: true } });
     renderPage();

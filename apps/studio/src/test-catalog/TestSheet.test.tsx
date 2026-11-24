@@ -84,7 +84,7 @@ describe('TestSheet', () => {
   it('adds a test with its catalog fields, and leaves this lab settings alone when untouched', async () => {
     vi.mocked(api.createCatalogTest).mockResolvedValue({ ...HIVVL, shortName: 'VL', specimenTypes: [BLD] });
     const { onSaved, onClose } = renderSheet();
-    type('Code', 'HIVVL');
+    type('Test code', 'HIVVL');
     type('Name', 'HIV viral load');
     type('Short name', 'VL');
     await pickCategory(/molecular/i);
@@ -106,7 +106,7 @@ describe('TestSheet', () => {
     vi.mocked(api.setCatalogLabSettings)
       .mockResolvedValue({ ...HIVVL, lab: { enabled: true, specimenTypes: null, localDisplay: 'Viral load' } });
     renderSheet();
-    type('Code', 'HIVVL');
+    type('Test code', 'HIVVL');
     type('Name', 'HIV viral load');
     fireEvent.click(screen.getByRole('switch', { name: 'On at this lab' }));
     type('Local name', 'Viral load');
@@ -122,7 +122,7 @@ describe('TestSheet', () => {
       .mockRejectedValueOnce(new Error('save lab settings failed: 500'))
       .mockResolvedValueOnce({ ...HIVVL, lab: { enabled: true, specimenTypes: null, localDisplay: null } });
     const { onClose } = renderSheet();
-    type('Code', 'HIVVL');
+    type('Test code', 'HIVVL');
     type('Name', 'HIV viral load');
     fireEvent.click(screen.getByRole('switch', { name: 'On at this lab' }));
     await save();
@@ -135,19 +135,62 @@ describe('TestSheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('edits a test without letting its code change', async () => {
+  it('edits a saved test, sending its Test code, with the id in the path', async () => {
     vi.mocked(api.updateCatalogTest).mockResolvedValue({ ...HIVVL, display: 'HIV-1 viral load' });
     renderSheet({ target: { kind: 'edit', test: HIVVL } });
-    expect(screen.queryByRole('textbox', { name: 'Code' })).toBeNull();
-    expect(screen.getByText('HIVVL')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Test code' })).toHaveValue('HIVVL');
     type('Name', 'HIV-1 viral load');
     fireEvent.click(screen.getByRole('switch', { name: 'Active' }));
     await save();
     expect(api.updateCatalogTest).toHaveBeenCalledWith('HIVVL', {
-      display: 'HIV-1 viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR], resultParams: [],
+      testCode: 'HIVVL', display: 'HIV-1 viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR], resultParams: [],
       loinc: '25836-8', active: false, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
+  });
+
+  // Test identity spec, call 4: the Test code can change. The id in the path never does.
+  it("changes a saved test's Test code, keeps its id in the path, and names the new code", async () => {
+    const test = { ...HIVVL, code: 'tst-0123456789abcdef', testCode: 'HIVVL' };
+    vi.mocked(api.updateCatalogTest).mockResolvedValue({ ...test, testCode: 'VL' });
+    renderSheet({ target: { kind: 'edit', test } });
+    expect(screen.getByText('Internal id: tst-0123456789abcdef')).toBeInTheDocument();
+    type('Test code', '  VL ');
+    await save();
+    expect(api.updateCatalogTest).toHaveBeenCalledWith('tst-0123456789abcdef', expect.objectContaining({ testCode: 'VL' }));
+    expect(toast.success).toHaveBeenCalledWith('VL saved.');
+  });
+
+  it('shows no internal id line when the id is the Test code', () => {
+    renderSheet({ target: { kind: 'edit', test: HIVVL } });
+    expect(screen.queryByText(/Internal id/)).toBeNull();
+  });
+
+  it('puts Test code first in Basic information', () => {
+    renderSheet();
+    const labels = [...document.querySelectorAll('label')].map((l) => l.textContent);
+    // LOINC is the row above Basic information.
+    expect(labels.slice(0, 3)).toEqual(['LOINC', 'Test code', 'Name']);
+  });
+
+  it('keeps Save off while the Test code is empty, and says it is required', async () => {
+    renderSheet();
+    type('Name', 'HIV viral load');
+    type('Test code', '   ');
+    expect(screen.getByText('Required. Use the code from your national test list.')).toBeInTheDocument();
+    const trigger = screen.getByTestId('test-sheet-menu');
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(await screen.findByTestId('test-sheet-save')).toHaveAttribute('data-disabled');
+    await act(async () => { fireEvent.click(screen.getByTestId('test-sheet-save')); });
+    expect(api.createCatalogTest).not.toHaveBeenCalled();
+  });
+
+  it('shows the Test code and the id as text at a lab that receives central catalog', () => {
+    renderSheet({ target: { kind: 'edit', test: { ...HIVVL, code: 'tst-0123456789abcdef', testCode: 'HIVVL' } }, ownedHere: false });
+    expect(screen.queryByRole('textbox', { name: 'Test code' })).toBeNull();
+    expect(screen.getByText('HIVVL')).toBeInTheDocument();
+    expect(screen.getByText('Internal id: tst-0123456789abcdef')).toBeInTheDocument();
   });
 
   it('at a lab that receives central catalog, shows central fields as text and saves only this lab settings', async () => {
@@ -210,7 +253,7 @@ describe('TestSheet', () => {
   it('shows a server refusal and stays open', async () => {
     vi.mocked(api.createCatalogTest).mockRejectedValue(new Error('add test failed: Test HIVVL is already in the catalog.'));
     const { onClose } = renderSheet();
-    type('Code', 'HIVVL');
+    type('Test code', 'HIVVL');
     type('Name', 'HIV viral load');
     await save();
     expect(toast.error).toHaveBeenCalledWith('add test failed: Test HIVVL is already in the catalog.');
@@ -554,7 +597,7 @@ describe('TestSheet: the order of its sections', () => {
     expect(headings()).toEqual(OWNED);
     const loinc = screen.getByRole('textbox', { name: 'LOINC' });
     expect(before(loinc, basic())).toBe(true);
-    expect(before(basic(), screen.getByRole('textbox', { name: 'Code' }))).toBe(true);
+    expect(before(basic(), screen.getByRole('textbox', { name: 'Test code' }))).toBe(true);
     // The rule between the LOINC row and Basic information still bleeds to the sheet edges.
     expect(basic().parentElement!.previousElementSibling!.className).toContain('-mx-6');
   });

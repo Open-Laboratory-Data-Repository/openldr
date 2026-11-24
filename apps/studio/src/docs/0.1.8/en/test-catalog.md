@@ -34,13 +34,15 @@ Select **Add test**. The test sheet opens.
 
 ![Choose Add test to enter one test by hand.](test-catalog-guide-add-menu.png)
 
-The sheet runs from top to bottom in this order: **LOINC**, **Basic information**, **Specimen types**, **Result parameters**, **Reference ranges** and **This lab**. Basic information holds the code, name, short name, category, the two turnaround times and review. When LOINC is loaded, pick the LOINC code first. It fills the empty fields below it. [Fill a test from LOINC](#fill-a-test-from-loinc) explains what it fills. The steps below fill the same fields by hand.
+The sheet runs from top to bottom in this order: **LOINC**, **Basic information**, **Specimen types**, **Result parameters**, **Reference ranges** and **This lab**. Basic information holds the Test code, name, short name, category, the two turnaround times and review. When LOINC is loaded, pick the LOINC code first. It fills the empty fields below it. [Fill a test from LOINC](#fill-a-test-from-loinc) explains what it fills. The steps below fill the same fields by hand.
 
-### 4. Enter the code
+### 4. Enter the Test code
 
-Enter the stable code from your own catalog. The fictional example uses `EXAMPLE-ALPHA`. Leave it empty only if the LOINC code should become the code. A saved code cannot be changed.
+Type the code from your national test list in **Test code**. It is required. Save stays off until it is filled. The fictional example uses `EXAMPLE-ALPHA`.
 
-![Use the stable code from your catalog. This example uses EXAMPLE-ALPHA.](test-catalog-guide-test-code.png)
+The Test code can change later. Each test also has an internal id that never changes. LOINC is a separate field. It links the test to the international standard, and its search helps you fill a new test.
+
+![Type the Test code from your national list. This example uses EXAMPLE-ALPHA.](test-catalog-guide-test-code.png)
 
 ### 5. Enter the name
 
@@ -114,11 +116,11 @@ Use local settings when this lab uses a different display name or accepts fewer 
 
 ### 1. Choose Edit
 
-Open the row dots menu and select **Edit**. The saved code is shown without an editable input.
+Open the row dots menu and select **Edit**. You can change the Test code here too. [Change a test's Test code](#change-a-test-s-test-code) explains it.
 
 ![Edit opens the catalog and local settings.](test-catalog-guide-edit-menu.png)
 
-![An existing test keeps its code. Use its name and other editable fields for corrections.](test-catalog-guide-fixed-code.png)
+![A saved test keeps its internal id. Its Test code and other fields can be corrected.](test-catalog-guide-fixed-code.png)
 
 ### 2. Check local availability
 
@@ -144,7 +146,20 @@ Open the sheet dots menu and select **Save**.
 
 ![Save stores the local settings alongside the existing test.](test-catalog-guide-local-save.png)
 
-**Expected result:** The lab settings are saved without changing the test code.
+**Expected result:** The lab settings are saved without changing the Test code.
+
+## Change a test's Test code
+
+Do this when your national list gives a test a new code. The test keeps its internal id, so its orders, lab settings and mappings stay with it.
+
+1. Open the row dots menu and select **Edit**.
+2. In **Basic information**, replace the value in **Test code**. The example uses `EXAMPLE-ALPHA-2`.
+3. Read the line under it. **Internal id** names the id, which does not change.
+4. Open the sheet dots menu and select **Save**.
+
+**Expected result:** The table shows the new Test code. The earlier code stays reserved for this test. Orders that arrived with it still count as this test, and no other test can take it.
+
+From the CLI, run `openldr test-catalog set EXAMPLE-ALPHA --test-code EXAMPLE-ALPHA-2`. The command finds a test by its Test code or its internal id.
 
 ## Find and export tests
 
@@ -170,11 +185,13 @@ Clear the search if you no longer need it. Open the Tests dots menu and select *
 
 **Expected result:** The browser downloads a CSV in the columns the import wizard understands. Export contains active catalog tests, not just a visible row.
 
+The `id` column holds each test's internal id. The `code` column holds its Test code. Keep the `id` column when you edit the file, so an import can change a Test code and still find the test.
+
 The file has three columns for turnaround and review: `expected_tat_hours`, `critical_tat_hours` and `requires_verification`. Verification is written `yes` or `no`. In the import wizard, the same columns are **Expected TAT (hours)**, **Critical TAT (hours)** and **Requires verification (yes/no)**. An import reads yes, no, true or false. A TAT cell that is not a number refuses its row.
 
 ## Choose and map your test-list file
 
-Use an import when you have a list in CSV or Excel .xlsx format. Tests match by code. An import does not retire tests absent from the file or change local lab settings.
+Use an import when you have a list in CSV or Excel .xlsx format. A row matches a test by its internal id when the file has an **Internal id** column, else by its Test code. A row with a new Test code and no id adds a test. An import does not retire tests absent from the file or change local lab settings.
 
 ### 1. Choose Import
 
@@ -601,7 +618,7 @@ On Windows, use `.\openldr.ps1` instead of `./openldr`. An install that loaded L
 
 A catalog received from central has read-only shared definitions. Local availability, local specimen choices and local names remain this lab's settings.
 
-Import accepts at most 5,000 rows and 5 MB. Excel import reads the first worksheet. Tests match by code. A file does not retire tests absent from it or change local settings.
+Import accepts at most 5,000 rows and 5 MB. Excel import reads the first worksheet. Tests match by internal id, else by Test code. A file does not retire tests absent from it or change local settings.
 
 Retiring a test hides it from the default active list. It can be restored. Catalog tests cannot be deleted. Use the Status filter when looking for retired tests.
 
@@ -611,7 +628,9 @@ Retiring a test hides it from the default active list. It can be restored. Catal
 
 **A new test is absent from Lab order.** Check On at this lab. Creating or importing a test does not automatically enable it.
 
-**The import refuses rows.** Read each row's reason in Review. Return to Values for unchosen category or specimen text. Check Name and the code or LOINC that supplies its identity.
+**The import refuses rows.** Read each row's reason in Review. Return to Values for unchosen category or specimen text. Check Name and the Test code. Every row needs a Test code.
+
+**Save says a Test code is already used.** Another test holds that code, or held it before. An earlier Test code stays reserved for its own test, so orders that carry it still count. Choose another code.
 
 **No result parameters appear.** This installation has no usable result fields in its dictionary. Load the dictionary for your system first. The optional practice dictionary is only an example.
 

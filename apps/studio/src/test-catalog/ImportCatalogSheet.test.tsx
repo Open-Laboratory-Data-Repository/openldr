@@ -121,7 +121,7 @@ describe('ImportCatalogSheet', () => {
     await chooseFile('tests.xlsx');
     expect(api.readTestCatalogFile).toHaveBeenCalledWith(expect.any(File), 'xlsx');
     await screen.findByText('Step 2 of 4: Columns');
-    await pick('Code', /not in the file/i);
+    await pick('Test code', /not in the file/i);
     await choose('import-next');
     await screen.findByText('Step 3 of 4: Values');
     expect(screen.getByText('Every category and specimen in the file matched the lists.')).toBeInTheDocument();
@@ -131,6 +131,25 @@ describe('ImportCatalogSheet', () => {
 
     await choose('import-back');
     expect(await screen.findByText('Step 2 of 4: Columns')).toBeInTheDocument();
+  });
+
+  // An export's id column, so a re-import matches each row on the test's internal id.
+  it('offers the internal id column first and sends it when the file has one', async () => {
+    vi.mocked(api.readTestCatalogFile).mockResolvedValue({
+      ...FILE, headers: ['id', ...FILE.headers], rows: [['tst-0123456789abcdef', ...FILE.rows[0]]],
+      suggested: { id: 'id', ...FILE.suggested },
+    });
+    vi.mocked(api.previewTestCatalogImport).mockResolvedValue(report());
+    renderSheet();
+    await chooseFile('tests.csv');
+    await screen.findByText('Step 2 of 4: Columns');
+    const fields = [...document.querySelectorAll('label[for^="import-column-"]')].map((l) => l.textContent);
+    expect(fields.slice(0, 3)).toEqual(['Internal id', 'Test code', 'Name']);
+    expect(screen.getByRole('combobox', { name: 'Internal id' }).textContent).toBe('id');
+    await choose('import-next');
+    expect(api.previewTestCatalogImport).toHaveBeenLastCalledWith(expect.objectContaining({
+      columnMap: expect.objectContaining({ id: 'id', code: 'Test code' }),
+    }));
   });
 
   it('shows the refused rows and the LOINC note, and offers no Apply with nothing to write', async () => {

@@ -34,13 +34,15 @@ Selecione **Add test**. Abre o painel do teste.
 
 ![Escolha Add test para introduzir um teste à mão.](test-catalog-guide-add-menu.png)
 
-O painel lê-se de cima para baixo nesta ordem: **LOINC**, **Informações básicas**, **Tipos de amostra**, **Parâmetros de resultado**, **Valores de referência** e **Este laboratório**. Informações básicas tem o código, o nome, o nome curto, a categoria, os dois tempos de resposta e a verificação. Quando LOINC está carregado, escolha primeiro o código LOINC. Ele preenche os campos vazios abaixo. [Preencher um exame a partir do LOINC](#preencher-um-exame-a-partir-do-loinc) explica o que preenche. Os passos abaixo preenchem os mesmos campos à mão.
+O painel lê-se de cima para baixo nesta ordem: **LOINC**, **Informações básicas**, **Tipos de amostra**, **Parâmetros de resultado**, **Valores de referência** e **Este laboratório**. Informações básicas tem o código do teste, o nome, o nome curto, a categoria, os dois tempos de resposta e a verificação. Quando LOINC está carregado, escolha primeiro o código LOINC. Ele preenche os campos vazios abaixo. [Preencher um exame a partir do LOINC](#preencher-um-exame-a-partir-do-loinc) explica o que preenche. Os passos abaixo preenchem os mesmos campos à mão.
 
-### 4. Introduzir o código
+### 4. Introduzir o código do teste
 
-Introduza o código estável do catálogo. O exemplo fictício usa `EXAMPLE-ALPHA`. Deixe vazio apenas se o código LOINC deve tornar-se o código. Um código guardado não pode ser alterado.
+Introduza o código da sua lista nacional de testes em **Código do teste**. É obrigatório. Guardar fica inativo enquanto estiver vazio. O exemplo fictício usa `EXAMPLE-ALPHA`.
 
-![Use o código estável do catálogo. O exemplo usa EXAMPLE-ALPHA.](test-catalog-guide-test-code.png)
+O código do teste pode mudar mais tarde. Cada teste tem também um identificador interno que nunca muda. LOINC é um campo à parte. Liga o teste à norma internacional, e a sua pesquisa ajuda a preencher um teste novo.
+
+![Introduza o código do teste da sua lista nacional. O exemplo usa EXAMPLE-ALPHA.](test-catalog-guide-test-code.png)
 
 ### 5. Introduzir o nome
 
@@ -114,11 +116,11 @@ Use definições locais quando este laboratório apresenta outro nome ou aceita 
 
 ### 1. Escolher Edit
 
-Abra os pontos da linha e selecione **Edit**. O código guardado aparece sem campo editável.
+Abra os pontos da linha e selecione **Edit**. Também pode alterar aqui o código do teste. [Alterar o código de um teste](#alterar-o-codigo-de-um-teste) explica como.
 
 ![Edit abre o catálogo e as definições locais.](test-catalog-guide-edit-menu.png)
 
-![Um teste existente mantém o código. Corrija o nome e os outros campos editáveis.](test-catalog-guide-fixed-code.png)
+![Um teste guardado mantém o identificador interno. O código do teste e os outros campos podem ser corrigidos.](test-catalog-guide-fixed-code.png)
 
 ### 2. Verificar a disponibilidade local
 
@@ -146,6 +148,19 @@ Abra os pontos do painel e selecione **Save**.
 
 **Resultado esperado:** as definições do laboratório ficam guardadas sem alterar o código do teste.
 
+## Alterar o código de um teste
+
+Faça-o quando a sua lista nacional der um código novo a um teste. O teste mantém o identificador interno, por isso os pedidos, as definições locais e as associações ficam com ele.
+
+1. Abra os pontos da linha e selecione **Edit**.
+2. Em **Informações básicas**, substitua o valor de **Código do teste**. O exemplo usa `EXAMPLE-ALPHA-2`.
+3. Leia a linha por baixo. **Identificador interno** mostra o identificador, que não muda.
+4. Abra os pontos do painel e selecione **Guardar**.
+
+**Resultado esperado:** a tabela mostra o novo código do teste. O código anterior fica reservado para este teste. Os pedidos que chegaram com ele continuam a contar para este teste, e nenhum outro teste o pode usar.
+
+Na CLI, execute `openldr test-catalog set EXAMPLE-ALPHA --test-code EXAMPLE-ALPHA-2`. O comando encontra um teste pelo código do teste ou pelo identificador interno.
+
 ## Encontrar e exportar testes
 
 Pesquise antes de criar outro teste. Também pode exportar testes ativos do catálogo para revisão ou importação posterior.
@@ -170,11 +185,13 @@ Limpe a pesquisa se já não precisar dela. Abra os pontos de Tests e selecione 
 
 **Resultado esperado:** o navegador descarrega um CSV com as colunas aceites pelo assistente. A exportação contém testes ativos do catálogo, não apenas uma linha visível.
 
+A coluna `id` tem o identificador interno de cada teste. A coluna `code` tem o código do teste. Mantenha a coluna `id` quando editar o ficheiro, para que uma importação possa alterar um código do teste e ainda encontrar o teste.
+
 O ficheiro tem três colunas para o tempo de resposta e a verificação: `expected_tat_hours`, `critical_tat_hours` e `requires_verification`. A verificação escreve-se `yes` ou `no`. No assistente de importação, estas colunas são **Tempo de resposta esperado (horas)**, **Tempo de resposta crítico (horas)** e **Requer verificação (yes/no)**. Uma importação lê yes, no, true ou false. Uma célula de tempo que não seja um número faz recusar a sua linha.
 
 ## Escolher e associar o ficheiro de testes
 
-Importe quando tiver uma lista CSV ou Excel .xlsx. Os testes correspondem por código. A importação não retira testes ausentes do ficheiro nem altera definições locais.
+Importe quando tiver uma lista CSV ou Excel .xlsx. Uma linha corresponde a um teste pelo identificador interno quando o ficheiro tem uma coluna **Identificador interno**, senão pelo código do teste. Uma linha com um código do teste novo e sem identificador acrescenta um teste. A importação não retira testes ausentes do ficheiro nem altera definições locais.
 
 ### 1. Escolher Import
 
@@ -601,7 +618,7 @@ No Windows, use `.\openldr.ps1` em vez de `./openldr`. Uma instalação que carr
 
 Um catálogo recebido do central tem definições partilhadas de leitura. A disponibilidade, as escolhas de amostras e os nomes locais continuam a ser definições deste laboratório.
 
-A importação aceita até 5 000 linhas e 5 MB. A importação Excel lê a primeira folha. Os testes correspondem por código. Um ficheiro não retira testes ausentes nem altera definições locais.
+A importação aceita até 5 000 linhas e 5 MB. A importação Excel lê a primeira folha. Os testes correspondem pelo identificador interno, senão pelo código do teste. Um ficheiro não retira testes ausentes nem altera definições locais.
 
 Retirar um teste oculta-o da lista ativa predefinida. Pode ser restaurado. Os testes do catálogo não podem ser eliminados. Use o filtro Status para encontrar testes retirados.
 
@@ -611,7 +628,9 @@ Retirar um teste oculta-o da lista ativa predefinida. Pode ser restaurado. Os te
 
 **Falta um teste novo em Lab order.** Verifique On at this lab. Criar ou importar um teste não o ativa automaticamente.
 
-**A importação recusa linhas.** Leia a razão de cada linha em Review. Volte a Values para categorias ou amostras sem escolha. Verifique Name e o código ou LOINC que fornece a identidade.
+**A importação recusa linhas.** Leia a razão de cada linha em Review. Volte a Values para categorias ou amostras sem escolha. Verifique Name e o código do teste. Cada linha precisa de um código do teste.
+
+**Guardar diz que um código do teste já está em uso.** Outro teste tem esse código, ou já o teve. Um código do teste anterior fica reservado para o seu teste, para que os pedidos que o trazem continuem a contar. Escolha outro código.
 
 **Não aparecem parâmetros de resultado.** A instalação não tem campos utilizáveis no dicionário. Carregue primeiro o dicionário do sistema. O dicionário de prática é apenas um exemplo.
 

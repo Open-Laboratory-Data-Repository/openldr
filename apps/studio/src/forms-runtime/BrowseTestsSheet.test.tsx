@@ -9,8 +9,8 @@ import { BrowseTestsSheet } from './BrowseTestsSheet';
 // The system arrives in the server's answer, so the sheet names none.
 const CATALOG = 'urn:openldr:codesystem:test-catalog';
 const rows = [
-  { code: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: true },
-  { code: 'CD4', display: 'CD4 count', category: 'HAEM', enabled: false },
+  { code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: true },
+  { code: 'CD4', testCode: 'CD4', display: 'CD4 count', category: 'HAEM', enabled: false },
 ];
 // MICRO is in the catalog but on no loaded row, as a category whose tests sit on a later page would be.
 const categories = [
@@ -32,6 +32,21 @@ describe('BrowseTestsSheet', () => {
     expect(await screen.findByText('HIV viral load')).toBeInTheDocument();
     expect(screen.getByText('CD4 count')).toBeInTheDocument();
     expect(await screen.findByText('Molecular')).toBeInTheDocument();
+  });
+
+  // Test identity spec, call 8: the list shows the Test code. The picked coding keeps the id.
+  it('shows a test by its Test code, and picks it by its id', async () => {
+    vi.mocked(browseTestCatalog).mockResolvedValue({
+      rows: [{ code: 'tst-0123456789abcdef', testCode: 'VL', display: 'HIV viral load', category: 'MOL', enabled: true }], total: 1, system: CATALOG,
+    });
+    const onPick = vi.fn();
+    const user = userEvent.setup();
+    render(<BrowseTestsSheet onPick={onPick} onClose={() => {}} />);
+    const row = await screen.findByTestId('browse-test-tst-0123456789abcdef');
+    expect(row.textContent).toContain('VL');
+    expect(row.textContent).not.toContain('tst-0123456789abcdef');
+    await user.click(row);
+    expect(onPick).toHaveBeenCalledWith({ system: CATALOG, code: 'tst-0123456789abcdef', display: 'HIV viral load' });
   });
 
   it('marks a test this lab does not run, and refuses to pick it', async () => {

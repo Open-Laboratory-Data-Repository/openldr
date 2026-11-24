@@ -194,7 +194,8 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
                       <div className="flex flex-col">
                         <span>{r.catalog.name ?? r.catalog.code}</span>
                         <span className="text-xs text-muted-foreground">
-                          {r.catalog.code} · {r.catalog.loinc ?? t('testCatalog.observed.noLoinc')}
+                          {/* A catalog test reads by its Test code. A result field has none, so its code. */}
+                          {r.catalog.testCode ?? r.catalog.code} · {r.catalog.loinc ?? t('testCatalog.observed.noLoinc')}
                         </span>
                       </div>
                     ) : (
