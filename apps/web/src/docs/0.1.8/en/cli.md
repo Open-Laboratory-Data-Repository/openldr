@@ -126,14 +126,14 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `health` | Report service health (auth, storage, eventing, target store). |
 | `db` | `migrate`, `reset`, `seed` the database; `reproject` the warehouse read model. |
 | `patients` | `list` and `show` patients (masked unless `--identifiers`, which is audited); `identifier-systems list` and `set` labels. |
-| `settings` | Feature `flags list` / `flags set`, `danger <action>`, and `sync show` / `sync set` (lab⇄central sync config). |
+| `settings` | Feature `flags list` / `flags set`, `danger <action>`, `sync show` / `sync set` (lab⇄central sync config), and `lab show` / `lab set` for the laboratory's identity, with its country (`--country`). |
 | `terminology` | Import and query CodeSystems, ValueSets, ConceptMaps, ontologies. |
 | `fhir` | Validate FHIR R4 resources. |
 | `dashboards` | Show or set which roles may see a dashboard and its data. |
 | `forms` | List form definitions; extract answers from a QuestionnaireResponse; set which roles may open and submit a form. |
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see **Facilities** in the studio's Docs). |
-| `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog, `set` a test's Test code (`--test-code`), turnaround times and review, `loinc-hints` for a LOINC code, and `result-fields` to link, add or make result fields from LOINC. |
+| `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog, `set` a test's Test code (`--test-code`), turnaround times, review and additional codings (`--codings`), `params` to read or replace its result parameters, `loinc-hints` for a LOINC code, and `result-fields` to link, add or make result fields from LOINC. |
 | `lab` | `requisitions rebuild --force` rebuilds the index that finds an order by its requisition number. Needs **Danger zone**. |
 | `query` | Custom queries: `export` them to a JSON file, `import` them from one (`--force` replaces existing names and needs **Manage saved queries**; without it, an import adds new queries with no group). |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
@@ -483,6 +483,7 @@ Set a test's turnaround times and review:
 - `--requires-verification` takes `true` or `false`. A test without it set reads `true`.
 - `set` changes only the flags you give. It works only where this install owns the catalog. CE stores these values. The lab plugin does not use them yet.
 - `export` and `import` carry the same values in the columns `expected_tat_hours`, `critical_tat_hours` and `requires_verification`. Verification is written `yes` or `no`. An import reads yes, no, true or false.
+- `--codings <file.json>` replaces the test's additional codings with the JSON list in the file. Each entry has a `system`, a `code`, a `purpose` and an optional `note`. The purpose is `ADDITIONAL`, `INDICATION`, `PROCEDURE` or `CATEGORY`, and `ADDITIONAL` when left out. The system must be loaded on this install and hold the code. `[]` clears them. `export` and `import` carry them in the `codings` column, as the same JSON list.
 
 LOINC hints and result fields from LOINC need LOINC loaded, with its ontology built. Load it from a folder that holds the unzipped LOINC release:
 
@@ -510,6 +511,15 @@ Read the hints for a LOINC code, and make result fields from LOINC:
 - `result-fields from-loinc <code...>` makes a result field for each code. With `--panel`, it makes one for each member test of each panel. A field or answer set that is already there is reused, so running it again makes nothing new.
 - `result-fields add --display <text>` adds one field to the result dictionary. `--code` sets its code. Without it, the code is made from the name, such as `HAEMOGLOBIN_A1C`. `--unit` sets its UCUM unit. A code that is already there is refused.
 - Neither command ticks the field on a test. Tick it in the test sheet, or with `test-catalog params --set`. A lab that receives its dictionary from central cannot add fields.
+
+`test-catalog params <code>` prints a test's result parameters with their type, whether each is required, and their settings. `--set <file>` replaces them from a JSON list. Each entry may carry:
+
+- `resultType`: `numeric`, `coded`, `text`, `boolean` (yes/no), `date` or `multicoded` (several answers). `coded` and `multicoded` need a `valueSetUrl`.
+- `required`: `false` for a field that may stay empty. Left out, the field is required.
+- Entry limits for the type: `min`, `max` and `decimals` for `numeric`, `minLength` and `maxLength` for `text`, and `dateLimit` (`any`, `past` or `future`) for `date`. Limits of another type are refused.
+- On each band in `bands`: `pregnancy` (`pregnant` or `not-pregnant`), `country` (an alpha-3 code from the country list, such as `TZA`), `validFrom` and `validTo` (`YYYY-MM-DD`), `source` (`WHO`, `CLSI`, `EUCAST`, `national` or `facility`) and `scope` (`global`, `national` or `facility`).
+
+A band with a country fits only when the lab's country matches. Set it with `openldr settings lab set --country TZA`, using your own code. An empty string clears it.
 
 ## Install a content pack
 

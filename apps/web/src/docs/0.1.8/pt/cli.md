@@ -126,14 +126,14 @@ Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real n
 | `health` | Indica o estado dos serviços (autenticação, armazenamento, eventos, armazém de destino). |
 | `db` | `migrate`, `reset`, `seed` da base de dados; `reproject` do modelo de leitura do armazém. |
 | `patients` | `list` e `show` de doentes (mascarados, exceto com `--identifiers`, que fica na auditoria); `identifier-systems list` e `set` de rótulos. |
-| `settings` | Indicadores de funcionalidades `flags list` / `flags set`, `danger <action>`, e `sync show` / `sync set` (configuração da sincronização laboratório⇄central). |
+| `settings` | Indicadores de funcionalidades `flags list` / `flags set`, `danger <action>`, `sync show` / `sync set` (configuração da sincronização laboratório⇄central), e `lab show` / `lab set` para a identidade do laboratório, com o seu país (`--country`). |
 | `terminology` | Importa e consulta CodeSystems, ValueSets, ConceptMaps e ontologias. |
 | `fhir` | Valida recursos FHIR R4. |
 | `dashboards` | Mostra ou escolhe as funções que podem ver um painel e os seus dados. |
 | `forms` | Lista definições de formulários; extrai respostas de um QuestionnaireResponse; escolhe as funções que podem abrir e submeter um formulário. |
 | `ingest` | Carrega um ficheiro através do pipeline (opcionalmente com um plugin). |
 | `facilities` | Importa um registo nacional de unidades: `suggest-map`, `suggest-values`, `import` (mapeamento de colunas e valores; consulte **Unidades** na Documentação do estúdio). |
-| `test-catalog` | O catálogo nacional de exames: `list` dos testes, `import` de uma lista a partir de CSV ou Excel, `export` em CSV, `enable` ou `disable` de um teste neste laboratório, e `retire` ou `restore` de um teste quando esta instalação é dona do catálogo, `set` do código do teste (`--test-code`), dos tempos de resposta e da verificação de um teste, `loinc-hints` de um código LOINC, e `result-fields` para ligar, adicionar ou criar a partir do LOINC campos de resultado. |
+| `test-catalog` | O catálogo nacional de exames: `list` dos testes, `import` de uma lista a partir de CSV ou Excel, `export` em CSV, `enable` ou `disable` de um teste neste laboratório, e `retire` ou `restore` de um teste quando esta instalação é dona do catálogo, `set` do código do teste (`--test-code`), dos tempos de resposta, da verificação e das codificações adicionais (`--codings`) de um teste, `params` para ler ou substituir os seus parâmetros de resultado, `loinc-hints` de um código LOINC, e `result-fields` para ligar, adicionar ou criar a partir do LOINC campos de resultado. |
 | `lab` | `requisitions rebuild --force` reconstrói o índice que encontra um pedido pelo seu número de requisição. Exige **Zona de perigo**. |
 | `query` | Consultas personalizadas: `export` para um ficheiro JSON, `import` a partir de um (`--force` substitui os nomes existentes e exige **Gerir consultas guardadas**; sem essa permissão, uma importação acrescenta as novas consultas sem grupo). |
 | `pipeline` | Inspeciona lotes de ingestão: `status`, `retry`, `logs`. |
@@ -490,6 +490,7 @@ Definir os tempos de resposta e a verificação de um teste:
 - `--requires-verification` aceita `true` ou `false`. Um teste sem valor lê `true`.
 - `set` só altera as opções dadas. Só funciona quando esta instalação é dona do catálogo. O CE guarda estes valores. O plugin de laboratório ainda não os usa.
 - `export` e `import` levam os mesmos valores nas colunas `expected_tat_hours`, `critical_tat_hours` e `requires_verification`. A verificação escreve-se `yes` ou `no`. Uma importação lê yes, no, true ou false.
+- `--codings <ficheiro.json>` substitui as codificações adicionais do teste pela lista JSON do ficheiro. Cada entrada tem um `system`, um `code`, um `purpose` e uma `note` opcional. A finalidade é `ADDITIONAL`, `INDICATION`, `PROCEDURE` ou `CATEGORY`, e `ADDITIONAL` quando falta. O sistema tem de estar carregado nesta instalação e ter o código. `[]` limpa-as. `export` e `import` levam-nas na coluna `codings`, com a mesma lista JSON.
 
 As sugestões LOINC e os campos de resultado criados a partir do LOINC precisam do LOINC carregado, com a sua ontologia construída. Carregue-o a partir de uma pasta com a versão LOINC descompactada:
 
@@ -517,6 +518,15 @@ Ler as sugestões de um código LOINC, e criar campos de resultado a partir do L
 - `result-fields from-loinc <code...>` cria um campo de resultado para cada código. Com `--panel`, cria um para cada teste membro de cada painel. Um campo ou conjunto de respostas que já existe é reutilizado, por isso repetir não cria nada de novo.
 - `result-fields add --display <texto>` adiciona um campo ao dicionário de resultados. `--code` define o código. Sem ele, o código é feito a partir do nome, por exemplo `HAEMOGLOBIN_A1C`. `--unit` define a unidade UCUM. Um código que já existe é recusado.
 - Nenhum dos comandos marca o campo num teste. Marque-o no painel do exame, ou com `test-catalog params --set`. Um laboratório que recebe o dicionário do central não pode adicionar campos.
+
+`test-catalog params <code>` mostra os parâmetros de resultado de um teste com o tipo, se cada um é obrigatório, e as suas definições. `--set <ficheiro>` substitui-os a partir de uma lista JSON. Cada entrada pode levar:
+
+- `resultType`: `numeric`, `coded`, `text`, `boolean` (sim/não), `date` ou `multicoded` (várias respostas). `coded` e `multicoded` precisam de um `valueSetUrl`.
+- `required`: `false` para um campo que pode ficar vazio. Quando falta, o campo é obrigatório.
+- Os limites de entrada do tipo: `min`, `max` e `decimals` para `numeric`, `minLength` e `maxLength` para `text`, e `dateLimit` (`any`, `past` ou `future`) para `date`. Os limites de outro tipo são recusados.
+- Em cada intervalo de `bands`: `pregnancy` (`pregnant` ou `not-pregnant`), `country` (um código alfa-3 da lista de países, como `TZA`), `validFrom` e `validTo` (`AAAA-MM-DD`), `source` (`WHO`, `CLSI`, `EUCAST`, `national` ou `facility`) e `scope` (`global`, `national` ou `facility`).
+
+Um intervalo com país só serve quando o país do laboratório corresponde. Defina-o com `openldr settings lab set --country TZA`, com o seu próprio código. Um texto vazio limpa-o.
 
 ## Instalar um pacote de conteúdo
 

@@ -34,7 +34,7 @@ Selecione **Add test**. Abre o painel do teste.
 
 ![Escolha Add test para introduzir um teste à mão.](test-catalog-guide-add-menu.png)
 
-O painel lê-se de cima para baixo nesta ordem: **LOINC**, **Informações básicas**, **Tipos de amostra**, **Parâmetros de resultado**, **Valores de referência** e **Este laboratório**. Informações básicas tem o código do teste, o nome, o nome curto, a categoria, os dois tempos de resposta e a verificação. Quando LOINC está carregado, escolha primeiro o código LOINC. Ele preenche os campos vazios abaixo. [Preencher um exame a partir do LOINC](#preencher-um-exame-a-partir-do-loinc) explica o que preenche. Os passos abaixo preenchem os mesmos campos à mão.
+O painel lê-se de cima para baixo nesta ordem: **LOINC**, **Codificações adicionais**, **Informações básicas**, **Tipos de amostra**, **Parâmetros de resultado**, **Valores de referência** e **Este laboratório**. Informações básicas tem o código do teste, o nome, o nome curto, a categoria, os dois tempos de resposta e a verificação. Quando LOINC está carregado, escolha primeiro o código LOINC. Ele preenche os campos vazios abaixo. [Preencher um exame a partir do LOINC](#preencher-um-exame-a-partir-do-loinc) explica o que preenche. Os passos abaixo preenchem os mesmos campos à mão.
 
 ### 4. Introduzir o código do teste
 
@@ -289,7 +289,9 @@ Escolha Edit no menu da linha do teste. Marque os campos produzidos pelo teste n
 
 ### 2. Escolher cada tipo de resultado
 
-Escolha **Numeric**, **Coded** ou **Text** para cada campo selecionado. Um campo codificado também precisa do conjunto de valores configurado. O exemplo usa Numeric.
+Escolha o tipo de cada campo selecionado: **numérico**, **codificado**, **texto**, **sim/não**, **data** ou **várias respostas**. Um campo codificado e um campo de várias respostas também precisam do conjunto de valores configurado. O exemplo usa numérico.
+
+Nos relatórios, um resultado sim/não lê-se `true` ou `false`, e um resultado de data lê-se como a data. Um resultado de várias respostas dá uma linha de resultado por cada resposta escolhida.
 
 ![Escolha Numeric, Coded ou Text para o campo de resultado.](test-catalog-guide-parameter-type.png)
 
@@ -350,6 +352,39 @@ Abra os pontos do painel do teste e selecione **Save**.
 ![Save guarda os campos de resultado e os intervalos selecionados.](test-catalog-guide-parameter-save.png)
 
 **Resultado esperado:** os campos, os tipos de resultado e os intervalos selecionados ficam guardados com o teste.
+
+## Definir os limites e a ordem de um campo
+
+Use isto quando um campo pode ficar vazio, quando um valor tem de ficar dentro de limites, ou para mudar a ordem dos campos.
+
+1. Abra o menu de pontos da linha do teste e selecione **Editar**.
+2. Abra os pontos ao lado do tipo de um campo marcado, em **Parâmetros de resultado**.
+3. Selecione **Obrigatório** para o desligar quando o campo pode ficar vazio. Um campo marcado é obrigatório até o desligar.
+4. Selecione **Definições**. Abre o painel **Definições do campo**. Só os campos numérico, texto e data o têm.
+5. Preencha os limites. Um campo numérico tem **Mínimo**, **Máximo** e **Casas decimais**. Um campo de texto tem **Comprimento mínimo** e **Comprimento máximo**. Um campo de data tem **Datas permitidas**: **Qualquer data**, **Só datas passadas** ou **Só datas futuras**.
+6. Abra os pontos de **Definições do campo** e selecione **Aplicar**.
+7. Selecione **Subir** ou **Descer** nos pontos de um campo para mudar o seu lugar.
+8. Abra os pontos do painel do exame e selecione **Guardar**.
+
+**Resultado esperado:** o painel mostra os campos marcados na ordem guardada, e depois os não marcados. **Valores de referência** segue a mesma ordem. Na bancada, um campo que não é obrigatório aparece como opcional, e os seus limites aparecem por baixo. A bancada mostra os limites e não recusa um valor fora deles. O plugin de laboratório recusa-o quando o resultado é introduzido.
+
+## Limitar um intervalo por país, datas ou gravidez
+
+Use isto quando um intervalo só vale num país, só durante um período, ou só na gravidez. Cada intervalo em **Valores de referência** tem estes campos abaixo de **Limite crítico superior**.
+
+1. Abra o menu de pontos da linha do teste e selecione **Editar**.
+2. Escolha o **País** do intervalo na lista de países, ou deixe **nenhum**.
+3. Escolha as datas **Válido de** e **Válido até**, ou deixe-as vazias.
+4. Escolha **Gravidez**: **grávida** ou **não grávida**. Deixe **qualquer** para um intervalo que não depende disso.
+5. Escolha **Fonte** e **Âmbito** para registar de onde vem o intervalo.
+6. Abra os pontos do painel do exame e selecione **Guardar**.
+
+**Resultado esperado:** a bancada usa estes campos para escolher um intervalo.
+
+- Um intervalo com país só serve quando corresponde ao país do laboratório. Defina-o em [Laboratório](/docs/laboratory). Quando o laboratório não tem país, o intervalo não é escolhido sozinho. Escolha-o na bancada.
+- Um intervalo não serve antes da data **Válido de** nem depois da data **Válido até**. A bancada compara-as com a data do resultado, ou com hoje.
+- Um intervalo de gravidez nunca é escolhido sozinho, porque o CE não regista se uma doente está grávida. Escolha-o na bancada.
+- **Fonte** e **Âmbito** são só etiquetas. Não mudam o intervalo que serve.
 
 ## Definir o tempo de resposta e a verificação
 
@@ -420,6 +455,21 @@ Use isto quando o exame precisa de um campo de resultado que ainda não está no
 7. Abra os pontos do painel do exame e selecione **Guardar**.
 
 **Resultado esperado:** o novo campo fica marcado no exame com o tipo escolhido e aparece em **Campos de resultado**. Um código que já está no dicionário é recusado. Dê outro código, ou marque o campo que já existe.
+
+## Adicionar outro código para o exame
+
+Use isto quando outro sistema de códigos nomeia o mesmo exame, como um código nacional de procedimento. Só uma instalação que é dona do seu catálogo pode adicionar um.
+
+1. Abra o painel do exame com **Adicionar exame** ou **Editar**.
+2. Abra os pontos ao lado de **Codificações adicionais**, abaixo de **LOINC**, e selecione **Adicionar codificação**.
+3. Escolha o **Sistema**. A lista mostra os sistemas de códigos carregados nesta instalação, exceto o LOINC. O exame tem o seu próprio campo LOINC.
+4. Escreva parte do código ou do nome em **Código** e escolha-o.
+5. Escolha a **Finalidade**: **Adicional**, **Indicação**, **Procedimento** ou **Categoria**.
+6. Escreva uma **Nota** se precisar.
+7. Abra os pontos de **Adicionar codificação** e selecione **Guardar**.
+8. Abra os pontos do painel do exame e selecione **Guardar**.
+
+**Resultado esperado:** a codificação aparece em **Codificações adicionais**, com o sistema, o código e a finalidade. Os seus pontos têm **Editar** e **Remover**. Um pedido deste exame leva primeiro o código LOINC, depois o código do teste, depois cada codificação adicional. A exportação CSV guarda-as na coluna `codings` como uma lista JSON, e a importação lê essa coluna de volta. O mesmo sistema e código duas vezes no mesmo exame é recusado.
 
 ## Ligar um código de teste recebido ao catálogo
 
@@ -647,6 +697,10 @@ Retirar um teste oculta-o da lista ativa predefinida. Pode ser restaurado. Os te
 **Uma escolha não adiciona campo de resultado.** O exame já tinha um campo de resultado, ou o código é um painel. Use **Usar o campo de resultado do LOINC** ou **Preencher a partir do painel** nos pontos de Parâmetros de resultado.
 
 **Um intervalo mostra Não é uma unidade UCUM.** A unidade que manteve não está na lista UCUM. Fica guardada como foi escrita. Escolha a mesma unidade na lista, se existir.
+
+**Um intervalo com país nunca é escolhido.** Defina o país do laboratório em [Laboratório](/docs/laboratory). Tem de ser o mesmo país do intervalo.
+
+**Definições não aparece nos pontos de um campo.** Só os campos numérico, texto e data têm definições. **Obrigatório** e as opções de mover estão lá para todos os campos.
 
 **A página indica uma cópia do armazém desatualizada.** Abra as ações de Observed e escolha Rebuild warehouse copy. A página indica falha se não conseguir reconstruir.
 

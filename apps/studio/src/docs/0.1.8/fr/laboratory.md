@@ -1,6 +1,6 @@
 # Laboratoire
 
-Laboratory conserve le nom, l'adresse, les coordonnées et le logo du laboratoire émetteur pour les modèles de rapport. Cette page définit aussi le registre d'établissements par défaut et le fuseau horaire local.
+Laboratory conserve le nom, l'adresse, les coordonnées et le logo du laboratoire émetteur pour les modèles de rapport. Cette page définit aussi le registre d'établissements par défaut, le fuseau horaire local et le pays.
 
 Utilisez les coordonnées réelles et le logo approuvé de votre laboratoire. Les images montrent un laboratoire fictif sur une installation de test. Aucun jeu de données n'est nécessaire. View settings permet d'ouvrir la page. Edit general settings permet d'enregistrer.
 
@@ -50,7 +50,11 @@ Pour PostgreSQL ou MySQL, saisissez un fuseau nommé comme `Africa/Dar_es_Salaam
 
 ![Saisissez un fuseau nommé pour PostgreSQL ou MySQL. Lisez l'exception SQL Server sous le champ.](laboratory-guide-timezone.png)
 
-### 7. Enregistrer les coordonnées
+### 7. Choisir le pays
+
+Choisissez le pays de votre laboratoire dans **Pays**. La liste vient de la liste des codes de pays. Un intervalle de référence qui nomme un pays ne convient que si c'est ce pays. Sans pays, la paillasse ne choisit pas un tel intervalle toute seule. [Catalogue de tests](/docs/test-catalog) décrit les champs d'intervalle. Sur une installation sans interface, lancez `openldr settings lab set --country TZA`, avec votre propre code de pays.
+
+### 8. Enregistrer les coordonnées
 
 Ouvrez le menu à points de la page en haut à droite et sélectionnez **Save**.
 

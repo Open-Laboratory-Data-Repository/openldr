@@ -1,6 +1,6 @@
 # Laboratório
 
-Laboratory guarda o nome, a morada, os contactos e o logótipo do laboratório emissor usados nos modelos de relatório. Também define o registo de unidades predefinido e o fuso horário local.
+Laboratory guarda o nome, a morada, os contactos e o logótipo do laboratório emissor usados nos modelos de relatório. Também define o registo de unidades predefinido, o fuso horário local e o país.
 
 Use os dados reais e o logótipo aprovado do laboratório. As imagens mostram um laboratório fictício numa instalação de teste. Não precisa de dados de prática. View settings permite abrir a página. Edit general settings permite guardar.
 
@@ -50,7 +50,11 @@ Para PostgreSQL ou MySQL, introduza um fuso com nome, como `Africa/Dar_es_Salaam
 
 ![Introduza um fuso com nome para PostgreSQL ou MySQL. Leia a exceção SQL Server abaixo.](laboratory-guide-timezone.png)
 
-### 7. Guardar os dados
+### 7. Escolher o país
+
+Escolha o país do seu laboratório em **País**. A lista vem da lista de códigos de países. Um intervalo de referência que nomeia um país só serve quando é este país. Sem país, a bancada não escolhe esse intervalo sozinha. [Catálogo de testes](/docs/test-catalog) explica os campos de intervalo. Numa instalação sem interface, execute `openldr settings lab set --country TZA`, com o código do seu país.
+
+### 8. Guardar os dados
 
 Abra os pontos da página no canto superior direito e selecione **Save**.
 

@@ -126,14 +126,14 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `health` | Indique l'état des services (authentification, stockage, événements, stockage cible). |
 | `db` | Applique les migrations (`migrate`), réinitialise (`reset`) et remplit (`seed`) la base de données ; reconstruit le modèle de lecture de l'entrepôt (`reproject`). |
 | `patients` | Liste (`list`) et affiche (`show`) les patients (masqués sauf avec `--identifiers`, ce qui est audité) ; `identifier-systems list` et `set` pour les libellés. |
-| `settings` | `flags list` / `flags set` pour les fonctionnalités, `danger <action>`, et `sync show` / `sync set` (configuration de la synchronisation laboratoire⇄central). |
+| `settings` | `flags list` / `flags set` pour les fonctionnalités, `danger <action>`, `sync show` / `sync set` (configuration de la synchronisation laboratoire⇄central), et `lab show` / `lab set` pour l'identité du laboratoire, avec son pays (`--country`). |
 | `terminology` | Importe et interroge des CodeSystems, ValueSets, ConceptMaps et ontologies. |
 | `fhir` | Valide des ressources FHIR R4. |
 | `dashboards` | Affiche ou choisit les rôles qui peuvent voir un tableau de bord et ses données. |
 | `forms` | Liste les définitions de formulaires ; extrait les réponses d'une QuestionnaireResponse ; choisit les rôles qui peuvent ouvrir et soumettre un formulaire. |
 | `ingest` | Ingère un fichier par le pipeline (en option via un plugin). |
 | `facilities` | Importe un registre national d'établissements : `suggest-map`, `suggest-values`, `import` (correspondance des colonnes et des valeurs, voir **Établissements** dans la documentation du studio). |
-| `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue, `set` règle le code du test (`--test-code`), les délais et la vérification d'un examen, `loinc-hints` lit les suggestions d'un code LOINC, et `result-fields` relie, ajoute ou crée depuis LOINC des champs de résultat. |
+| `test-catalog` | Le catalogue national des examens : `list` liste les examens, `import` importe une liste depuis un fichier CSV ou Excel, `export` l'exporte en CSV, `enable` ou `disable` active ou désactive un examen dans ce laboratoire, et `retire` ou `restore` retire ou rétablit un examen là où cette installation possède le catalogue, `set` règle le code du test (`--test-code`), les délais, la vérification et les codages supplémentaires (`--codings`) d'un examen, `params` lit ou remplace ses paramètres de résultat, `loinc-hints` lit les suggestions d'un code LOINC, et `result-fields` relie, ajoute ou crée depuis LOINC des champs de résultat. |
 | `lab` | `requisitions rebuild --force` reconstruit l'index qui trouve une demande par son numéro de demande. Exige **Zone de danger**. |
 | `query` | Requêtes personnalisées : `export` les exporte dans un fichier JSON, `import` les importe depuis un fichier (`--force` remplace les noms existants et exige **Gérer les requêtes enregistrées** ; sans cette permission, un import ajoute les nouvelles requêtes sans groupe). |
 | `pipeline` | Examine les lots d'ingestion : `status`, `retry`, `logs`. |
@@ -465,6 +465,7 @@ Régler les délais et la vérification d'un examen :
 - `--requires-verification` prend `true` ou `false`. Un examen sans valeur lit `true`.
 - `set` ne change que les options données. Il ne fonctionne que là où cette installation possède le catalogue. CE enregistre ces valeurs. Le plugin de laboratoire ne les utilise pas encore.
 - `export` et `import` portent les mêmes valeurs dans les colonnes `expected_tat_hours`, `critical_tat_hours` et `requires_verification`. La vérification s'écrit `yes` ou `no`. Une importation lit yes, no, true ou false.
+- `--codings <fichier.json>` remplace les codages supplémentaires de l'examen par la liste JSON du fichier. Chaque entrée a un `system`, un `code`, un `purpose` et une `note` facultative. L'usage est `ADDITIONAL`, `INDICATION`, `PROCEDURE` ou `CATEGORY`, et `ADDITIONAL` s'il manque. Le système doit être chargé sur cette installation et contenir le code. `[]` les efface. `export` et `import` les portent dans la colonne `codings`, sous la même liste JSON.
 
 Les suggestions LOINC et les champs de résultat créés depuis LOINC exigent LOINC chargé, avec son ontologie construite. Chargez-le depuis un dossier qui contient la version LOINC décompressée :
 
@@ -492,6 +493,15 @@ Lire les suggestions d'un code LOINC, et créer des champs de résultat depuis L
 - `result-fields from-loinc <code...>` crée un champ de résultat pour chaque code. Avec `--panel`, il en crée un pour chaque examen membre de chaque panel. Un champ ou un jeu de réponses déjà présent est réutilisé, donc une nouvelle exécution ne crée rien de nouveau.
 - `result-fields add --display <texte>` ajoute un champ au dictionnaire des résultats. `--code` fixe son code. Sans lui, le code est fait à partir du nom, par exemple `HAEMOGLOBIN_A1C`. `--unit` fixe son unité UCUM. Un code déjà présent est refusé.
 - Aucune de ces commandes ne coche le champ sur un examen. Cochez-le dans le panneau de l'examen, ou avec `test-catalog params --set`. Un laboratoire qui reçoit son dictionnaire du central ne peut pas ajouter de champ.
+
+`test-catalog params <code>` affiche les paramètres de résultat d'un examen avec leur type, s'ils sont obligatoires, et leurs paramètres. `--set <fichier>` les remplace depuis une liste JSON. Chaque entrée peut porter :
+
+- `resultType` : `numeric`, `coded`, `text`, `boolean` (oui/non), `date` ou `multicoded` (plusieurs réponses). `coded` et `multicoded` exigent un `valueSetUrl`.
+- `required` : `false` pour un champ qui peut rester vide. S'il manque, le champ est obligatoire.
+- Les limites de saisie du type : `min`, `max` et `decimals` pour `numeric`, `minLength` et `maxLength` pour `text`, et `dateLimit` (`any`, `past` ou `future`) pour `date`. Les limites d'un autre type sont refusées.
+- Sur chaque intervalle de `bands` : `pregnancy` (`pregnant` ou `not-pregnant`), `country` (un code alpha-3 de la liste des pays, comme `TZA`), `validFrom` et `validTo` (`AAAA-MM-JJ`), `source` (`WHO`, `CLSI`, `EUCAST`, `national` ou `facility`) et `scope` (`global`, `national` ou `facility`).
+
+Un intervalle avec un pays ne convient que si le pays du laboratoire correspond. Réglez-le avec `openldr settings lab set --country TZA`, avec votre propre code. Une chaîne vide l'efface.
 
 ## Installer un pack de contenu
 
