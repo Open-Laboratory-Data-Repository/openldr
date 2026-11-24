@@ -1,6 +1,138 @@
 {
-  "generatedAt": "2026-11-23",
+  "generatedAt": "2026-11-24",
   "days": [
+    {
+      "date": "2026-11-24",
+      "version": null,
+      "entries": [
+        {
+          "hash": "e2f4ed980",
+          "type": "feat",
+          "scope": "settings",
+          "title": "The lab's country"
+        },
+        {
+          "hash": "8dfd4dfc2",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Store required only when false, and the CLI reads the settings list from bootstrap"
+        },
+        {
+          "hash": "8029f322b",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Field settings, more result types and range fields"
+        },
+        {
+          "hash": "5c60cf05b",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Identity review fixes"
+        },
+        {
+          "hash": "87e85d821",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "The screens and docs use the Test code"
+        },
+        {
+          "hash": "927e24ce6",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "The pack preview, the result sheet answer and map list carry the Test code"
+        },
+        {
+          "hash": "41c61eb6f",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Orders under an earlier Test code keep their test"
+        },
+        {
+          "hash": "53e9e6b91",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Mapping files and rejected tests use the Test code"
+        },
+        {
+          "hash": "8c01e55fe",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Orders and the test map carry the Test code"
+        },
+        {
+          "hash": "4dd7de9f2",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Compare Test codes ignoring case and refuse another test's id"
+        },
+        {
+          "hash": "61552185b",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "An internal id and a Test code that can change"
+        },
+        {
+          "hash": "dc9b289f4",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "LOINC pick review fixes"
+        },
+        {
+          "hash": "ecd1d7089",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "LOINC on one row"
+        },
+        {
+          "hash": "9e1221be3",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "A re-ticked LOINC field stays on another pick, and a param saved before any field takes its system"
+        },
+        {
+          "hash": "62cbdfcd9",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "A LOINC pick puts its result field on the unsaved test"
+        },
+        {
+          "hash": "a98c80a14",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Give focus back to the LOINC menu after Browse, and size the LOINC tree by dvh"
+        },
+        {
+          "hash": "c18b0de89",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "The test sheet in Corlix's order, with Browse LOINC and suggestion marks"
+        },
+        {
+          "hash": "e54809151",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Keep a specimen type's switched-off SNOMED link switched off"
+        },
+        {
+          "hash": "66a1d064c",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Corlix's 15 specimen types, linked to SNOMED"
+        },
+        {
+          "hash": "c7efe98c2",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Tick a name-matched specimen only on a prefix, and keep an existing field's unit"
+        },
+        {
+          "hash": "f4c4b2c17",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "LOINC short name, component and field plan on a pick"
+        }
+      ]
+    },
     {
       "date": "2026-11-23",
       "version": null,
