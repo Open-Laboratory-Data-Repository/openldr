@@ -487,10 +487,12 @@ export interface LabIdentityField {
   id: string;
   labelKey: string;
   multiline: boolean;
-  /** Present when the field must be PICKED from a list rather than typed — today only
-   *  `facility-registers`. See `LAB_IDENTITY_FIELDS` (@openldr/config) for why free text is unsafe
-   *  for a register URI. */
-  source?: 'facility-registers';
+  /** Present when the field must be PICKED from a list rather than typed: `facility-registers`, or
+   *  `country` (the codes of `valueSetUrl`). See `LAB_IDENTITY_FIELDS` (@openldr/config) for why
+   *  free text is unsafe for a register URI. */
+  source?: 'facility-registers' | 'country';
+  /** For `source: 'country'`: the value set the picker lists. */
+  valueSetUrl?: string;
 }
 /** Field definitions come FROM the server: `@openldr/config` re-exports an env loader that reads
  *  process.env, so studio cannot import the registry (same reason feature flags work this way). */

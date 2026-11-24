@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { createLabIdentity, labCountry, labTimeZone } from './lab-identity';
+import { LAB_COUNTRY_VALUE_SET } from '@openldr/config';
+import { createLabIdentity, countryCodes, labCountry, labTimeZone } from './lab-identity';
+import { CONTROLLED_VALUE_SETS } from './facility-controlled-fields';
 
 function fakeStore() {
   const rows = new Map<string, string>();
@@ -72,8 +74,50 @@ describe('labTimeZone', () => {
   });
 });
 
+describe('lab.country', () => {
+  const countries = async () => ['TZA', 'KEN'];
+
+  it('saves a code from the country list and reads it back through labCountry', async () => {
+    const { store } = fakeStore();
+    const svc = createLabIdentity(store, { countries });
+    expect(await svc.set({ 'lab.country': 'TZA' }, 'tester')).toEqual([]);
+    expect(await svc.all()).toEqual({ 'lab.country': 'TZA' });
+    expect(await labCountry(svc)).toBe('TZA');
+  });
+
+  it('refuses a code that is not in the country list, and writes nothing', async () => {
+    const { store, rows } = fakeStore();
+    const svc = createLabIdentity(store, { countries });
+    expect(await svc.set({ 'lab.name': 'Muhimbili', 'lab.country': 'XXX' }, 'tester'))
+      .toEqual([{ key: 'lab.country', reason: 'invalid-country' }]);
+    expect(rows.size).toBe(0);
+  });
+
+  it('refuses a country when the list cannot be read, and still clears one', async () => {
+    const { store } = fakeStore();
+    const svc = createLabIdentity(store, { countries: async () => { throw new Error('down'); } });
+    expect(await svc.set({ 'lab.country': 'TZA' }, 'tester')).toEqual([{ key: 'lab.country', reason: 'invalid-country' }]);
+    expect(await svc.set({ 'lab.country': '' }, 'tester')).toEqual([]);
+  });
+
+  it('reads the codes of the country value set through expand', async () => {
+    const seen: string[] = [];
+    const ops = {
+      expand: async (url: string) => {
+        seen.push(url);
+        return { expansion: { contains: [{ code: 'TZA' }, { code: 'KEN' }, {}] } };
+      },
+    };
+    expect([...await countryCodes(ops as never)]).toEqual(['TZA', 'KEN']);
+    expect(seen).toEqual([CONTROLLED_VALUE_SETS.country]);
+  });
+
+  it('names the same value set as the field the studio picks from', () => {
+    expect(LAB_COUNTRY_VALUE_SET).toBe(CONTROLLED_VALUE_SETS.country);
+  });
+});
+
 describe('labCountry', () => {
-  // Task 2 adds the lab.country setting. Until then tokens() never holds one, so this reads null.
   it('reads country from tokens(), trimmed, and null when none is set', async () => {
     expect(await labCountry({ tokens: async () => ({ country: ' TZA ' }) })).toBe('TZA');
     expect(await labCountry({ tokens: async () => ({}) })).toBeNull();

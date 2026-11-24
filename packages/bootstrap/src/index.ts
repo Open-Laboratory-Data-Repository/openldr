@@ -75,7 +75,7 @@ import { checkForActivity, copyForActivity, createActivityService, type Activity
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createValidationStrictness, type ValidationStrictness } from './validation-settings';
-import { createLabIdentity, labCountry, labTimeZone, type LabIdentityService } from './lab-identity';
+import { countryCodes, createLabIdentity, labCountry, labTimeZone, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createUpdateCheck, type UpdateCheck } from './update-check';
 export * from './update-check';
@@ -1471,7 +1471,8 @@ const reporting: ReportingApi = {
   const featureFlags = createFeatureFlags(appSettings);
   const numberSettings = createNumberSettings(appSettings);
   const validationStrictness: ValidationStrictness = createValidationStrictness(appSettings);
-  const labIdentity = createLabIdentity(appSettings);
+  // The country list is read on each save that sets a country, so a list loaded later counts.
+  const labIdentity = createLabIdentity(appSettings, { countries: () => countryCodes(terminology.ops) });
   // Reads/writes the discrete `update.*` keys. Built on every context — the CLI reads the same
   // state — but NOTHING polls from here; the API server process arms the timer (see
   // apps/server/src/index.ts), the way every other background runner is armed.
@@ -2353,7 +2354,7 @@ export { createFeatureFlags } from './feature-flags';
 export { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog, type CatalogGroup, type PluginCapabilityMeta } from './capability-catalog';
 export { createConnectorDialectLookup, dialectFor } from './connector-sql-service';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
-export { createLabIdentity, labCountry, labTimeZone, type LabIdentityService } from './lab-identity';
+export { countryCodes, createLabIdentity, labCountry, labTimeZone, type LabIdentityOptions, type LabIdentityService } from './lab-identity';
 export { createNumberSettings } from './number-settings';
 export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';

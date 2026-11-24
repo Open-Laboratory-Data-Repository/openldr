@@ -284,7 +284,7 @@ const NOT_A_PATH: Record<string, string[]> = {
   'import check codes': ['plugin', 'copy', '--label', '--reason', '--laboratory'],
   'settings flags set': ['key', 'value'],
   'settings numbers set': ['key', 'value'],
-  'settings lab set': ['--name', '--address', '--contact', '--timezone'],
+  'settings lab set': ['--name', '--address', '--contact', '--timezone', '--country'],
   'settings sync set': ['field', 'value'],
   'settings validation set': ['level'],
   'settings danger': ['action'],

@@ -1,5 +1,5 @@
 import { createAppContext, dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, recordAuditEvent } from '@openldr/bootstrap';
-import { loadConfig, LAB_LOGO_MIME, type SyncConfigView, type SyncConfigInput } from '@openldr/config';
+import { loadConfig, LAB_COUNTRY_VALUE_SET, LAB_LOGO_MIME, type SyncConfigView, type SyncConfigInput } from '@openldr/config';
 import { callerName, cliActor } from './cli-actor';
 
 interface JsonOpt { json: boolean }
@@ -243,6 +243,9 @@ export interface LabSetOpts extends JsonOpt {
    *  every spelling — "+03:00" because it cannot express daylight saving, and "Etc/GMT+3" because
    *  it resolves fine and means UTC−3, the opposite of how it reads. */
   timezone?: string;
+  /** ISO 3166-1 alpha-3 code from the country value set, e.g. "TZA"; empty string clears it.
+   *  Trimmed and put in capitals here; `ctx.labIdentity.set` refuses a code not in the list. */
+  country?: string;
   /** Path to a PNG/JPEG file; read and stored as a data URI. */
   logoFile?: string;
 }
@@ -253,6 +256,7 @@ export async function runSettingsLabSet(opts: LabSetOpts): Promise<number> {
   if (opts.address !== undefined) patch['lab.address'] = opts.address;
   if (opts.contact !== undefined) patch['lab.contact'] = opts.contact;
   if (opts.timezone !== undefined) patch['lab.timezone'] = opts.timezone;
+  if (opts.country !== undefined) patch['lab.country'] = opts.country.trim().toUpperCase();
 
   if (opts.logoFile !== undefined) {
     if (opts.logoFile === '') {
@@ -276,7 +280,7 @@ export async function runSettingsLabSet(opts: LabSetOpts): Promise<number> {
   }
 
   if (Object.keys(patch).length === 0) {
-    process.stderr.write('nothing to set — pass at least one of --name, --address, --contact, --timezone, --logo-file\n');
+    process.stderr.write('nothing to set: pass at least one of --name, --address, --contact, --timezone, --country, --logo-file\n');
     return 1;
   }
 
@@ -293,6 +297,9 @@ export async function runSettingsLabSet(opts: LabSetOpts): Promise<number> {
           process.stderr.write(
             '  use a named zone such as Africa/Dar_es_Salaam. A fixed offset is refused in every '
             + 'spelling: Etc/GMT+3 means UTC-3, the opposite of how it reads.\n');
+        }
+        if (e.reason === 'invalid-country') {
+          process.stderr.write(`  use a three-letter code from ${LAB_COUNTRY_VALUE_SET}, such as TZA.\n`);
         }
       }
       return 1;

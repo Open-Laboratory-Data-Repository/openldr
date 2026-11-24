@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@openldr/config', () => ({
   loadConfig: vi.fn(() => ({ config: true })),
+  LAB_COUNTRY_VALUE_SET: 'urn:openldr:valueset:country',
 }));
 
 vi.mock('@openldr/bootstrap', () => ({
@@ -288,11 +289,29 @@ describe('settings lab — set (timezone parity with --name/--address/--contact)
     expect(err).toContain('invalid-timezone');
   });
 
+  it('passes --country through as lab.country, in capitals', async () => {
+    const code = await runSettingsLabSet({ country: ' tza ', json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.appCtx.labIdentity.set).toHaveBeenCalledWith({ 'lab.country': 'TZA' }, 'cli');
+  });
+
+  it('refuses a country the service refuses, and says where the list is', async () => {
+    mocks.appCtx.labIdentity.set.mockResolvedValue([{ key: 'lab.country', reason: 'invalid-country' }]);
+
+    const code = await runSettingsLabSet({ country: 'XXX', json: false });
+
+    expect(code).not.toBe(0);
+    expect(err).toContain('invalid-country');
+    expect(err).toContain('urn:openldr:valueset:country');
+  });
+
   it('rejects an empty options object — --timezone now appears in the "nothing to set" hint', async () => {
     const code = await runSettingsLabSet({ json: false });
 
     expect(code).not.toBe(0);
     expect(err).toContain('--timezone');
+    expect(err).toContain('--country');
   });
 });
 

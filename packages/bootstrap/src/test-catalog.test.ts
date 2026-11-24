@@ -15,6 +15,7 @@ import {
   type CatalogListQuery, type CatalogListResult, type CatalogTestInput, type CatalogImportInput,
 } from './test-catalog';
 import type { CatalogColumnMap } from './test-catalog-import';
+import { countryCodes, createLabIdentity, labCountry } from './lab-identity';
 
 const LOCAL = 'urn:openldr:cs:local';
 // Three of the four codes the seeded specimen-type ValueSet lists (migration 014).
@@ -26,7 +27,11 @@ const CSF = { system: LOCAL, code: 'CSF' };
 // Mirrors reexpand-value-sets.test.ts.
 // Tests written before tests had their own id pass `legacyIds`, so a new test's id is its Test code,
 // as every test saved before the change reads. The tests of the id itself use the real one.
-async function buildCatalog(opts: { realIds?: boolean; labCountry?: string | null } = {}) {
+async function buildCatalog(opts: {
+  realIds?: boolean; labCountry?: string | null;
+  /** Wires a real lab identity service, as bootstrap does. Given the catalog's ops so it can read the seeded country list. */
+  labIdentity?: (ops: ReturnType<typeof createOperations>) => () => Promise<string | null>;
+} = {}) {
   const db = await makeMigratedDb();
   const fhirStore = createFhirStore(db);
   const store = createTerminologyStore(db, fhirStore);
@@ -52,8 +57,9 @@ async function buildCatalog(opts: { realIds?: boolean; labCountry?: string | nul
     translate: (q) => store.translate(q),
   });
   const makeId = opts.realIds ? undefined : (testCode: string) => testCode;
-  const labCountry = opts.labCountry === undefined ? {} : { labCountry: async () => opts.labCountry ?? null };
-  return { db, admin, catalog: createTestCatalog({ db, admin, ops, ...(makeId ? { makeId } : {}), ...labCountry }) };
+  const labCountry = opts.labIdentity ? { labCountry: opts.labIdentity(ops) }
+    : opts.labCountry === undefined ? {} : { labCountry: async () => opts.labCountry ?? null };
+  return { db, admin, ops, catalog: createTestCatalog({ db, admin, ops, ...(makeId ? { makeId } : {}), ...labCountry }) };
 }
 
 async function seedTest(
@@ -1668,6 +1674,27 @@ describe('test catalog: field settings, more types and range fields (plan B, Tas
       expect(answer.params[0].fits).toEqual(fits);
       expect(answer.params[0].band?.low).toBe(low);
     }
+  });
+
+  it('uses the country saved in the lab settings', async () => {
+    const rows = new Map<string, string>();
+    const appStore = {
+      get: async (k: string) => (rows.has(k) ? { key: k, value: rows.get(k)!, updatedAt: '', updatedBy: null } : undefined),
+      set: async (k: string, v: string) => { rows.set(k, v); },
+    } as never;
+    let identity: ReturnType<typeof createLabIdentity> | null = null;
+    const { db, catalog } = await buildCatalog({
+      labIdentity: (ops) => {
+        identity = createLabIdentity(appStore, { countries: () => countryCodes(ops) });
+        return () => labCountry(identity);
+      },
+    });
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ low: 1, country: 'TZA' }), range({ low: 3 })] }] as never });
+    expect(await identity!.set({ 'lab.country': 'XXX' }, 'tester')).toEqual([{ key: 'lab.country', reason: 'invalid-country' }]);
+    expect(await identity!.set({ 'lab.country': 'KEN' }, 'tester')).toEqual([]);
+    const [answer] = await catalog.resultParamsFor([test('FBC')], {});
+    expect(answer.params[0].fits).toEqual(['no', 'yes']);
   });
 
   it('answers a band with no country when the catalog has no country dependency', async () => {

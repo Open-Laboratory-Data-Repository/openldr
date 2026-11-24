@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  fetchLabIdentity, saveLabIdentity, listFacilityImportSources,
-  type LabIdentity, type LabIdentityResponse, type FacilityRegisterSource,
+  fetchLabIdentity, saveLabIdentity, listFacilityImportSources, expandValueSetByUrl,
+  type CatalogRejectReason, type LabIdentity, type LabIdentityResponse, type FacilityRegisterSource,
 } from '@/api';
 
 const LOGO_KEY = 'lab.logo';
@@ -44,6 +44,9 @@ export function Laboratory(): JSX.Element {
   // Active-only, matching the import sheet's own picklist: offering a deactivated register here
   // would let Settings hand the Facility form a value the route then refuses.
   const [registers, setRegisters] = useState<FacilityRegisterSource[]>([]);
+  // The country list, from the value set the server names on the country field.
+  const [countries, setCountries] = useState<CatalogRejectReason[]>([]);
+  const countryUrl = meta?.fields.find((f) => f.source === 'country')?.valueSetUrl;
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +66,16 @@ export function Laboratory(): JSX.Element {
       .catch(() => { if (!cancelled) setRegisters([]); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!countryUrl) return;
+    let cancelled = false;
+    // A failure leaves the picker empty. The rest of the page does not need the country list.
+    void expandValueSetByUrl(countryUrl)
+      .then((rows) => { if (!cancelled) setCountries(rows); })
+      .catch(() => { if (!cancelled) setCountries([]); });
+    return () => { cancelled = true; };
+  }, [countryUrl]);
 
   const set = (key: string, value: string) => {
     setValues((v) => ({ ...v, [key]: value }));
@@ -166,6 +179,20 @@ export function Laboratory(): JSX.Element {
                 <SelectContent>
                   {registers.map((r) => (
                     <SelectItem key={r.url} value={r.url}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldRow>
+          ) : f.source === 'country' ? (
+            /* Picked, never typed: a reference range naming a country fits only on an exact code. */
+            <FieldRow key={f.id} id={f.id} label={t(f.labelKey)}>
+              <Select value={values[f.id] ?? ''} onValueChange={(v) => set(f.id, v)}>
+                <SelectTrigger id={f.id} aria-label={t(f.labelKey)} className="h-8 text-xs">
+                  <SelectValue placeholder={t('settings.laboratory.countryPlaceholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {countries.map((c) => (
+                    <SelectItem key={c.code} value={c.code}>{c.display ? `${c.display} (${c.code})` : c.code}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

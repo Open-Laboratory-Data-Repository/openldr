@@ -693,6 +693,8 @@ export const en = {
       facilitySystem: 'Facility register',
       facilitySystemPlaceholder: 'Select a register…',
       timezone: 'Time zone',
+      country: 'Country',
+      countryPlaceholder: 'Select a country…',
       timezoneHint: 'An IANA zone name, e.g. Africa/Dar_es_Salaam. A SQL Server warehouse takes Windows zone names instead, which this field rejects — on SQL Server leave this empty and type the zone into the Time zone filter on each report run.',
       chooseLogo: 'Choose file…',
       clearLogo: 'Clear',

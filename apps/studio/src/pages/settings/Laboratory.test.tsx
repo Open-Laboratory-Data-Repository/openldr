@@ -15,6 +15,7 @@ vi.mock('@/api', async (orig) => {
     fetchLabIdentity: vi.fn(),
     saveLabIdentity: vi.fn(),
     listFacilityImportSources: vi.fn(),
+    expandValueSetByUrl: vi.fn(),
   };
 });
 import * as api from '@/api';
@@ -29,6 +30,7 @@ const META = {
     { id: 'lab.address', labelKey: 'settings.laboratory.address', multiline: true },
     { id: 'lab.contact', labelKey: 'settings.laboratory.contact', multiline: false },
     { id: 'lab.timezone', labelKey: 'settings.laboratory.timezone', multiline: false },
+    { id: 'lab.country', labelKey: 'settings.laboratory.country', multiline: false, source: 'country', valueSetUrl: 'urn:openldr:valueset:country' },
     { id: 'lab.logo', labelKey: 'settings.laboratory.logo', multiline: false },
   ],
   values: { 'lab.name': 'OpenLDR', 'lab.address': 'PO Box xxxx', 'lab.contact': 'support@example.org', 'lab.logo': LOGO },
@@ -40,6 +42,10 @@ beforeEach(() => {
   vi.mocked(toast.error).mockClear();
   vi.mocked(api.fetchLabIdentity).mockResolvedValue(META as never);
   vi.mocked(api.listFacilityImportSources).mockResolvedValue([] as never);
+  vi.mocked(api.expandValueSetByUrl).mockResolvedValue([
+    { system: 'urn:iso:std:iso:3166', code: 'TZA', display: 'Tanzania' },
+    { system: 'urn:iso:std:iso:3166', code: 'KEN', display: 'Kenya' },
+  ] as never);
 });
 
 /** AGENTS.md section 5: page actions live in a ⋯ dropdown, never a standalone button. Radix opens
@@ -156,6 +162,27 @@ describe('Settings → Laboratory', () => {
     // The logo row is three fixed-width things that together outrun the column on a 320px phone.
     const logoRow = screen.getByRole('img').parentElement;
     expect(logoRow?.className, 'logo row must wrap rather than push past the padding').toMatch(/flex-wrap/);
+  });
+
+  // The lab's country is PICKED from the country value set the server names, never typed: a range
+  // that names a country fits only when the code matches exactly.
+  it('picks the country from the value set the server names, label left, and saves the code', async () => {
+    vi.mocked(api.saveLabIdentity).mockResolvedValue(META.values as never);
+    render(<MemoryRouter><Laboratory /></MemoryRouter>);
+    await screen.findByDisplayValue('OpenLDR');
+    await waitFor(() => expect(api.expandValueSetByUrl).toHaveBeenCalledWith('urn:openldr:valueset:country'));
+
+    const picker = screen.getByRole('combobox', { name: /^country$/i });
+    expect(screen.queryByRole('textbox', { name: /^country$/i }), 'never a text box').not.toBeInTheDocument();
+    // Label left, control right: the label is the grid cell just before the picker.
+    const label = screen.getByText(/^country$/i, { selector: 'label' });
+    expect(label.parentElement?.className).toMatch(/grid-cols-\[auto_/);
+    expect(label.nextElementSibling).toBe(picker);
+
+    fireEvent.click(picker);
+    fireEvent.click(await screen.findByRole('option', { name: /Tanzania/ }));
+    await save();
+    await waitFor(() => expect(api.saveLabIdentity).toHaveBeenCalledWith(expect.objectContaining({ 'lab.country': 'TZA' })));
   });
 
   it('toasts the failure and keeps the page usable when the write fails', async () => {
