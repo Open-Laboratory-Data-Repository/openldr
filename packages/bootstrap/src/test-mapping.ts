@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import { testMapId, type ExternalSchema, type InternalSchema, type MapType, type TerminologyAdminStore, type TestMapLevel } from '@openldr/db';
 import { LOINC_SYSTEM, RESULT_PARAM_SYSTEM } from '@openldr/terminology';
 import { toCsv } from '@openldr/reporting';
-import { TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM, TestCatalogError, testCodeKey, testCodeOf } from './test-catalog';
+import { TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM, TestCatalogError, previousTestCodesOf, testCodeKey, testCodeOf } from './test-catalog';
 import { readTableFile, TableFileError } from './table-file';
 
 // Test mapping (docs/superpowers/specs/2026-10-11-test-mapping-design.md) and result field mapping
@@ -101,8 +101,9 @@ export interface TestMappingDeps {
 }
 
 type MappingRow = { id: string; from_system: string; from_code: string; to_code: string; to_display: string | null; map_type: string; managed_origin: string | null };
-/** `published` is the code test_map names the target by: a test's Test code, a field's own code. */
-type CatalogEntry = { published: string; name: string | null; category: string | null; loinc: string | null; retired: boolean };
+/** `published` is the code test_map names the target by: a test's Test code, a field's own code.
+ *  `previous` is a test's earlier Test codes, which its earlier orders carry. A field has none. */
+type CatalogEntry = { published: string; previous: string[]; name: string | null; category: string | null; loinc: string | null; retired: boolean };
 type Resolved =
   | { kind: 'mapped'; catalogCode: string }
   | { kind: 'ambiguous'; catalogCodes: string[] }
@@ -234,7 +235,7 @@ export function createTestMapping(deps: TestMappingDeps) {
       .where('map_type', '=', MAP_TYPE).where('is_active', '=', true).execute();
     const loinc = new Map(links.map((l) => [l.from_code, l.to_code]));
     return new Map(concepts.map((c) => [c.code, {
-      published: testCodeOf(c.code, c.properties),
+      published: testCodeOf(c.code, c.properties), previous: previousTestCodesOf(c.properties),
       name: c.display, category: categoryOf(c.properties), loinc: loinc.get(c.code) ?? null, retired: c.status === RETIRED,
     }]));
   }
@@ -249,7 +250,7 @@ export function createTestMapping(deps: TestMappingDeps) {
       .where('map_type', '=', MAP_TYPE).where('is_active', '=', true).execute();
     const loinc = new Map(links.map((l) => [l.from_code, l.to_code]));
     return new Map(concepts.map((c) => [c.code, {
-      published: c.code, name: c.display, category: null, loinc: loinc.get(c.code) ?? null, retired: c.status === RETIRED,
+      published: c.code, previous: [], name: c.display, category: null, loinc: loinc.get(c.code) ?? null, retired: c.status === RETIRED,
     }]));
   }
 
@@ -305,16 +306,19 @@ export function createTestMapping(deps: TestMappingDeps) {
     // CE's own orders and results already carry the target's code, so each target maps to itself.
     const ids = [...targets.keys()].sort(compare);
     const self = ids.map((code) => row(MAP_TARGET_SYSTEM[level], code, code));
-    // A test also maps from its Test code, which a new order leads with when it has no LOINC link. Test
-    // codes are unique ignoring case; should two ever match, the first id keeps it, so the key never collides.
+    // A test also maps from its Test code, which a new order leads with when it has no LOINC link, and
+    // from each earlier Test code, which its earlier orders carry. All name the current Test code.
+    // Test codes, earlier ones included, are unique ignoring case. Should two ever match, current codes
+    // win over earlier ones and then the first id keeps it, so the key never collides.
     if (level === 'test') {
       const taken = new Set<string>();
-      for (const id of ids) {
-        const testCode = targets.get(id)!.published;
-        if (taken.has(testCodeKey(testCode))) continue;
+      const add = (id: string, testCode: string): void => {
+        if (taken.has(testCodeKey(testCode))) return;
         taken.add(testCodeKey(testCode));
         self.push(row(TEST_CODE_SYSTEM, testCode, id));
-      }
+      };
+      for (const id of ids) add(id, targets.get(id)!.published);
+      for (const id of ids) for (const earlier of targets.get(id)!.previous) add(id, earlier);
     }
     return {
       rows: [...mapped, ...self],

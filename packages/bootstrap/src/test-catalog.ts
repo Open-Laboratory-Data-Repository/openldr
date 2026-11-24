@@ -370,6 +370,28 @@ export function testCodeKey(code: string): string {
   return code.trim().toLowerCase();
 }
 
+/** A concept's earlier Test codes: the codes it had before each change, oldest first. Orders saved under
+ *  one still carry it, so test_map keeps a row for each and no other test may take one. */
+export function previousTestCodesOf(properties: unknown): string[] {
+  const p = (parseJson(properties) ?? {}) as Record<string, unknown>;
+  return Array.isArray(p.previousTestCodes) ? p.previousTestCodes.filter((c): c is string => typeof c === 'string' && c.trim() !== '') : [];
+}
+
+/** The earlier Test codes after a test's Test code goes from `from` to `to`: `from` is added when it is
+ *  a different code, and `to` leaves the list, so going back never lists a code twice. Compared by
+ *  testCodeKey. */
+function nextPreviousTestCodes(previous: string[], from: string | null, to: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const c of from !== null && testCodeKey(from) !== testCodeKey(to) ? [...previous, from] : previous) {
+    const key = testCodeKey(c);
+    if (key === testCodeKey(to) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+  }
+  return out;
+}
+
 /** A concept's Test code: its testCode property, else its concept code (a test saved before Test codes). */
 export function testCodeOf(code: string, properties: unknown): string {
   const p = (parseJson(properties) ?? {}) as Record<string, unknown>;
@@ -436,6 +458,8 @@ interface PlannedWrite {
   test: ValidTest;
   /** The stored properties, so keys this catalog does not manage survive. Null for a new test. */
   stored: unknown;
+  /** The test is saved already, so a changed Test code is kept as an earlier one. */
+  existing: boolean;
   /** The LOINC code linked before the import. */
   loincBefore: string | null;
 }
@@ -606,10 +630,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
 
   /** Every test's id, Test code and name, retired tests included. The catalog is small (spec 4.4),
    *  so uniqueness is checked here rather than by an index. */
-  async function testCodes(): Promise<Array<{ id: string; testCode: string; display: string }>> {
+  async function testCodes(): Promise<Array<{ id: string; testCode: string; previous: string[]; display: string }>> {
     const rows = await db.selectFrom('terminology_concepts').select(['code', 'display', 'properties'])
       .where('system', '=', TEST_CATALOG_SYSTEM).orderBy('code').execute();
-    return rows.map((r) => ({ id: r.code, testCode: testCodeOf(r.code, r.properties), display: r.display ?? r.code }));
+    return rows.map((r) => ({
+      id: r.code, testCode: testCodeOf(r.code, r.properties), previous: previousTestCodesOf(r.properties), display: r.display ?? r.code,
+    }));
   }
 
   async function findByTestCode(testCode: string): Promise<CatalogTest | null> {
@@ -632,6 +658,10 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return new TestCatalogError(`Test code ${testCode} is the id of another test, ${holder.display} (${holder.id}).`, 'conflict');
   }
 
+  function wasUsedBy(testCode: string, holder: { id: string; display: string }): TestCatalogError {
+    return new TestCatalogError(`Test code ${testCode} was used by ${holder.display} (${holder.id}) before. Earlier orders still carry it.`, 'conflict');
+  }
+
   /**
    * Refuses a Test code another test holds, or one that is another test's id, so resolve can never
    * send a Test code to a different test than the id means. `self` is the test being edited, which may
@@ -644,6 +674,9 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (holder) throw heldBy(holder);
     const idHolder = others.find((t) => testCodeKey(t.id) === key);
     if (idHolder) throw isAnId(testCode, idHolder);
+    // An earlier Test code of another test still names that test on its earlier orders.
+    const earlier = others.find((t) => t.previous.some((c) => testCodeKey(c) === key));
+    if (earlier) throw wasUsedBy(testCode, earlier);
   }
 
   function invalid(message: string): TestCatalogError {
@@ -811,19 +844,25 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       .where('system', '=', TEST_CATALOG_SYSTEM).where('code', '=', code).executeTakeFirst();
   }
 
-  async function writeConceptOn(exec: Kysely<InternalSchema>, code: string, t: ValidTest, stored: unknown): Promise<void> {
+  /** `existing` says the test is saved already. Its stored properties may still be null (a test saved
+   *  before Test codes), so they cannot say it. */
+  async function writeConceptOn(exec: Kysely<InternalSchema>, code: string, t: ValidTest, stored: unknown, existing: boolean): Promise<void> {
     // Keep every key this catalog does not manage, as terms.update does since test catalog S0.
     const parsed = parseJson(stored);
     const next: Record<string, unknown> = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? { ...(parsed as Record<string, unknown>) }
       : {};
     delete next.testCode;
+    delete next.previousTestCodes;
     delete next.shortName;
     delete next.category;
     delete next.specimenTypes;
     // A Test code equal to the id is what the fallback reads anyway, so it is not stored. A test saved
     // before Test codes keeps its properties as they were until its code changes.
     if (t.testCode !== code) next.testCode = t.testCode;
+    // A changed Test code is kept as an earlier one (test identity, fix round 1). A new test has none.
+    const previous = nextPreviousTestCodes(previousTestCodesOf(stored), existing ? testCodeOf(code, stored) : null, t.testCode);
+    if (previous.length) next.previousTestCodes = previous;
     if (t.shortName) next.shortName = t.shortName;
     if (t.category) next.category = t.category;
     if (t.specimenTypes.length) next.specimenTypes = t.specimenTypes;
@@ -855,8 +894,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     }))).execute();
   }
 
-  async function writeConcept(code: string, t: ValidTest, stored: unknown): Promise<void> {
-    await writeConceptOn(db, code, t, stored);
+  async function writeConcept(code: string, t: ValidTest, stored: unknown, existing: boolean): Promise<void> {
+    await writeConceptOn(db, code, t, stored, existing);
     // One terminology_system signal per edit, as terms.create does, so labs pull the change.
     await markTerminologyChanged(db, TEST_CATALOG_SYSTEM);
   }
@@ -886,7 +925,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (await storedConcept(code)) throw new TestCatalogError(`Test ${code} is already in the catalog.`, 'conflict');
     // Two writes, not one transaction: the admin store opens its own. A failed link leaves the test
     // saved without it, and saving again links it.
-    await writeConcept(code, t, null);
+    await writeConcept(code, t, null, false);
     await writeLoincLink(code, t.loinc);
     changed();
     return saved(code);
@@ -900,7 +939,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     const testCode = input.testCode === undefined ? testCodeOf(code, stored.properties) : input.testCode;
     const t = await validate({ ...input, testCode });
     await refuseTakenTestCode(t.testCode, code);
-    await writeConcept(code, t, stored.properties);
+    await writeConcept(code, t, stored.properties, true);
     await writeLoincLink(code, t.loinc);
     changed();
     return saved(code);
@@ -1037,6 +1076,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     const byIdKey = new Map(all.map((t) => [testCodeKey(t.code), t]));
     const storedByCode = new Map((await db.selectFrom('terminology_concepts').select(['code', 'properties'])
       .where('system', '=', TEST_CATALOG_SYSTEM).execute()).map((r) => [r.code, r.properties as unknown]));
+    // Each earlier Test code and the test it still names on earlier orders.
+    const byPrevious = new Map(all.flatMap((t) => previousTestCodesOf(storedByCode.get(t.code)).map((c) => [testCodeKey(c), t] as const)));
     const ctx = await loadCheckContext(rows.flatMap((r) => (r.values.loinc ? [r.values.loinc] : [])));
     const answers = input.valueMap ?? { categories: [], specimens: [] };
     const toAdd = await newCategories(answers.categories);
@@ -1104,6 +1145,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       const idHolder = byIdKey.get(codeKey);
       if (idHolder && idHolder.code !== before?.code) {
         report.refused.push({ line, code, reason: isAnId(code, { id: idHolder.code, display: idHolder.display }).message });
+        continue;
+      }
+      // Or an earlier Test code of another test.
+      const earlier = byPrevious.get(codeKey);
+      if (earlier && earlier.code !== before?.code) {
+        report.refused.push({ line, code, reason: wasUsedBy(code, { id: earlier.code, display: earlier.display }).message });
         continue;
       }
       firstLine.set(key, line);
@@ -1180,12 +1227,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         report.counts.new += 1;
         // The id is made when the plan is, so a preview and an apply give different ids. Only the
         // apply's plan is written.
-        writes.push({ code: (deps.makeId ?? newTestId)(code), test, stored: null, loincBefore: null });
+        writes.push({ code: (deps.makeId ?? newTestId)(code), test, stored: null, existing: false, loincBefore: null });
       } else if (sameTest(before, test)) {
         report.counts.unchanged += 1;
       } else {
         report.counts.changed += 1;
-        writes.push({ code: before.code, test, stored: storedByCode.get(before.code) ?? null, loincBefore: before.loinc });
+        writes.push({ code: before.code, test, stored: storedByCode.get(before.code) ?? null, existing: true, loincBefore: before.loinc });
       }
     }
 
@@ -1226,7 +1273,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         }).execute();
       }
       for (const w of writes) {
-        await writeConceptOn(trx, w.code, w.test, w.stored);
+        await writeConceptOn(trx, w.code, w.test, w.stored, w.existing);
         if (w.test.loinc !== null && w.test.loinc !== w.loincBefore) {
           await deps.admin.termMappings.saveExclusive(loincLinkInput(w.code, w.test.loinc), { trx });
         } else {

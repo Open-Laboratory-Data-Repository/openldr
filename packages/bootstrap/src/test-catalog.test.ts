@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
+import { makeMigratedExternalDb } from '@openldr/db/testing-external';
+import { createTestMapping } from './test-mapping';
 import {
   createFhirStore, createTerminologyStore, createTerminologyAdminStore,
   type InternalSchema, type ValueSetProjection,
@@ -1299,8 +1301,8 @@ describe('test catalog: an internal id and a Test code', () => {
     expect(await catalog.findByTestCode('HB')).toBeNull();
     const mapped = await admin.termMappings.listOutgoing('urn:openldr:disa', 'HGB');
     expect(mapped.map((m) => m.toCode)).toEqual([hb.code]);
-    // The old Test code is free again.
-    expect((await catalog.create({ testCode: 'HB', display: 'Another' })).testCode).toBe('HB');
+    // The old Test code is not free: earlier orders still carry it (fix round 1 ruling).
+    await expect(catalog.create({ testCode: 'HB', display: 'Another' })).rejects.toMatchObject({ kind: 'conflict' });
   });
 
   it('resolves a Test code first, then an id', async () => {
@@ -1423,3 +1425,57 @@ describe('test catalog: an internal id and a Test code', () => {
     expect(report.counts).toEqual({ new: 1, changed: 0, unchanged: 0, refused: 4 });
   });
 });
+
+describe('test catalog: earlier Test codes', () => {
+  it('keeps each earlier Test code once, never the current one, and refuses it to another test', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await catalog.update(hb.code, { testCode: 'HGB', display: 'Haemoglobin' });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HGB', previousTestCodes: ['HB'] });
+
+    // HB still means this test's earlier orders, so no other test may take it, in any case.
+    await expect(catalog.create({ testCode: 'hb', display: 'Copy' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: 'Test code hb was used by Haemoglobin (' + hb.code + ') before. Earlier orders still carry it.' });
+    const glu = await catalog.create({ testCode: 'GLU', display: 'Glucose' });
+    await expect(catalog.update(glu.code, { testCode: 'HB', display: 'Glucose' })).rejects.toMatchObject({ kind: 'conflict' });
+
+    // The test itself may go back, and HB is not listed twice.
+    await catalog.update(hb.code, { testCode: 'HB', display: 'Haemoglobin' });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HB', previousTestCodes: ['HGB'] });
+    await catalog.update(hb.code, { testCode: 'hgb', display: 'Haemoglobin' });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'hgb', previousTestCodes: ['HB'] });
+    // A change of case only is the same code, so nothing is kept.
+    await catalog.update(hb.code, { testCode: 'HGB', display: 'Haemoglobin' });
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HGB', previousTestCodes: ['HB'] });
+  });
+
+  it('keeps the earlier Test code when an import renames a test, and refuses a row that takes one', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    const columnMap = { id: 'id', code: 'code', name: 'name' };
+    const renamed = await catalog.importApply({ table: { headers: ['id', 'code', 'name'], rows: [[hb.code, 'HGB', 'Haemoglobin']] }, columnMap });
+    expect(renamed.counts.changed).toBe(1);
+    expect((await storedConcept(db, hb.code)).properties).toEqual({ testCode: 'HGB', previousTestCodes: ['HB'] });
+
+    const taken = await catalog.importPreview({ table: { headers: ['id', 'code', 'name'], rows: [['', 'HB', 'Another']] }, columnMap });
+    expect(taken.refused).toEqual([
+      { line: 2, code: 'HB', reason: `Test code HB was used by Haemoglobin (${hb.code}) before. Earlier orders still carry it.` },
+    ]);
+  });
+
+  it('publishes a test_map self row for each earlier Test code, all naming the current one', async () => {
+    const { db, admin, catalog } = await buildCatalog({ realIds: true });
+    const externalDb = await makeMigratedExternalDb();
+    const mapping = createTestMapping({ internalDb: db, externalDb, admin, logger: { warn: () => {} } });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await catalog.update(hb.code, { testCode: 'HGB', display: 'Haemoglobin' });
+    await mapping.publish({ apply: true });
+    const rows = await externalDb.selectFrom('test_map').select(['source_system', 'source_code', 'catalog_code'])
+      .where('source_system', '=', TEST_CODE_SYSTEM).orderBy('source_code').execute();
+    expect(rows).toEqual([
+      { source_system: TEST_CODE_SYSTEM, source_code: 'HB', catalog_code: 'HGB' },
+      { source_system: TEST_CODE_SYSTEM, source_code: 'HGB', catalog_code: 'HGB' },
+    ]);
+  });
+});
+
