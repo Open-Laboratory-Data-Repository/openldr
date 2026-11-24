@@ -351,7 +351,7 @@ Indiquez en combien de temps les résultats de cet examen doivent revenir, et si
 Lorsque LOINC est chargé, choisir un code LOINC dans le panneau de l'examen remplit une partie de l'examen. Il remplit seulement les champs encore vides. Il ne change jamais un champ que vous avez rempli ni un paramètre de résultat que vous avez coché. Rien n'est écrit avant l'enregistrement.
 
 1. Ouvrez le panneau de l'examen avec **Ajouter un examen** ou **Modifier**.
-2. Saisissez une partie du nom ou du code dans **Code LOINC**. Chaque résultat affiche une deuxième ligne avec le nom court, la classe et l'unité de LOINC. Choisissez le terme.
+2. Saisissez une partie du nom ou du code dans **LOINC**. Chaque résultat affiche une deuxième ligne avec le nom court, la classe et l'unité de LOINC. Choisissez le terme.
 3. Vérifiez **Nom** et **Nom court**. Un nom vide prend le nom long de LOINC. Un nom court vide prend le nom court de LOINC.
 4. Lisez sous **Catégorie**. Si la catégorie était vide et que la classe LOINC correspond à une catégorie ici, elle est choisie. Si la catégorie contient autre chose, un bouton indique `Chemistry, suggérée`. Sélectionnez-le pour prendre la catégorie de LOINC. Si la classe ne correspond à aucune catégorie ici, une ligne le dit.
 5. Lisez **Types de prélèvement**. Si la liste était vide et qu'un seul type de prélèvement correspond clairement, il est coché. Les autres types qui correspondent affichent **suggéré** à côté. Cochez-les si l'examen les accepte.
@@ -377,7 +377,7 @@ Un choix n'ajoute aucun champ de résultat si l'examen en a déjà un. Utilisez 
 
 Utilisez ceci quand vous connaissez le genre d'examen mais pas son nom ni son code.
 
-1. Sélectionnez les points à côté de **Code LOINC** et choisissez **Parcourir LOINC**.
+1. Sélectionnez les points à côté de **LOINC** et choisissez **Parcourir LOINC**.
 2. Ouvrez les branches de l'arbre LOINC et choisissez le code.
 
 **Résultat attendu :** l'arbre se ferme. Le code remplit l'examen de la même façon qu'un choix dans la recherche.

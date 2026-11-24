@@ -88,7 +88,7 @@ describe('TestSheet', () => {
     type('Name', 'HIV viral load');
     type('Short name', 'VL');
     await pickCategory(/molecular/i);
-    type('LOINC code', '25836-8');
+    type('LOINC', '25836-8');
     fireEvent.click(screen.getByTestId('specimen-BLD'));
     await save();
     expect(api.createCatalogTest).toHaveBeenCalledWith({
@@ -196,7 +196,7 @@ describe('TestSheet', () => {
 
   it('types a LOINC code, and says only its format is checked, when LOINC is not loaded here', () => {
     renderSheet();
-    expect(screen.getByRole('textbox', { name: 'LOINC code' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'LOINC' })).toBeInTheDocument();
     expect(screen.getByText('LOINC is not loaded here, so only the format is checked.')).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Search terms' })).toBeNull();
   });
@@ -204,7 +204,7 @@ describe('TestSheet', () => {
   it('searches LOINC when it is loaded here', () => {
     renderSheet({ options: { ...OPTIONS, loinc: { systemId: 'cs-url-LOINC', system: 'http://loinc.org' } } });
     expect(screen.getByRole('combobox', { name: 'Search terms' })).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'LOINC code' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'LOINC' })).toBeNull();
   });
 
   it('shows a server refusal and stays open', async () => {
@@ -541,33 +541,36 @@ describe('TestSheet: a range unit from UCUM', () => {
   });
 });
 
-// Spec section 2: the sheet reads top to bottom as Corlix's test editor does, LOINC first.
+// Spec section 2: the sheet reads top to bottom as Corlix's test editor does, LOINC first. LOINC is one
+// row (label, picker, menu) with no title line, so the titled sections start at Basic information.
 describe('TestSheet: the order of its sections', () => {
   const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
-  const OWNED = ['LOINC', 'Basic information', 'Specimen types', 'Result parameters', 'Reference ranges', 'This lab'];
+  const OWNED = ['Basic information', 'Specimen types', 'Result parameters', 'Reference ranges', 'This lab'];
+  const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  const basic = () => screen.getByRole('heading', { level: 3, name: 'Basic information' });
 
-  it('puts LOINC first on a new test', () => {
+  it('puts the LOINC row first on a new test, with no title line of its own', () => {
     renderSheet();
     expect(headings()).toEqual(OWNED);
+    const loinc = screen.getByRole('textbox', { name: 'LOINC' });
+    expect(before(loinc, basic())).toBe(true);
+    expect(before(basic(), screen.getByRole('textbox', { name: 'Code' }))).toBe(true);
+    // The rule between the LOINC row and Basic information still bleeds to the sheet edges.
+    expect(basic().parentElement!.previousElementSibling!.className).toContain('-mx-6');
   });
 
-  it('puts LOINC first on a saved test', () => {
+  it('puts the LOINC row first on a saved test', () => {
     renderSheet({ target: { kind: 'edit', test: HIVVL } });
     expect(headings()).toEqual(OWNED);
+    expect(before(screen.getByRole('textbox', { name: 'LOINC' }), basic())).toBe(true);
   });
 
-  it('keeps the same order in the read-only view, with this lab last', () => {
+  it('keeps the same order in the read-only view, with the LOINC row first and this lab last', () => {
     renderSheet({ target: { kind: 'edit', test: HIVVL }, ownedHere: false });
-    expect(headings()).toEqual(['LOINC', 'Basic information', 'Specimen types', 'This lab']);
-  });
-
-  it('puts the code and name under Basic information, after the LOINC code', () => {
-    renderSheet();
-    const [loinc, basic] = screen.getAllByRole('heading', { level: 3 });
-    const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-    expect(before(loinc, screen.getByRole('textbox', { name: 'LOINC code' }))).toBe(true);
-    expect(before(screen.getByRole('textbox', { name: 'LOINC code' }), basic)).toBe(true);
-    expect(before(basic, screen.getByRole('textbox', { name: 'Code' }))).toBe(true);
+    expect(headings()).toEqual(['Basic information', 'Specimen types', 'This lab']);
+    const label = screen.getByText('LOINC', { selector: 'label' });
+    expect(label.nextElementSibling!.textContent).toBe('25836-8');
+    expect(before(label, basic())).toBe(true);
   });
 });
 

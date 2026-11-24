@@ -405,9 +405,9 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   const hours = (value: number | null | undefined) => text(value == null ? null : t('testCatalog.sheet.hours', { count: value }));
   /** A section's title with its edge-to-edge rule above it, and an optional ⋯ menu at its right. The
    *  rule is a direct child of the px-6 grid, so -mx-6 lands on the sheet's edges (AGENTS.md section 5). */
-  const section = (title: string, menu: ReactNode = null, first = false) => (
+  const section = (title: string, menu: ReactNode = null) => (
     <>
-      {first ? null : <Divider className="col-span-2 -mx-6" />}
+      <Divider className="col-span-2 -mx-6" />
       <div className="col-span-2 flex min-h-8 items-center justify-between gap-2">
         <h3 className="text-sm font-medium text-foreground">{title}</h3>
         {menu}
@@ -521,13 +521,13 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
           <div className="border-t border-border" />
           {/* Corlix's order, top to bottom (spec section 2): LOINC code, additional codings, basic
               information, specimen types, result parameters, reference ranges. "This lab" stays last.
-              The sections share this one grid, so every label sits in one column and lines up. */}
+              The sections share this one grid, so every label sits in one column and lines up. LOINC is
+              one row with no title line of its own: LOINC | picker | ⋯ (operator, 2026-11-24). */}
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-6 py-4 text-sm">
-            {section(t('testCatalog.sheet.sectionLoinc'), null, true)}
             {ownedHere ? (
               <>
                 <Label htmlFor={options.loinc ? undefined : 'test-loinc'} className="whitespace-nowrap">
-                  {t('testCatalog.sheet.loinc')}
+                  {t('testCatalog.sheet.sectionLoinc')}
                 </Label>
                 {options.loinc ? (
                   <div className="flex min-w-0 items-start gap-2">
@@ -565,7 +565,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
               </>
             ) : (
               <>
-                <Label className="whitespace-nowrap">{t('testCatalog.sheet.loinc')}</Label>
+                <Label className="whitespace-nowrap">{t('testCatalog.sheet.sectionLoinc')}</Label>
                 {text(saved?.loinc)}
               </>
             )}

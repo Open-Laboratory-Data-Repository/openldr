@@ -1720,7 +1720,6 @@ export const en = {
       shortName: 'Short name',
       category: 'Category',
       noCategory: 'No category',
-      loinc: 'LOINC code',
       loincTyped: 'LOINC is not loaded here, so only the format is checked.',
       specimens: 'Specimen types',
       noSpecimens: 'The catalog lists no specimens for this test.',

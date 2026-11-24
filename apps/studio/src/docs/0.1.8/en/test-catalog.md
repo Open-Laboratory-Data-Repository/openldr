@@ -351,7 +351,7 @@ Record how fast results of this test should come back, and whether a second pers
 When LOINC is loaded, picking a LOINC code in the test sheet fills some of the test for you. It fills only fields that are still empty. It never changes a field you filled or a result parameter you ticked. Nothing is written until you save.
 
 1. Open the test sheet with **Add test** or **Edit**.
-2. Type part of the name or code in **LOINC code**. Each result shows a second line with LOINC's short name, class and unit. Pick the term.
+2. Type part of the name or code in **LOINC**. Each result shows a second line with LOINC's short name, class and unit. Pick the term.
 3. Check **Name** and **Short name**. An empty name takes LOINC's long name. An empty short name takes LOINC's short name.
 4. Read under **Category**. When the category was empty and LOINC's class matches one here, it is chosen. When the category holds something else, a button reads `Chemistry, suggested`. Select it to take LOINC's category. When the class matches no category here, a line says so.
 5. Read **Specimen types**. When the list was empty and one specimen type clearly matches, it is ticked. Other matching types show **suggested** beside them. Tick them if the test takes them.
@@ -377,7 +377,7 @@ A pick adds no result field when the test already has one. Use the **Result para
 
 Use this when you know the kind of test but not its name or code.
 
-1. Select the dots beside **LOINC code** and choose **Browse LOINC**.
+1. Select the dots beside **LOINC** and choose **Browse LOINC**.
 2. Open the branches of the LOINC tree and pick the code.
 
 **Expected result:** The tree closes. The code fills the test the same way a search pick does.

@@ -296,7 +296,7 @@ describe('TestSheet: without LOINC hints', () => {
   it('does not ask for hints when LOINC is not loaded here', () => {
     renderSheet(NEW_TEST({ loinc: '6429-5' }), { ...OPTIONS, loinc: null });
     expect(api.getLoincHints).not.toHaveBeenCalled();
-    expect(screen.getByRole('textbox', { name: 'LOINC code' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'LOINC' })).toBeTruthy();
   });
 
   it('works as before when the hint read fails', async () => {
@@ -616,7 +616,7 @@ describe("TestSheet: LOINC's result field goes into the unsaved test", () => {
     vi.mocked(api.createCatalogTest).mockResolvedValue(NEW_TEST());
     renderNew({ ...OPTIONS, loinc: null });
     fireEvent.change(textbox('Name'), { target: { value: 'Cholesterol' } });
-    fireEvent.change(textbox('LOINC code'), { target: { value: '2093-3' } });
+    fireEvent.change(textbox('LOINC'), { target: { value: '2093-3' } });
     expect(screen.queryByTestId('param-2093-3')).toBeNull();
     await saveNew();
     expect(api.getLoincHints).not.toHaveBeenCalled();

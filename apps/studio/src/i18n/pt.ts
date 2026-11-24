@@ -1708,7 +1708,6 @@ export const pt: EnShape = {
       shortName: 'Nome curto',
       category: 'Categoria',
       noCategory: 'Sem categoria',
-      loinc: 'Código LOINC',
       loincTyped: 'O LOINC não está carregado aqui, por isso só o formato é verificado.',
       specimens: 'Tipos de amostra',
       noSpecimens: 'O catálogo não indica amostras para este exame.',

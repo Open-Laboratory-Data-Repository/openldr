@@ -351,7 +351,7 @@ Registe em quanto tempo os resultados deste exame devem voltar, e se uma segunda
 Quando LOINC está carregado, escolher um código LOINC no painel do exame preenche parte do exame. Preenche apenas os campos ainda vazios. Nunca altera um campo que preencheu nem um parâmetro de resultado que marcou. Nada é escrito antes de guardar.
 
 1. Abra o painel do exame com **Adicionar exame** ou **Editar**.
-2. Escreva parte do nome ou do código em **Código LOINC**. Cada resultado mostra uma segunda linha com o nome curto, a classe e a unidade do LOINC. Escolha o termo.
+2. Escreva parte do nome ou do código em **LOINC**. Cada resultado mostra uma segunda linha com o nome curto, a classe e a unidade do LOINC. Escolha o termo.
 3. Verifique **Nome** e **Nome curto**. Um nome vazio recebe o nome longo do LOINC. Um nome curto vazio recebe o nome curto do LOINC.
 4. Leia abaixo de **Categoria**. Quando a categoria estava vazia e a classe LOINC corresponde a uma categoria aqui, é escolhida. Quando a categoria tem outro valor, um botão diz `Chemistry, sugerida`. Selecione-o para usar a categoria do LOINC. Quando a classe não corresponde a nenhuma categoria aqui, uma linha di-lo.
 5. Leia **Tipos de amostra**. Quando a lista estava vazia e um só tipo de amostra corresponde claramente, fica marcado. Os outros tipos que correspondem mostram **sugerido** ao lado. Marque-os se o exame os aceitar.
@@ -377,7 +377,7 @@ Uma escolha não adiciona campo de resultado quando o exame já tem um. Use ante
 
 Use isto quando sabe o tipo de exame mas não o nome nem o código.
 
-1. Selecione os pontos ao lado de **Código LOINC** e escolha **Procurar no LOINC**.
+1. Selecione os pontos ao lado de **LOINC** e escolha **Procurar no LOINC**.
 2. Abra os ramos da árvore LOINC e escolha o código.
 
 **Resultado esperado:** a árvore fecha. O código preenche o exame da mesma forma que uma escolha na pesquisa.
