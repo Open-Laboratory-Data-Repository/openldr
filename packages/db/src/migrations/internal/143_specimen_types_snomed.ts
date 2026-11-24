@@ -11,7 +11,8 @@ import type { VsCompose, VsInclude } from '../../value-set-expander';
 //    gets no set back.
 // 3. Each of the 15 codes gets a SAME-AS link to its SNOMED code in the local map, written as the
 //    Terminology page writes one (terminology-admin-store.ts, termMappings.create): a term_mappings
-//    row and its concept_map_elements mirror. A code that already has an active SNOMED link keeps it.
+//    row and its concept_map_elements mirror. A code that already has any SNOMED link, active or
+//    switched off, keeps it as it is.
 //
 // Like 137 and 140, this writes no fhir.change_log row, so the value set change does not sync.
 // Values are inlined, not imported: a migration is a frozen record of one release (see 078).
@@ -108,14 +109,12 @@ async function addToValueSet(db: Kysely<any>): Promise<void> {
 
 async function linkToSnomed(db: Kysely<any>): Promise<void> {
   for (const s of SPECIMENS) {
-    const active = await db.selectFrom('term_mappings').select('id')
+    // Any row, active or not, is the lab's choice. A link a person switched off stays off.
+    const held = await db.selectFrom('term_mappings').select('id')
       .where('from_system', '=', LOCAL_CS).where('from_code', '=', s.code)
-      .where('to_system', '=', SNOMED).where('is_active', '=', true).executeTakeFirst();
-    if (active) continue;
+      .where('to_system', '=', SNOMED).executeTakeFirst();
+    if (held) continue;
     const id = `${MAPPING_ID_PREFIX}${s.code}`;
-    // A row with this id that a person switched off stays off.
-    const ours = await db.selectFrom('term_mappings').select('id').where('id', '=', id).executeTakeFirst();
-    if (ours) continue;
     await db.insertInto('term_mappings').values({
       id, from_system: LOCAL_CS, from_code: s.code, to_system: SNOMED, to_code: s.snomed,
       to_display: null, map_type: 'SAME-AS', relationship: null, owner: null, is_active: true,

@@ -95,6 +95,21 @@ describe('143_specimen_types_snomed', () => {
     expect((await snomedLinks(db, 'BLD')).mappings).toEqual([{ to_code: '119297000', map_type: 'SAME-AS', is_active: true }]);
   });
 
+  it('leaves a link the lab switched off switched off, and adds no seeded link beside it', async () => {
+    const db = await makeMigratedDbUpTo('142_plugin_permission_groups');
+    await db.insertInto('term_mappings').values({
+      id: 'tm-lab-bld', from_system: LOCAL, from_code: 'BLD', to_system: SNOMED, to_code: '119297000',
+      to_display: null, map_type: 'SAME-AS', relationship: null, owner: null, is_active: false,
+    }).execute();
+
+    await up(db);
+
+    expect(await db.selectFrom('term_mappings').select('id').where('id', '=', 'tm-m143-BLD').execute()).toEqual([]);
+    const bld = await snomedLinks(db, 'BLD');
+    expect(bld.mappings).toEqual([{ to_code: '119297000', map_type: 'SAME-AS', is_active: false }]);
+    expect(bld.elements).toEqual([]);
+  });
+
   it('adds no expansion rows and does not fail when the value set is gone', async () => {
     const db = await makeMigratedDbUpTo('142_plugin_permission_groups');
     await db.deleteFrom('value_sets').where('url', '=', VS_URL).execute();
