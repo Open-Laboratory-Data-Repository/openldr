@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import pg from 'pg';
 import { Kysely, sql } from 'kysely';
 import { createAuth, createLocalAuth, LOCAL_ISSUER, type LocalSignIn } from '@openldr/adapter-auth';
+import { ontologySystemId } from './ontology-system-id';
 import { bindAuthIssuer } from './auth-issuer-binding';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createBlobFromConfig } from './s3-config';
@@ -464,21 +465,27 @@ function datasetTableName(name: string): string {
   return `wf_ds_${safe}`;
 }
 
-function createOntologyApi(ontologyStore: OntologyStore) {
+function createOntologyApi(ontologyStore: OntologyStore, db: Kysely<InternalSchema>) {
+  // A system may be named by its id or its URL. An index already stored under the exact key given
+  // (an old build by URL) is still found, so it can be rebuilt or unlinked (ontology-system-id.ts).
+  const keyOf = async (given: string): Promise<string> =>
+    (await ontologyStore.get(given)) ? given : ontologySystemId(db, given);
   return {
     listDistributions: () => ontologyStore.list(),
     async getDistribution(systemId: string) {
-      const distribution = await ontologyStore.get(systemId);
+      const key = await keyOf(systemId).catch(() => systemId);
+      const distribution = await ontologyStore.get(key);
       return distribution ? { ...distribution, stale: stalenessReason(distribution.manifest as OntologyManifest | null) !== null } : null;
     },
-    build: (systemId: string, sourcePath: string, onProgress: (progress: OntologyBuildProgress) => void) =>
-      buildOntologyDistribution(systemId, sourcePath, ontologyStore, onProgress),
+    build: async (systemId: string, sourcePath: string, onProgress: (progress: OntologyBuildProgress) => void) =>
+      buildOntologyDistribution(await ontologySystemId(db, systemId), sourcePath, ontologyStore, onProgress),
     async rebuild(systemId: string, onProgress: (progress: OntologyBuildProgress) => void) {
-      const distribution = await ontologyStore.get(systemId);
+      const key = await keyOf(systemId);
+      const distribution = await ontologyStore.get(key);
       if (!distribution) throw new Error('No distribution linked.');
-      return buildOntologyDistribution(systemId, distribution.sourcePath, ontologyStore, onProgress);
+      return buildOntologyDistribution(key, distribution.sourcePath, ontologyStore, onProgress);
     },
-    unlink: (systemId: string) => ontologyStore.unlink(systemId),
+    unlink: async (systemId: string) => ontologyStore.unlink(await keyOf(systemId)),
     roots: (systemId: string) => ontologyStore.roots(systemId),
     children: (systemId: string, parent: string) => ontologyStore.children(systemId, parent),
     node: (systemId: string, code: string) => ontologyStore.node(systemId, code),
@@ -1211,7 +1218,7 @@ const reporting: ReportingApi = {
   // coding_systems / term_mappings) lands rows in reference_change_log for labs to pull.
   const termAdmin = createTerminologyAdminStore(termDb, termProjection, referenceCapture);
   const termOntologyStore = createOntologyStore(termDb);
-  const termOntology = createOntologyApi(termOntologyStore);
+  const termOntology = createOntologyApi(termOntologyStore, termDb);
   const loaderStore: LoaderStore = {
     upsertConcepts: (r) => termStore.upsertConcepts(r),
     upsertMapElements: (r) => termStore.upsertMapElements(r),

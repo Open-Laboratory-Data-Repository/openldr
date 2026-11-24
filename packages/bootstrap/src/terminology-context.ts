@@ -2,6 +2,7 @@ import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
 import { redact, createLogger, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
+import { ontologySystemId } from './ontology-system-id';
 import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, createTerminologyIngestJobStore, createJobInterruptionStore, type JobInterruptionStore, type TerminologyAdminStore, type InternalSchema, type OntologyStore, type TerminologyIngestJobStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
 import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, type ImportOrigin, loadLoinc, loadWhonetAmr, importTerminologyResource, stalenessReason, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
@@ -11,21 +12,27 @@ import { createResourceLoader } from './reexpand-value-sets';
 import { withLabTestsList } from './test-catalog';
 import { catalogStoredExpansion } from './register-fhir-catalog';
 
-function createOntologyApi(ontologyStore: OntologyStore) {
+function createOntologyApi(ontologyStore: OntologyStore, db: Kysely<InternalSchema>) {
+  // A system may be named by its id or its URL. An index already stored under the exact key given
+  // (an old build by URL) is still found, so it can be rebuilt or unlinked (ontology-system-id.ts).
+  const keyOf = async (given: string): Promise<string> =>
+    (await ontologyStore.get(given)) ? given : ontologySystemId(db, given);
   return {
     listDistributions: () => ontologyStore.list(),
     async getDistribution(systemId: string) {
-      const distribution = await ontologyStore.get(systemId);
+      const key = await keyOf(systemId).catch(() => systemId);
+      const distribution = await ontologyStore.get(key);
       return distribution ? { ...distribution, stale: stalenessReason(distribution.manifest as OntologyManifest | null) !== null } : null;
     },
-    build: (systemId: string, sourcePath: string, onProgress: (progress: OntologyBuildProgress) => void) =>
-      buildOntologyDistribution(systemId, sourcePath, ontologyStore, onProgress),
+    build: async (systemId: string, sourcePath: string, onProgress: (progress: OntologyBuildProgress) => void) =>
+      buildOntologyDistribution(await ontologySystemId(db, systemId), sourcePath, ontologyStore, onProgress),
     async rebuild(systemId: string, onProgress: (progress: OntologyBuildProgress) => void) {
-      const distribution = await ontologyStore.get(systemId);
+      const key = await keyOf(systemId);
+      const distribution = await ontologyStore.get(key);
       if (!distribution) throw new Error('No distribution linked.');
-      return buildOntologyDistribution(systemId, distribution.sourcePath, ontologyStore, onProgress);
+      return buildOntologyDistribution(key, distribution.sourcePath, ontologyStore, onProgress);
     },
-    unlink: (systemId: string) => ontologyStore.unlink(systemId),
+    unlink: async (systemId: string) => ontologyStore.unlink(await keyOf(systemId)),
     roots: (systemId: string) => ontologyStore.roots(systemId),
     children: (systemId: string, parent: string) => ontologyStore.children(systemId, parent),
     node: (systemId: string, code: string) => ontologyStore.node(systemId, code),
@@ -89,7 +96,7 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
   // Inert on a lab (labs serve no pull); consistent with S2's capture-on-every-instance decision.
   const admin = createTerminologyAdminStore(db, projection, referenceCapture);
   const ontologyStore = createOntologyStore(db);
-  const ontology = createOntologyApi(ontologyStore);
+  const ontology = createOntologyApi(ontologyStore, db);
   const jobs = createTerminologyIngestJobStore(db);
   const jobInterruptions = createJobInterruptionStore(db);
   const blob = createBlobFromConfig(cfg);
