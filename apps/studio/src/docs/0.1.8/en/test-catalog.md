@@ -360,7 +360,7 @@ When LOINC is loaded, picking a LOINC code in the test sheet fills some of the t
 
 **Expected result:** Save first makes each ticked new field in the result dictionary, then saves the test. A new field you untick before Save is never made. The field takes its name from LOINC's component, such as `Cholesterol` for 2093-3. A quantity code becomes a number field with LOINC's unit. An ordinal code with an answer list becomes a coded field, with that list as its value set. Any other code becomes a text field. A new range starts with the field's unit.
 
-Pick another code, or clear the code, and the sheet takes back the result field the last pick added. Fields you ticked by hand stay. A name, short name, category or specimen a pick filled stays until you change it.
+Pick another code, or clear the code, and the sheet takes back the result fields the last pick and **Fill from panel** added. Fields you ticked by hand stay. A name, short name, category or specimen a pick filled stays until you change it.
 
 ### Add LOINC's fields to a test that has fields
 

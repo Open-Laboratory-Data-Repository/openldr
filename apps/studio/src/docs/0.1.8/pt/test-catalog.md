@@ -360,7 +360,7 @@ Quando LOINC está carregado, escolher um código LOINC no painel do exame preen
 
 **Resultado esperado:** Guardar cria primeiro cada campo novo marcado no dicionário de resultados, e depois guarda o exame. Um campo novo que desmarque antes de guardar nunca é criado. O campo recebe o nome do componente LOINC, por exemplo `Cholesterol` para 2093-3. Um código de quantidade torna-se um campo numérico com a unidade do LOINC. Um código ordinal com lista de respostas torna-se um campo codificado, com essa lista como conjunto de valores. Qualquer outro código torna-se um campo de texto. Um novo intervalo começa com a unidade do campo.
 
-Escolha outro código, ou limpe o código, e o painel retira o campo de resultado que a última escolha adicionou. Os campos que marcou à mão ficam. Um nome, nome curto, categoria ou amostra que uma escolha preencheu fica até o alterar.
+Escolha outro código, ou limpe o código, e o painel retira os campos de resultado que a última escolha e **Preencher a partir do painel** adicionaram. Os campos que marcou à mão ficam. Um nome, nome curto, categoria ou amostra que uma escolha preencheu fica até o alterar.
 
 ### Adicionar os campos do LOINC a um exame que já tem campos
 

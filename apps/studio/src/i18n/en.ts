@@ -1693,6 +1693,7 @@ export const en = {
     fillReplace: 'Replace',
     fillAdd: 'Add',
     panelSkipped: 'Not added from the panel: {{list}}.',
+    notLoincTestCode: '{{code}} is not a LOINC test code. Choose a test, not a part or a class.',
     hintCategory: 'LOINC suggests {{name}}.',
     hintClass: 'LOINC class {{class}} matches no category here.',
     hintSpecimens: 'LOINC suggests {{names}}.',

@@ -125,6 +125,19 @@ describe('result fields routes', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('POST from-loinc refuses a name longer than 500 characters before the service', async () => {
+    const { ctx, calls } = fakeCtx();
+    const long = await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: ['99999-9'], names: { '99999-9': 'x'.repeat(501) } },
+    });
+    expect(long.statusCode).toBe(400);
+    const edge = await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog/result-fields/from-loinc', payload: { codes: ['99999-9'], names: { '99999-9': 'x'.repeat(500) } },
+    });
+    expect(edge.statusCode).toBe(200);
+    expect(calls).toHaveLength(1);
+  });
+
   it('POST from-loinc writes no audit row when it only reused fields', async () => {
     const reusedOnly = { params: FROM_LOINC.params, created: [], reused: ['CHOL'], valueSetsCreated: [] };
     const { ctx, audit } = fakeCtx({ resultFieldsFromLoinc: async () => reusedOnly });

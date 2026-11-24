@@ -22,7 +22,10 @@ vi.mock('@/terminology/TermPicker', () => ({
 // The LOINC tree. Here it is one button that picks 2093-3, as a click on a node would.
 vi.mock('@/terminology/ontology/OntologyBrowser', () => ({
   OntologyBrowser: ({ onPick, codingSystemId }: { onPick: (n: { code: string; display: string }) => void; codingSystemId: string }) => (
-    <button type="button" data-testid={`browser-pick-${codingSystemId}`} onClick={() => onPick({ code: '2093-3', display: 'Cholesterol' })}>pick</button>
+    <>
+      <button type="button" data-testid={`browser-pick-${codingSystemId}`} onClick={() => onPick({ code: '2093-3', display: 'Cholesterol' })}>pick</button>
+      <button type="button" data-testid={`browser-pick-part-${codingSystemId}`} onClick={() => onPick({ code: 'LP14355-9', display: 'Cholesterol' })}>part</button>
+    </>
   ),
 }));
 vi.mock('@/api', async (orig) => {
@@ -609,6 +612,70 @@ describe("TestSheet: LOINC's result field goes into the unsaved test", () => {
     await saveNew();
     expect(api.resultFieldsFromLoinc).toHaveBeenCalledTimes(1);
     expect(vi.mocked(api.createCatalogTest).mock.calls[1][0].resultParams).toEqual([param('2093-3')]);
+  });
+
+  it('a coded LOINC field unticked and ticked again keeps its type and answer list', async () => {
+    const url = 'urn:openldr:valueset:loinc-answers:2093-3';
+    hintsFor({ '2093-3': { ...CHOL, field: { ...CHOL.field!, resultType: 'coded', unit: null, valueSetUrl: url } } });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3', { resultType: 'coded', valueSetUrl: url })]));
+    vi.mocked(api.createCatalogTest).mockResolvedValue(NEW_TEST());
+    renderNew();
+    await pickLoinc('2093-3');
+    fireEvent.click(screen.getByTestId('param-2093-3'));
+    fireEvent.click(screen.getByTestId('param-2093-3'));
+    await saveNew();
+    expect(vi.mocked(api.createCatalogTest).mock.calls[0][0].resultParams).toEqual([param('2093-3', { resultType: 'coded', valueSetUrl: url })]);
+  });
+
+  it('another pick also takes back what a Fill from panel of the old code added, but not a hand tick', async () => {
+    hintsFor({ '24331-1': LIPID, '2571-8': TRIG });
+    renderNew();
+    await pickLoinc('24331-1');
+    await choose('result-params-menu', 'fill-from-panel');
+    expect([checked('param-2093-3'), checked('param-2571-8')]).toEqual([true, true]);
+    fireEvent.click(screen.getByTestId('param-HGB'));
+    await pickLoinc('2571-8');
+    expect(checked('param-HGB')).toBe(true);
+    expect(screen.queryByTestId('param-2093-3')).toBeNull();
+    // HGB is a hand tick, so the new pick adds nothing either.
+    expect(screen.queryByTestId('param-2571-8')).toBeNull();
+  });
+
+  it('another pick after a fill on an empty test puts the new code\'s field in place of the panel', async () => {
+    hintsFor({ '24331-1': LIPID, '2571-8': TRIG });
+    renderNew();
+    await pickLoinc('24331-1');
+    await choose('result-params-menu', 'fill-from-panel');
+    await pickLoinc('2571-8');
+    expect(screen.queryByTestId('param-2093-3')).toBeNull();
+    expect(checked('param-2571-8')).toBe(true);
+  });
+
+  it("names the field in the hint line by LOINC's component, as the field is named", async () => {
+    hintsFor({ '2093-3': CHOL });
+    renderSheet(NEW_TEST({ resultParams: [param('HGB')] }));
+    await pickLoinc('2093-3');
+    expect(screen.getByTestId('hint-result').textContent).toBe("LOINC's result field: Cholesterol (mg/dL).");
+  });
+
+  it('saves the code the server answered when it reused a field under its own code', async () => {
+    hintsFor({ '2093-3': CHOL });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue({ params: [param('CHOL')], created: [], reused: ['CHOL'], valueSetsCreated: [] });
+    vi.mocked(api.createCatalogTest).mockResolvedValue(NEW_TEST());
+    renderNew();
+    await pickLoinc('2093-3');
+    await saveNew();
+    expect(vi.mocked(api.createCatalogTest).mock.calls[0][0].resultParams).toEqual([param('CHOL')]);
+  });
+
+  it('refuses a Browse node that is not a LOINC test code', async () => {
+    hintsFor({ '2093-3': CHOL });
+    renderNew();
+    await choose('loinc-menu', 'browse-loinc');
+    await act(async () => { fireEvent.click(await screen.findByTestId('browser-pick-part-loinc-id')); });
+    expect(toast.error).toHaveBeenCalledWith('LP14355-9 is not a LOINC test code. Choose a test, not a part or a class.');
+    expect(api.getLoincHints).not.toHaveBeenCalled();
+    expect(textbox('Name').value).toBe('');
   });
 
   // Review focus 3.

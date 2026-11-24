@@ -20,7 +20,7 @@ const createBody = z.object({
 // `names` names a code missing from the loaded LOINC, as a panel member's name does.
 const fromLoincBody = z.object({
   codes: z.array(z.string().min(1)).min(1).max(200), panel: z.boolean().optional(),
-  names: z.record(z.string(), z.string()).optional(),
+  names: z.record(z.string(), z.string().max(500)).optional(),
 });
 
 export function registerResultFieldsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {

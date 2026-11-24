@@ -360,7 +360,7 @@ Lorsque LOINC est chargé, choisir un code LOINC dans le panneau de l'examen rem
 
 **Résultat attendu :** l'enregistrement crée d'abord chaque nouveau champ coché dans le dictionnaire des résultats, puis enregistre l'examen. Un nouveau champ décoché avant l'enregistrement n'est jamais créé. Le champ prend son nom du composant LOINC, par exemple `Cholesterol` pour 2093-3. Un code de quantité devient un champ numérique avec l'unité de LOINC. Un code ordinal avec une liste de réponses devient un champ codé, avec cette liste comme jeu de valeurs. Tout autre code devient un champ texte. Un nouvel intervalle commence avec l'unité du champ.
 
-Choisissez un autre code, ou effacez le code, et le panneau retire le champ de résultat ajouté par le dernier choix. Les champs que vous avez cochés à la main restent. Un nom, un nom court, une catégorie ou un prélèvement rempli par un choix reste jusqu'à ce que vous le changiez.
+Choisissez un autre code, ou effacez le code, et le panneau retire les champs de résultat ajoutés par le dernier choix et par **Remplir depuis le panel**. Les champs que vous avez cochés à la main restent. Un nom, un nom court, une catégorie ou un prélèvement rempli par un choix reste jusqu'à ce que vous le changiez.
 
 ### Ajouter les champs de LOINC à un examen qui a déjà des champs
 

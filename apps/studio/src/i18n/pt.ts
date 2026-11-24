@@ -1681,6 +1681,7 @@ export const pt: EnShape = {
     fillReplace: 'Substituir',
     fillAdd: 'Adicionar',
     panelSkipped: 'Não adicionado a partir do painel: {{list}}.',
+    notLoincTestCode: '{{code}} não é um código de teste LOINC. Escolha um teste, não uma parte nem uma classe.',
     hintCategory: 'O LOINC sugere {{name}}.',
     hintClass: 'A classe LOINC {{class}} não corresponde a nenhuma categoria aqui.',
     hintSpecimens: 'O LOINC sugere {{names}}.',
