@@ -333,6 +333,19 @@ describe('plugin host: ce_read', () => {
     expect(((await fns.ce_read({ op: 'testCatalog.get', input: { code: 'HB' } })) as any).result).toMatchObject(fields);
     expect(((await fns.ce_read({ op: 'testCatalog.list', input: {} })) as any).result.rows[0]).toMatchObject(fields);
   });
+
+  it('testCatalog.get finds a test by its id, and get and list answer its Test code beside it', async () => {
+    const test = { code: 'tst-0123456789abcdef', testCode: 'HB', display: 'Haemoglobin', lab: {} };
+    const get = vi.fn(async (c: string) => (c === test.code ? test : null));
+    const deps = fakeDeps({ testCatalog: { list: vi.fn(async () => ({ rows: [test], total: 1 })), get } as any });
+    const fns = createPluginHost(deps).forCall(plugin([{ kind: 'host:ce-read' }]), SITE);
+    // `code` keeps meaning the id, so a plugin order saved before Test codes still finds its test.
+    expect(((await fns.ce_read({ op: 'testCatalog.get', input: { code: test.code } })) as any).result)
+      .toMatchObject({ code: test.code, testCode: 'HB' });
+    expect(get).toHaveBeenCalledWith(test.code);
+    expect(((await fns.ce_read({ op: 'testCatalog.list', input: {} })) as any).result.rows[0])
+      .toMatchObject({ code: test.code, testCode: 'HB' });
+  });
 });
 
 describe('plugin host: fhir_emit', () => {

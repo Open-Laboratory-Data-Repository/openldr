@@ -50,7 +50,7 @@ const OPTIONS: api.TestCatalogOptions = {
   sexes: [],
 };
 const NEW_TEST = (over: Partial<api.CatalogTest> = {}): api.CatalogTest => ({
-  code: 'T1', display: 'Test one', shortName: null, category: null, specimenTypes: [],
+  code: 'T1', testCode: 'T1', display: 'Test one', shortName: null, category: null, specimenTypes: [],
   resultParams: [], loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
   lab: { enabled: false, specimenTypes: null, localDisplay: null }, ...over,
 });

@@ -2385,8 +2385,8 @@ export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
 export { importFacilities, resolveKnownNationalSystem } from './facility-import';
 export {
-  createTestCatalog, parseCatalogListQuery, catalogChangeAction, catalogImportAudit, readCatalogImportFile, TestCatalogError,
-  TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM, TEST_CATEGORY_VALUE_SET, SPECIMEN_TYPE_VALUE_SET,
+  createTestCatalog, parseCatalogListQuery, catalogChangeAction, catalogImportAudit, catalogUpdateAudit, readCatalogImportFile, TestCatalogError,
+  newTestId, TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM, TEST_CATEGORY_SYSTEM, TEST_CATEGORY_VALUE_SET, SPECIMEN_TYPE_VALUE_SET,
   LAB_TESTS_VALUE_SET, labTestsCompose, withLabTestsList,
   type TestCatalog, type CatalogTest, type CatalogTestInput, type CatalogListQuery, type CatalogListResult,
   type LabSettingsInput, type SpecimenCoding,

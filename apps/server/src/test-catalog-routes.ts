@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
-  catalogChangeAction, catalogImportAudit, catalogImportInputSchema, parseCatalogListQuery, readCatalogImportFile,
+  catalogChangeAction, catalogImportAudit, catalogImportInputSchema, catalogUpdateAudit, parseCatalogListQuery, readCatalogImportFile,
   CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, labTimeZone, patientBandKey, type AppContext, type BandPatient,
 } from '@openldr/bootstrap';
 import { z } from 'zod';
@@ -57,7 +57,9 @@ const resultParam = z.object({
   })),
 }));
 const testInput = z.object({
-  code: z.string().nullish(),
+  // The national code. Required on create; left out of an update, the stored one stays. The test's
+  // id is the :code in the path and never changes.
+  testCode: z.string().nullish(),
   display: z.string(),
   shortName: z.string().nullish(),
   category: z.string().nullish(),
@@ -164,7 +166,10 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
     try {
       const created = await ctx.testCatalog.create(parsed.data);
-      await recordAudit(ctx, req, { action: 'test_catalog.create', entityType: 'test_catalog', entityId: created.code, before: null, after: created });
+      await recordAudit(ctx, req, {
+        action: 'test_catalog.create', entityType: 'test_catalog', entityId: created.code, before: null, after: created,
+        metadata: { testCode: created.testCode },
+      });
       return reply.code(201).send(created);
     } catch (err) {
       return replyCatalogError(err, reply);
@@ -178,7 +183,8 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     try {
       const before = await ctx.testCatalog.get(code);
       const updated = await ctx.testCatalog.update(code, parsed.data);
-      await recordAudit(ctx, req, { action: 'test_catalog.update', entityType: 'test_catalog', entityId: code, before, after: updated });
+      // `openldr test-catalog set` records the same entry, a changed Test code named old and new.
+      await recordAudit(ctx, req, catalogUpdateAudit(code, before, updated));
       return reply.send(updated);
     } catch (err) {
       return replyCatalogError(err, reply);
@@ -296,7 +302,7 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
     const result = await ctx.testCatalog.list(parsed.query);
     return reply.send({
-      rows: result.rows.map((t) => ({ code: t.code, display: t.display, category: t.category, enabled: t.lab.enabled })),
+      rows: result.rows.map((t) => ({ code: t.code, testCode: t.testCode, display: t.display, category: t.category, enabled: t.lab.enabled })),
       total: result.total,
       system: TEST_CATALOG_SYSTEM,
     });

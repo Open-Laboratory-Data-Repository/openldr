@@ -24,7 +24,7 @@ const OPTIONS: api.TestCatalogOptions = {
   sexes: [{ code: 'female', labels: { en: 'Female', fr: 'Femme', pt: 'Feminino' } }, { code: 'male', labels: { en: 'Male', fr: 'Homme', pt: 'Masculino' } }],
 };
 const HIVVL: api.CatalogTest = {
-  code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR],
+  code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR],
   resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
@@ -92,7 +92,7 @@ describe('TestSheet', () => {
     fireEvent.click(screen.getByTestId('specimen-BLD'));
     await save();
     expect(api.createCatalogTest).toHaveBeenCalledWith({
-      code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD],
+      testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD],
       resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();

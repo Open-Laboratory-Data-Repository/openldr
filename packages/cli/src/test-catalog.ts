@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { extname } from 'node:path';
 import { loadConfig } from '@openldr/config';
 import {
-  catalogChangeAction, catalogColumnMapSchema, catalogImportAudit, catalogValueMapSchema, createAppContext,
+  catalogChangeAction, catalogColumnMapSchema, catalogImportAudit, catalogUpdateAudit, catalogValueMapSchema, createAppContext,
   parseCatalogListQuery, parseResultParams, readCatalogImportFile, readHoursCell, recordAuditEvent, type CatalogTestInput,
   type CatalogColumnMap, type CatalogImportFile, type CatalogImportReport, type CatalogValueMap,
   type TestResultParam,
@@ -39,7 +39,7 @@ export async function runTestCatalogList(opts: TestCatalogListOpts): Promise<num
       process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     } else {
       const lines = result.rows.map((t) => [
-        t.code, t.display, t.category ?? '-', t.loinc ?? 'No LOINC', t.lab.enabled ? 'on' : 'off', t.active ? '' : 'retired',
+        t.testCode, t.display, t.category ?? '-', t.loinc ?? 'No LOINC', t.lab.enabled ? 'on' : 'off', t.active ? '' : 'retired',
       ].join('\t').trimEnd());
       process.stdout.write((lines.length ? lines.join('\n') : '(no tests)') + '\n');
       // The list is paged, so say how much of it this is, as `facilities list` does.
@@ -73,36 +73,34 @@ export function readResultParamsFile(text: string): TestResultParam[] {
 
 /** `openldr test-catalog params <code>`: the CLI door to the sheet's result parameters section. With
  *  --set it replaces them from a JSON file, through the same service the route calls, so both doors
- *  refuse the same parameters in the same words. */
+ *  refuse the same parameters in the same words. <code> is a Test code or an id. */
 export async function runTestCatalogParams(code: string, opts: { set?: string; json: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
+    const found = await ctx.testCatalog.resolve(code);
+    if (!found) {
+      process.stderr.write(`test-catalog params failed: no such test: ${code}\n`);
+      return 1;
+    }
+    const id = found.code;
+    let test = found;
     if (opts.set) {
       const text = readFileSync(opts.set, 'utf8');
       const params = readResultParamsFile(text);
       // The service gets the file as written, so it refuses what the route refuses (an unknown age
       // unit, say) rather than seeing the parser's copy with that unit already dropped.
       const sent = JSON.parse(text) as TestResultParam[];
-      const before = await ctx.testCatalog.get(code);
-      if (!before) {
-        process.stderr.write(`test-catalog params failed: no such test: ${code}\n`);
-        return 1;
-      }
-      await ctx.testCatalog.update(code, {
+      const before = found;
+      test = await ctx.testCatalog.update(id, {
         display: before.display, shortName: before.shortName, category: before.category,
         specimenTypes: before.specimenTypes, loinc: before.loinc, active: before.active,
         resultParams: sent,
       });
       await recordAuditEvent(ctx, cliActor(), {
-        action: 'test_catalog.result_params_set', entityType: 'test_catalog', entityId: code,
+        action: 'test_catalog.result_params_set', entityType: 'test_catalog', entityId: id,
         before: { resultParams: before.resultParams },
         after: { resultParams: params },
       });
-    }
-    const test = await ctx.testCatalog.get(code);
-    if (!test) {
-      process.stderr.write(`test-catalog params failed: no such test: ${code}\n`);
-      return 1;
     }
     process.stdout.write(opts.json
       ? JSON.stringify(test.resultParams, null, 2) + '\n'
@@ -119,6 +117,8 @@ export async function runTestCatalogParams(code: string, opts: { set?: string; j
 }
 
 export interface TestCatalogSetOpts {
+  /** A new Test code. Left out keeps the stored one. */
+  testCode?: string;
   expectedTat?: string;
   criticalTat?: string;
   requiresVerification?: string;
@@ -133,16 +133,20 @@ function readTatFlag(flag: string, text: string): { ok: true; value: number | nu
   return { ok: true, value: read };
 }
 
-/** `openldr test-catalog set <code>`: the CLI door to the sheet's turnaround and verification fields.
- *  It sends the test as stored with only the given fields changed, through the same update the route
- *  calls, so both doors refuse the same values. A lab whose catalog comes from central is refused. */
+/** `openldr test-catalog set <code>`: the CLI door to the sheet's Test code, turnaround and verification
+ *  fields. <code> is a Test code or an id. It sends the test as stored with only the given fields
+ *  changed, through the same update the route calls, so both doors refuse the same values. A lab whose catalog comes from central is refused. */
 export async function runTestCatalogSet(code: string, opts: TestCatalogSetOpts): Promise<number> {
   const fail = (msg: string): number => {
     if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
     else process.stderr.write(`test-catalog set failed: ${msg}\n`);
     return 1;
   };
-  const change: Pick<CatalogTestInput, 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification'> = {};
+  const change: Pick<CatalogTestInput, 'testCode' | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification'> = {};
+  if (opts.testCode !== undefined) {
+    if (!opts.testCode.trim()) return fail('--test-code needs a code');
+    change.testCode = opts.testCode.trim();
+  }
   if (opts.expectedTat !== undefined) {
     const read = readTatFlag('--expected-tat', opts.expectedTat);
     if (!read.ok) return fail(read.error);
@@ -158,23 +162,25 @@ export async function runTestCatalogSet(code: string, opts: TestCatalogSetOpts):
     if (key !== 'true' && key !== 'false') return fail(`--requires-verification must be true or false, not "${opts.requiresVerification}"`);
     change.requiresVerification = key === 'true';
   }
-  if (Object.keys(change).length === 0) return fail('give at least one of --expected-tat, --critical-tat or --requires-verification');
+  if (Object.keys(change).length === 0) {
+    return fail('give at least one of --test-code, --expected-tat, --critical-tat or --requires-verification');
+  }
 
   const ctx = await createAppContext(loadConfig());
   try {
-    const before = await ctx.testCatalog.get(code);
+    const before = await ctx.testCatalog.resolve(code);
     if (!before) return fail(`no such test: ${code}`);
-    // Result parameters are left out, so the service keeps them.
-    const after = await ctx.testCatalog.update(code, {
+    // Result parameters are left out, so the service keeps them. So is the Test code, unless
+    // --test-code gives one.
+    const after = await ctx.testCatalog.update(before.code, {
       display: before.display, shortName: before.shortName, category: before.category,
       specimenTypes: before.specimenTypes, loinc: before.loinc, active: before.active, ...change,
     });
-    await recordAuditEvent(ctx, cliActor(), {
-      action: 'test_catalog.update', entityType: 'test_catalog', entityId: code, before, after,
-    });
+    await recordAuditEvent(ctx, cliActor(), catalogUpdateAudit(before.code, before, after));
     process.stdout.write(opts.json
       ? JSON.stringify(after, null, 2) + '\n'
       : [
+        `Test code\t${after.testCode}`,
         `expected TAT\t${after.expectedTatHours === null ? 'none' : `${after.expectedTatHours} h`}`,
         `critical TAT\t${after.criticalTatHours === null ? 'none' : `${after.criticalTatHours} h`}`,
         `requires verification\t${after.requiresVerification ? 'yes' : 'no'}`,
@@ -197,22 +203,25 @@ const CHANGES: Record<TestCatalogChange, { field: 'enabled' | 'active'; value: b
 };
 
 /** `openldr test-catalog enable | disable | retire | restore <code>`: the CLI door to the page's row
- *  actions, PUT /api/test-catalog/:code/enabled and /active. It calls the same service methods and
- *  records the same audit action, as the CLI actor. Retire is reversible, so none takes --force. */
+ *  actions, PUT /api/test-catalog/:code/enabled and /active. <code> is a Test code or an id. It calls
+ *  the same service methods by the test's id and records the same audit action, as the CLI actor.
+ *  Retire is reversible, so none takes --force. */
 export async function runTestCatalogChange(change: TestCatalogChange, code: string, opts: { json: boolean }): Promise<number> {
   const { field, value, done } = CHANGES[change];
   const ctx = await createAppContext(loadConfig());
   try {
-    const before = await ctx.testCatalog.get(code);
+    const before = await ctx.testCatalog.resolve(code);
+    if (!before) throw new Error(`no such test: ${code}`);
+    const id = before.code;
     const after = field === 'enabled'
-      ? await ctx.testCatalog.setEnabled(code, value)
-      : await ctx.testCatalog.setActive(code, value);
+      ? await ctx.testCatalog.setEnabled(id, value)
+      : await ctx.testCatalog.setActive(id, value);
     await recordAuditEvent(ctx, cliActor(), {
-      action: catalogChangeAction(field, value), entityType: 'test_catalog', entityId: code,
-      before: field === 'enabled' ? { enabled: before?.lab.enabled ?? null } : { active: before?.active ?? null },
+      action: catalogChangeAction(field, value), entityType: 'test_catalog', entityId: id,
+      before: field === 'enabled' ? { enabled: before.lab.enabled } : { active: before.active },
       after: field === 'enabled' ? { enabled: after.lab.enabled } : { active: after.active },
     });
-    process.stdout.write(opts.json ? JSON.stringify(after, null, 2) + '\n' : `${code} ${done}.\n`);
+    process.stdout.write(opts.json ? JSON.stringify(after, null, 2) + '\n' : `${after.testCode} ${done}.\n`);
     return 0;
   } catch (err) {
     const msg = redactError(err);

@@ -2641,7 +2641,10 @@ export const ontologyPath = (id: string, code: string): Promise<OntologyBreadcru
 // These types mirror @openldr/bootstrap's test-catalog.ts. The routes are apps/server/src/test-catalog-routes.ts.
 export interface CatalogSpecimenCoding { system: string; code: string }
 export interface CatalogTest {
+  /** The internal id. It never changes. */
   code: string;
+  /** The national code people use. It can change. */
+  testCode: string;
   display: string;
   shortName: string | null;
   category: string | null;
@@ -2671,7 +2674,8 @@ export interface TestCatalogListParams {
   offset?: number;
 }
 export interface CatalogTestInput {
-  code?: string | null;
+  /** Required on create. Left out of an update, the stored one stays. */
+  testCode?: string | null;
   display: string;
   shortName?: string | null;
   category?: string | null;

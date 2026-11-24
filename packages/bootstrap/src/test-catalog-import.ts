@@ -12,10 +12,10 @@ export const CATALOG_IMPORT_MAX_ROWS = 5000;
 export const CATALOG_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 
 export type CatalogImportField =
-  | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
+  | 'id' | 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes'
   | 'expectedTatHours' | 'criticalTatHours' | 'requiresVerification';
 export const CATALOG_IMPORT_FIELDS: readonly CatalogImportField[] = [
-  'code', 'name', 'shortName', 'loinc', 'category', 'specimenTypes', 'expectedTatHours', 'criticalTatHours', 'requiresVerification',
+  'id', 'code', 'name', 'shortName', 'loinc', 'category', 'specimenTypes', 'expectedTatHours', 'criticalTatHours', 'requiresVerification',
 ];
 
 /** Which file column feeds each field, by header text. A field left out is not read, so the import leaves it alone. */
@@ -48,6 +48,8 @@ export interface CatalogImportRow {
 
 /** The header names each field answers to, lower case with everything but letters and digits removed. */
 const HEADER_NAMES: Record<CatalogImportField, readonly string[]> = {
+  // The test's internal id, as an export writes it. The code column is the Test code.
+  id: ['id', 'testid', 'internalid'],
   code: ['code', 'nationalcode', 'testcode'],
   name: ['name', 'testname', 'display'],
   shortName: ['shortname', 'abbreviation'],
@@ -156,13 +158,14 @@ export function readYesNoCell(text: string): boolean | 'bad' {
 
 /** The export's columns. suggestCatalogColumns maps every one, so an export imports back as it is. */
 export const CATALOG_EXPORT_HEADERS = [
-  'code', 'name', 'short_name', 'loinc', 'category', 'specimen_types', 'expected_tat_hours', 'critical_tat_hours', 'requires_verification',
+  'id', 'code', 'name', 'short_name', 'loinc', 'category', 'specimen_types', 'expected_tat_hours', 'critical_tat_hours', 'requires_verification',
 ] as const;
 export const CATALOG_EXPORT_COLUMNS = CATALOG_EXPORT_HEADERS.map((h) => ({ key: h, label: h }));
 
 export function catalogExportRow(t: CatalogTest): Record<string, string> {
   return {
-    code: t.code,
+    id: t.code,
+    code: t.testCode,
     name: t.display,
     short_name: t.shortName ?? '',
     loinc: t.loinc ?? '',
@@ -178,6 +181,7 @@ export function catalogExportRow(t: CatalogTest): Record<string, string> {
 // --column-map and --value-map files with them, so the two doors refuse the same things.
 const headerText = z.string().min(1);
 export const catalogColumnMapSchema = z.object({
+  id: headerText.optional(),
   code: headerText.optional(),
   name: headerText.optional(),
   shortName: headerText.optional(),

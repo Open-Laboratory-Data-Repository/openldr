@@ -481,7 +481,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
         };
         test = test
           ? await updateCatalogTest(test.code, input)
-          : await createCatalogTest({ ...input, code: draft.code.trim() || null });
+          : await createCatalogTest({ ...input, testCode: draft.code.trim() || null });
         setSaved(test);
         if (made.length > 0) {
           set({ resultParams });

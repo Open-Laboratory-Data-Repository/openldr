@@ -685,7 +685,7 @@ export function buildProgram(): Command {
     });
   testCatalog
     .command('params <code>')
-    .description("List a test's result parameters, or replace them from a JSON file")
+    .description("List a test's result parameters, or replace them from a JSON file. <code> is a Test code or an id")
     .option('--set <file>', 'a JSON list of result parameters to write')
     .option('--json', 'emit JSON', false)
     .action(async (code: string, opts: { set?: string; json: boolean }) => {
@@ -700,7 +700,8 @@ export function buildProgram(): Command {
     });
   testCatalog
     .command('set <code>')
-    .description("Set a test's turnaround times and whether its results need verification (only where this install owns the catalog)")
+    .description("Set a test's Test code, turnaround times and whether its results need verification (only where this install owns the catalog). <code> is a Test code or an id")
+    .option('--test-code <code>', 'a new Test code, the national code (left out, the Test code stays)')
     .option('--expected-tat <hours>', 'hours from receipt to release the lab aims for, or none to clear')
     .option('--critical-tat <hours>', 'hours after which the test is overdue, or none to clear')
     .option('--requires-verification <true|false>', 'whether a result needs a second person to verify it')

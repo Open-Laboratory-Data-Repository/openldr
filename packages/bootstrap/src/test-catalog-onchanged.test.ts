@@ -28,10 +28,10 @@ describe('createTestCatalog onChanged', () => {
     const { catalog, calls } = await catalogWithSpy();
     const options = await catalog.options();
     const category = options.categories[0]?.code ?? null;
-    await catalog.create({ code: 'ZZVL', display: 'Viral load', shortName: null, category, specimenTypes: [], loinc: null } as never);
+    const { code: id } = await catalog.create({ testCode: 'ZZVL', display: 'Viral load', shortName: null, category, specimenTypes: [], loinc: null } as never);
     expect(calls()).toBe(1);
-    await catalog.update('ZZVL', { code: 'ZZVL', display: 'HIV viral load', shortName: null, category, specimenTypes: [], loinc: null } as never);
-    await catalog.setActive('ZZVL', false);
+    await catalog.update(id, { testCode: 'ZZVL', display: 'HIV viral load', shortName: null, category, specimenTypes: [], loinc: null } as never);
+    await catalog.setActive(id, false);
     expect(calls()).toBe(3);
     await catalog.list({ q: undefined, status: 'all', limit: 25, offset: 0 } as never);
     expect(calls()).toBe(3);

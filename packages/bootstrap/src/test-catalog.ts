@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
 import {
   markTerminologyChanged, type InternalSchema, type TerminologyAdminStore, type TermMapping, type TermMappingInput,
@@ -23,11 +24,19 @@ import {
 // (AGENTS.md section 6).
 //
 // The catalog is a CE-owned code system. Each test is a concept: code, display, status, and the
-// properties shortName, category and specimenTypes. Its LOINC code is a term mapping, not a property.
+// properties testCode, shortName, category and specimenTypes. Its LOINC code is a term mapping, not a property.
 // This install's own settings for a test live in test_catalog_lab_settings, which sync never writes.
+//
+// The concept code is the test's internal id. It never changes, so lab settings, the LOINC link,
+// lab-code mappings, saved orders and plugin lookups all key on it. The Test code is the national
+// code people use. It is required, unique in the catalog, and can change. A test saved before Test
+// codes existed has no testCode property and reads its concept code as its Test code
+// (docs/superpowers/specs/2026-11-24-test-identity-design.md).
 
 /** Must equal CATALOG_SYSTEM in migration 104. */
 export const TEST_CATALOG_SYSTEM = 'urn:openldr:codesystem:test-catalog';
+/** The system of a test's Test code, the national code, when it leaves CE as a coding. */
+export const TEST_CODE_SYSTEM = 'urn:openldr:codesystem:test-catalog:test-code';
 /** Must equal CATEGORY_SYSTEM in migration 104. */
 export const TEST_CATEGORY_SYSTEM = 'urn:openldr:codesystem:test-category';
 /** A test's category must be a code in this ValueSet. Must equal CATEGORY_VALUE_SET in migration 104. */
@@ -59,7 +68,10 @@ export interface SpecimenCoding {
 }
 
 export interface CatalogTest {
+  /** The internal id. It never changes. */
   code: string;
+  /** The national code people use. It can change. A test saved without one reads its id here. */
+  testCode: string;
   display: string;
   shortName: string | null;
   category: string | null;
@@ -98,8 +110,8 @@ export interface CatalogListResult {
 
 /** A whole test, as the edit sheet sends it. A field left out is cleared. */
 export interface CatalogTestInput {
-  /** The national code. Optional on create, where a test with none takes its LOINC code. Fixed once saved. */
-  code?: string | null;
+  /** The national code. Required on create. On update, left out keeps what is stored. */
+  testCode?: string | null;
   display: string;
   shortName?: string | null;
   category?: string | null;
@@ -245,7 +257,12 @@ export interface TestParamsAnswer {
 export interface TestCatalog {
   ownedHere(): Promise<boolean>;
   list(query: CatalogListQuery): Promise<CatalogListResult>;
+  /** One test by its id. */
   get(code: string): Promise<CatalogTest | null>;
+  /** One test by its Test code, retired tests included. */
+  findByTestCode(testCode: string): Promise<CatalogTest | null>;
+  /** What a person typed: a Test code first, then an id. The CLI finds tests this way. */
+  resolve(codeOrId: string): Promise<CatalogTest | null>;
   create(input: CatalogTestInput): Promise<CatalogTest>;
   update(code: string, input: CatalogTestInput): Promise<CatalogTest>;
   setLabSettings(code: string, input: LabSettingsInput): Promise<CatalogTest>;
@@ -275,6 +292,22 @@ export interface TestCatalogDeps {
   /** Called after a change that alters a test's name, category, LOINC link or status. Test mapping
    *  rebuilds test_map from it (docs/superpowers/specs/2026-10-11-test-mapping-design.md, 4.3). */
   onChanged?: () => void;
+  /** How a new test gets its id. Defaults to newTestId. Tests written before ids existed pass one that
+   *  returns the Test code, so they read as a test saved before the change does. */
+  makeId?: (testCode: string) => string;
+}
+
+/** A new test's internal id: tst- and 16 hex characters of a random UUID. Made once, at create. */
+export function newTestId(): string {
+  return `tst-${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+}
+
+/** The audit entry for an edit to a test. The route and the CLI both record it, so they must agree.
+ *  The entity is the id. A changed Test code is named, old and new. */
+export function catalogUpdateAudit(id: string, before: CatalogTest | null, after: CatalogTest): AuditDetails {
+  const details: AuditDetails = { action: 'test_catalog.update', entityType: 'test_catalog', entityId: id, before, after };
+  if (before && before.testCode !== after.testCode) details.metadata = { testCode: { from: before.testCode, to: after.testCode } };
+  return details;
 }
 
 /**
@@ -329,10 +362,17 @@ function readHours(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
+/** A concept's Test code: its testCode property, else its concept code (a test saved before Test codes). */
+function testCodeOf(code: string, properties: unknown): string {
+  const p = (parseJson(properties) ?? {}) as Record<string, unknown>;
+  return typeof p.testCode === 'string' && p.testCode.trim() !== '' ? p.testCode : code;
+}
+
 function toTest(c: ConceptRow, loinc: string | null, lab: LabRow | undefined): CatalogTest {
   const p = (parseJson(c.properties) ?? {}) as Record<string, unknown>;
   return {
     code: c.code,
+    testCode: testCodeOf(c.code, p),
     display: c.display ?? c.code,
     shortName: typeof p.shortName === 'string' ? p.shortName : null,
     category: typeof p.category === 'string' ? p.category : null,
@@ -356,6 +396,7 @@ function toTest(c: ConceptRow, loinc: string | null, lab: LabRow | undefined): C
 }
 
 type ValidTest = {
+  testCode: string;
   display: string;
   shortName: string | null;
   category: string | null;
@@ -393,7 +434,7 @@ interface PlannedWrite {
 
 /** Status is not compared: an import never changes it. */
 function sameTest(a: CatalogTest, b: ValidTest): boolean {
-  return a.display === b.display && a.shortName === b.shortName && a.category === b.category && a.loinc === b.loinc
+  return a.testCode === b.testCode && a.display === b.display && a.shortName === b.shortName && a.category === b.category && a.loinc === b.loinc
     && a.specimenTypes.map(codingKey).join('\n') === b.specimenTypes.map(codingKey).join('\n')
     && (b.expectedTatHours === undefined || a.expectedTatHours === b.expectedTatHours)
     && (b.criticalTatHours === undefined || a.criticalTatHours === b.criticalTatHours)
@@ -539,7 +580,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       if (query.loinc === 'none' && t.loinc !== null) return false;
       if (query.enabled !== undefined && t.lab.enabled !== query.enabled) return false;
       if (needle) {
-        const text = [t.code, t.display, t.shortName ?? '', t.lab.localDisplay ?? ''].join('\n').toLowerCase();
+        const text = [t.testCode, t.code, t.display, t.shortName ?? '', t.lab.localDisplay ?? ''].join('\n').toLowerCase();
         if (!text.includes(needle)) return false;
       }
       return true;
@@ -553,6 +594,33 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
 
   async function get(code: string): Promise<CatalogTest | null> {
     return (await readTests(code))[0] ?? null;
+  }
+
+  /** Every test's id, Test code and name, retired tests included. The catalog is small (spec 4.4),
+   *  so uniqueness is checked here rather than by an index. */
+  async function testCodes(): Promise<Array<{ id: string; testCode: string; display: string }>> {
+    const rows = await db.selectFrom('terminology_concepts').select(['code', 'display', 'properties'])
+      .where('system', '=', TEST_CATALOG_SYSTEM).orderBy('code').execute();
+    return rows.map((r) => ({ id: r.code, testCode: testCodeOf(r.code, r.properties), display: r.display ?? r.code }));
+  }
+
+  async function findByTestCode(testCode: string): Promise<CatalogTest | null> {
+    const hit = (await testCodes()).find((t) => t.testCode === testCode);
+    return hit ? get(hit.id) : null;
+  }
+
+  async function resolve(codeOrId: string): Promise<CatalogTest | null> {
+    return (await findByTestCode(codeOrId)) ?? get(codeOrId);
+  }
+
+  function heldBy(holder: { id: string; testCode: string; display: string }): TestCatalogError {
+    return new TestCatalogError(`Test code ${holder.testCode} is already used by ${holder.display} (${holder.id}).`, 'conflict');
+  }
+
+  /** Refuses a Test code another test holds. `self` is the test being edited, which may keep its own. */
+  async function refuseTakenTestCode(testCode: string, self: string | null): Promise<void> {
+    const holder = (await testCodes()).find((t) => t.testCode === testCode && t.id !== self);
+    if (holder) throw heldBy(holder);
   }
 
   function invalid(message: string): TestCatalogError {
@@ -615,6 +683,9 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   function checkTest(input: CatalogTestInput, ctx: CheckContext, linked: string | null = null): ValidTest {
     const display = clean(input.display);
     if (!display) throw invalid('A test needs a name.');
+    // The LOINC code is a mapping to the international standard, never the test's code.
+    const testCode = clean(input.testCode);
+    if (!testCode) throw invalid('A test needs a Test code.');
     const category = clean(input.category);
     if (category && !ctx.categories.some((c) => c.code === category)) {
       throw invalid(`Category ${category} is not in the test category list.`);
@@ -628,7 +699,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     // would have nothing to offer.
     // The parser drops an age unit it does not know, which would read the range as years. Check the
     // unit as sent first, so the route, the CLI and an import all refuse the same input.
-    checkAgeUnits(clean(input.code) ?? display, input.resultParams);
+    checkAgeUnits(testCode, input.resultParams);
     const resultParams = input.resultParams === undefined ? undefined : parseResultParams(input.resultParams);
     for (const param of resultParams ?? []) {
       if (!ctx.resultParams.has(param.code)) {
@@ -681,7 +752,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       throw invalid('Requires verification must be true or false.');
     }
     return {
-      display, shortName: clean(input.shortName), category, specimenTypes, resultParams, loinc, active: input.active ?? true,
+      testCode, display, shortName: clean(input.shortName), category, specimenTypes, resultParams, loinc, active: input.active ?? true,
       expectedTatHours, criticalTatHours, requiresVerification,
     };
   }
@@ -723,9 +794,13 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     const next: Record<string, unknown> = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? { ...(parsed as Record<string, unknown>) }
       : {};
+    delete next.testCode;
     delete next.shortName;
     delete next.category;
     delete next.specimenTypes;
+    // A Test code equal to the id is what the fallback reads anyway, so it is not stored. A test saved
+    // before Test codes keeps its properties as they were until its code changes.
+    if (t.testCode !== code) next.testCode = t.testCode;
     if (t.shortName) next.shortName = t.shortName;
     if (t.category) next.category = t.category;
     if (t.specimenTypes.length) next.specimenTypes = t.specimenTypes;
@@ -783,8 +858,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   async function create(input: CatalogTestInput): Promise<CatalogTest> {
     await refuseUnlessOwned();
     const t = await validate(input);
-    const code = clean(input.code) ?? t.loinc;
-    if (!code) throw invalid('A test needs a national code or a LOINC code.');
+    await refuseTakenTestCode(t.testCode, null);
+    const code = (deps.makeId ?? newTestId)(t.testCode);
     if (await storedConcept(code)) throw new TestCatalogError(`Test ${code} is already in the catalog.`, 'conflict');
     // Two writes, not one transaction: the admin store opens its own. A failed link leaves the test
     // saved without it, and saving again links it.
@@ -798,10 +873,10 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     await refuseUnlessOwned();
     const stored = await storedConcept(code);
     if (!stored) throw notFound(code);
-    const given = clean(input.code);
-    if (given && given !== code) throw invalid(`A test's code cannot change once saved (${code}).`);
-    // The code goes in so a refusal can name the test.
-    const t = await validate({ ...input, code });
+    // Left out keeps the stored Test code. The id never changes, so nothing keyed on it moves.
+    const testCode = input.testCode === undefined ? testCodeOf(code, stored.properties) : input.testCode;
+    const t = await validate({ ...input, testCode });
+    await refuseTakenTestCode(t.testCode, code);
     await writeConcept(code, t, stored.properties);
     await writeLoincLink(code, t.loinc);
     changed();
@@ -932,7 +1007,9 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (mapProblem) throw invalid(mapProblem);
     const rows = readCatalogRows(table, columnMap);
 
-    const tests = new Map((await readTests()).map((t) => [t.code, t]));
+    const all = await readTests();
+    const tests = new Map(all.map((t) => [t.code, t]));
+    const byTestCode = new Map(all.map((t) => [t.testCode, t]));
     const storedByCode = new Map((await db.selectFrom('terminology_concepts').select(['code', 'properties'])
       .where('system', '=', TEST_CATALOG_SYSTEM).execute()).map((r) => [r.code, r.properties as unknown]));
     const ctx = await loadCheckContext(rows.flatMap((r) => (r.values.loinc ? [r.values.loinc] : [])));
@@ -964,21 +1041,41 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       loincChecked: ctx.loincLoaded,
     };
     const writes: PlannedWrite[] = [];
+    // The row that first named each test (by id) and each Test code, so a file cannot name one twice.
     const firstLine = new Map<string, number>();
+    const claimed = new Map<string, number>();
 
     for (const { line, values: v } of rows) {
-      // A test with no national code takes its LOINC code, as create does.
-      const code = v.code || v.loinc || null;
+      // A row names its test by id when it gives one, else by Test code (spec call 6). An id that names
+      // no test is refused: CE makes ids, a file never does.
+      const id = v.id || null;
+      const byId = id ? tests.get(id) : undefined;
+      if (id && !byId) {
+        report.refused.push({ line, code: v.code || null, reason: `No test has the id ${id}. Leave the id empty to add a new test.` });
+        continue;
+      }
+      // An unmapped code column keeps the Test code of the test the id names.
+      const code = v.code === undefined ? byId?.testCode ?? null : v.code || null;
       if (!code) {
-        report.refused.push({ line, code: null, reason: 'A test needs a national code or a LOINC code.' });
+        report.refused.push({ line, code: null, reason: 'A test needs a Test code.' });
         continue;
       }
-      const first = firstLine.get(code);
+      const before = byId ?? byTestCode.get(code);
+      const key = before ? before.code : `new|${code}`;
+      const first = firstLine.get(key) ?? claimed.get(code);
       if (first !== undefined) {
-        report.refused.push({ line, code, reason: `Test ${code} is already on row ${first} of this file.` });
+        const what = before && firstLine.has(key) ? `Test ${before.testCode}` : `Test code ${code}`;
+        report.refused.push({ line, code, reason: `${what} is already on row ${first} of this file.` });
         continue;
       }
-      firstLine.set(code, line);
+      // Another saved test may hold the Test code this row gives its own test.
+      const holder = byTestCode.get(code);
+      if (holder && holder.code !== before?.code) {
+        report.refused.push({ line, code, reason: heldBy({ id: holder.code, testCode: holder.testCode, display: holder.display }).message });
+        continue;
+      }
+      firstLine.set(key, line);
+      claimed.set(code, line);
 
       const problems: string[] = [];
       // undefined means the column is not mapped, so the test keeps what it has (decision 4).
@@ -1025,9 +1122,9 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         continue;
       }
 
-      const before = tests.get(code);
       // A mapped column is authoritative, so an empty cell clears the field. An unmapped one is left alone.
       const merged: CatalogTestInput = {
+        testCode: code,
         display: v.name ?? '',
         shortName: v.shortName !== undefined ? v.shortName : before?.shortName ?? null,
         category: category !== undefined ? category : before?.category ?? null,
@@ -1049,12 +1146,14 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       }
       if (!before) {
         report.counts.new += 1;
-        writes.push({ code, test, stored: null, loincBefore: null });
+        // The id is made when the plan is, so a preview and an apply give different ids. Only the
+        // apply's plan is written.
+        writes.push({ code: (deps.makeId ?? newTestId)(code), test, stored: null, loincBefore: null });
       } else if (sameTest(before, test)) {
         report.counts.unchanged += 1;
       } else {
         report.counts.changed += 1;
-        writes.push({ code, test, stored: storedByCode.get(code) ?? null, loincBefore: before.loinc });
+        writes.push({ code: before.code, test, stored: storedByCode.get(before.code) ?? null, loincBefore: before.loinc });
       }
     }
 
@@ -1187,6 +1286,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     ownedHere,
     list,
     get,
+    findByTestCode,
+    resolve,
     create,
     update,
     setLabSettings,

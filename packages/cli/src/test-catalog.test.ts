@@ -17,6 +17,7 @@ vi.mock('@openldr/bootstrap', async () => {
     parseCatalogListQuery: actual.parseCatalogListQuery,
     parseResultParams: actual.parseResultParams,
     readHoursCell: actual.readHoursCell,
+    catalogUpdateAudit: actual.catalogUpdateAudit,
     recordAuditEvent: mocks.recordAuditEvent,
   };
 });
@@ -27,7 +28,7 @@ import { join } from 'node:path';
 import { formatResultParams, readResultParamsFile, runTestCatalogList, runTestCatalogParams, runTestCatalogSet } from './test-catalog';
 
 const TEST = {
-  code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
+  code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
   specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD' }], loinc: '25836-8', active: true,
   lab: { enabled: true, specimenTypes: null, localDisplay: null },
 };
@@ -136,7 +137,7 @@ describe('openldr test-catalog params --set', () => {
     const update = vi.fn().mockRejectedValue(new Error('FBC: HGB range 1 has the age unit "days". Use d (days), mo (months) or y (years).'));
     const close = vi.fn().mockResolvedValue(undefined);
     mocks.createAppContext.mockResolvedValue({
-      testCatalog: { get: vi.fn().mockResolvedValue({ ...TEST, code: 'FBC', resultParams: [] }), update }, close,
+      testCatalog: { resolve: vi.fn().mockResolvedValue({ ...TEST, code: 'FBC', resultParams: [] }), update }, close,
     });
     const file = join(mkdtempSync(join(tmpdir(), 'tc-params-')), 'params.json');
     writeFileSync(file, JSON.stringify([
@@ -170,8 +171,9 @@ describe('openldr test-catalog set', () => {
   function withTest() {
     const update = vi.fn(async (_code: string, input: Record<string, unknown>) => ({ ...stored, ...input }));
     const close = vi.fn().mockResolvedValue(undefined);
-    mocks.createAppContext.mockResolvedValue({ testCatalog: { get: vi.fn().mockResolvedValue(stored), update }, close });
-    return { update, close };
+    const resolve = vi.fn().mockResolvedValue(stored);
+    mocks.createAppContext.mockResolvedValue({ testCatalog: { resolve, update }, close });
+    return { update, close, resolve };
   }
 
   it('sends the stored test with only the given fields changed, leaves result parameters out, and audits', async () => {
@@ -181,9 +183,36 @@ describe('openldr test-catalog set', () => {
     expect(sent).toMatchObject({ display: 'HIV viral load', criticalTatHours: 0.5, requiresVerification: false });
     expect(sent).not.toHaveProperty('expectedTatHours');
     expect(sent).not.toHaveProperty('resultParams');
-    expect(out.join('')).toBe('expected TAT\t48 h\ncritical TAT\t0.5 h\nrequires verification\tno\n');
+    // No --test-code leaves the Test code as stored.
+    expect(sent).not.toHaveProperty('testCode');
+    expect(out.join('')).toBe('Test code\tHIVVL\nexpected TAT\t48 h\ncritical TAT\t0.5 h\nrequires verification\tno\n');
     expect(mocks.recordAuditEvent.mock.calls[0][2]).toMatchObject({ action: 'test_catalog.update', entityId: 'HIVVL' });
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('changes the Test code with --test-code, on the test the typed code finds, and audits old and new', async () => {
+    const { update, resolve } = withTest();
+    const stored2 = { ...stored, code: 'tst-0123456789abcdef', testCode: 'HB' };
+    resolve.mockResolvedValue(stored2);
+    update.mockImplementation(async (_code: string, input: Record<string, unknown>) => ({ ...stored2, ...input }));
+    expect(await runTestCatalogSet('HB', { testCode: 'HGB', json: false })).toBe(0);
+    expect(resolve).toHaveBeenCalledWith('HB');
+    expect(update.mock.calls[0][0]).toBe('tst-0123456789abcdef');
+    expect(update.mock.calls[0][1]).toMatchObject({ testCode: 'HGB' });
+    expect(out.join('')).toContain('Test code\tHGB\n');
+    expect(mocks.recordAuditEvent.mock.calls[0][2]).toMatchObject({
+      action: 'test_catalog.update', entityId: 'tst-0123456789abcdef', metadata: { testCode: { from: 'HB', to: 'HGB' } },
+    });
+  });
+
+  it('refuses an empty --test-code before opening a context, and names a test it cannot find', async () => {
+    expect(await runTestCatalogSet('HB', { testCode: '  ', json: false })).toBe(1);
+    expect(err.join('')).toContain('--test-code needs a code');
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+    const { resolve } = withTest();
+    resolve.mockResolvedValue(null);
+    expect(await runTestCatalogSet('NOPE', { testCode: 'X', json: false })).toBe(1);
+    expect(err.join('')).toContain('no such test: NOPE');
   });
 
   it('clears a TAT given as none', async () => {
@@ -204,7 +233,7 @@ describe('openldr test-catalog set', () => {
   it('hands a negative TAT to the service and reports its refusal', async () => {
     const update = vi.fn().mockRejectedValue(new Error('The expected turnaround time must be a positive number of hours, not -2.'));
     const close = vi.fn().mockResolvedValue(undefined);
-    mocks.createAppContext.mockResolvedValue({ testCatalog: { get: vi.fn().mockResolvedValue(stored), update }, close });
+    mocks.createAppContext.mockResolvedValue({ testCatalog: { resolve: vi.fn().mockResolvedValue(stored), update }, close });
     expect(await runTestCatalogSet('HIVVL', { expectedTat: '-2', json: false })).toBe(1);
     expect(update.mock.calls[0][1].expectedTatHours).toBe(-2);
     expect(err.join('')).toContain('must be a positive number of hours');
