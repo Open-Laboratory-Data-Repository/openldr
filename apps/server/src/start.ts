@@ -5,6 +5,7 @@ import { buildApp } from './app';
 import { createUpdateFetch } from './update-fetch';
 import { createShutdown } from './shutdown';
 import { registerEventHandlers } from './register-event-handlers';
+import { widenConnectAttempts } from './connect-attempts';
 
 export interface RunningServer {
   /** For example http://127.0.0.1:3000 */
@@ -23,6 +24,8 @@ export interface RunningServer {
  * rejection is then left with a process that can exit by itself.
  */
 export async function startServer(cfg: Config, logger: Logger): Promise<RunningServer> {
+  // Before any outbound call: Node's 250 ms per address fails slow links (connect-attempts.ts).
+  widenConnectAttempts();
   // Self-migrate on startup when enabled (single-port prod deployment). migrateToLatest is
   // idempotent, so a fresh DB gets its schema and an already-migrated one is a no-op. Runs
   // before any context that queries tables, so the app never serves 500s on an unmigrated DB.
