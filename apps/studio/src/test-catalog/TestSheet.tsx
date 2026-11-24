@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { DatePicker, pickerValueToDate } from '@/components/ui/date-picker';
 import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -23,9 +24,9 @@ import {
 import { TermPicker } from '@/terminology/TermPicker';
 import { OntologyPickerDialog } from '@/terminology/ontology/OntologyPickerDialog';
 import {
-  createCatalogTest, expandValueSetByUrl, fetchLabIdentity, getLoincHints, listCodingSystems, resultFieldsFromLoinc, setCatalogLabSettings,
+  createCatalogTest, getLoincHints, listCodingSystems, resultFieldsFromLoinc, setCatalogLabSettings,
   termExists, updateCatalogTest, type CatalogTestCoding,
-  type LoincFieldPlan, type LoincHints, type Term, type CatalogRejectReason, type CatalogResultType,
+  type LoincFieldPlan, type LoincHints, type Term, type CatalogResultType,
   type CatalogBandPregnancy, type CatalogBandSource, type CatalogBandScope,
   type CatalogLabSettingsInput, type CatalogTestResultParam, type CatalogSpecimenCoding, type CatalogTest, type CatalogTestInput,
   type CatalogAgeUnit, type CatalogResultBand, type TestCatalogOptions,
@@ -229,9 +230,10 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   // Each loaded system's name by url, so a coding row names its system. Read only when the test has
   // codings; a failure leaves the url showing.
   const [systemNames, setSystemNames] = useState<ReadonlyMap<string, string>>(() => new Map());
-  // CE's country list, for a range's country. Read as Settings, Laboratory reads it: the value set the
-  // lab identity's country field names. A failure leaves the list empty; a saved country still shows.
-  const [countries, setCountries] = useState<CatalogRejectReason[]>([]);
+  // CE's country list, for a range's country. It comes with the catalog options, which a catalog editor
+  // can read (terminology.view); /api/settings/lab needs reports.view. Empty when it could not be read,
+  // and then a saved country still shows by its code.
+  const countries = options.countries ?? [];
   // What LOINC says about the test's code. Null when LOINC or its ontology is not loaded, and then the
   // sheet shows no hint and offers no LOINC action (spec, call 7).
   const [hints, setHints] = useState<LoincHints | null>(null);
@@ -283,22 +285,6 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   }, [target]);
 
   const open = target !== null;
-  useEffect(() => {
-    if (!open || !ownedHere) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const meta = await fetchLabIdentity();
-        const url = meta.fields.find((f) => f.source === 'country')?.valueSetUrl;
-        if (!url) return;
-        const rows = await expandValueSetByUrl(url);
-        if (!cancelled) setCountries(rows);
-      } catch {
-        // No list is no harm: a saved country still shows by its code, and None still clears it.
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [open, ownedHere]);
 
   const hasCodings = draft.codings.length > 0;
   useEffect(() => {
@@ -1195,21 +1181,20 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                                 </SelectContent>
                               </Select>
                               {label('country', 'testCatalog.sheet.bandCountry')}
-                              <Select
-                                value={band.country ?? UNSET}
-                                onValueChange={(v) => writeBand(withBandField(band, 'country', v === UNSET ? null : v))}
-                              >
-                                <SelectTrigger id={id('country')} className="h-8" aria-label={t('testCatalog.sheet.bandCountryFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value={UNSET}>{t('testCatalog.sheet.bandNone')}</SelectItem>
-                                  {/* A saved country the list lacks (it failed to load) still shows, by its code. */}
-                                  {band.country && !countries.some((c) => c.code === band.country)
-                                    ? <SelectItem key={band.country} value={band.country}>{band.country}</SelectItem> : null}
-                                  {countries.map((c) => (
-                                    <SelectItem key={c.code} value={c.code}>{c.display ? `${c.display} (${c.code})` : c.code}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              {/* About 250 countries, so the operator types to find one. None removes it. */}
+                              <Combobox
+                                id={id('country')} className="h-8" ariaLabel={t('testCatalog.sheet.bandCountryFor', { code: p.code, n })}
+                                options={[
+                                  // A saved country the list lacks (it failed to load) still shows, by its code.
+                                  ...(band.country && !countries.some((c) => c.code === band.country) ? [{ value: band.country, label: band.country }] : []),
+                                  ...countries.map((c) => ({ value: c.code, label: c.display ? `${c.display} (${c.code})` : c.code })),
+                                ]}
+                                value={band.country ?? ''}
+                                onChange={(v) => writeBand(withBandField(band, 'country', v === '' ? null : v))}
+                                noneLabel={t('testCatalog.sheet.bandNone')}
+                                placeholder={t('testCatalog.sheet.bandNone')}
+                                searchPlaceholder={t('settings.laboratory.countrySearch')}
+                              />
                               {label('validFrom', 'testCatalog.sheet.bandValidFrom')}
                               <DatePicker
                                 id={id('validFrom')} className="h-8"

@@ -200,6 +200,9 @@ export interface CatalogOptions {
   ucum: { systemId: string; system: string } | null;
   /** The sexes a range may name, with labels, so the studio names no code (named reference ranges). */
   sexes: SexOption[];
+  /** The countries a range may name: the list a save checks a range's country against. Here, so a
+   *  catalog editor needs no reports.view (the lab identity route) to pick one. Empty when unreadable. */
+  countries: Array<{ code: string; display: string | null }>;
 }
 
 /** A file read for import: its table, and CE's guess at which column feeds which field. */
@@ -1221,10 +1224,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   }
 
   async function options(): Promise<CatalogOptions> {
-    const [categories, specimenTypes, resultParams] = await Promise.all([
+    const [categories, specimenTypes, resultParams, countries] = await Promise.all([
       expandEntries(TEST_CATEGORY_VALUE_SET),
       expandEntries(SPECIMEN_TYPE_VALUE_SET),
       expandEntries(RESULT_PARAM_VALUE_SET),
+      // As the save reads it: an unreadable list offers none rather than failing the sheet.
+      expandEntries(CONTROLLED_VALUE_SETS.country).catch(() => []),
     ]);
     let loinc: CatalogOptions['loinc'] = null;
     if (await loincLoaded()) {
@@ -1239,6 +1244,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       loinc,
       ucum: ucumRow ? { systemId: ucumRow.id, system: UCUM_SYSTEM } : null,
       sexes: SEX_OPTIONS,
+      countries: countries.map(({ code, display }) => ({ code, display })).sort(byLabel),
     };
   }
 

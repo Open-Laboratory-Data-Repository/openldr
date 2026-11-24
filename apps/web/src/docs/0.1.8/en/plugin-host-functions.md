@@ -140,11 +140,21 @@ A `pluginRef` belongs to the plugin id, not to one install. If you remove a plug
 
 `testCatalog.get` and `testCatalog.list` answer each test with `code` and `testCode`. `code` is the fixed id of the test. It never changes, so store it and pass it back to CE. `testCode` is the national Test code. It can change, and a test saved before this change reads the same as its `code`. Show `testCode` to people.
 
+`testCatalog.get` also answers `codings`: other codes that name the test, such as a SNOMED procedure. Each has `system`, `code`, `display`, `purpose` (`ADDITIONAL`, `INDICATION`, `PROCEDURE` or `CATEGORY`) and `note`. The list is empty when the test has none.
+
 ### Result parameters for one patient
 
 `testCatalog.resultParams` gives each test's result parameters, with the reference range that fits one patient. Send `{ "tests": [{ "system": "...", "code": "..." }], "patientRef": "p1...." }`. It needs `patients.view` or `patients.find`, as the patient ops do. A patient outside the caller's limit gives `NOT_FOUND`.
 
 The answer is `{ "tests": [...], "sexes": [...] }`. Each test lists its `params`. Each parameter has its `unit`, `display`, `bands`, the `band` that fits the patient or null, and `fits`, one of `yes`, `no` or `unknown` for each band in order. A band has a `name` when the lab gave the range one. `sexes` gives each sex code with its label in en, fr and pt. CE reads the patient's sex and age to pick the band. The answer does not include them.
+
+Each parameter also has its `resultType`: `numeric`, `coded`, `text`, `boolean`, `date` or `multicoded`. `boolean` is a yes or no answer. `multicoded` takes one or more answers from the parameter's `valueSetUrl`, as `coded` takes one. `required` says whether the field must be filled. When it is absent, the field is required. The entry limits come only on their own type, and each is absent when not set:
+
+- `numeric`: `min`, `max` and `decimals`, the decimal places to keep.
+- `text`: `minLength` and `maxLength`.
+- `date`: `dateLimit`, `past` or `future`. Absent means any date.
+
+A band can name a `country`. The lab's country, set in Settings, Laboratory, decides `fits` for it: `no` for another country, and `unknown` while the lab has no country set.
 
 ## fhir_emit
 

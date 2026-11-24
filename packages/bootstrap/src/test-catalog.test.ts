@@ -933,6 +933,25 @@ describe('test catalog: result parameters on a test', () => {
     expect(params.find((p) => p.code === 'WBC')).toMatchObject({ units: null });
   });
 
+  // A range's country is picked from this list, so a catalog editor needs no reports.view to read it
+  // (the lab identity route needs that). It is the list a save checks a range's country against.
+  it('offers the country list a range may name, by name, and none when it cannot be read', async () => {
+    const { db, admin, catalog, ops } = await buildCatalog();
+    const countries = (await catalog.options()).countries;
+    expect(countries.find((c) => c.code === 'TZA')).toEqual({ code: 'TZA', display: 'Tanzania, United Republic of' });
+    expect(countries.length).toBeGreaterThan(200);
+    const names = countries.map((c) => c.display ?? c.code);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+
+    const broken = createTestCatalog({ db, admin, ops: {
+      ...ops, expand: async (...args: Parameters<typeof ops.expand>) => {
+        if (args[0] === 'urn:openldr:valueset:country') throw new Error('down');
+        return ops.expand(...args);
+      },
+    } as never });
+    expect((await broken.options()).countries).toEqual([]);
+  });
+
   it('names the UCUM system migration 017 seeds, and null without it', async () => {
     const { db, catalog } = await buildCatalog();
     expect((await catalog.options()).ucum).toEqual({ systemId: 'cs-ucum-seed', system: 'http://unitsofmeasure.org' });

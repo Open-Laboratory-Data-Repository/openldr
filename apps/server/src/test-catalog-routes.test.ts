@@ -30,6 +30,7 @@ const OPTIONS: CatalogOptions = {
   loinc: null,
   ucum: { systemId: 'cs-ucum-seed', system: 'http://unitsofmeasure.org' },
   sexes: [{ code: 'female', labels: { en: 'Female', fr: 'Femme', pt: 'Feminino' } }],
+  countries: [{ code: 'TZA', display: 'Tanzania' }],
 };
 
 const REPORT: CatalogImportReport = {
@@ -209,6 +210,15 @@ describe('test catalog routes', () => {
       { method: 'setLabSettings', args: ['HIVVL', body] },
     ]);
     expect(audit).toMatchObject([{ action: 'test_catalog.lab_settings', entityType: 'test_catalog', entityId: 'HIVVL', before: TEST.lab, after: TEST.lab }]);
+  });
+
+  // The Test sheet's range country picker reads the list here. /api/settings/lab needs reports.view,
+  // which a catalog editor may not hold, so the list must come with terminology.view alone.
+  it('GET /api/test-catalog/options gives the country list to a catalog editor without reports.view', async () => {
+    const { ctx } = fakeCtx();
+    const res = await appWith(ctx, ['terminology.view']).inject({ method: 'GET', url: '/api/test-catalog/options' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().countries).toEqual([{ code: 'TZA', display: 'Tanzania' }]);
   });
 
   it('GET /api/test-catalog/options returns the picker choices and needs terminology.view', async () => {

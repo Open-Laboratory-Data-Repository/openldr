@@ -2732,6 +2732,8 @@ export interface TestCatalogOptions {
   ucum?: { systemId: string; system: string } | null;
   /** The sexes a range may name, with labels by language, so the studio names no code. */
   sexes: CatalogSexOption[];
+  /** The countries a range may name. Here so a catalog editor needs no reports.view to read them. */
+  countries?: { code: string; display: string | null }[];
 }
 
 export function listTestCatalog(p: TestCatalogListParams = {}): Promise<TestCatalogListResult> {

@@ -9,8 +9,11 @@ import { cn } from '@/lib/cn';
 export interface ComboboxOption { value: string; label: string }
 
 export function Combobox({
-  options, value, onChange, placeholder, searchPlaceholder, disabled, limit,
+  id, ariaLabel, options, value, onChange, placeholder, searchPlaceholder, disabled, limit, noneLabel, className,
 }: {
+  id?: string;
+  /** The field's name, for a picker a label names. Without it the trigger is named by what it shows. */
+  ariaLabel?: string;
   options: ComboboxOption[];
   value: string | null;
   onChange: (value: string) => void;
@@ -19,6 +22,10 @@ export function Combobox({
   disabled?: boolean;
   /** Show at most this many matches, for a long list such as a national register. Typing narrows it. */
   limit?: number;
+  /** When given, a first row with this text answers '' so an optional field can go back to no value. */
+  noneLabel?: string;
+  /** Classes for the trigger, such as a height to match the row. */
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -35,20 +42,35 @@ export function Combobox({
     // allowance (AGENTS.md section 6). Only a real browser can confirm it; jsdom cannot scroll.
     <Popover modal open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQuery(''); }}>
       <PopoverTrigger asChild>
-        <Button variant="outline" disabled={disabled} className="w-full justify-between font-normal" aria-label={selected ? selected.label : placeholder}>
+        <Button
+          id={id} variant="outline" role="combobox" aria-expanded={open} aria-haspopup="listbox" disabled={disabled}
+          className={cn('w-full justify-between font-normal', className)} aria-label={ariaLabel ?? (selected ? selected.label : placeholder)}
+        >
           <TruncatedText text={selected ? selected.label : placeholder} className={cn('min-w-0', !selected && 'text-muted-foreground')} />
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
         <div className="p-2"><Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={searchPlaceholder} aria-label={searchPlaceholder} /></div>
-        <div className="max-h-64 overflow-y-auto p-1">
+        <div role="listbox" aria-label={ariaLabel ?? placeholder} className="max-h-64 overflow-y-auto p-1">
+          {noneLabel !== undefined ? (
+            <button
+              type="button" role="option" aria-selected={!value}
+              className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent"
+              onClick={() => { onChange(''); setOpen(false); setQuery(''); }}
+            >
+              <span>{noneLabel}</span>
+              {!value ? <Check className="ml-2 h-4 w-4 shrink-0" /> : null}
+            </button>
+          ) : null}
           {filtered.length === 0 ? (
             <div className="px-2 py-3 text-center text-sm text-muted-foreground">{searchPlaceholder}…</div>
           ) : filtered.map((o) => (
             <button
               key={o.value}
               type="button"
+              role="option"
+              aria-selected={o.value === value}
               className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
               onClick={() => { onChange(o.value); setOpen(false); setQuery(''); }}
             >

@@ -713,6 +713,8 @@ export const fr: EnShape = {
       timezone: 'Fuseau horaire',
       country: 'Pays',
       countryPlaceholder: 'Sélectionner un pays…',
+      countryNone: 'Aucun',
+      countrySearch: 'Rechercher un pays',
       timezoneHint: "Un nom de fuseau IANA, ex. Africa/Dar_es_Salaam. Un entrepôt SQL Server attend plutôt un nom de fuseau Windows, que ce champ refuse — sur SQL Server, laissez-le vide et saisissez le fuseau dans le filtre Fuseau horaire à chaque exécution du rapport.",
       chooseLogo: 'Choisir un fichier…',
       clearLogo: 'Effacer',

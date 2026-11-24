@@ -29,6 +29,7 @@ const OPTIONS: api.TestCatalogOptions = {
   ],
   loinc: null,
   sexes: [],
+  countries: [{ code: 'KEN', display: 'Kenya' }, { code: 'TZA', display: 'Tanzania' }],
 };
 const param = (code: string, extra: Partial<api.CatalogTestResultParam> = {}): api.CatalogTestResultParam => ({
   system: DICT, code, resultType: 'numeric', valueSetUrl: null, bands: [], ...extra,
@@ -59,6 +60,12 @@ async function save() {
 const saved = () => vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams ?? [];
 async function choose(combobox: HTMLElement, name: string | RegExp) {
   fireEvent.keyDown(combobox, { key: 'ArrowDown' });
+  await act(async () => { fireEvent.click(await screen.findByRole('option', { name })); });
+}
+// The range country is a type-to-search picker (Combobox), not a Select: about 250 countries.
+async function chooseCountry(name: string | RegExp, search?: string) {
+  fireEvent.click(screen.getByRole('combobox', { name: /country for HGB band 1/i }));
+  if (search) fireEvent.change(screen.getByPlaceholderText(/search countries/i), { target: { value: search } });
   await act(async () => { fireEvent.click(await screen.findByRole('option', { name })); });
 }
 const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
@@ -211,7 +218,7 @@ describe('TestSheet: a range plan B fields', () => {
     expect(within(block).getByText('Valid from', { selector: 'label' }).getAttribute('for')).toBe('band-HGB-1-validFrom');
     expect(within(block).getByText('Valid to', { selector: 'label' }).getAttribute('for')).toBe('band-HGB-1-validTo');
     await choose(screen.getByRole('combobox', { name: /pregnancy for HGB band 1/i }), 'not pregnant');
-    await choose(screen.getByRole('combobox', { name: /country for HGB band 1/i }), 'Tanzania (TZA)');
+    await chooseCountry('Tanzania (TZA)');
     await choose(screen.getByRole('combobox', { name: /source for HGB band 1/i }), 'WHO');
     await choose(screen.getByRole('combobox', { name: /scope for HGB band 1/i }), 'National');
     await save();
@@ -219,12 +226,14 @@ describe('TestSheet: a range plan B fields', () => {
       name: null, low: 12, high: 15, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null,
       pregnancy: 'not-pregnant', country: 'TZA', source: 'WHO', scope: 'national',
     });
-    expect(api.expandValueSetByUrl).toHaveBeenCalledWith(COUNTRY_VS);
+    // The list comes with the catalog options (terminology.view). /api/settings/lab needs reports.view.
+    expect(api.fetchLabIdentity).not.toHaveBeenCalled();
+    expect(api.expandValueSetByUrl).not.toHaveBeenCalled();
   });
 
   it('clears a saved country, source and pregnancy back to none', async () => {
     renderSheet(TEST([param('HGB', { bands: [{ name: null, low: 1, high: 2, unit: null, sex: null, ageLow: null, ageHigh: null, country: 'KEN', source: 'CLSI', pregnancy: 'pregnant' }] })]));
-    await choose(screen.getByRole('combobox', { name: /country for HGB band 1/i }), 'none');
+    await chooseCountry(/^none$/i, 'zzz');
     await choose(screen.getByRole('combobox', { name: /source for HGB band 1/i }), 'none');
     await choose(screen.getByRole('combobox', { name: /pregnancy for HGB band 1/i }), 'any');
     await save();
@@ -246,11 +255,22 @@ describe('TestSheet: a range plan B fields', () => {
     expect(saved()[0].bands[0]).toMatchObject({ validFrom: from, validTo: to });
   });
 
+  it('finds a country by typing part of its name', async () => {
+    renderSheet(ONE_BAND);
+    fireEvent.click(screen.getByRole('combobox', { name: /country for HGB band 1/i }));
+    fireEvent.change(screen.getByPlaceholderText(/search countries/i), { target: { value: 'ken' } });
+    expect(screen.queryByRole('option', { name: /Tanzania/ })).not.toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('option', { name: 'Kenya (KEN)' })); });
+    await save();
+    expect(saved()[0].bands[0].country).toBe('KEN');
+  });
+
   it('shows a saved country the list does not hold by its code', async () => {
-    vi.mocked(api.expandValueSetByUrl).mockRejectedValue(new Error('down'));
-    renderSheet(TEST([param('HGB', { bands: [{ name: null, low: 1, high: 2, unit: null, sex: null, ageLow: null, ageHigh: null, country: 'KEN' }] })]));
+    render(<TestSheet target={{ kind: 'edit', test: TEST([param('HGB', { bands: [{ name: null, low: 1, high: 2, unit: null, sex: null, ageLow: null, ageHigh: null, country: 'KEN' }] })]) }}
+      options={{ ...OPTIONS, countries: [] }} ownedHere onSaved={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByRole('combobox', { name: /country for HGB band 1/i })).toHaveTextContent('KEN');
     await save();
     expect(saved()[0].bands[0].country).toBe('KEN');
   });
+
 });

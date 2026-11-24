@@ -140,11 +140,21 @@ Un `pluginRef` appartient à l'identifiant du plugin, pas à une installation. S
 
 `testCatalog.get` et `testCatalog.list` répondent pour chaque test avec `code` et `testCode`. `code` est l’identifiant fixe du test. Il ne change jamais : stockez-le et renvoyez-le à CE. `testCode` est le code de test national. Il peut changer, et un test enregistré avant ce changement a la même valeur que son `code`. Montrez `testCode` aux personnes.
 
+`testCatalog.get` répond aussi `codings` : d'autres codes qui nomment le test, comme une procédure SNOMED. Chacun a `system`, `code`, `display`, `purpose` (`ADDITIONAL`, `INDICATION`, `PROCEDURE` ou `CATEGORY`) et `note`. La liste est vide quand le test n'en a pas.
+
 ### Paramètres de résultat pour un patient
 
 `testCatalog.resultParams` donne les paramètres de résultat de chaque test, avec l'intervalle de référence qui convient à un patient. Envoyez `{ "tests": [{ "system": "...", "code": "..." }], "patientRef": "p1...." }`. Il faut `patients.view` ou `patients.find`, comme pour les opérations patient. Un patient hors de la limite de l'appelant donne `NOT_FOUND`.
 
 La réponse est `{ "tests": [...], "sexes": [...] }`. Chaque test liste ses `params`. Chaque paramètre a son `unit`, son `display`, ses `bands`, la `band` qui convient au patient ou null, et `fits`, qui vaut `yes`, `no` ou `unknown` pour chaque intervalle, dans l'ordre. Un intervalle a un `name` quand le laboratoire lui en a donné un. `sexes` donne chaque code de sexe avec son libellé en en, fr et pt. CE lit le sexe et l'âge du patient pour choisir l'intervalle. La réponse ne les contient pas.
+
+Chaque paramètre a aussi son `resultType` : `numeric`, `coded`, `text`, `boolean`, `date` ou `multicoded`. `boolean` est une réponse oui ou non. `multicoded` prend une ou plusieurs réponses du `valueSetUrl` du paramètre, comme `coded` en prend une. `required` dit si le champ doit être rempli. Quand il est absent, le champ est obligatoire. Les limites de saisie ne viennent que sur leur propre type, et chacune est absente quand elle n'est pas fixée :
+
+- `numeric` : `min`, `max` et `decimals`, le nombre de décimales à garder.
+- `text` : `minLength` et `maxLength`.
+- `date` : `dateLimit`, `past` ou `future`. Absent veut dire toute date.
+
+Un intervalle peut nommer un `country`. Le pays du laboratoire, fixé dans Paramètres, Laboratoire, décide `fits` pour lui : `no` pour un autre pays, et `unknown` tant que le laboratoire n'a pas de pays.
 
 ## fhir_emit
 
