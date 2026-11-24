@@ -11,7 +11,21 @@ import { Patient } from '@openldr/fhir';
 /** Parameters whose result_role is 'result', seeded by migration 069. The picker offers these. */
 export const RESULT_PARAM_VALUE_SET = 'urn:openldr:valueset:reportable-result';
 
-export type ResultType = 'numeric' | 'coded' | 'text';
+export type ResultType = 'numeric' | 'coded' | 'text' | 'boolean' | 'date' | 'multicoded';
+
+/** Which dates a date field takes. Any is the default and is never stored. */
+export type DateLimit = 'any' | 'past' | 'future';
+export const DATE_LIMITS: readonly DateLimit[] = ['any', 'past', 'future'];
+
+/** Who a band is for by pregnancy. Absent means any, and any is never stored. */
+export type BandPregnancy = 'pregnant' | 'not-pregnant';
+export const BAND_PREGNANCIES: readonly BandPregnancy[] = ['pregnant', 'not-pregnant'];
+/** Where a band comes from. A label only. Corlix's list (shared-types index.ts:1030-1050). */
+export type BandSource = 'WHO' | 'CLSI' | 'EUCAST' | 'national' | 'facility';
+export const BAND_SOURCES: readonly BandSource[] = ['WHO', 'CLSI', 'EUCAST', 'national', 'facility'];
+/** How widely a band applies. A label only. Corlix's list. */
+export type BandScope = 'global' | 'national' | 'facility';
+export const BAND_SCOPES: readonly BandScope[] = ['global', 'national', 'facility'];
 
 /** The unit a band's age window is written in: days, months or years. A band without one is in years. */
 export type AgeUnit = 'd' | 'mo' | 'y';
@@ -34,19 +48,76 @@ export interface ResultBand {
   criticalLow?: number;
   /** The critical high limit. Absent when the band sets none. Slice 5 decides how results are flagged against it. */
   criticalHigh?: number;
+  // Plan B range fields (spec 2026-11-24-loinc-pick-parity-design.md, call 10). Each is absent when
+  // not set, so a band saved before them reads back unchanged.
+  /** Absent means any. CE holds no pregnancy status, so a band that sets one fits as unknown. */
+  pregnancy?: BandPregnancy;
+  /** ISO 3166-1 alpha-3, from CE's country value set. A band of another country than the lab's does not fit. */
+  country?: string;
+  /** YYYY-MM-DD. A result dated before it does not fit. */
+  validFrom?: string;
+  /** YYYY-MM-DD. A result dated after it does not fit. */
+  validTo?: string;
+  source?: BandSource;
+  scope?: BandScope;
 }
 
 export interface TestResultParam {
   system: string;
   code: string;
   resultType: ResultType;
-  /** For a coded parameter, the ValueSet its answers come from. Null for the other types. */
+  /** For a coded or multicoded parameter, the ValueSet its answers come from. Null for the other types. */
   valueSetUrl: string | null;
-  /** Bands, in the order the operator wrote them. Empty for a coded or text parameter. */
+  /** Bands, in the order the operator wrote them. Empty for any type but numeric. */
   bands: ResultBand[];
+  // Field settings (call 8). Each is absent when not set, so a param saved before them reads back
+  // unchanged. They are entry limits, not ranges.
+  /** Absent means true, so a saved test keeps today's behaviour. */
+  required?: boolean;
+  /** Numeric only. */
+  min?: number | null;
+  max?: number | null;
+  /** Numeric only. A whole number of decimal places. */
+  decimals?: number | null;
+  /** Text only. */
+  minLength?: number | null;
+  maxLength?: number | null;
+  /** Date only. Absent means any. */
+  dateLimit?: DateLimit;
 }
 
-const RESULT_TYPES: ResultType[] = ['numeric', 'coded', 'text'];
+export const RESULT_TYPES: readonly ResultType[] = ['numeric', 'coded', 'text', 'boolean', 'date', 'multicoded'];
+
+/** The field settings each type may carry. A setting of another type is dropped on read and refused on write. */
+export const TYPE_SETTINGS = {
+  numeric: ['min', 'max', 'decimals'],
+  text: ['minLength', 'maxLength'],
+  date: ['dateLimit'],
+} as const;
+export const ALL_TYPE_SETTINGS = ['min', 'max', 'decimals', 'minLength', 'maxLength', 'dateLimit'] as const;
+export type TypeSetting = (typeof ALL_TYPE_SETTINGS)[number];
+
+/** The settings a type may carry. */
+export function settingsOf(resultType: ResultType): readonly TypeSetting[] {
+  return (TYPE_SETTINGS as Record<string, readonly TypeSetting[]>)[resultType] ?? [];
+}
+
+/** True for the types whose answers come from a ValueSet. */
+export function needsValueSet(resultType: ResultType): boolean {
+  return resultType === 'coded' || resultType === 'multicoded';
+}
+
+// A civil date as a band stores it.
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** True for a real YYYY-MM-DD date. 2026-02-30 is not one. */
+export function isIsoDate(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const m = ISO_DATE.exec(value);
+  if (!m) return false;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
+}
 
 function num(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -62,15 +133,43 @@ function toBand(value: unknown): ResultBand | null {
   const criticalLow = num(b.criticalLow);
   const criticalHigh = num(b.criticalHigh);
   const ageUnit = AGE_UNITS.find((u) => u === b.ageUnit);
-  // The age unit and critical limits are left out when not set, so a band stored without them reads
-  // back unchanged.
+  const pregnancy = BAND_PREGNANCIES.find((v) => v === b.pregnancy);
+  const country = str(b.country);
+  const validFrom = isIsoDate(b.validFrom) ? b.validFrom : null;
+  const validTo = isIsoDate(b.validTo) ? b.validTo : null;
+  const source = BAND_SOURCES.find((v) => v === b.source);
+  const scope = BAND_SCOPES.find((v) => v === b.scope);
+  // The age unit, the critical limits and the range fields below are left out when not set, so a band
+  // stored without them reads back unchanged. Pregnancy "any" is the same as none.
   return {
     name: str(b.name), low: num(b.low), high: num(b.high), unit: str(b.unit),
     sex: str(b.sex), ageLow: num(b.ageLow), ageHigh: num(b.ageHigh),
     ...(ageUnit ? { ageUnit } : {}),
     ...(criticalLow !== null ? { criticalLow } : {}),
     ...(criticalHigh !== null ? { criticalHigh } : {}),
+    ...(pregnancy ? { pregnancy } : {}),
+    ...(country !== null ? { country } : {}),
+    ...(validFrom !== null ? { validFrom } : {}),
+    ...(validTo !== null ? { validTo } : {}),
+    ...(source ? { source } : {}),
+    ...(scope ? { scope } : {}),
   };
+}
+
+/** The settings one param stored for its own type, each only when set. */
+function settingsFor(resultType: ResultType, e: Record<string, unknown>): Partial<TestResultParam> {
+  const out: Partial<TestResultParam> = {};
+  if (typeof e.required === 'boolean') out.required = e.required;
+  for (const key of settingsOf(resultType)) {
+    if (key === 'dateLimit') {
+      // Any is the default, so it is never stored.
+      if (e.dateLimit === 'past' || e.dateLimit === 'future') out.dateLimit = e.dateLimit;
+      continue;
+    }
+    const n = num(e[key]);
+    if (n !== null) out[key] = n;
+  }
+  return out;
 }
 
 /** Read what a test stored. Anything unreadable is dropped rather than failing the whole test. */
@@ -88,7 +187,10 @@ export function parseResultParams(value: unknown): TestResultParam[] {
     const bands = resultType === 'numeric' && Array.isArray(e.bands)
       ? e.bands.map(toBand).filter((b): b is ResultBand => b !== null)
       : [];
-    out.push({ system, code, resultType, valueSetUrl: resultType === 'coded' ? str(e.valueSetUrl) : null, bands });
+    out.push({
+      system, code, resultType, valueSetUrl: needsValueSet(resultType) ? str(e.valueSetUrl) : null, bands,
+      ...settingsFor(resultType, e),
+    });
   }
   return out;
 }
@@ -111,6 +213,9 @@ export interface BandPatient {
    *  urn:openldr:ext:birthdate-estimated), as 1 January of the guessed year. Such a date is good
    *  for years, not for days or months. */
   birthDateEstimated?: boolean;
+  /** The lab's country (ISO 3166-1 alpha-3), the fit's context. Unset means a band that names a
+   *  country fits as unknown. */
+  labCountry?: string | null;
 }
 
 /** The Patient extension that says the birth date was worked out from an age. The lab plugin sets it. */
@@ -188,6 +293,11 @@ export type BandFit = 'yes' | 'no' | 'unknown';
  * band's unit, must fall inside its window, both edges counted as inside: a band "0 to 28 days" fits
  * through day 28, and "18+ years" from the 18th birthday. A band naming a sex or an age the record
  * lacks is unknown, unless the other half already rules it out.
+ *
+ * Plan B (calls 2 to 4): a band of another country than the lab's does not fit, and with no lab
+ * country it is unknown. A result dated outside the band's valid dates does not fit; the date is
+ * `at` in the lab's zone, both edges inside. A band that sets pregnancy is unknown, because CE holds
+ * no pregnancy status. Source and scope are labels and never decide.
  */
 export function bandFit(band: ResultBand, patient: BandPatient): BandFit {
   const sex = patient.sex ?? null;
@@ -203,6 +313,17 @@ export function bandFit(band: ResultBand, patient: BandPatient): BandFit {
     if (age === null) unknown = true;
     else if ((band.ageLow !== null && age < band.ageLow) || (band.ageHigh !== null && age > band.ageHigh)) return 'no';
   }
+  if (band.country !== undefined) {
+    const lab = patient.labCountry?.trim() || null;
+    if (lab === null) unknown = true;
+    else if (lab !== band.country) return 'no';
+  }
+  if (band.validFrom !== undefined || band.validTo !== undefined) {
+    const c = civilDateIn(patient.at ?? Date.now(), patient.timeZone);
+    const day = `${String(c.y).padStart(4, '0')}-${String(c.m).padStart(2, '0')}-${String(c.d).padStart(2, '0')}`;
+    if ((band.validFrom !== undefined && day < band.validFrom) || (band.validTo !== undefined && day > band.validTo)) return 'no';
+  }
+  if (band.pregnancy !== undefined) unknown = true;
   return unknown ? 'unknown' : 'yes';
 }
 
@@ -256,7 +377,7 @@ export function patientBandKey(
 }
 
 const NUMBER_FIELDS = ['low', 'high', 'ageLow', 'ageHigh', 'criticalLow', 'criticalHigh'] as const;
-const STRING_FIELDS = ['name', 'unit', 'sex', 'ageUnit'] as const;
+const STRING_FIELDS = ['name', 'unit', 'sex', 'ageUnit', 'pregnancy', 'country', 'validFrom', 'validTo', 'source', 'scope'] as const;
 
 /**
  * False when a raw submitted field is neither the field's proper type nor null/absent. `toBand`
@@ -274,6 +395,9 @@ function bandFieldTypesOk(raw: Record<string, unknown>): boolean {
   }
   // An age unit CE does not know would read as years, and so match a years band it is not.
   if (raw.ageUnit !== null && raw.ageUnit !== undefined && !AGE_UNITS.includes(raw.ageUnit as AgeUnit)) return false;
+  // The same for a pregnancy, source or scope CE does not know: it would read as none.
+  const known = (v: unknown, list: readonly string[]) => v === null || v === undefined || list.includes(v as string);
+  if (!known(raw.pregnancy, ['any', ...BAND_PREGNANCIES]) || !known(raw.source, BAND_SOURCES) || !known(raw.scope, BAND_SCOPES)) return false;
   return true;
 }
 
@@ -282,6 +406,10 @@ function bandFieldTypesOk(raw: Record<string, unknown>): boolean {
  * included. A missing name reads as none, so a range saved before names existed still matches an
  * unnamed one. A missing critical limit reads as none too, and a missing age unit as years. Null when the value
  * is not band-shaped, a field carries the wrong type, or no catalog range matches.
+ *
+ * Pregnancy, source and scope are compared, absent equal to absent and pregnancy "any" equal to
+ * absent. The country and the valid dates are not compared (plan B, call 3): they decide the fit,
+ * so a band picked at the bench is never refused at submit for them.
  */
 export function findCatalogBand(band: unknown, bands: ResultBand[]): ResultBand | null {
   if (!band || typeof band !== 'object') return null;
@@ -292,7 +420,9 @@ export function findCatalogBand(band: unknown, bands: ResultBand[]): ResultBand 
   return bands.find((c) => c.name === b.name && c.low === b.low && c.high === b.high && c.unit === b.unit
     && c.sex === b.sex && c.ageLow === b.ageLow && c.ageHigh === b.ageHigh
     && (c.ageUnit ?? 'y') === (b.ageUnit ?? 'y')
-    && (c.criticalLow ?? null) === (b.criticalLow ?? null) && (c.criticalHigh ?? null) === (b.criticalHigh ?? null)) ?? null;
+    && (c.criticalLow ?? null) === (b.criticalLow ?? null) && (c.criticalHigh ?? null) === (b.criticalHigh ?? null)
+    && (c.pregnancy ?? 'any') === (b.pregnancy ?? 'any')
+    && (c.source ?? null) === (b.source ?? null) && (c.scope ?? null) === (b.scope ?? null)) ?? null;
 }
 
 /**

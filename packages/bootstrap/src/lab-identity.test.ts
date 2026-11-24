@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createLabIdentity, labTimeZone } from './lab-identity';
+import { createLabIdentity, labCountry, labTimeZone } from './lab-identity';
 
 function fakeStore() {
   const rows = new Map<string, string>();
@@ -69,5 +69,20 @@ describe('labTimeZone', () => {
   it('answers undefined when there is no service or it cannot be read', async () => {
     expect(await labTimeZone(undefined)).toBeUndefined();
     expect(await labTimeZone({ tokens: async () => { throw new Error('down'); } })).toBeUndefined();
+  });
+});
+
+describe('labCountry', () => {
+  // Task 2 adds the lab.country setting. Until then tokens() never holds one, so this reads null.
+  it('reads country from tokens(), trimmed, and null when none is set', async () => {
+    expect(await labCountry({ tokens: async () => ({ country: ' TZA ' }) })).toBe('TZA');
+    expect(await labCountry({ tokens: async () => ({}) })).toBeNull();
+    const { store } = fakeStore();
+    expect(await labCountry(createLabIdentity(store))).toBeNull();
+  });
+
+  it('answers null when there is no service or it cannot be read', async () => {
+    expect(await labCountry(undefined)).toBeNull();
+    expect(await labCountry({ tokens: async () => { throw new Error('down'); } })).toBeNull();
   });
 });

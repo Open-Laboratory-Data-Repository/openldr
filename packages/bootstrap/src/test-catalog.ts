@@ -8,9 +8,11 @@ import { toCsv } from '@openldr/reporting';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { readTableFile, TableFileError, type TableFileFormat } from './table-file';
 import {
-  AGE_UNITS, bandFit, matchBand, parseResultParams, type AgeUnit, type BandPatient, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, type BandFit, type ResultBand,
+  AGE_UNITS, ALL_TYPE_SETTINGS, BAND_PREGNANCIES, BAND_SCOPES, BAND_SOURCES, bandFit, DATE_LIMITS, isIsoDate, matchBand, parseResultParams,
+  RESULT_TYPES, settingsOf, type AgeUnit, type BandPatient, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, type BandFit, type ResultBand, type ResultType,
   type SexOption, type TestResultParam,
 } from './result-params';
+import { CONTROLLED_VALUE_SETS } from './facility-controlled-fields';
 import type { AuditDetails } from './record-audit';
 import {
   CATALOG_EXPORT_COLUMNS, catalogExportRow,
@@ -309,6 +311,9 @@ export interface TestCatalogDeps {
   /** How a new test gets its id. Defaults to newTestId. Tests written before ids existed pass one that
    *  returns the Test code, so they read as a test saved before the change does. */
   makeId?: (testCode: string) => string;
+  /** The lab's country (ISO 3166-1 alpha-3), read from lab identity. A band naming a country fits
+   *  only this lab's. Left out, or answering null, means no country is set (plan B, call 2). */
+  labCountry?: () => Promise<string | null | undefined>;
 }
 
 /** A new test's internal id: tst- and 16 hex characters of a random UUID. Made once, at create. */
@@ -460,6 +465,8 @@ interface CheckContext {
   loincLoaded: boolean;
   /** The LOINC codes asked about that LOINC holds as more than a DRAFT stub. */
   knownLoinc: Set<string>;
+  /** The codes of CE's country value set, which a range's country must be one of. */
+  countries: Set<string>;
 }
 
 /** A row the import will write. */
@@ -742,6 +749,62 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     }
   }
 
+  /**
+   * Refuses, as sent, a field setting or range field the parser would drop or read as its default:
+   * a setting of another type, a setting of the wrong kind, and a pregnancy, source, scope or valid
+   * date CE does not know. The route refuses these too, so the CLI's raw file gets the same answer.
+   */
+  function checkFieldSettings(params: unknown): void {
+    if (!Array.isArray(params)) return;
+    const set = (v: unknown) => v !== undefined && v !== null && v !== '';
+    const one = (list: readonly string[]) => list.length === 1 ? list[0] : `${list.slice(0, -1).join(', ')} or ${list[list.length - 1]}`;
+    for (const raw of params) {
+      if (!raw || typeof raw !== 'object') continue;
+      const p = raw as Record<string, unknown>;
+      const code = String(p.code);
+      const type: ResultType = RESULT_TYPES.includes(p.resultType as ResultType) ? p.resultType as ResultType : 'text';
+      if (set(p.required) && typeof p.required !== 'boolean') throw invalid(`${code}: required must be true or false.`);
+      const own = settingsOf(type);
+      for (const key of ALL_TYPE_SETTINGS) {
+        // Any is the default date limit, so sending it says nothing.
+        if (!set(p[key]) || (key === 'dateLimit' && p[key] === 'any')) continue;
+        if (!own.includes(key)) throw invalid(`${code} is a ${type} field, so it cannot have ${key}.`);
+      }
+      for (const key of ['min', 'max'] as const) {
+        if (own.includes(key) && set(p[key]) && (typeof p[key] !== 'number' || !Number.isFinite(p[key]))) {
+          throw invalid(`${code}: ${key} must be a number.`);
+        }
+      }
+      const counts = [['decimals', 'decimals'], ['minLength', 'the minimum length'], ['maxLength', 'the maximum length']] as const;
+      for (const [key, words] of counts) {
+        const v = p[key];
+        if (own.includes(key) && set(v) && !(typeof v === 'number' && Number.isInteger(v) && v >= 0)) {
+          throw invalid(`${code}: ${words} must be a whole number, 0 or more.`);
+        }
+      }
+      if (own.includes('dateLimit') && set(p.dateLimit) && !DATE_LIMITS.includes(p.dateLimit as never)) {
+        throw invalid(`${code} has the date limit ${JSON.stringify(p.dateLimit)}. Use ${one(DATE_LIMITS)}.`);
+      }
+      if (type !== 'numeric' || !Array.isArray(p.bands)) continue;
+      p.bands.forEach((band: unknown, i: number) => {
+        if (!band || typeof band !== 'object') return;
+        const b = band as Record<string, unknown>;
+        const where = `${code} range ${i + 1}`;
+        // Any pregnancy is the same as none, so it is accepted and not stored.
+        const labels = [['pregnancy', [...BAND_PREGNANCIES, 'any']], ['source', BAND_SOURCES], ['scope', BAND_SCOPES]] as const;
+        for (const [key, list] of labels) {
+          if (set(b[key]) && !(list as readonly unknown[]).includes(b[key])) {
+            throw invalid(`${where} has the ${key} ${JSON.stringify(b[key])}. Use ${one(list)}.`);
+          }
+        }
+        for (const [key, words] of [['validFrom', 'valid from'], ['validTo', 'valid to']] as const) {
+          if (set(b[key]) && !isIsoDate(b[key])) throw invalid(`${where} has the ${words} date ${JSON.stringify(b[key])}. Use a date such as 2026-01-31.`);
+        }
+        if (set(b.country) && typeof b.country !== 'string') throw invalid(`${where}: the country must be a country code.`);
+      });
+    }
+  }
+
   /** A TAT as sent: undefined and null pass through, anything else must be a positive number of hours. */
   function checkHours(what: string, value: unknown): number | null | undefined {
     if (value === undefined || value === null) return value;
@@ -776,6 +839,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     // The parser drops an age unit it does not know, which would read the range as years. Check the
     // unit as sent first, so the route, the CLI and an import all refuse the same input.
     checkAgeUnits(testCode, input.resultParams);
+    checkFieldSettings(input.resultParams);
     const resultParams = input.resultParams === undefined ? undefined : parseResultParams(input.resultParams);
     for (const param of resultParams ?? []) {
       if (!ctx.resultParams.has(param.code)) {
@@ -783,6 +847,13 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       }
       if (param.resultType === 'coded' && !param.valueSetUrl) {
         throw invalid(`${param.code} is a coded result and needs a value set.`);
+      }
+      if (param.resultType === 'multicoded' && !param.valueSetUrl) {
+        throw invalid(`${param.code} is a several-answer result and needs a value set.`);
+      }
+      if (param.min != null && param.max != null && param.min > param.max) throw invalid(`${param.code} has a minimum above its maximum.`);
+      if (param.minLength != null && param.maxLength != null && param.minLength > param.maxLength) {
+        throw invalid(`${param.code} has a minimum length above its maximum length.`);
       }
       // A duplicate name leaves the bench two choices it cannot tell apart. A sex outside the Patient
       // codes can never fit anyone, silently.
@@ -802,6 +873,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         }
         if (band.criticalLow !== undefined && band.criticalHigh !== undefined && band.criticalLow >= band.criticalHigh) {
           throw invalid(`${where}: the critical low limit must be below the critical high limit.`);
+        }
+        if (band.country !== undefined && !ctx.countries.has(band.country)) {
+          throw invalid(`${where} names the country ${band.country}, which is not in the country list.`);
+        }
+        if (band.validFrom !== undefined && band.validTo !== undefined && band.validFrom > band.validTo) {
+          throw invalid(`${where} is valid from a date after its valid to date.`);
         }
         if (band.sex !== null && !SEX_OPTIONS.some((s) => s.code === band.sex)) {
           throw invalid(`${where} names ${band.sex}, which is not a sex this install knows.`);
@@ -834,9 +911,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   }
 
   async function loadCheckContext(loincCodes: string[]): Promise<CheckContext> {
-    const [categories, specimens, params, loaded] = await Promise.all([
+    const [categories, specimens, params, loaded, countries] = await Promise.all([
       expandEntries(TEST_CATEGORY_VALUE_SET), expandEntries(SPECIMEN_TYPE_VALUE_SET),
       expandEntries(RESULT_PARAM_VALUE_SET), loincLoaded(),
+      // Migration 073 seeds the country list. If it cannot be read, a range naming a country is
+      // refused as not in the list, and every other save goes on.
+      expandEntries(CONTROLLED_VALUE_SETS.country).catch(() => []),
     ]);
     const knownLoinc = new Set<string>();
     const wanted = [...new Set(loincCodes.filter((c) => LOINC_CODE.test(c)))];
@@ -851,7 +931,10 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         for (const f of found) knownLoinc.add(f.code);
       }
     }
-    return { categories, specimens, resultParams: new Set(params.map((p) => p.code)), loincLoaded: loaded, knownLoinc };
+    return {
+      categories, specimens, resultParams: new Set(params.map((p) => p.code)), loincLoaded: loaded, knownLoinc,
+      countries: new Set(countries.map((c) => c.code)),
+    };
   }
 
   async function validate(input: CatalogTestInput): Promise<ValidTest> {
@@ -1369,8 +1452,12 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   ): Promise<TestParamsAnswer[]> {
     const codes = tests.filter((t) => t.system === TEST_CATALOG_SYSTEM).map((t) => t.code);
     if (codes.length === 0) return [];
-    // One moment for every band, so two bands never read the patient at different ages.
-    const who: BandPatient = { ...patient, at: patient.at ?? Date.now() };
+    // One moment for every band, so two bands never read the patient at different ages. The lab's
+    // country decides a band that names one (plan B, call 2); a caller that names it wins.
+    const labCountry = patient.labCountry !== undefined
+      ? patient.labCountry
+      : ((await deps.labCountry?.().catch(() => null)) ?? null);
+    const who: BandPatient = { ...patient, at: patient.at ?? Date.now(), labCountry };
     const wanted = new Set(codes);
     const found = (await readTests()).filter((t) => wanted.has(t.code));
     const paramCodes = [...new Set(found.flatMap((t) => t.resultParams.map((p) => p.code)))];

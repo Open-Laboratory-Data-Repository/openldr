@@ -28,6 +28,19 @@ export async function labTimeZone(identity: Pick<LabIdentityService, 'tokens'> |
   }
 }
 
+/**
+ * The lab's country (ISO 3166-1 alpha-3), or null when none is set or the settings cannot be read.
+ * Read from `tokens()`, so the key is `country`. A reference range naming a country fits only this one
+ * (test catalog plan B, call 2).
+ */
+export async function labCountry(identity: Pick<LabIdentityService, 'tokens'> | null | undefined): Promise<string | null> {
+  try {
+    return (await identity?.tokens())?.country?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export function createLabIdentity(store: AppSettingStore): LabIdentityService {
   async function all(): Promise<Record<string, string>> {
     const out: Record<string, string> = {};

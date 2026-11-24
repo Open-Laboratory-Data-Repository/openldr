@@ -56,11 +56,21 @@ export async function runTestCatalogList(opts: TestCatalogListOpts): Promise<num
   }
 }
 
-/** One line per parameter, the way `list` prints one line per test. */
+/** One line per parameter, the way `list` prints one line per test: code, type, required or
+ *  optional, band count, then the settings it has, named as a --set file names them. */
 export function formatResultParams(params: TestResultParam[]): string {
   if (params.length === 0) return '(no result parameters)';
   return params
-    .map((p) => `${p.code}\t${p.resultType}\t${p.bands.length} ${p.bands.length === 1 ? 'band' : 'bands'}`)
+    .map((p) => {
+      const settings = (['min', 'max', 'decimals', 'minLength', 'maxLength', 'dateLimit'] as const)
+        .filter((key) => p[key] !== undefined && p[key] !== null)
+        .map((key) => `${key} ${String(p[key])}`)
+        .join(', ');
+      // Absent means required, so a test saved before the setting reads as before.
+      const required = p.required === false ? 'optional' : 'required';
+      const bands = `${p.bands.length} ${p.bands.length === 1 ? 'band' : 'bands'}`;
+      return [p.code, p.resultType, required, bands, ...(settings ? [settings] : [])].join('\t');
+    })
     .join('\n');
 }
 

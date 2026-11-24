@@ -26,7 +26,7 @@ const CSF = { system: LOCAL, code: 'CSF' };
 // Mirrors reexpand-value-sets.test.ts.
 // Tests written before tests had their own id pass `legacyIds`, so a new test's id is its Test code,
 // as every test saved before the change reads. The tests of the id itself use the real one.
-async function buildCatalog(opts: { realIds?: boolean } = {}) {
+async function buildCatalog(opts: { realIds?: boolean; labCountry?: string | null } = {}) {
   const db = await makeMigratedDb();
   const fhirStore = createFhirStore(db);
   const store = createTerminologyStore(db, fhirStore);
@@ -52,7 +52,8 @@ async function buildCatalog(opts: { realIds?: boolean } = {}) {
     translate: (q) => store.translate(q),
   });
   const makeId = opts.realIds ? undefined : (testCode: string) => testCode;
-  return { db, admin, catalog: createTestCatalog({ db, admin, ops, ...(makeId ? { makeId } : {}) }) };
+  const labCountry = opts.labCountry === undefined ? {} : { labCountry: async () => opts.labCountry ?? null };
+  return { db, admin, catalog: createTestCatalog({ db, admin, ops, ...(makeId ? { makeId } : {}), ...labCountry }) };
 }
 
 async function seedTest(
@@ -1579,5 +1580,109 @@ describe('test catalog: identity review fixes', () => {
     expect(await catalog.get(a.code)).toMatchObject({ testCode: 'Y' });
     expect(await catalog.get(b.code)).toMatchObject({ testCode: 'B' });
     await expect(catalog.update(b.code, { testCode: 'X', display: 'Test B' })).rejects.toMatchObject({ kind: 'conflict' });
+  });
+});
+
+describe('test catalog: field settings, more types and range fields (plan B, Task 1)', () => {
+  const S = 'urn:openldr:default_result';
+  const HGB = { system: S, code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null, bands: [] as object[] };
+  const range = (b: object) => ({ name: null, low: null, high: null, unit: null, sex: null, ageLow: null, ageHigh: null, ...b });
+  const test = (code: string) => ({ system: TEST_CATALOG_SYSTEM, code });
+
+  async function refuses(param: object, message: string) {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB', 'NOTE', 'SEEN', 'SYM']);
+    await expect(catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [param as never] }))
+      .rejects.toMatchObject({ kind: 'invalid', message });
+  }
+
+  it('keeps the field settings, the new types and the range fields through a save', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB', 'NOTE', 'SEEN', 'POS', 'SYM']);
+    const params = [
+      { ...HGB, required: false, min: 0, max: 30, decimals: 1, bands: [range({
+        low: 11, high: 14, pregnancy: 'pregnant', country: 'TZA', validFrom: '2026-01-01', validTo: '2026-12-31', source: 'WHO', scope: 'national',
+      })] },
+      { system: S, code: 'NOTE', resultType: 'text' as const, valueSetUrl: null, bands: [], minLength: 2, maxLength: 200 },
+      { system: S, code: 'SEEN', resultType: 'date' as const, valueSetUrl: null, bands: [], dateLimit: 'past' as const },
+      { system: S, code: 'POS', resultType: 'boolean' as const, valueSetUrl: null, bands: [] },
+      { system: S, code: 'SYM', resultType: 'multicoded' as const, valueSetUrl: 'urn:x:vs:symptoms', bands: [] },
+    ];
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: params as never });
+    expect((await catalog.get('FBC'))?.resultParams).toEqual(params);
+  });
+
+  it('refuses a min above the max, and negative or fractional decimals', async () => {
+    await refuses({ ...HGB, min: 10, max: 5 }, 'HGB has a minimum above its maximum.');
+    await refuses({ ...HGB, decimals: -1 }, 'HGB: decimals must be a whole number, 0 or more.');
+    await refuses({ ...HGB, decimals: 1.5 }, 'HGB: decimals must be a whole number, 0 or more.');
+  });
+
+  it('refuses a minimum length above the maximum length, and a negative length', async () => {
+    const NOTE = { system: S, code: 'NOTE', resultType: 'text', valueSetUrl: null, bands: [] };
+    await refuses({ ...NOTE, minLength: 10, maxLength: 5 }, 'NOTE has a minimum length above its maximum length.');
+    await refuses({ ...NOTE, maxLength: -1 }, 'NOTE: the maximum length must be a whole number, 0 or more.');
+  });
+
+  it('refuses a date limit it does not know, and a setting of another type', async () => {
+    const SEEN = { system: S, code: 'SEEN', resultType: 'date', valueSetUrl: null, bands: [] };
+    await refuses({ ...SEEN, dateLimit: 'yesterday' }, 'SEEN has the date limit "yesterday". Use any, past or future.');
+    await refuses({ ...SEEN, min: 1 }, 'SEEN is a date field, so it cannot have min.');
+    await refuses({ ...HGB, maxLength: 4 }, 'HGB is a numeric field, so it cannot have maxLength.');
+  });
+
+  it('refuses required that is not true or false', async () => {
+    await refuses({ ...HGB, required: 'yes' }, 'HGB: required must be true or false.');
+  });
+
+  it('refuses a multicoded param without a value set', async () => {
+    await refuses({ system: S, code: 'SYM', resultType: 'multicoded', valueSetUrl: null, bands: [] }, 'SYM is a several-answer result and needs a value set.');
+  });
+
+  it('refuses a country not in the country value set, valid dates the wrong way round, and an unknown source or scope', async () => {
+    await refuses({ ...HGB, bands: [range({ country: 'XXX' })] }, 'HGB range 1 names the country XXX, which is not in the country list.');
+    await refuses({ ...HGB, bands: [range({ validFrom: '2026-06-01', validTo: '2026-01-01' })] }, 'HGB range 1 is valid from a date after its valid to date.');
+    await refuses({ ...HGB, bands: [range({ validFrom: '2026-02-30' })] }, 'HGB range 1 has the valid from date "2026-02-30". Use a date such as 2026-01-31.');
+    await refuses({ ...HGB, bands: [range({ source: 'Mayo' })] }, 'HGB range 1 has the source "Mayo". Use WHO, CLSI, EUCAST, national or facility.');
+    await refuses({ ...HGB, bands: [range({ scope: 'world' })] }, 'HGB range 1 has the scope "world". Use global, national or facility.');
+    await refuses({ ...HGB, bands: [range({ pregnancy: 'yes' })] }, 'HGB range 1 has the pregnancy "yes". Use pregnant, not-pregnant or any.');
+  });
+
+  it('accepts a country from the country value set', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ country: 'TZA' })] }] as never });
+    expect((await catalog.get('FBC'))?.resultParams[0].bands[0].country).toBe('TZA');
+  });
+
+  it('passes the lab country into the fit', async () => {
+    const at = Date.parse('2026-11-23T12:00:00Z');
+    const bands = [range({ low: 1, country: 'TZA' }), range({ low: 2, country: 'KEN' }), range({ low: 3 })];
+    for (const [labCountry, fits, low] of [
+      ['TZA', ['yes', 'no', 'yes'], 1], ['KEN', ['no', 'yes', 'yes'], 2], [null, ['unknown', 'unknown', 'yes'], 3],
+    ] as const) {
+      const { db, catalog } = await buildCatalog({ labCountry });
+      await seedResultParams(db, ['HGB']);
+      await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands }] as never });
+      const [answer] = await catalog.resultParamsFor([test('FBC')], { sex: null, birthDate: null, at });
+      expect(answer.params[0].fits).toEqual(fits);
+      expect(answer.params[0].band?.low).toBe(low);
+    }
+  });
+
+  it('answers a band with no country when the catalog has no country dependency', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ low: 1, country: 'TZA' }), range({ low: 3 })] }] as never });
+    const [answer] = await catalog.resultParamsFor([test('FBC')], {});
+    expect(answer.params[0].fits).toEqual(['unknown', 'yes']);
+  });
+
+  it('answers the field settings to the bench', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, required: false, min: 0, decimals: 2 }] as never });
+    const [answer] = await catalog.resultParamsFor([test('FBC')], {});
+    expect(answer.params[0]).toMatchObject({ required: false, min: 0, decimals: 2 });
   });
 });

@@ -455,6 +455,75 @@ describe('test catalog routes', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('carries the field settings, the new types and the range fields through a create (plan B wire shape)', async () => {
+    const S = 'urn:openldr:default_result';
+    const params = [
+      { system: S, code: 'HGB', resultType: 'numeric', valueSetUrl: null, required: false, min: 0, max: 30, decimals: 1, bands: [{
+        name: null, low: 11, high: 14, unit: null, sex: null, ageLow: null, ageHigh: null,
+        pregnancy: 'pregnant', country: 'TZA', validFrom: '2026-01-01', validTo: '2026-12-31', source: 'WHO', scope: 'national',
+      }] },
+      { system: S, code: 'NOTE', resultType: 'text', valueSetUrl: null, bands: [], required: true, minLength: 2, maxLength: 200 },
+      { system: S, code: 'SEEN', resultType: 'date', valueSetUrl: null, bands: [], dateLimit: 'past' },
+      { system: S, code: 'POS', resultType: 'boolean', valueSetUrl: null, bands: [] },
+      { system: S, code: 'SYM', resultType: 'multicoded', valueSetUrl: 'urn:x:vs:symptoms', bands: [] },
+    ];
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog', payload: { testCode: 'FBC', display: 'FBC', resultParams: params } });
+    expect(res.statusCode).toBe(201);
+    const created = calls.find((c) => c.method === 'create');
+    expect((created?.args[0] as { resultParams?: unknown }).resultParams).toEqual(params);
+  });
+
+  it('adds no key for a field setting or range field not given, and drops pregnancy any and a null setting', async () => {
+    const { ctx, calls } = fakeCtx();
+    await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog',
+      payload: { testCode: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', min: null, bands: [
+        { low: 12, high: 15, pregnancy: 'any', country: null, validFrom: null, source: null, scope: null },
+      ] }] },
+    });
+    const created = calls.find((c) => c.method === 'create');
+    const [param] = (created?.args[0] as { resultParams: Array<Record<string, unknown> & { bands: object[] }> }).resultParams;
+    expect(Object.keys(param).sort()).toEqual(['bands', 'code', 'resultType', 'system', 'valueSetUrl']);
+    expect(param.bands[0]).toEqual({ name: null, low: 12, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null });
+  });
+
+  it('refuses a setting of another type, an unknown type, source, scope or pregnancy, and a bad date, before the store', async () => {
+    const S = 'urn:openldr:default_result';
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    for (const param of [
+      { system: S, code: 'NOTE', resultType: 'text', min: 1 },
+      { system: S, code: 'HGB', resultType: 'numeric', maxLength: 4 },
+      { system: S, code: 'SEEN', resultType: 'date', decimals: 2 },
+      { system: S, code: 'POS', resultType: 'boolean', dateLimit: 'past' },
+      { system: S, code: 'SEEN', resultType: 'date', dateLimit: 'yesterday' },
+      { system: S, code: 'ORG', resultType: 'organism' },
+      { system: S, code: 'HGB', resultType: 'numeric', bands: [{ source: 'Mayo' }] },
+      { system: S, code: 'HGB', resultType: 'numeric', bands: [{ scope: 'world' }] },
+      { system: S, code: 'HGB', resultType: 'numeric', bands: [{ pregnancy: 'yes' }] },
+      { system: S, code: 'HGB', resultType: 'numeric', bands: [{ validFrom: '1 Jan 2026' }] },
+    ]) {
+      const res = await app.inject({ method: 'POST', url: '/api/test-catalog', payload: { testCode: 'FBC', display: 'FBC', resultParams: [param] } });
+      expect(res.statusCode, JSON.stringify(param)).toBe(400);
+    }
+    expect(calls.filter((c) => c.method === 'create')).toEqual([]);
+  });
+
+  it('POST /result-params answers the field settings and the range fields as the catalog gives them', async () => {
+    const param = {
+      system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, required: false, min: 0, max: 30, decimals: 1,
+      bands: [{ name: null, low: 1, high: 2, unit: null, sex: null, ageLow: null, ageHigh: null, country: 'TZA', validFrom: '2026-01-01', source: 'WHO', scope: 'global', pregnancy: 'pregnant' }],
+      unit: 'g/dL', display: 'Haemoglobin', band: null, fits: ['unknown'],
+    };
+    const { ctx } = fakeCtx({ resultParamsFor: async () => [{ test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }, params: [param] }] });
+    const res = await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params', payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().tests[0].params[0]).toEqual(param);
+  });
+
   it('carries the turnaround times and the verification switch through a create and an update', async () => {
     const { ctx, calls } = fakeCtx();
     const app = appWith(ctx);

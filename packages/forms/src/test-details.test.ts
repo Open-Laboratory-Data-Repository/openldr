@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseTestDetails, testDetailItems } from './test-details'
+import { parseTestDetails, testDetailItems, type ResultBandRef, type TypedResult } from './test-details'
 
 const CATALOG = 'urn:openldr:codesystem:test-catalog'
 const answer = {
@@ -35,6 +35,20 @@ describe('test details answer', () => {
         band: { name: null, low: 14, high: 22, unit: 'g/dL', sex: null, ageLow: 0, ageHigh: 28, ageUnit: 'd' } },
     ] } }
     expect(parseTestDetails(days)[`${CATALOG}|FBC`].results[0].band?.ageUnit).toBe('d')
+  })
+
+  it('keeps the plan B range fields of the range the bench picked', () => {
+    // Typed, so the type declares each field (plan B, Task 1). Task 3 makes the bench send them.
+    const band: ResultBandRef = {
+      name: null, low: 11, high: 14, unit: 'g/dL', sex: 'female', ageLow: null, ageHigh: null,
+      pregnancy: 'pregnant', country: 'TZA', validFrom: '2026-01-01', validTo: '2026-12-31', source: 'WHO', scope: 'national',
+    }
+    const types: Array<TypedResult['resultType']> = ['numeric', 'coded', 'text', 'boolean', 'date', 'multicoded']
+    expect(types).toHaveLength(6)
+    const sent = { [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+      { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 12, unit: 'g/dL', band },
+    ] } }
+    expect(parseTestDetails(sent)[`${CATALOG}|FBC`].results[0].band).toEqual(band)
   })
 
   it('reads a rejection and drops nothing else', () => {

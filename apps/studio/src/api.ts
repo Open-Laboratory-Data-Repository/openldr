@@ -2970,12 +2970,36 @@ export interface CatalogResultBand {
   ageUnit?: CatalogAgeUnit;
   /** Absent when the band sets none. The editor sends null for a limit it cleared, which the server drops. */
   criticalLow?: number | null; criticalHigh?: number | null;
+  /** Absent means any. A band that sets one fits as unknown, since CE holds no pregnancy status. */
+  pregnancy?: CatalogBandPregnancy;
+  /** ISO 3166-1 alpha-3. A band of another country than the lab's does not fit. */
+  country?: string;
+  /** YYYY-MM-DD. A result dated outside them does not fit. */
+  validFrom?: string; validTo?: string;
+  /** Labels only. */
+  source?: CatalogBandSource; scope?: CatalogBandScope;
+}
+export type CatalogBandPregnancy = 'pregnant' | 'not-pregnant';
+export type CatalogBandSource = 'WHO' | 'CLSI' | 'EUCAST' | 'national' | 'facility';
+export type CatalogBandScope = 'global' | 'national' | 'facility';
+export type CatalogResultType = 'numeric' | 'coded' | 'text' | 'boolean' | 'date' | 'multicoded';
+export type CatalogDateLimit = 'any' | 'past' | 'future';
+/** A field's settings, each absent when not set. Entry limits, not ranges. */
+export interface CatalogFieldSettings {
+  /** Absent means true. */
+  required?: boolean;
+  /** Numeric only. */
+  min?: number | null; max?: number | null; decimals?: number | null;
+  /** Text only. */
+  minLength?: number | null; maxLength?: number | null;
+  /** Date only. Absent means any. */
+  dateLimit?: CatalogDateLimit;
 }
 export interface CatalogSexOption { code: string; labels: Record<string, string> }
 /** Whether a range fits the patient on the order. Unknown means the record lacks the sex or age it names. */
 export type CatalogBandFit = 'yes' | 'no' | 'unknown';
-export interface CatalogResultParam {
-  system: string; code: string; resultType: 'numeric' | 'coded' | 'text'; valueSetUrl: string | null;
+export interface CatalogResultParam extends CatalogFieldSettings {
+  system: string; code: string; resultType: CatalogResultType; valueSetUrl: string | null;
   bands: CatalogResultBand[]; unit: string | null; display: string | null; band: CatalogResultBand | null;
   /** For each band, by index. */
   fits: CatalogBandFit[];
@@ -2984,8 +3008,8 @@ export interface CatalogResultParam {
 export interface CatalogTestParams { test: { system: string; code: string; testCode?: string }; params: CatalogResultParam[] }
 /** What a test STORES for one parameter. The route's CatalogResultParam adds the unit, display and
  *  matched band, which are read from the dictionary and never stored on the test. */
-export interface CatalogTestResultParam {
-  system: string; code: string; resultType: 'numeric' | 'coded' | 'text'; valueSetUrl: string | null;
+export interface CatalogTestResultParam extends CatalogFieldSettings {
+  system: string; code: string; resultType: CatalogResultType; valueSetUrl: string | null;
   bands: CatalogResultBand[];
 }
 export interface CatalogRejectReason { system: string; code: string; display: string | null }

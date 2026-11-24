@@ -378,3 +378,137 @@ describe('result parameters: a birth date estimated from an age', () => {
     expect(bandFit(band({ sex: 'male', ageLow: 0, ageHigh: 28, ageUnit: 'd' }), newborn)).toBe('no');
   });
 });
+
+describe('result parameters: field settings and the new types (plan B, Task 1)', () => {
+  const S = 'urn:openldr:default_result';
+
+  it('keeps required and the settings that belong to each type', () => {
+    expect(parseResultParams([
+      { system: S, code: 'HGB', resultType: 'numeric', required: false, min: 0, max: 30, decimals: 1, bands: [] },
+      { system: S, code: 'NOTE', resultType: 'text', required: true, minLength: 2, maxLength: 200 },
+      { system: S, code: 'SEEN', resultType: 'date', dateLimit: 'past' },
+      { system: S, code: 'POS', resultType: 'boolean' },
+      { system: S, code: 'SYM', resultType: 'multicoded', valueSetUrl: 'urn:x:vs:symptoms' },
+    ])).toEqual([
+      { system: S, code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [], required: false, min: 0, max: 30, decimals: 1 },
+      { system: S, code: 'NOTE', resultType: 'text', valueSetUrl: null, bands: [], required: true, minLength: 2, maxLength: 200 },
+      { system: S, code: 'SEEN', resultType: 'date', valueSetUrl: null, bands: [], dateLimit: 'past' },
+      { system: S, code: 'POS', resultType: 'boolean', valueSetUrl: null, bands: [] },
+      { system: S, code: 'SYM', resultType: 'multicoded', valueSetUrl: 'urn:x:vs:symptoms', bands: [] },
+    ]);
+  });
+
+  it('drops the settings of another type', () => {
+    const [text, num, date, coded] = parseResultParams([
+      { system: S, code: 'NOTE', resultType: 'text', min: 1, max: 2, decimals: 0, dateLimit: 'past' },
+      { system: S, code: 'HGB', resultType: 'numeric', minLength: 1, maxLength: 9, dateLimit: 'future' },
+      { system: S, code: 'SEEN', resultType: 'date', min: 1, minLength: 1 },
+      { system: S, code: 'MRDT', resultType: 'coded', valueSetUrl: 'urn:x:vs:rdt', min: 1, maxLength: 4, dateLimit: 'past' },
+    ]);
+    for (const p of [text, num, date, coded]) {
+      expect(Object.keys(p).sort()).toEqual(['bands', 'code', 'resultType', 'system', 'valueSetUrl']);
+    }
+  });
+
+  it('reads a dateLimit of any as the default, and leaves it out', () => {
+    const [p] = parseResultParams([{ system: S, code: 'SEEN', resultType: 'date', dateLimit: 'any' }]);
+    expect('dateLimit' in p).toBe(false);
+  });
+
+  it('keeps a param saved before plan B exactly as it was (review focus 1)', () => {
+    const saved = [{ system: S, code: 'HGB', resultType: 'numeric', valueSetUrl: null,
+      bands: [{ name: null, low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }] }];
+    expect(parseResultParams(saved)).toEqual(saved);
+    expect(Object.keys(parseResultParams(saved)[0]).sort()).toEqual(['bands', 'code', 'resultType', 'system', 'valueSetUrl']);
+    expect(Object.keys(parseResultParams(saved)[0].bands[0]).sort())
+      .toEqual(['ageHigh', 'ageLow', 'high', 'low', 'name', 'sex', 'unit']);
+  });
+
+  it('keeps the new range fields, and writes each only when set', () => {
+    const [p] = parseResultParams([{ system: S, code: 'HGB', resultType: 'numeric', bands: [
+      { low: 11, high: 14, pregnancy: 'pregnant', country: 'TZA', validFrom: '2026-01-01', validTo: '2026-12-31', source: 'WHO', scope: 'national' },
+      { low: 12, high: 15, pregnancy: 'any', country: '', validFrom: null, source: null },
+      { low: 12, high: 15, pregnancy: 'maybe', validFrom: '2026-02-30', validTo: 'soon', source: 'Mayo', scope: 'world' },
+    ] }]);
+    expect(p.bands[0]).toEqual({
+      name: null, low: 11, high: 14, unit: null, sex: null, ageLow: null, ageHigh: null,
+      pregnancy: 'pregnant', country: 'TZA', validFrom: '2026-01-01', validTo: '2026-12-31', source: 'WHO', scope: 'national',
+    });
+    expect(Object.keys(p.bands[1]).sort()).toEqual(['ageHigh', 'ageLow', 'high', 'low', 'name', 'sex', 'unit']);
+    expect(Object.keys(p.bands[2]).sort()).toEqual(['ageHigh', 'ageLow', 'high', 'low', 'name', 'sex', 'unit']);
+  });
+});
+
+describe('result parameters: whether a range fits, by country, dates and pregnancy (plan B, calls 2 to 4)', () => {
+  const who = { sex: 'female', ...aged(30) };
+
+  it('fits a band of the lab country, not one of another country, and answers unknown with no lab country', () => {
+    expect(bandFit(band({ country: 'TZA' }), { ...who, labCountry: 'TZA' })).toBe('yes');
+    expect(bandFit(band({ country: 'TZA' }), { ...who, labCountry: 'KEN' })).toBe('no');
+    expect(bandFit(band({ country: 'TZA' }), { ...who, labCountry: null })).toBe('unknown');
+    expect(bandFit(band({ country: 'TZA' }), who)).toBe('unknown');
+    // A band with no country fits any lab.
+    expect(bandFit(band({}), { ...who, labCountry: 'KEN' })).toBe('yes');
+  });
+
+  it('does not fit a result dated before validFrom or after validTo, and fits on either edge', () => {
+    const dated = band({ validFrom: '2026-01-01', validTo: '2026-11-23' });
+    expect(bandFit(dated, who)).toBe('yes');
+    expect(bandFit(dated, { ...who, at: Date.parse('2025-12-31T12:00:00Z') })).toBe('no');
+    expect(bandFit(dated, { ...who, at: Date.parse('2026-11-24T12:00:00Z') })).toBe('no');
+    expect(bandFit(dated, { ...who, at: Date.parse('2026-01-01T00:30:00Z') })).toBe('yes');
+    expect(bandFit(band({ validFrom: '2026-12-01' }), who)).toBe('no');
+    expect(bandFit(band({ validTo: '2026-01-01' }), who)).toBe('no');
+  });
+
+  it('reads the result date in the lab time zone', () => {
+    // 22:00 UTC on 23 November is already 24 November in Dar es Salaam.
+    const late = { ...who, at: Date.parse('2026-11-23T22:00:00Z') };
+    expect(bandFit(band({ validTo: '2026-11-23' }), late)).toBe('yes');
+    expect(bandFit(band({ validTo: '2026-11-23' }), { ...late, timeZone: 'Africa/Dar_es_Salaam' })).toBe('no');
+  });
+
+  it('answers unknown for a band marked pregnant or not pregnant, as CE holds no pregnancy status', () => {
+    expect(bandFit(band({ pregnancy: 'pregnant' }), who)).toBe('unknown');
+    expect(bandFit(band({ pregnancy: 'not-pregnant' }), who)).toBe('unknown');
+    // No still wins over unknown.
+    expect(bandFit(band({ pregnancy: 'pregnant', sex: 'male' }), who)).toBe('no');
+    expect(matchBand([band({ pregnancy: 'pregnant', high: 1 }), band({ high: 2 })], who)?.high).toBe(2);
+  });
+
+  it('reads source and scope as labels only', () => {
+    expect(bandFit(band({ source: 'WHO', scope: 'global' }), who)).toBe('yes');
+  });
+});
+
+describe('result parameters: a submitted range with the new fields against the catalog (call 3, review focus 2)', () => {
+  const sentOf = (b: Record<string, unknown>) => ({ low: 12, high: 15, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null, ...b });
+
+  it('reads absent and any pregnancy as equal, both ways', () => {
+    expect(findCatalogBand(sentOf({ pregnancy: 'any' }), [band({ low: 12, high: 15 })])).not.toBeNull();
+    expect(findCatalogBand(sentOf({}), [band({ low: 12, high: 15 })])).not.toBeNull();
+    expect(findCatalogBand(sentOf({ pregnancy: 'pregnant' }), [band({ low: 12, high: 15 })])).toBeNull();
+    expect(findCatalogBand(sentOf({}), [band({ low: 12, high: 15, pregnancy: 'pregnant' })])).toBeNull();
+  });
+
+  it('compares source and scope, absent equal to absent', () => {
+    const stored = [band({ low: 12, high: 15, source: 'WHO', scope: 'global' })];
+    expect(findCatalogBand(sentOf({ source: 'WHO', scope: 'global' }), stored)).toEqual(stored[0]);
+    expect(findCatalogBand(sentOf({ source: 'CLSI', scope: 'global' }), stored)).toBeNull();
+    expect(findCatalogBand(sentOf({}), stored)).toBeNull();
+    expect(findCatalogBand(sentOf({ scope: null }), [band({ low: 12, high: 15 })])).not.toBeNull();
+  });
+
+  it('ignores the validity dates and the country, so a band picked at the bench is never refused for them', () => {
+    const stored = [band({ low: 12, high: 15, country: 'TZA', validFrom: '2026-01-01', validTo: '2026-06-30' })];
+    expect(findCatalogBand(sentOf({}), stored)).toEqual(stored[0]);
+    expect(findCatalogBand(sentOf({ country: 'KEN', validFrom: '2020-01-01' }), stored)).toEqual(stored[0]);
+  });
+
+  it('refuses a pregnancy, source or scope CE does not know rather than reading it as none', () => {
+    const stored = [band({ low: 12, high: 15 })];
+    expect(findCatalogBand(sentOf({ pregnancy: 'maybe' }), stored)).toBeNull();
+    expect(findCatalogBand(sentOf({ source: 'Mayo' }), stored)).toBeNull();
+    expect(findCatalogBand(sentOf({ scope: 1 }), stored)).toBeNull();
+  });
+});
