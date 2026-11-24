@@ -159,7 +159,7 @@ describe('test catalog: reads', () => {
     expect(await catalog.list(q())).toEqual({
       rows: [{
         code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
-        resultParams: [],
+        resultParams: [], codings: [],
         loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
         lab: { enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' },
       }],
@@ -243,7 +243,7 @@ describe('test catalog: writes', () => {
     });
     expect(created).toEqual({
       code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
-      resultParams: [],
+      resultParams: [], codings: [],
       loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
       lab: { enabled: false, specimenTypes: null, localDisplay: null },
     });
@@ -758,9 +758,9 @@ describe('test catalog: import apply and export', () => {
 
     const csv = await catalog.exportCsv();
     expect(csv).toBe(
-      'id,code,name,short_name,loinc,category,specimen_types,expected_tat_hours,critical_tat_hours,requires_verification\n'
-      + 'CD4,CD4,"CD4 count, absolute",,,HAEM,,,,yes\n'
-      + 'HIVVL,HIVVL,HIV viral load,VL,25836-8,MOL,BLD;UR,,,yes\n',
+      'id,code,name,short_name,loinc,category,specimen_types,expected_tat_hours,critical_tat_hours,requires_verification,codings\n'
+      + 'CD4,CD4,"CD4 count, absolute",,,HAEM,,,,yes,\n'
+      + 'HIVVL,HIVVL,HIV viral load,VL,25836-8,MOL,BLD;UR,,,yes,\n',
     );
     const file = readCatalogImportFile(new TextEncoder().encode(csv), 'csv');
     const report = await catalog.importPreview({ table: file, columnMap: file.suggested });
@@ -1218,7 +1218,7 @@ describe('test catalog: turnaround times and verification', () => {
     expect(await catalog.get('CD4')).toMatchObject({ expectedTatHours: null, criticalTatHours: null, requiresVerification: true });
 
     const csv = await catalog.exportCsv();
-    expect(csv).toContain('HIVVL,HIV viral load,,,,,48,0.5,no\n');
+    expect(csv).toContain('HIVVL,HIV viral load,,,,,48,0.5,no,\n');
     const back = readCatalogImportFile(new TextEncoder().encode(csv), 'csv');
     expect((await catalog.importPreview({ table: back, columnMap: back.suggested })).counts)
       .toEqual({ new: 0, changed: 0, unchanged: 2, refused: 0 });
@@ -1383,8 +1383,8 @@ describe('test catalog: an internal id and a Test code', () => {
     const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
     const csv = await catalog.exportCsv();
     expect(csv).toBe(
-      'id,code,name,short_name,loinc,category,specimen_types,expected_tat_hours,critical_tat_hours,requires_verification\n'
-      + `${hb.code},HB,Haemoglobin,,,,,,,yes\n`,
+      'id,code,name,short_name,loinc,category,specimen_types,expected_tat_hours,critical_tat_hours,requires_verification,codings\n'
+      + `${hb.code},HB,Haemoglobin,,,,,,,yes,\n`,
     );
     const edited = csv.replace(`${hb.code},HB,`, `${hb.code},HGB,`);
     const file = readCatalogImportFile(new TextEncoder().encode(edited), 'csv');
@@ -1711,5 +1711,129 @@ describe('test catalog: field settings, more types and range fields (plan B, Tas
     await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, required: false, min: 0, decimals: 2 }] as never });
     const [answer] = await catalog.resultParamsFor([test('FBC')], {});
     expect(answer.params[0]).toMatchObject({ required: false, min: 0, decimals: 2 });
+  });
+});
+
+describe('test catalog: additional codings (plan B, Task 5)', () => {
+  const EXTRA = 'urn:test:cs:extra';
+  const OTHER = 'urn:test:cs:other';
+  const test = (code: string) => ({ system: TEST_CATALOG_SYSTEM, code });
+
+  /** A loaded coding system: a coding_systems row and its concepts. */
+  async function loadSystem(db: Kysely<InternalSchema>, url: string, concepts: Array<[string, string]>): Promise<void> {
+    await db.insertInto('coding_systems').values({
+      id: `cs-${url}`, system_code: url, system_name: url, url, active: true, publisher_id: 'pub-system', seeded: false,
+    } as never).execute();
+    for (const [code, display] of concepts) {
+      await db.insertInto('terminology_concepts').values({ system: url, code, display, status: 'ACTIVE', properties: null }).execute();
+    }
+  }
+
+  async function withSystems() {
+    const built = await buildCatalog();
+    await loadSystem(built.db, EXTRA, [['X1', 'Extra one'], ['X2', 'Extra two']]);
+    await loadSystem(built.db, OTHER, [['O1', 'Other one']]);
+    return built;
+  }
+
+  it('stores codings on create, reads them back with the concept name, and defaults the purpose to additional', async () => {
+    const { db, catalog } = await withSystems();
+    const made = await catalog.create({
+      testCode: 'GLU', display: 'Glucose',
+      codings: [{ system: EXTRA, code: 'X1', display: 'typed name', note: '  for reports  ' }, { system: OTHER, code: 'O1', purpose: 'INDICATION' }],
+    });
+    expect(made.codings).toEqual([
+      { system: EXTRA, code: 'X1', display: 'Extra one', purpose: 'ADDITIONAL', note: 'for reports' },
+      { system: OTHER, code: 'O1', display: 'Other one', purpose: 'INDICATION', note: null },
+    ]);
+    expect((await storedConcept(db, 'GLU')).properties).toEqual({
+      codings: [
+        { system: EXTRA, code: 'X1', display: 'Extra one', purpose: 'ADDITIONAL', note: 'for reports' },
+        { system: OTHER, code: 'O1', display: 'Other one', purpose: 'INDICATION' },
+      ],
+    });
+    expect((await catalog.get('GLU'))?.codings).toEqual(made.codings);
+  });
+
+  it('reads no codings for a test saved before them', async () => {
+    const { catalog } = await withSystems();
+    expect((await catalog.create({ testCode: 'GLU', display: 'Glucose' })).codings).toEqual([]);
+  });
+
+  it('replaces the codings on update, keeps them when an update leaves them out, and clears them with an empty list', async () => {
+    const { catalog } = await withSystems();
+    await catalog.create({ testCode: 'GLU', display: 'Glucose', codings: [{ system: EXTRA, code: 'X1' }] });
+    const edited = await catalog.update('GLU', { display: 'Glucose', codings: [{ system: EXTRA, code: 'X2', purpose: 'CATEGORY' }] });
+    expect(edited.codings).toEqual([{ system: EXTRA, code: 'X2', display: 'Extra two', purpose: 'CATEGORY', note: null }]);
+    expect((await catalog.update('GLU', { display: 'Glucose 2' })).codings).toHaveLength(1);
+    expect((await catalog.update('GLU', { display: 'Glucose', codings: [] })).codings).toEqual([]);
+  });
+
+  it('refuses a coding with no system or code, a system not loaded, a code not in it, an unknown purpose and a repeat', async () => {
+    const { catalog } = await withSystems();
+    const cases: Array<[unknown, string]> = [
+      [[{ system: ' ', code: 'X1' }], 'Coding 1 needs a system.'],
+      [[{ system: EXTRA, code: '' }], 'Coding 1 needs a code.'],
+      [[{ system: 'urn:test:cs:missing', code: 'X1' }], 'Coding 1 names the system urn:test:cs:missing, which is not loaded on this install.'],
+      [[{ system: EXTRA, code: 'X9' }], `Coding 1: X9 is not in ${EXTRA}.`],
+      [[{ system: EXTRA, code: 'X1', purpose: 'PRIMARY' }], 'Coding 1 has the purpose "PRIMARY". Use ADDITIONAL, INDICATION, PROCEDURE or CATEGORY.'],
+      [[{ system: EXTRA, code: 'X1' }, { system: EXTRA, code: 'X1', purpose: 'INDICATION' }], `Coding 2 repeats ${EXTRA} X1.`],
+      [[{ system: TEST_CATALOG_SYSTEM, code: 'GLU' }], `Coding 1: ${TEST_CATALOG_SYSTEM} holds the catalog's own codes, so it cannot be an additional coding.`],
+      ['X1', 'Codings must be a list.'],
+    ];
+    for (const [codings, message] of cases) {
+      await expect(catalog.create({ testCode: 'GLU', display: 'Glucose', codings: codings as never }))
+        .rejects.toMatchObject({ kind: 'invalid', message });
+    }
+  });
+
+  it('exports codings as a JSON column, and the export imports back unchanged', async () => {
+    const { catalog } = await withSystems();
+    await catalog.create({
+      testCode: 'GLU', display: 'Glucose',
+      codings: [{ system: EXTRA, code: 'X1', note: 'a, "quoted" note' }, { system: OTHER, code: 'O1', purpose: 'PROCEDURE' }],
+    });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
+    const csv = await catalog.exportCsv();
+    expect(csv.split('\n')[0]).toBe(
+      'id,code,name,short_name,loinc,category,specimen_types,expected_tat_hours,critical_tat_hours,requires_verification,codings',
+    );
+    const file = readCatalogImportFile(new TextEncoder().encode(csv), 'csv');
+    expect(file.suggested.codings).toBe('codings');
+    expect((await catalog.importPreview({ table: file, columnMap: file.suggested })).counts)
+      .toEqual({ new: 0, changed: 0, unchanged: 2, refused: 0 });
+  });
+
+  it('imports a codings cell, counts a changed one as changed, refuses one that is not a JSON list, and leaves them alone when unmapped', async () => {
+    const { catalog } = await withSystems();
+    await catalog.create({ testCode: 'GLU', display: 'Glucose', codings: [{ system: EXTRA, code: 'X1' }] });
+    const headers = ['code', 'name', 'codings'];
+    const table = (cell: string) => ({ headers, rows: [['GLU', 'Glucose', cell]] });
+    const columnMap = { code: 'code', name: 'name', codings: 'codings' };
+    const changed = JSON.stringify([{ system: EXTRA, code: 'X2' }]);
+    expect((await catalog.importPreview({ table: table(changed), columnMap })).counts).toMatchObject({ changed: 1, unchanged: 0 });
+    const bad = await catalog.importPreview({ table: table('X2'), columnMap });
+    expect(bad.refused).toEqual([{ line: 2, code: 'GLU', reason: 'Codings "X2" must be a JSON list of codings.' }]);
+    const missing = await catalog.importPreview({ table: table(JSON.stringify([{ system: EXTRA, code: 'X9' }])), columnMap });
+    expect(missing.refused[0].reason).toBe(`Coding 1: X9 is not in ${EXTRA}.`);
+    await catalog.importApply({ table: table(changed), columnMap });
+    expect((await catalog.get('GLU'))?.codings.map((c) => c.code)).toEqual(['X2']);
+    // A mapped empty cell clears; an unmapped column keeps.
+    await catalog.importApply({ table: { headers: ['code', 'name'], rows: [['GLU', 'Glucose']] }, columnMap: { code: 'code', name: 'name' } });
+    expect((await catalog.get('GLU'))?.codings.map((c) => c.code)).toEqual(['X2']);
+    await catalog.importApply({ table: table(''), columnMap });
+    expect((await catalog.get('GLU'))?.codings).toEqual([]);
+  });
+
+  it('writes the codings after LOINC and the Test code on an order, so the first coding does not change', async () => {
+    const { catalog } = await withSystems();
+    await catalog.create({ testCode: 'GLU', display: 'Glucose', loinc: '2345-7', codings: [{ system: EXTRA, code: 'X1' }, { system: OTHER, code: 'O1' }] });
+    await catalog.create({ testCode: 'CD4', display: 'CD4 count', codings: [{ system: EXTRA, code: 'X2' }] });
+    const found = await catalog.orderCodingsFor([test('GLU'), test('CD4')]);
+    expect(found.get(`${TEST_CATALOG_SYSTEM}|GLU`)).toEqual([
+      { system: LOINC_SYSTEM, code: '2345-7' }, { system: TEST_CODE_SYSTEM, code: 'GLU' },
+      { system: EXTRA, code: 'X1' }, { system: OTHER, code: 'O1' },
+    ]);
+    expect(found.get(`${TEST_CATALOG_SYSTEM}|CD4`)).toEqual([{ system: TEST_CODE_SYSTEM, code: 'CD4' }, { system: EXTRA, code: 'X2' }]);
   });
 });

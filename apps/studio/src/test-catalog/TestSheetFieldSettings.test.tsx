@@ -35,7 +35,7 @@ const param = (code: string, extra: Partial<api.CatalogTestResultParam> = {}): a
 });
 const TEST = (resultParams: api.CatalogTestResultParam[]): api.CatalogTest => ({
   code: 'FBC', testCode: 'FBC', display: 'Full blood count', shortName: null, category: null, specimenTypes: [],
-  resultParams, loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+  resultParams, loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true, codings: [],
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 });
 

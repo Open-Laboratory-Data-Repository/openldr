@@ -51,7 +51,7 @@ const OPTIONS: api.TestCatalogOptions = {
 };
 const NEW_TEST = (over: Partial<api.CatalogTest> = {}): api.CatalogTest => ({
   code: 'T1', testCode: 'T1', display: 'Test one', shortName: null, category: null, specimenTypes: [],
-  resultParams: [], loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+  resultParams: [], loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true, codings: [],
   lab: { enabled: false, specimenTypes: null, localDisplay: null }, ...over,
 });
 

@@ -495,7 +495,7 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'test-catalog params': { kind: 'app', capability: 'terminology.manage', alsoRequires: ['terminology.view'], destructive: true, paths: [inFile('--set')] },
   'test-catalog restore': { kind: 'app', capability: 'terminology.manage' }, // catalog :202
   // Overwrites a test's turnaround times and verification switch (PUT /api/test-catalog/:code, manage).
-  'test-catalog set': { kind: 'app', capability: 'terminology.manage', destructive: true },
+  'test-catalog set': { kind: 'app', capability: 'terminology.manage', destructive: true, paths: [inFile('--codings')] },
   // POST /api/test-catalog/result-fields, manage. Adds one field and refuses a code already there.
   'test-catalog result-fields add': { kind: 'app', capability: 'terminology.manage' },
   // POST /api/test-catalog/result-fields/from-loinc, manage. Adds fields and answer sets, changes none.

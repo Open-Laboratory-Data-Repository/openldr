@@ -23,14 +23,15 @@ import {
 import { TermPicker } from '@/terminology/TermPicker';
 import { OntologyPickerDialog } from '@/terminology/ontology/OntologyPickerDialog';
 import {
-  createCatalogTest, expandValueSetByUrl, fetchLabIdentity, getLoincHints, resultFieldsFromLoinc, setCatalogLabSettings,
-  termExists, updateCatalogTest,
+  createCatalogTest, expandValueSetByUrl, fetchLabIdentity, getLoincHints, listCodingSystems, resultFieldsFromLoinc, setCatalogLabSettings,
+  termExists, updateCatalogTest, type CatalogTestCoding,
   type LoincFieldPlan, type LoincHints, type Term, type CatalogRejectReason, type CatalogResultType,
   type CatalogBandPregnancy, type CatalogBandSource, type CatalogBandScope,
   type CatalogLabSettingsInput, type CatalogTestResultParam, type CatalogSpecimenCoding, type CatalogTest, type CatalogTestInput,
   type CatalogAgeUnit, type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
 import { criteriaLabel, sexLabel, type RangeCopy } from '@/forms-runtime/rangeLabel';
+import { AddCodingSheet } from './AddCodingSheet';
 import { AddResultFieldSheet } from './AddResultFieldSheet';
 import { FieldSettingsSheet } from './FieldSettingsSheet';
 import { changeType, fieldsInOrder, moveParam, setRequired, settingsOf, withBandField } from './field-settings';
@@ -55,6 +56,8 @@ interface Draft {
   shortName: string;
   category: string;
   loinc: string;
+  /** Codes from other loaded systems that also name the test (plan B, call 10), in the operator's order. */
+  codings: CatalogTestCoding[];
   specimens: CatalogSpecimenCoding[];
   /** Bench result entry: the parameters this test yields, in the order the operator ticked them. */
   resultParams: CatalogTestResultParam[];
@@ -151,6 +154,7 @@ function draftFrom(test: CatalogTest | null): Draft {
     shortName: test?.shortName ?? '',
     category: test?.category ?? '',
     loinc: test?.loinc ?? '',
+    codings: test?.codings ?? [],
     specimens: test?.specimenTypes ?? [],
     resultParams: test?.resultParams ?? [],
     active: test?.active ?? true,
@@ -217,6 +221,14 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   const [settingsFor, setSettingsFor] = useState<string | null>(null);
   const fieldMenuButtons = useRef(new Map<string, HTMLButtonElement>());
   const settingsReturn = useRef<HTMLButtonElement | null>(null);
+  // The Add coding sheet (plan B, Task 5): closed, adding (index null), or editing the coding at index.
+  const [codingSheet, setCodingSheet] = useState<{ index: number | null } | null>(null);
+  const codingsMenuButton = useRef<HTMLButtonElement>(null);
+  const codingMenuButtons = useRef(new Map<number, HTMLButtonElement>());
+  const codingReturn = useRef<HTMLButtonElement | null>(null);
+  // Each loaded system's name by url, so a coding row names its system. Read only when the test has
+  // codings; a failure leaves the url showing.
+  const [systemNames, setSystemNames] = useState<ReadonlyMap<string, string>>(() => new Map());
   // CE's country list, for a range's country. Read as Settings, Laboratory reads it: the value set the
   // lab identity's country field names. A failure leaves the list empty; a saved country still shows.
   const [countries, setCountries] = useState<CatalogRejectReason[]>([]);
@@ -287,6 +299,18 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     })();
     return () => { cancelled = true; };
   }, [open, ownedHere]);
+
+  const hasCodings = draft.codings.length > 0;
+  useEffect(() => {
+    if (!open || !hasCodings || systemNames.size > 0) return;
+    let cancelled = false;
+    listCodingSystems()
+      .then((rows) => {
+        if (!cancelled) setSystemNames(new Map(rows.flatMap((r) => (r.url ? [[r.url, r.systemName] as const] : []))));
+      })
+      .catch(() => { /* the url stands in for the name */ });
+    return () => { cancelled = true; };
+  }, [open, hasCodings, systemNames.size]);
 
   // A saved code shows its hints, but fills nothing: only a code picked here fills empty fields. Keyed
   // on the LOINC system id, not the options object, which is read again after a field is added.
@@ -545,6 +569,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
           specimenTypes: draft.specimens,
           resultParams,
           loinc: draft.loinc.trim() || null,
+          codings: draft.codings,
           active: draft.active,
           expectedTatHours: draft.expectedTatHours,
           criticalTatHours: draft.criticalTatHours,
@@ -663,7 +688,70 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
               </>
             )}
 
-            {/* Plan B puts Additional codings here, between the LOINC code and Basic information (spec call 11). */}
+            {/* Additional codings, between the LOINC code and Basic information (spec call 11, plan B Task 5). */}
+            {section(t('testCatalog.sheet.sectionCodings'), ownedHere ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    ref={codingsMenuButton}
+                    variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                    data-testid="codings-menu" aria-label={t('testCatalog.sheet.codingsActions')}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    data-testid="add-coding"
+                    onSelect={() => { codingReturn.current = codingsMenuButton.current; setCodingSheet({ index: null }); }}
+                  >
+                    {t('testCatalog.sheet.addCoding')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null)}
+            <div className="col-span-2 flex min-w-0 flex-col gap-2">
+              {draft.codings.length === 0 ? (
+                <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.noCodings')}</span>
+              ) : draft.codings.map((c, i) => (
+                <div key={`${c.system}|${c.code}`} data-testid={`coding-row-${i}`} className="flex min-w-0 items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="break-words">{c.display ?? c.code}</span>
+                    <span className="break-all text-xs text-muted-foreground">
+                      {[systemNames.get(c.system) ?? c.system, c.code, t(`testCatalog.addCoding.purpose${c.purpose}`)].join(' · ')}
+                    </span>
+                    {c.note ? <span className="break-words text-xs text-muted-foreground">{c.note}</span> : null}
+                  </div>
+                  {ownedHere ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          ref={(el) => { if (el) codingMenuButtons.current.set(i, el); else codingMenuButtons.current.delete(i); }}
+                          variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                          data-testid={`coding-menu-${i}`} aria-label={t('testCatalog.sheet.codingActions', { code: c.code })}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          data-testid={`coding-edit-${i}`}
+                          onSelect={() => { codingReturn.current = codingMenuButtons.current.get(i) ?? null; setCodingSheet({ index: i }); }}
+                        >
+                          {t('testCatalog.sheet.editCoding')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          data-testid={`coding-remove-${i}`}
+                          onSelect={() => set({ codings: draft.codings.filter((_, k) => k !== i) })}
+                        >
+                          {t('testCatalog.sheet.removeCoding')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+                </div>
+              ))}
+            </div>
 
             {section(t('testCatalog.sheet.sectionBasic'))}
             {/* Test identity spec, call 8: the Test code is the first field, editable on a saved test
@@ -1273,6 +1361,17 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
           returnFocusTo={settingsReturn}
           onClose={() => setSettingsFor(null)}
           onApply={(next) => set({ resultParams: setParam(draft.resultParams, next.code, next) })}
+        />
+        <AddCodingSheet
+          open={codingSheet !== null}
+          editing={codingSheet?.index != null ? draft.codings[codingSheet.index] ?? null : null}
+          taken={draft.codings.filter((_, k) => k !== codingSheet?.index)}
+          returnFocusTo={codingReturn}
+          onClose={() => setCodingSheet(null)}
+          onSave={(coding) => {
+            const at = codingSheet?.index ?? null;
+            set({ codings: at === null ? [...draft.codings, coding] : draft.codings.map((c, k) => (k === at ? coding : c)) });
+          }}
         />
         <AddResultFieldSheet
         open={addingField}

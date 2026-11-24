@@ -82,6 +82,11 @@ describe('test-catalog list: commander parsing', () => {
     expect(mocks.runTestCatalogSet).toHaveBeenLastCalledWith('HB', { testCode: 'HGB', json: false });
   });
 
+  it('hands set its --codings file', async () => {
+    await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', 'set', 'HB', '--codings', 'codings.json']);
+    expect(mocks.runTestCatalogSet).toHaveBeenLastCalledWith('HB', { codings: 'codings.json', json: false });
+  });
+
   it('reads params with no flags', async () => {
     await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', 'params', 'FBC']);
     expect(mocks.runTestCatalogParams).toHaveBeenCalledWith('FBC', { json: false });

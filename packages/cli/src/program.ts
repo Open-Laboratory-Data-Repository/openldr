@@ -701,11 +701,12 @@ export function buildProgram(): Command {
     });
   testCatalog
     .command('set <code>')
-    .description("Set a test's Test code, turnaround times and whether its results need verification (only where this install owns the catalog). <code> is a Test code or an id")
+    .description("Set a test's Test code, turnaround times, whether its results need verification, and its additional codings (only where this install owns the catalog). <code> is a Test code or an id")
     .option('--test-code <code>', 'a new Test code, the national code (left out, the Test code stays)')
     .option('--expected-tat <hours>', 'hours from receipt to release the lab aims for, or none to clear')
     .option('--critical-tat <hours>', 'hours after which the test is overdue, or none to clear')
     .option('--requires-verification <true|false>', 'whether a result needs a second person to verify it')
+    .option('--codings <file>', 'a JSON list of additional codings (system, code, purpose, note) that replaces the test list; [] clears it')
     .option('--json', 'emit JSON', false)
     .action(async (code: string, opts: TestCatalogSetOpts) => {
       process.exitCode = await runTestCatalogSet(code, opts);

@@ -24,7 +24,7 @@ const OPTIONS: api.TestCatalogOptions = {
 const HGB_PARAM: api.CatalogTestResultParam = { system: RESULT, code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [] };
 const TEST: api.CatalogTest = {
   code: 'FBC', testCode: 'FBC', display: 'Full blood count', shortName: null, category: null, specimenTypes: [],
-  resultParams: [], loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+  resultParams: [], loinc: null, active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true, codings: [],
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 const VALUE_SETS: api.ValueSetSummary[] = [{

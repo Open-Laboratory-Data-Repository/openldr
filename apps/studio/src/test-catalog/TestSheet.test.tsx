@@ -25,7 +25,7 @@ const OPTIONS: api.TestCatalogOptions = {
 };
 const HIVVL: api.CatalogTest = {
   code: 'HIVVL', testCode: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR],
-  resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+  resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true, codings: [],
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
@@ -93,7 +93,7 @@ describe('TestSheet', () => {
     await save();
     expect(api.createCatalogTest).toHaveBeenCalledWith({
       testCode: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD],
-      resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+      resultParams: [], loinc: '25836-8', active: true, expectedTatHours: null, criticalTatHours: null, requiresVerification: true, codings: [],
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('HIVVL saved.');
@@ -144,7 +144,7 @@ describe('TestSheet', () => {
     await save();
     expect(api.updateCatalogTest).toHaveBeenCalledWith('HIVVL', {
       testCode: 'HIVVL', display: 'HIV-1 viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR], resultParams: [],
-      loinc: '25836-8', active: false, expectedTatHours: null, criticalTatHours: null, requiresVerification: true,
+      loinc: '25836-8', active: false, expectedTatHours: null, criticalTatHours: null, requiresVerification: true, codings: [],
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
   });
@@ -585,10 +585,10 @@ describe('TestSheet: a range unit from UCUM', () => {
 });
 
 // Spec section 2: the sheet reads top to bottom as Corlix's test editor does, LOINC first. LOINC is one
-// row (label, picker, menu) with no title line, so the titled sections start at Basic information.
+// row (label, picker, menu) with no title line, so the titled sections start at Additional codings.
 describe('TestSheet: the order of its sections', () => {
   const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
-  const OWNED = ['Basic information', 'Specimen types', 'Result parameters', 'Reference ranges', 'This lab'];
+  const OWNED = ['Additional codings', 'Basic information', 'Specimen types', 'Result parameters', 'Reference ranges', 'This lab'];
   const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
   const basic = () => screen.getByRole('heading', { level: 3, name: 'Basic information' });
 
@@ -610,7 +610,7 @@ describe('TestSheet: the order of its sections', () => {
 
   it('keeps the same order in the read-only view, with the LOINC row first and this lab last', () => {
     renderSheet({ target: { kind: 'edit', test: HIVVL }, ownedHere: false });
-    expect(headings()).toEqual(['Basic information', 'Specimen types', 'This lab']);
+    expect(headings()).toEqual(['Additional codings', 'Basic information', 'Specimen types', 'This lab']);
     const label = screen.getByText('LOINC', { selector: 'label' });
     expect(label.nextElementSibling!.textContent).toBe('25836-8');
     expect(before(label, basic())).toBe(true);
