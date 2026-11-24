@@ -884,6 +884,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       if (system === TEST_CATALOG_SYSTEM || system === TEST_CODE_SYSTEM) {
         throw invalid(`${where}: ${system} holds the catalog's own codes, so it cannot be an additional coding.`);
       }
+      // A test has one LOINC code, its mapping (review I1), so ServiceRequest.code never carries two.
+      if (system === LOINC_SYSTEM) throw invalid(`${where} is a LOINC code. A test has one LOINC code: put it in the LOINC field.`);
       if (!ctx.codingSystems.has(system)) throw invalid(`${where} names the system ${system}, which is not loaded on this install.`);
       const key = `${system}|${code}`;
       if (!ctx.knownCodings.has(key)) throw invalid(`${where}: ${code} is not in ${system}.`);
@@ -1051,7 +1053,10 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         const wantedCodes = [...new Set(codings.filter((c) => c.system === system).map((c) => c.code))];
         for (let i = 0; i < wantedCodes.length; i += LOINC_LOOKUP_CHUNK) {
           const found = await db.selectFrom('terminology_concepts').select(['code', 'display'])
-            .where('system', '=', system).where('code', 'in', wantedCodes.slice(i, i + LOINC_LOOKUP_CHUNK)).execute();
+            .where('system', '=', system).where('code', 'in', wantedCodes.slice(i, i + LOINC_LOOKUP_CHUNK))
+            // A DRAFT concept is a stub, such as one an earlier mapping left, not a real code. NULL counts.
+            .where((eb) => eb.or([eb('status', 'is', null), eb('status', '!=', 'DRAFT')]))
+            .execute();
           for (const f of found) knownCodings.set(`${system}|${f.code}`, f.display ?? null);
         }
       }
@@ -1583,7 +1588,10 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         { system: TEST_CODE_SYSTEM, code: testCodeOf(c.code, c.properties) },
         // Plan B, call 10: the additional codings after the Test code, so the first coding, which the
         // warehouse keeps as panel_code, does not change.
-        ...toTestCodings(((parseJson(c.properties) ?? {}) as Record<string, unknown>).codings).map((k) => ({ system: k.system, code: k.code })),
+        // A LOINC coding left in stored data is dropped: the LOINC link above is the test's one LOINC.
+        ...toTestCodings(((parseJson(c.properties) ?? {}) as Record<string, unknown>).codings)
+          .filter((k) => k.system !== LOINC_SYSTEM)
+          .map((k) => ({ system: k.system, code: k.code })),
       ]];
     }));
   }

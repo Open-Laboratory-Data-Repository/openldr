@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { TermPicker, type PickedTerm } from '@/terminology/TermPicker';
 import {
-  CATALOG_CODING_PURPOSES, listCodingSystems, TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM,
+  CATALOG_CODING_PURPOSES, listCodingSystems, LOINC_SYSTEM_URL, TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM,
   type CatalogCodingPurpose, type CatalogTestCoding, type CodingSystem,
 } from '@/api';
 
@@ -19,10 +19,11 @@ import {
 // purpose and a note. It changes the draft only; the Test sheet's Save sends it. Layout copied from
 // AddResultFieldSheet.tsx (AGENTS.md section 5).
 
-/** The systems a coding may come from: active, with a url, and not the catalog's own. */
+/** The systems a coding may come from: active, with a url, not the catalog's own, and not LOINC, whose
+ *  one code is the test's LOINC field (review I1). */
 function offered(systems: CodingSystem[]): Array<CodingSystem & { url: string }> {
   return systems.filter((s): s is CodingSystem & { url: string } =>
-    s.active && !!s.url && s.url !== TEST_CATALOG_SYSTEM && s.url !== TEST_CODE_SYSTEM);
+    s.active && !!s.url && s.url !== TEST_CATALOG_SYSTEM && s.url !== TEST_CODE_SYSTEM && s.url !== LOINC_SYSTEM_URL);
 }
 
 export function AddCodingSheet({ open, editing, taken, returnFocusTo, onClose, onSave }: {
@@ -118,8 +119,6 @@ export function AddCodingSheet({ open, editing, taken, returnFocusTo, onClose, o
                   id="add-coding-code"
                   ariaLabel={t('testCatalog.addCoding.code')}
                   systemId={system.id}
-                  // Any system may have one-letter codes.
-                  minQueryLength={1}
                   value={term}
                   onChange={(v) => setTerm(v ? { system: system.url, code: v.code, display: v.display } : null)}
                 />

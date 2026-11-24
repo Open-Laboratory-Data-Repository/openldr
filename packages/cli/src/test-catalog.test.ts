@@ -295,6 +295,16 @@ describe('openldr test-catalog set', () => {
     expect(mocks.createAppContext).not.toHaveBeenCalled();
   });
 
+  it('reports the refusal of a LOINC coding in words that point to the LOINC field', async () => {
+    const update = vi.fn().mockRejectedValue(new Error('Coding 1 is a LOINC code. A test has one LOINC code: put it in the LOINC field.'));
+    mocks.createAppContext.mockResolvedValue({ testCatalog: { resolve: vi.fn().mockResolvedValue(stored), update }, close: vi.fn().mockResolvedValue(undefined) });
+    const file = join(mkdtempSync(join(tmpdir(), 'tc-codings-')), 'codings.json');
+    writeFileSync(file, JSON.stringify([{ system: 'http://loinc.org', code: '2345-7' }]));
+    expect(await runTestCatalogSet('HIVVL', { codings: file, json: false })).toBe(1);
+    expect(update.mock.calls[0][1].codings).toEqual([{ system: 'http://loinc.org', code: '2345-7' }]);
+    expect(err.join('')).toContain('put it in the LOINC field');
+  });
+
   it('hands a coding the service refuses to it, and reports its refusal', async () => {
     const update = vi.fn().mockRejectedValue(new Error('Coding 1: X9 is not in urn:test:cs:extra.'));
     const close = vi.fn().mockResolvedValue(undefined);

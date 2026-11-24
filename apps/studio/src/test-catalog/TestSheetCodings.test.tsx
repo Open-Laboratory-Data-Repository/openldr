@@ -29,8 +29,9 @@ const system = (over: Partial<api.CodingSystem>): api.CodingSystem => ({
 });
 const SYSTEMS: api.CodingSystem[] = [
   system({}),
-  // The catalog's own systems and an inactive one are not offered.
+  // The catalog's own systems, LOINC (the test's LOINC field) and an inactive one are not offered.
   system({ id: 'cs-catalog', systemName: 'Test catalog', url: api.TEST_CATALOG_SYSTEM }),
+  system({ id: 'cs-loinc', systemName: 'LOINC', url: 'http://loinc.org' }),
   system({ id: 'cs-off', systemName: 'Switched off', url: 'urn:test:cs:off', active: false }),
 ];
 const term = (code: string, display: string): api.Term => ({
@@ -79,7 +80,7 @@ describe('TestSheet: Additional codings', () => {
     await choose('codings-menu', 'add-coding');
     const sheet = codingSheet();
     expect(sheet.querySelector('.grid-cols-\\[auto_minmax\\(0\\,1fr\\)\\]')).not.toBeNull();
-    // Only the active systems that are not the catalog's own are offered.
+    // Only the active systems that are not the catalog's own or LOINC are offered.
     fireEvent.keyDown(within(sheet).getByRole('combobox', { name: 'System' }), { key: 'ArrowDown' });
     expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Extra system']);
     fireEvent.click(screen.getByRole('option', { name: 'Extra system' }));
@@ -97,6 +98,20 @@ describe('TestSheet: Additional codings', () => {
     expect(row.textContent).toContain('Indication');
     await choose('test-sheet-menu', 'test-sheet-save');
     expect(sent()).toEqual([X1]);
+  });
+
+  it('searches a code from two letters, the TermPicker default', async () => {
+    vi.mocked(api.searchTerms).mockResolvedValue({ rows: [], total: 0 });
+    renderSheet();
+    await choose('codings-menu', 'add-coding');
+    await pick(codingSheet(), 'System', /Extra system/);
+    const box = within(codingSheet()).getByRole('combobox', { name: 'Code' });
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: 'X' } });
+    await act(async () => { await new Promise((r) => setTimeout(r, 300)); });
+    expect(api.searchTerms).not.toHaveBeenCalled();
+    fireEvent.change(box, { target: { value: 'X1' } });
+    await waitFor(() => expect(api.searchTerms).toHaveBeenCalledTimes(1));
   });
 
   it('cannot save a coding with no code, or one the test already has', async () => {

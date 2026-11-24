@@ -1787,6 +1787,33 @@ describe('test catalog: additional codings (plan B, Task 5)', () => {
     }
   });
 
+  it('refuses a LOINC coding on create, update and import: a test has one LOINC, its LOINC field (review I1)', async () => {
+    const { db, catalog } = await withSystems();
+    await db.insertInto('terminology_concepts').values({ system: LOINC_SYSTEM, code: '2345-7', display: 'Glucose', status: 'ACTIVE', properties: null }).execute();
+    const loinc = [{ system: LOINC_SYSTEM, code: '2345-7' }];
+    await expect(catalog.create({ testCode: 'GLU', display: 'Glucose', codings: loinc }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'Coding 1 is a LOINC code. A test has one LOINC code: put it in the LOINC field.' });
+    await catalog.create({ testCode: 'GLU', display: 'Glucose' });
+    await expect(catalog.update('GLU', { display: 'Glucose', codings: loinc }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'Coding 1 is a LOINC code. A test has one LOINC code: put it in the LOINC field.' });
+    const report = await catalog.importPreview({
+      table: { headers: ['code', 'name', 'codings'], rows: [['GLU', 'Glucose', JSON.stringify(loinc)]] },
+      columnMap: { code: 'code', name: 'name', codings: 'codings' },
+    });
+    expect(report.refused).toEqual([{ line: 2, code: 'GLU', reason: 'Coding 1 is a LOINC code. A test has one LOINC code: put it in the LOINC field.' }]);
+  });
+
+  it('counts a DRAFT concept as not in its system, and a NULL status as in it', async () => {
+    const { db, catalog } = await withSystems();
+    await db.insertInto('terminology_concepts').values([
+      { system: EXTRA, code: 'STUB', display: 'Stub', status: 'DRAFT', properties: null },
+      { system: EXTRA, code: 'BARE', display: 'Bare', status: null, properties: null },
+    ]).execute();
+    await expect(catalog.create({ testCode: 'GLU', display: 'Glucose', codings: [{ system: EXTRA, code: 'STUB' }] }))
+      .rejects.toMatchObject({ kind: 'invalid', message: `Coding 1: STUB is not in ${EXTRA}.` });
+    expect((await catalog.create({ testCode: 'GLU', display: 'Glucose', codings: [{ system: EXTRA, code: 'BARE' }] })).codings[0].code).toBe('BARE');
+  });
+
   it('exports codings as a JSON column, and the export imports back unchanged', async () => {
     const { catalog } = await withSystems();
     await catalog.create({
@@ -1835,5 +1862,15 @@ describe('test catalog: additional codings (plan B, Task 5)', () => {
       { system: EXTRA, code: 'X1' }, { system: OTHER, code: 'O1' },
     ]);
     expect(found.get(`${TEST_CATALOG_SYSTEM}|CD4`)).toEqual([{ system: TEST_CODE_SYSTEM, code: 'CD4' }, { system: EXTRA, code: 'X2' }]);
+  });
+
+  it('drops a LOINC coding left in stored data from the order codings', async () => {
+    const { db, catalog } = await withSystems();
+    await seedTest(db, 'GLU', 'Glucose', { codings: [
+      { system: LOINC_SYSTEM, code: '9999-9', display: null, purpose: 'ADDITIONAL' },
+      { system: EXTRA, code: 'X1', display: 'Extra one', purpose: 'ADDITIONAL' },
+    ] });
+    const found = await catalog.orderCodingsFor([test('GLU')]);
+    expect(found.get(`${TEST_CATALOG_SYSTEM}|GLU`)).toEqual([{ system: TEST_CODE_SYSTEM, code: 'GLU' }, { system: EXTRA, code: 'X1' }]);
   });
 });

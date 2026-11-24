@@ -2650,6 +2650,8 @@ export interface CatalogSpecimenCoding { system: string; code: string }
  *  can never be one of its additional codings. */
 export const TEST_CATALOG_SYSTEM = 'urn:openldr:codesystem:test-catalog';
 export const TEST_CODE_SYSTEM = 'urn:openldr:codesystem:test-catalog:test-code';
+/** Must equal LOINC_SYSTEM in @openldr/terminology. A test's one LOINC code is its LOINC field, never a coding. */
+export const LOINC_SYSTEM_URL = 'http://loinc.org';
 /** What an additional coding is for (plan B, call 10). Must equal CODING_PURPOSES in @openldr/bootstrap. */
 export const CATALOG_CODING_PURPOSES = ['ADDITIONAL', 'INDICATION', 'PROCEDURE', 'CATEGORY'] as const;
 export type CatalogCodingPurpose = (typeof CATALOG_CODING_PURPOSES)[number];
