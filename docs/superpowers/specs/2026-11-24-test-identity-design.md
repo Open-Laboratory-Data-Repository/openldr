@@ -49,7 +49,11 @@ changes beside a code that can (`docs/superpowers/specs/2026-08-13-facility-one-
    also takes the id. Routes keep `:code` meaning the id, as today.
 6. **CSV.** Export gains an `id` column beside `code` (the Test code). Import matches a row on `id`
    when given, else on the Test code. A row with a new Test code and no `id` makes a new test, as
-   facilities do.
+   facilities do. An `id` that names no test here (a file from another install) falls back to the
+   Test code, else makes a new test, with a note on that row. (Changed after the final review.)
+10. **Earlier codes.** A renamed test keeps its earlier Test codes in `previousTestCodes`. They stay
+    reserved for it, and the warehouse test map keeps a row for each, so orders saved under an
+    earlier code still join. (Added after the task 2 review.)
 7. **What leaves CE carries the Test code.**
    - A ServiceRequest's codings become: LOINC when linked, then the Test code in
      `urn:openldr:codesystem:test-catalog:test-code`, then the id in the catalog system. So the
