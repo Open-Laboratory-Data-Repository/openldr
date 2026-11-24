@@ -122,7 +122,17 @@ describe('loincHints', () => {
       properties: JSON.stringify({ result_role: 'result' }) as never,
     }).execute();
     await other.resultFields.link('CHOL', '2093-3');
-    expect((await other.hints.hints('2093-3'))?.field).toMatchObject({ loinc: '2093-3', code: 'CHOL', exists: true });
+    expect((await other.hints.hints('2093-3'))?.field).toMatchObject({ loinc: '2093-3', code: 'CHOL', exists: true, unit: null });
+  });
+
+  it('gives an existing field\'s own unit, not LOINC\'s', async () => {
+    const { hints, db, resultFields } = await build();
+    await db.insertInto('terminology_concepts').values({
+      system: RESULT_PARAM_SYSTEM, code: 'CHOL', display: 'Cholesterol', status: 'ACTIVE',
+      properties: JSON.stringify({ result_role: 'result', parm_units: 'mmol/L' }) as never,
+    }).execute();
+    await resultFields.link('CHOL', '2093-3');
+    expect((await hints.hints('2093-3'))?.field).toMatchObject({ code: 'CHOL', exists: true, unit: 'mmol/L' });
   });
 
   it('answers no field and the refusal when the field standing for the code is unusable', async () => {
@@ -220,10 +230,31 @@ describe('loincHints', () => {
 
   it('matches LOINC\'s SYSTEM part to a specimen type\'s name when LOINC has no specimen link', async () => {
     // 6429-5's SYSTEM is Bld. Without its SNOMED link, the name match is the only way in.
+    // Bld only abbreviates Blood, so it is suggested and never ticked.
     const { hints } = await build({ wrap: (o) => ({ ...o, specimenCodes: async () => [] }) });
     expect((await hints.hints('6429-5'))?.specimens).toEqual([
-      { snomed: null, display: null, equivalence: null, specimenType: { system: LOCAL, code: 'BLD', display: 'Blood' }, tick: true, via: 'system-name' },
+      { snomed: null, display: null, equivalence: null, specimenType: { system: LOCAL, code: 'BLD', display: 'Blood' }, tick: false, via: 'system-name' },
     ]);
+  });
+
+  async function onlySpecimens(admin: Awaited<ReturnType<typeof build>>['admin'], concept: Array<{ code: string; display: string }>) {
+    const vs = await admin.valueSets.getByUrl(SPECIMEN_TYPE_VALUE_SET);
+    const full = await admin.valueSets.get(vs!.id);
+    await admin.valueSets.save({ ...full, compose: { include: [{ system: LOCAL, concept }] } });
+  }
+
+  it('ticks a name match when it is the only one and a SYSTEM piece starts the name', async () => {
+    const { hints, admin } = await build();
+    await onlySpecimens(admin, [{ code: 'SER', display: 'Serum' }]);
+    expect((await hints.hints('2093-3'))?.specimens).toEqual([
+      { snomed: null, display: null, equivalence: null, specimenType: { system: LOCAL, code: 'SER', display: 'Serum' }, tick: true, via: 'system-name' },
+    ]);
+  });
+
+  it('suggests Bile fluid for Bld when it is the only name match, and does not tick it', async () => {
+    const { hints, admin } = await build({ wrap: (o) => ({ ...o, specimenCodes: async () => [] }) });
+    await onlySpecimens(admin, [{ code: 'BILE', display: 'Bile fluid' }]);
+    expect((await hints.hints('6429-5'))?.specimens.map((s) => [s.specimenType?.code, s.tick])).toEqual([['BILE', false]]);
   });
 
   it('matches Ser/Plas to Serum and Plasma by name, and ticks neither', async () => {
