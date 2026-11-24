@@ -19,6 +19,25 @@ function countNotifies(): { plugin: KyselyPlugin; count: () => number } {
   return { plugin, count: () => n };
 }
 
+/** Counts the insert statements into fhir.change_log, one per chunk of a save. */
+function countChangeLogInserts(): { plugin: KyselyPlugin; count: () => number } {
+  let n = 0;
+  const plugin: KyselyPlugin = {
+    transformQuery({ node }) {
+      const q = node as RootOperationNode & { kind: string; into?: { table?: { identifier?: { name?: string } } } };
+      if (q.kind === 'InsertQueryNode' && q.into?.table?.identifier?.name === 'change_log') n++;
+      return node;
+    },
+    async transformResult({ result }) { return result; },
+  };
+  return { plugin, count: () => n };
+}
+
+// A chunk of 4 rows, so 9 records cross two chunk boundaries. With the real chunk of 1,000, pg-mem
+// took 6 s to save 1,001 records and 13 s to check them again, and over 60 s under the full gate's
+// load. The 2,500-record case with the real chunk runs on real PostgreSQL in the live test.
+const SMALL_CHUNK = 4;
+
 describe('fhirStore.saveMany', () => {
   it('saves each record in order; one id twice gets versions 1 then 2', async () => {
     const db = await makeMigratedDb();
@@ -148,17 +167,17 @@ describe('fhirStore.saveMany', () => {
     await b.destroy();
   });
 
-  // 1,001 records cross one chunk boundary. The 2,500-record case runs on real PostgreSQL in the
-  // live test; on pg-mem it took over 60 s under the full gate's load.
-  it('a list of 1,001 records saves across a chunk boundary', async () => {
+  it('a list longer than one chunk saves across the chunk boundaries', async () => {
     const db = await makeMigratedDb();
-    const store = createFhirStore(db as never);
-    const refs = await store.saveMany(Array.from({ length: 1001 }, (_, i) => ({ resourceType: 'Patient', id: `big-${i}` })) as never);
-    expect(refs).toHaveLength(1001);
+    const inserts = countChangeLogInserts();
+    const store = createFhirStore(db.withPlugin(inserts.plugin) as never, { saveChunk: SMALL_CHUNK });
+    const refs = await store.saveMany(Array.from({ length: 9 }, (_, i) => ({ resourceType: 'Patient', id: `big-${i}` })) as never);
+    expect(refs).toHaveLength(9);
+    expect(inserts.count()).toBe(3);
     const n: any = await db.selectFrom('fhir.change_log').select((eb: any) => eb.fn.countAll().as('n')).where('resource_id', 'like', 'big-%').executeTakeFirstOrThrow();
-    expect(Number(n.n)).toBe(1001);
+    expect(Number(n.n)).toBe(9);
     await db.destroy();
-  }, 60_000);
+  });
 });
 
 // Item 16: which path a store saves with. pg-mem cannot run the set-based statement.
@@ -317,18 +336,20 @@ describe('fhirStore.saveMany with skipUnchanged', () => {
 
   it('the_skip_lookup_works_across_a_chunk_boundary', async () => {
     const db = await makeMigratedDb();
-    const store = createFhirStore(db as never);
-    const many = Array.from({ length: 1001 }, (_, i) => ({ resourceType: 'Patient', id: `m${i}`, gender: 'male' }));
+    const inserts = countChangeLogInserts();
+    const store = createFhirStore(db.withPlugin(inserts.plugin) as never, { saveChunk: SMALL_CHUNK });
+    const many = Array.from({ length: 9 }, (_, i) => ({ resourceType: 'Patient', id: `m${i}`, gender: 'male' }));
     await store.saveMany(many as never);
-    // All 1,001 again, with the first and the last changed.
-    const again = many.map((r, i) => (i === 0 || i === 1000 ? { ...r, gender: 'female' } : { ...r }));
+    expect(inserts.count()).toBe(3);
+    // All 9 again, with the first and the last changed: one in the first chunk, one in the last.
+    const again = many.map((r, i) => (i === 0 || i === 8 ? { ...r, gender: 'female' } : { ...r }));
     const refs = await store.saveMany(again as never, {}, { skipUnchanged: true });
-    expect(refs.filter((r) => r.version === 2).map((r) => r.id)).toEqual(['m0', 'm1000']);
-    expect(refs.filter((r) => r.version === 1)).toHaveLength(999);
+    expect(refs.filter((r) => r.version === 2).map((r) => r.id)).toEqual(['m0', 'm8']);
+    expect(refs.filter((r) => r.version === 1)).toHaveLength(7);
     const rows = await db.selectFrom('fhir.resource_history').select('id').where('id', 'like', 'm%').where('version', '=', 2).execute();
-    expect(rows.map((r) => r.id).sort()).toEqual(['m0', 'm1000']);
+    expect(rows.map((r) => r.id).sort()).toEqual(['m0', 'm8']);
     await db.destroy();
-  }, 60_000);
+  });
 
   it('a_call_that_skips_everything_writes_nothing_and_sends_no_wake_up', async () => {
     const counter = countNotifies();

@@ -178,7 +178,12 @@ function contentHash(serialized: string): string {
  *  real PostgreSQL can run. 'rows' is a few multi-row statements, which pg-mem can run too. 'auto'
  *  (the default) asks the database once and uses 'set' where it works. The two store the same rows:
  *  fhir-store-save-set.live.test.ts runs every scenario through both and compares the tables. */
-export interface FhirStoreOpts { saveMode?: 'auto' | 'rows' | 'set' }
+export interface FhirStoreOpts {
+  saveMode?: 'auto' | 'rows' | 'set';
+  /** Rows per statement in a list save. 1,000 unless set. Tests set a small one to cross a chunk
+   *  boundary with a few records, since pg-mem slows down far faster than the row count grows. */
+  saveChunk?: number;
+}
 
 export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStoreOpts = {}): FhirStore {
   // site_id is enrollment-stable ONCE SET, so memoize it — but only when it resolves to a
@@ -257,7 +262,7 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
 
   // Rows per statement. Nine columns at most, so 1,000 rows stay far below PostgreSQL's limit of
   // 65,535 parameters. saveMany has no size limit of its own, so every statement is split.
-  const SAVE_CHUNK = 1000;
+  const SAVE_CHUNK = storeOpts.saveChunk ?? 1000;
   function chunksOf<T>(list: T[]): T[][] {
     const out: T[][] = [];
     for (let i = 0; i < list.length; i += SAVE_CHUNK) out.push(list.slice(i, i + SAVE_CHUNK));
