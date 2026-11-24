@@ -6,6 +6,42 @@
       "version": null,
       "entries": [
         {
+          "hash": "9851c605c",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "Country picker and plugin host docs"
+        },
+        {
+          "hash": "d081ee1d7",
+          "type": "fix",
+          "scope": "test-catalog",
+          "title": "One LOINC per test, and codings name real concepts"
+        },
+        {
+          "hash": "07adfee11",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Additional codings on a test"
+        },
+        {
+          "hash": "fb04bb232",
+          "type": "feat",
+          "scope": "test-catalog",
+          "title": "Field settings, order and range fields on the Test sheet"
+        },
+        {
+          "hash": "eabc47095",
+          "type": "fix",
+          "scope": "results",
+          "title": "Yes/no words and a clear choice at the bench"
+        },
+        {
+          "hash": "3b4db4dd2",
+          "type": "feat",
+          "scope": "results",
+          "title": "Yes/no, date and several-answer fields reach the warehouse"
+        },
+        {
           "hash": "e2f4ed980",
           "type": "feat",
           "scope": "settings",
