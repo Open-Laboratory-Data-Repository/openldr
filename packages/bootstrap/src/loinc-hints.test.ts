@@ -112,6 +112,7 @@ describe('loincHints', () => {
       specimens: [
         { snomed: null, display: null, equivalence: null, specimenType: { system: LOCAL, code: 'PLAS', display: 'Plasma' }, tick: false, via: 'system-name' },
         { snomed: null, display: null, equivalence: null, specimenType: { system: LOCAL, code: 'SER', display: 'Serum' }, tick: false, via: 'system-name' },
+        { snomed: null, display: null, equivalence: null, specimenType: { system: LOCAL, code: 'SERPL', display: 'Serum or plasma' }, tick: false, via: 'system-name' },
       ],
       answers: [],
       panelMembers: [],
@@ -266,21 +267,34 @@ describe('loincHints', () => {
     expect((await hints.hints('6429-5'))?.specimens.map((s) => [s.specimenType?.code, s.tick])).toEqual([['BILE', false]]);
   });
 
-  it('matches Ser/Plas to Serum and Plasma by name, and ticks neither', async () => {
-    // Migration 143 seeds PLAS and SER, in that order.
+  it('matches Ser/Plas to Serum, Plasma and Serum or plasma by name, and ticks none', async () => {
+    // Migration 143 seeds PLAS and SER, in that order, and 144 adds SERPL after them.
     const { hints } = await build();
     const specimens = (await hints.hints('2093-3'))?.specimens ?? [];
-    expect(specimens.map((s) => [s.specimenType?.code, s.via, s.tick])).toEqual([['PLAS', 'system-name', false], ['SER', 'system-name', false]]);
+    expect(specimens.map((s) => [s.specimenType?.code, s.via, s.tick])).toEqual([
+      ['PLAS', 'system-name', false], ['SER', 'system-name', false], ['SERPL', 'system-name', false],
+    ]);
   });
 
-  it('matches the migrated SER and PLAS through their seeded SNOMED links, and ticks neither', async () => {
-    // The fixture links 2571-8's Ser/Plas part to SNOMED serum (119364003) and plasma (119361006).
+  it('matches the migrated SER, PLAS and SERPL through their seeded SNOMED links, and ticks none', async () => {
+    // The fixture links 2571-8's Ser/Plas part to SNOMED serum (119364003), plasma (119361006) and
+    // serum or plasma (122592007).
     const { hints } = await build();
     const specimens = (await hints.hints('2571-8'))?.specimens ?? [];
     expect(specimens.map((s) => [s.snomed, s.specimenType?.code, s.via, s.tick])).toEqual([
       ['119364003', 'SER', 'snomed', false],
       ['119361006', 'PLAS', 'snomed', false],
+      ['122592007', 'SERPL', 'snomed', false],
     ]);
+  });
+
+  it('matches a specimen link to 122592007 to Serum or plasma, not Bone marrow', async () => {
+    // Migration 143 linked BM to 122592007. Migration 144 moves BM to 119359002 and gives 122592007 to SERPL.
+    const { hints } = await build();
+    const specimens = (await hints.hints('2571-8'))?.specimens ?? [];
+    const serumOrPlasma = specimens.filter((s) => s.snomed === '122592007');
+    expect(serumOrPlasma.map((s) => s.specimenType?.code)).toEqual(['SERPL']);
+    expect(specimens.some((s) => s.specimenType?.code === 'BM')).toBe(false);
   });
 
   it('does not match by name when LOINC has a specimen link', async () => {

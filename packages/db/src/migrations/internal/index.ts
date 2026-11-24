@@ -142,6 +142,7 @@ import * as m140 from './140_lab_rejection';
 import * as m141 from './141_lab_order_form_results_back';
 import * as m142 from './142_plugin_permission_groups';
 import * as m143 from './143_specimen_types_snomed';
+import * as m144 from './144_specimen_type_snomed_fix';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -288,4 +289,5 @@ export const internalMigrations: Record<string, Migration> = {
   '141_lab_order_form_results_back': { up: m141.up, down: m141.down },
   '142_plugin_permission_groups': { up: m142.up, down: m142.down },
   '143_specimen_types_snomed': { up: m143.up, down: m143.down },
+  '144_specimen_type_snomed_fix': { up: m144.up, down: m144.down },
 };

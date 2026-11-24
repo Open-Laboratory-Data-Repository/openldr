@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Kysely } from 'kysely';
-import { makeMigratedDb, makeMigratedDbUpTo } from './test-helpers';
+import { makeMigratedDbUpTo } from './test-helpers';
 import { createFhirStore } from '../../fhir-store';
 import { createTerminologyStore } from '../../terminology-store';
 import { up, down } from './143_specimen_types_snomed';
@@ -35,9 +35,10 @@ async function snomedLinks(db: Kysely<any>, code: string) {
   return { mappings, elements };
 }
 
+// Run to 143 only: 144 adds SERPL and moves BM's link, so a fully migrated db is not what 143 left.
 describe('143_specimen_types_snomed', () => {
   it('gives the specimen value set 15 codes, and the local map translates SER to SNOMED 119364003', async () => {
-    const db = await makeMigratedDb();
+    const db = await makeMigratedDbUpTo('143_specimen_types_snomed');
     expect(await expansionCodes(db)).toEqual([...ALL].sort());
     expect(await composeCodes(db)).toEqual([...ALL].sort());
 
@@ -55,7 +56,7 @@ describe('143_specimen_types_snomed', () => {
   });
 
   it('leaves 15 codes and one link per code when it runs twice', async () => {
-    const db = await makeMigratedDb();
+    const db = await makeMigratedDbUpTo('143_specimen_types_snomed');
     await up(db);
     expect(await expansionCodes(db)).toEqual([...ALL].sort());
     expect(await composeCodes(db)).toEqual([...ALL].sort());
@@ -120,7 +121,7 @@ describe('143_specimen_types_snomed', () => {
   });
 
   it('down removes only the links it wrote that nobody has changed', async () => {
-    const db = await makeMigratedDb();
+    const db = await makeMigratedDbUpTo('143_specimen_types_snomed');
     // A person repoints SER's link. down must leave it.
     await db.updateTable('term_mappings').set({ to_code: '999' }).where('from_code', '=', 'SER').where('to_system', '=', SNOMED).execute();
     await down(db);

@@ -13,8 +13,9 @@ async function register(deps: ReconcileDeps, url = MZ, code = 'MZDISA'): Promise
 }
 
 async function activeMappings(deps: ReconcileDeps) {
-  // Leaves out the specimen type links migration 143 seeds.
-  return deps.internalDb.selectFrom('term_mappings').selectAll().where('is_active', '=', true).where('id', 'not like', 'tm-m143-%').execute();
+  // Leaves out the specimen type links migrations 143 and 144 seed.
+  return deps.internalDb.selectFrom('term_mappings').selectAll().where('is_active', '=', true)
+    .where('id', 'not like', 'tm-m143-%').where('id', 'not like', 'tm-m144-%').execute();
 }
 
 describe('linkMatchingFacilityCodes', () => {

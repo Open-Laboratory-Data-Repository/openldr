@@ -7195,8 +7195,9 @@ describe('POST /api/facilities/link-matching', () => {
 
   async function setup() {
     const internalDb = await makeMigratedDb();
-    // Migration 143 seeds SNOMED links for the specimen types. These tests count every mapping row.
+    // Migrations 143 and 144 seed SNOMED links for the specimen types. These tests count every mapping row.
     await internalDb.deleteFrom('term_mappings').where('id', 'like', 'tm-m143-%').execute();
+    await internalDb.deleteFrom('term_mappings').where('id', 'like', 'tm-m144-%').execute();
     const externalDb = await makeMigratedExternalDb();
     await createFacilityRegisterSourceStore(internalDb).create({ url: MZ, name: 'Mozambique DISA facility codes', code: 'MZDISA' });
     await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-mican', name: 'CS Micane', facilityCode: 'MICAN', facilitySystem: MZ, source: 'import' });

@@ -432,10 +432,10 @@ describe('test catalog: options and row changes', () => {
       { code: 'MOL', display: 'Molecular' },
       { code: 'SERO', display: 'Serology' },
     ]);
-    // 014's four, and the eleven migration 143 adds.
+    // 014's four, the eleven migration 143 adds, and Serum or plasma from 144.
     expect(o.specimenTypes.map((t) => t.display)).toEqual([
       'Ascitic fluid', 'Blood', 'Bone marrow', 'CSF', 'Nasal swab', 'Plasma', 'Pleural fluid', 'Saliva',
-      'Serum', 'Sputum', 'Stool', 'Synovial fluid', 'Throat swab', 'Urine', 'Wound specimen',
+      'Serum', 'Serum or plasma', 'Sputum', 'Stool', 'Synovial fluid', 'Throat swab', 'Urine', 'Wound specimen',
     ]);
     expect(o.specimenTypes[1]).toEqual({ system: LOCAL, code: 'BLD', display: 'Blood' });
     expect(o.sexes.map((s) => s.code)).toEqual(['male', 'female', 'other', 'unknown']);

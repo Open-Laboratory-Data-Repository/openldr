@@ -418,8 +418,9 @@ describe('facility mapping semantics (terminology mapping routes)', () => {
 
   async function realApp() {
     const internalDb = await makeMigratedDb();
-    // Migration 143 seeds SNOMED links for the specimen types. These tests count every mapping row.
+    // Migrations 143 and 144 seed SNOMED links for the specimen types. These tests count every mapping row.
     await internalDb.deleteFrom('term_mappings').where('id', 'like', 'tm-m143-%').execute();
+    await internalDb.deleteFrom('term_mappings').where('id', 'like', 'tm-m144-%').execute();
     const auditEvents: any[] = [];
     const facilityJobs = createFacilityJobStore(internalDb);
     const ctx = {

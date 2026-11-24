@@ -16,8 +16,9 @@ async function makeMigratedDb(): Promise<Kysely<InternalSchema>> {
   for (const migration of Object.values(internalMigrations)) {
     await (migration as { up: (db: Kysely<unknown>) => Promise<void> }).up(db as Kysely<unknown>);
   }
-  // Migration 143 seeds SNOMED links for the specimen types. These tests count every mapping row.
+  // Migrations 143 and 144 seed SNOMED links for the specimen types. These tests count every mapping row.
   await db.deleteFrom('term_mappings').where('id', 'like', 'tm-m143-%').execute();
+  await db.deleteFrom('term_mappings').where('id', 'like', 'tm-m144-%').execute();
   await db.deleteFrom('concept_map_elements').where('map_url', '=', 'urn:openldr:terminology:local-map').where('target_system', '=', 'http://snomed.info/sct').execute();
   return db;
 }
