@@ -4,6 +4,8 @@ import { makeMigratedDb } from './test-helpers';
 describe('013_term_mappings', () => {
   it('creates term_mappings with from/to rows', async () => {
     const db = await makeMigratedDb();
+    // Migration 143 seeds SNOMED links for the specimen types. This test counts every row.
+    await db.deleteFrom('term_mappings').execute();
     await db
       .insertInto('term_mappings')
       .values({

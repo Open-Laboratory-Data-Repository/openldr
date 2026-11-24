@@ -20,8 +20,13 @@ const SNOMED = 'http://snomed.info/sct';
 // The terminology context bootstrap builds (index.ts), over a migrated pg-mem db. Mirrors test-catalog.test.ts.
 type Ontology = ReturnType<typeof createOntologyStore>;
 // `wrap` swaps in an ontology answer the fixture lacks (answers for a Nom code, no specimen link).
-async function build(opts: { loinc?: boolean; ontology?: boolean; failLinks?: number; wrap?: (o: Ontology) => Ontology } = {}) {
+// `unlinked` removes the SNOMED links migration 143 gives the specimen types, for tests that make their own.
+async function build(opts: { loinc?: boolean; ontology?: boolean; failLinks?: number; unlinked?: boolean; wrap?: (o: Ontology) => Ontology } = {}) {
   const db = await makeMigratedDb();
+  if (opts.unlinked) {
+    await db.deleteFrom('term_mappings').where('from_system', '=', LOCAL).where('to_system', '=', SNOMED).execute();
+    await db.deleteFrom('concept_map_elements').where('source_system', '=', LOCAL).where('target_system', '=', SNOMED).execute();
+  }
   const fhirStore = createFhirStore(db);
   const store = createTerminologyStore(db, fhirStore);
   const projection: ValueSetProjection = {
@@ -103,7 +108,11 @@ describe('loincHints', () => {
       categorySuggestion: { code: 'CHEM', display: 'Chemistry' },
       unit: 'mg/dL',
       resultType: 'numeric',
-      specimens: [],
+      // 2093-3 has no SNOMED link in the fixture, so Ser/Plas matches by name.
+      specimens: [
+        { snomed: null, display: null, equivalence: null, specimenType: { system: LOCAL, code: 'PLAS', display: 'Plasma' }, tick: false, via: 'system-name' },
+        { snomed: null, display: null, equivalence: null, specimenType: { system: LOCAL, code: 'SER', display: 'Serum' }, tick: false, via: 'system-name' },
+      ],
       answers: [],
       panelMembers: [],
       field: { loinc: '2093-3', code: '2093-3', display: 'Cholesterol', resultType: 'numeric', unit: 'mg/dL', valueSetUrl: null, exists: false },
@@ -191,7 +200,7 @@ describe('loincHints', () => {
   });
 
   it('shows SNOMED specimens as text until the lab maps a specimen type', async () => {
-    const { hints } = await build();
+    const { hints } = await build({ unlinked: true });
     expect((await hints.hints('6429-5'))?.specimens).toEqual([
       { snomed: '119297000', display: null, equivalence: 'equivalent', specimenType: null, tick: false, via: 'snomed' },
       { snomed: '122555007', display: null, equivalence: 'narrower', specimenType: null, tick: false, via: 'snomed' },
@@ -199,7 +208,7 @@ describe('loincHints', () => {
   });
 
   it('matches BLD through the local map and ticks it, as the one equivalent match', async () => {
-    const { hints, admin } = await build();
+    const { hints, admin } = await build({ unlinked: true });
     await admin.termMappings.create({ fromSystem: LOCAL, fromCode: 'BLD', toSystem: SNOMED, toCode: '119297000', toDisplay: null, mapType: 'SAME-AS', isActive: true });
     const specimens = (await hints.hints('6429-5'))?.specimens;
     expect(specimens?.[0]).toEqual({
@@ -210,7 +219,7 @@ describe('loincHints', () => {
   });
 
   it('suggests several matches and ticks none', async () => {
-    const { hints, admin } = await build();
+    const { hints, admin } = await build({ unlinked: true });
     await admin.termMappings.create({ fromSystem: LOCAL, fromCode: 'BLD', toSystem: SNOMED, toCode: '119297000', toDisplay: null, mapType: 'SAME-AS', isActive: true });
     // A specimen type whose own code is the SNOMED code matches too.
     const vs = await admin.valueSets.getByUrl(SPECIMEN_TYPE_VALUE_SET);
@@ -222,7 +231,7 @@ describe('loincHints', () => {
   });
 
   it('suggests but does not tick a match through a local map that is only related', async () => {
-    const { hints, admin } = await build();
+    const { hints, admin } = await build({ unlinked: true });
     await admin.termMappings.create({ fromSystem: LOCAL, fromCode: 'BLD', toSystem: SNOMED, toCode: '119297000', toDisplay: null, mapType: 'RELATED-TO', isActive: true });
     const specimens = (await hints.hints('6429-5'))?.specimens ?? [];
     expect(specimens[0]).toMatchObject({ snomed: '119297000', specimenType: { code: 'BLD' }, tick: false });
@@ -258,12 +267,20 @@ describe('loincHints', () => {
   });
 
   it('matches Ser/Plas to Serum and Plasma by name, and ticks neither', async () => {
-    const { hints, admin } = await build();
-    const vs = await admin.valueSets.getByUrl(SPECIMEN_TYPE_VALUE_SET);
-    const full = await admin.valueSets.get(vs!.id);
-    await admin.valueSets.save({ ...full, compose: { include: [...(full.compose.include ?? []), { system: LOCAL, concept: [{ code: 'SER', display: 'Serum' }, { code: 'PLAS', display: 'Plasma' }] }] } });
+    // Migration 143 seeds PLAS and SER, in that order.
+    const { hints } = await build();
     const specimens = (await hints.hints('2093-3'))?.specimens ?? [];
-    expect(specimens.map((s) => [s.specimenType?.code, s.via, s.tick])).toEqual([['SER', 'system-name', false], ['PLAS', 'system-name', false]]);
+    expect(specimens.map((s) => [s.specimenType?.code, s.via, s.tick])).toEqual([['PLAS', 'system-name', false], ['SER', 'system-name', false]]);
+  });
+
+  it('matches the migrated SER and PLAS through their seeded SNOMED links, and ticks neither', async () => {
+    // The fixture links 2571-8's Ser/Plas part to SNOMED serum (119364003) and plasma (119361006).
+    const { hints } = await build();
+    const specimens = (await hints.hints('2571-8'))?.specimens ?? [];
+    expect(specimens.map((s) => [s.snomed, s.specimenType?.code, s.via, s.tick])).toEqual([
+      ['119364003', 'SER', 'snomed', false],
+      ['119361006', 'PLAS', 'snomed', false],
+    ]);
   });
 
   it('does not match by name when LOINC has a specimen link', async () => {
@@ -273,7 +290,7 @@ describe('loincHints', () => {
   });
 
   it('ticks nothing when the one match is not equivalent', async () => {
-    const { hints, admin } = await build();
+    const { hints, admin } = await build({ unlinked: true });
     await admin.termMappings.create({ fromSystem: LOCAL, fromCode: 'BLD', toSystem: SNOMED, toCode: '122555007', toDisplay: null, mapType: 'SAME-AS', isActive: true });
     const specimens = (await hints.hints('6429-5'))?.specimens ?? [];
     expect(specimens.filter((s) => s.specimenType !== null)).toHaveLength(1);

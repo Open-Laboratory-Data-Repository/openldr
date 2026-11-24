@@ -422,12 +422,12 @@ describe('test catalog: options and row changes', () => {
       { code: 'MOL', display: 'Molecular' },
       { code: 'SERO', display: 'Serology' },
     ]);
-    expect(o.specimenTypes).toEqual([
-      { system: LOCAL, code: 'BLD', display: 'Blood' },
-      { system: LOCAL, code: 'CSF', display: 'CSF' },
-      { system: LOCAL, code: 'SPT', display: 'Sputum' },
-      { system: LOCAL, code: 'UR', display: 'Urine' },
+    // 014's four, and the eleven migration 143 adds.
+    expect(o.specimenTypes.map((t) => t.display)).toEqual([
+      'Ascitic fluid', 'Blood', 'Bone marrow', 'CSF', 'Nasal swab', 'Plasma', 'Pleural fluid', 'Saliva',
+      'Serum', 'Sputum', 'Stool', 'Synovial fluid', 'Throat swab', 'Urine', 'Wound specimen',
     ]);
+    expect(o.specimenTypes[1]).toEqual({ system: LOCAL, code: 'BLD', display: 'Blood' });
     expect(o.sexes.map((s) => s.code)).toEqual(['male', 'female', 'other', 'unknown']);
     expect(o.loinc).toBeNull();
   });
@@ -584,7 +584,7 @@ describe('test catalog: import preview', () => {
   it('lists text that matched nothing, refuses its rows until answered, and adds a category the operator names', async () => {
     const { catalog } = await buildCatalog();
     const rows = [
-      ['VL1', 'Viral load 1', '', '', 'Virology', 'Plasma'],
+      ['VL1', 'Viral load 1', '', '', 'Virology', 'Semen'],
       ['VL2', 'Viral load 2', '', '', 'virology', 'Blood'],
     ];
 
@@ -594,16 +594,16 @@ describe('test catalog: import preview', () => {
       {
         line: 2, code: 'VL1',
         reason: 'Category "Virology" is not in the test category list. Choose a category for it. '
-          + 'Specimen "Plasma" is not in the specimen type list. Choose a specimen for it.',
+          + 'Specimen "Semen" is not in the specimen type list. Choose a specimen for it.',
       },
       { line: 3, code: 'VL2', reason: 'Category "virology" is not in the test category list. Choose a category for it.' },
     ]);
-    expect(unanswered.unmatched).toEqual({ categories: [{ text: 'Virology', rows: 2 }], specimens: [{ text: 'Plasma', rows: 1 }] });
+    expect(unanswered.unmatched).toEqual({ categories: [{ text: 'Virology', rows: 2 }], specimens: [{ text: 'Semen', rows: 1 }] });
 
     const answered = await catalog.importPreview(importInput(rows, {
       valueMap: {
         categories: [{ text: 'VIROLOGY', kind: 'new', code: 'VIRO', display: 'Virology' }],
-        specimens: [{ text: 'plasma', system: LOCAL, code: 'BLD' }],
+        specimens: [{ text: 'semen', system: LOCAL, code: 'BLD' }],
       },
     }));
     expect(answered.counts).toEqual({ new: 2, changed: 0, unchanged: 0, refused: 0 });
