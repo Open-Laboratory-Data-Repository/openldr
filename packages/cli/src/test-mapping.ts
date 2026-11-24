@@ -40,7 +40,8 @@ export async function runTestMappingList(opts: TestMappingListOpts): Promise<num
     const out = await ctx.testMapping.observed(parsed.query, level);
     if (opts.json) { process.stdout.write(JSON.stringify(out, null, 2) + '\n'); return 0; }
     const lines = out.rows.map((r) => {
-      const target = r.catalog ? `${r.catalog.code} ${r.catalog.name ?? ''}${r.catalog.loinc ? ` (LOINC ${r.catalog.loinc})` : ''}` : '';
+      // A catalog test reads by its Test code. A result field has none, so its code is shown.
+      const target = r.catalog ? `${r.catalog.testCode ?? r.catalog.code} ${r.catalog.name ?? ''}${r.catalog.loinc ? ` (LOINC ${r.catalog.loinc})` : ''}` : '';
       return `${r.system}  ${r.code}  ${r.requests}  ${r.status}${target ? `  ${target}` : ''}${r.centralManaged ? '  [central]' : ''}`;
     });
     process.stdout.write([...lines, `${out.rows.length} of ${out.total} code(s)`].join('\n') + '\n');

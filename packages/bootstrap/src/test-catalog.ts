@@ -250,7 +250,9 @@ export function catalogImportAudit(report: CatalogImportReport): AuditDetails {
 /** One test's parameters, ready for the sheet to draw. `fits` says, for each band by index, whether
  *  it fits this patient, so the browser never works out an age. */
 export interface TestParamsAnswer {
-  test: { system: string; code: string };
+  /** `code` is the id the order keys on. `testCode` is the Test code people read, left out for an id
+   *  with no test. */
+  test: { system: string; code: string; testCode?: string };
   params: Array<TestResultParam & { unit: string | null; display: string | null; band: ResultBand | null; fits: BandFit[] }>;
 }
 
@@ -1360,7 +1362,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return codes.map((code) => {
       const test = found.find((t) => t.code === code);
       return {
-        test: { system: TEST_CATALOG_SYSTEM, code },
+        test: { system: TEST_CATALOG_SYSTEM, code, ...(test ? { testCode: test.testCode } : {}) },
         params: (test?.resultParams ?? []).map((p) => ({
           ...p,
           unit: unitOf.get(p.code)?.unit ?? null,

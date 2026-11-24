@@ -1069,7 +1069,7 @@ describe('test catalog: what a result sheet needs', () => {
     await catalog.create({ testCode: 'FBC', display: 'Full blood count', resultParams: [HGB] });
     const answer = await catalog.resultParamsFor([test('FBC')], { sex: 'female', birthDate: '1996-01-01', at: Date.parse('2026-11-23T12:00:00Z') });
     expect(answer).toEqual([{
-      test: { system: TEST_CATALOG_SYSTEM, code: 'FBC' },
+      test: { system: TEST_CATALOG_SYSTEM, code: 'FBC', testCode: 'FBC' },
       params: [{
         ...HGB, unit: 'g/dL', display: 'HGB',
         band: { name: null, low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null },
@@ -1089,7 +1089,21 @@ describe('test catalog: what a result sheet needs', () => {
   it('answers an empty parameter list for a test that names none', async () => {
     const { catalog } = await buildCatalog();
     await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
-    expect(await catalog.resultParamsFor([test('CD4')], {})).toEqual([{ test: { system: TEST_CATALOG_SYSTEM, code: 'CD4' }, params: [] }]);
+    expect(await catalog.resultParamsFor([test('CD4')], {})).toEqual([{ test: { system: TEST_CATALOG_SYSTEM, code: 'CD4', testCode: 'CD4' }, params: [] }]);
+  });
+
+  // The order screen shows the Test code. The coding it keys on stays the id.
+  it('answers each test its Test code beside its id', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const made = await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
+    expect(made.code).not.toBe('CD4');
+    expect(await catalog.resultParamsFor([test(made.code)], {}))
+      .toEqual([{ test: { system: TEST_CATALOG_SYSTEM, code: made.code, testCode: 'CD4' }, params: [] }]);
+  });
+
+  it('answers no Test code for an id with no test', async () => {
+    const { catalog } = await buildCatalog();
+    expect(await catalog.resultParamsFor([test('NOPE')], {})).toEqual([{ test: { system: TEST_CATALOG_SYSTEM, code: 'NOPE' }, params: [] }]);
   });
 
   it('ignores codings that are not catalog tests', async () => {

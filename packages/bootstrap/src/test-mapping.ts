@@ -208,7 +208,9 @@ type PlannedRow = { system: string; code: string; catalogCode: string; name: str
 export interface PackMappingInput { system: string; code: string; loinc: string }
 
 export interface PackMappingPlan {
-  mapped: Array<{ system: string; code: string; catalogCode: string }>;
+  /** `catalogCode` is the id apply writes. `testCode` is a catalog test's Test code, what people read;
+   *  a result field has none. */
+  mapped: Array<{ system: string; code: string; catalogCode: string; testCode?: string }>;
   /** Already mapped here, by hand or by central. A pack never overwrites. */
   kept: Array<{ system: string; code: string }>;
   skipped: Array<{ system: string; code: string; reason: string }>;
@@ -725,6 +727,7 @@ export function createTestMapping(deps: TestMappingDeps) {
   async function planPack(mappings: PackMappingInput[], level: MapLevel = 'test'): Promise<PackMappingPlan> {
     const plan: PackMappingPlan = { mapped: [], kept: [], skipped: [] };
     const noun = TARGET_NOUN[level];
+    const targets = level === 'test' ? await readTargets(level) : null;
     const seen = new Set<string>();
     for (const m of mappings) {
       const key = sourceKey(m.system, m.code);
@@ -736,7 +739,8 @@ export function createTestMapping(deps: TestMappingDeps) {
       const codes = await catalogCodesForLoinc(m.loinc, level);
       if (codes.length === 0) { plan.skipped.push({ system: m.system, code: m.code, reason: `no ${noun} is linked to LOINC ${m.loinc}` }); continue; }
       if (codes.length > 1) { plan.skipped.push({ system: m.system, code: m.code, reason: `${codes.length} ${noun}s are linked to LOINC ${m.loinc}` }); continue; }
-      plan.mapped.push({ system: m.system, code: m.code, catalogCode: codes[0] });
+      const testCode = targets?.get(codes[0])?.published;
+      plan.mapped.push({ system: m.system, code: m.code, catalogCode: codes[0], ...(testCode ? { testCode } : {}) });
     }
     return plan;
   }
