@@ -70,10 +70,13 @@ function observationsFor(key: string, detail: TestDetail, ctx: ExtractionContext
   }
   if (detail.rejection) {
     const [system, code] = key.split('|')
+    // Coded as its order is: the codings the context puts in front (LOINC, then the Test code), then
+    // the catalog id. The warehouse keeps the first, so observation_code is never the id.
+    const before = ctx.codingsBefore?.get(key) ?? []
     return [{
       ...base,
       status: 'cancelled',
-      code: { coding: [{ system, code }] },
+      code: { coding: [...before.map((c) => ({ ...c })), { system, code }] },
       dataAbsentReason: {
         coding: [{
           system: detail.rejection.system, code: detail.rejection.code,

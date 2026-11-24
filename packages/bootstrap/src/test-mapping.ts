@@ -53,8 +53,10 @@ export interface ObservedTestCode {
   requests: number;
   lastSeen: string | null;
   status: ObservedStatus;
-  /** The target: a catalog test at the test level, a result field at the result level. */
-  catalog: { code: string; name: string | null; loinc: string | null } | null;
+  /** The target: a catalog test at the test level, a result field at the result level. `code` is the
+   *  id a mapping stores. `testCode` is a catalog test's Test code, what screens show; a result field
+   *  has none. */
+  catalog: { code: string; testCode?: string; name: string | null; loinc: string | null } | null;
   /** Central sent this mapping down. A lab cannot change it. */
   centralManaged: boolean;
 }
@@ -68,7 +70,8 @@ export interface ObservedResult {
   warehouse: { stale: boolean; error: string | null };
 }
 
-export interface CatalogTarget { code: string; name: string | null; loinc: string | null; retired: boolean }
+/** `code` is the id a mapping stores. `testCode` is a catalog test's Test code; a result field has none. */
+export interface CatalogTarget { code: string; testCode?: string; name: string | null; loinc: string | null; retired: boolean }
 
 export interface LevelPublishSummary {
   mapped: number;
@@ -446,7 +449,9 @@ export function createTestMapping(deps: TestMappingDeps) {
       return {
         ...g,
         status: kind === 'mapped' ? 'mapped' : kind === 'ambiguous' ? 'ambiguous' : 'unmapped',
-        catalog: targetCode ? { code: targetCode, name: entry!.name, loinc: entry!.loinc } : null,
+        catalog: targetCode
+          ? { code: targetCode, ...(level === 'test' ? { testCode: entry!.published } : {}), name: entry!.name, loinc: entry!.loinc }
+          : null,
         centralManaged: r?.central ?? false,
       };
     });
@@ -466,7 +471,7 @@ export function createTestMapping(deps: TestMappingDeps) {
 
   async function targets(level: MapLevel = 'test'): Promise<CatalogTarget[]> {
     return [...(await readTargets(level)).entries()]
-      .map(([code, e]) => ({ code, name: e.name, loinc: e.loinc, retired: e.retired }))
+      .map(([code, e]) => ({ code, ...(level === 'test' ? { testCode: e.published } : {}), name: e.name, loinc: e.loinc, retired: e.retired }))
       .sort((a, b) => compare(a.code, b.code));
   }
 
@@ -576,7 +581,8 @@ export function createTestMapping(deps: TestMappingDeps) {
     const rows = await observedAll(level);
     return toCsv(CSV_COLUMNS[level], rows.map((r) => ({
       system: r.system, code: r.code, description: r.description, [COUNT_COLUMN[level]]: r.requests,
-      [TARGET_COLUMN[level]]: r.catalog?.code ?? null, loinc: r.catalog?.loinc ?? null,
+      // A test by its Test code, what people type and import reads first (test identity spec, call 7).
+      [TARGET_COLUMN[level]]: r.catalog?.testCode ?? r.catalog?.code ?? null, loinc: r.catalog?.loinc ?? null,
     })));
   }
 
@@ -645,8 +651,10 @@ export function createTestMapping(deps: TestMappingDeps) {
       const noun = TARGET_NOUN[level];
       let targetCode: string | null = null;
       if (targetCell !== '') {
-        if (!targetsByCode.has(targetCell)) { refuse(line, system, code, `no ${noun} has code ${targetCell}`); continue; }
-        targetCode = targetCell;
+        // By Test code first, then id, as map set finds it. The mapping stores the id.
+        const found = findTarget(targetsByCode, targetCell, level);
+        if (!found) { refuse(line, system, code, `no ${noun} has code ${targetCell}`); continue; }
+        targetCode = found[0];
       } else if (loinc !== '') {
         const codes = await catalogCodesForLoinc(loinc, level);
         if (codes.length === 0) { refuse(line, system, code, `no ${noun} is linked to LOINC ${loinc}`); continue; }

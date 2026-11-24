@@ -20,6 +20,41 @@ describe('test mapping: CSV', () => {
     );
   });
 
+  it('exports the target test by its Test code, never its id', async () => {
+    const { internalDb, externalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'tst-0a1b2c3d4e5f6a7b', 'HIV viral load', { testCode: 'VL' });
+    await seedMapping(internalDb, 'm1', DISA, 'HIVVL', 'tst-0a1b2c3d4e5f6a7b');
+    await seedRequest(externalDb, 'r1', DISA, 'HIVVL', null, '2026-05-01T08:00:00Z');
+
+    expect(await mapping.exportCsv()).toBe(
+      'system,code,description,requests,catalog_code,loinc\n'
+      + `${DISA},HIVVL,,1,VL,\n`,
+    );
+  });
+
+  it('imports a catalog_code by Test code first, case ignored, then by id, and stores the id', async () => {
+    const { internalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'tst-0a1b2c3d4e5f6a7b', 'HIV viral load', { testCode: 'VL' });
+    // An id that is another test's Test code: the Test code wins, as in map set.
+    await seedCatalogTest(internalDb, 'vl', 'Old viral load', { testCode: 'OLDVL' });
+    await seedCatalogTest(internalDb, 'tst-1111111111111111', 'CD4 count', { testCode: 'CD4' });
+
+    const report = await mapping.importApply(csv([
+      'system,code,catalog_code',
+      `${DISA},HIVVL,vl`,
+      `${DISA},CD4P,tst-1111111111111111`,
+      `${DISA},BAD,NOPE`,
+    ].join('\n')));
+
+    expect(report.counts).toEqual({ new: 2, changed: 0, unchanged: 0, refused: 1 });
+    const stored = await internalDb.selectFrom('term_mappings').select(['from_code', 'to_code'])
+      .where('from_system', '=', DISA).where('is_active', '=', true).orderBy('from_code').execute();
+    expect(stored).toEqual([{ from_code: 'CD4P', to_code: 'tst-1111111111111111' }, { from_code: 'HIVVL', to_code: 'tst-0a1b2c3d4e5f6a7b' }]);
+    // An exported file re-imports as no change: the Test code names the test the mapping holds.
+    const again = await mapping.importPreview(csv(['system,code,catalog_code', `${DISA},HIVVL,VL`].join('\n')));
+    expect(again.counts).toEqual({ new: 0, changed: 0, unchanged: 1, refused: 0 });
+  });
+
   it('previews new, changed, unchanged and refused rows, resolving LOINC when catalog_code is blank', async () => {
     const { internalDb, mapping } = await buildMapping();
     await seedCatalogTest(internalDb, 'VL', 'HIV viral load', { loinc: '25836-8' });

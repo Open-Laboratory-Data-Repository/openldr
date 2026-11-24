@@ -9,7 +9,7 @@ import { makeField, makeSchema, definitionOf } from './__fixtures__/forms'
 import { isOrderRejectionField, orderRejectionFieldId } from './order-rejection-path'
 import { linkToOrder } from './link-to-order'
 import { labOrderId } from './extract/order-ids'
-import { projectServiceRequest } from '@openldr/db'
+import { projectObservation, projectServiceRequest } from '@openldr/db'
 
 const ctx = { subject: { reference: 'Patient/p1' }, authored: '2026-06-04T00:00:00Z' }
 
@@ -338,6 +338,27 @@ describe('TestResultsExtractor (bench result entry)', () => {
         dataAbsentReason: { coding: [{ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' }] },
       },
     ])
+  })
+
+  it('codes a rejected test like its order: LOINC, then the Test code, then the id', () => {
+    const TEST_CODE = 'urn:openldr:codesystem:test-catalog:test-code'
+    const rejected = { [`${CATALOG}|FBC`]: { specimen: null, rejection: { system: 'urn:openldr:cs:reject-test', code: 'HAEM' }, results: [] } }
+    const withLoinc = new Map([[`${CATALOG}|FBC`, [{ system: 'http://loinc.org', code: '58410-2' }, { system: TEST_CODE, code: 'CBC' }]]])
+    const [a] = extract(rejected, { codingsBefore: withLoinc }) as any[]
+    expect(a.code.coding).toEqual([{ system: 'http://loinc.org', code: '58410-2' }, { system: TEST_CODE, code: 'CBC' }, { system: CATALOG, code: 'FBC' }])
+    const noLoinc = new Map([[`${CATALOG}|FBC`, [{ system: TEST_CODE, code: 'CBC' }]]])
+    const [b] = extract(rejected, { codingsBefore: noLoinc }) as any[]
+    expect(b.code.coding).toEqual([{ system: TEST_CODE, code: 'CBC' }, { system: CATALOG, code: 'FBC' }])
+    // lab_results.observation_code keeps the first coding, so it is the Test code, never the id.
+    expect(projectObservation({ ...b, id: 'o1' }, {})).toMatchObject({ observation_system: TEST_CODE, observation_code: 'CBC' })
+  })
+
+  it('keeps hashing the id into a rejected test order link, whatever the Test code', () => {
+    const rejected = { [`${CATALOG}|FBC`]: { specimen: null, rejection: { system: 'urn:openldr:cs:reject-test', code: 'HAEM' }, results: [] } }
+    const codingsBefore = new Map([[`${CATALOG}|FBC`, [{ system: 'urn:openldr:codesystem:test-catalog:test-code', code: 'CBC' }]]])
+    const orderIdFor = (t: { system: string; code: string }) => labOrderId(null, 'CS-1', t)
+    const [o] = extract(rejected, { codingsBefore, orderIdFor }) as any[]
+    expect(o.basedOn).toEqual([{ reference: `ServiceRequest/${labOrderId(null, 'CS-1', { system: CATALOG, code: 'FBC' })}` }])
   })
 
   it('writes nothing for a test with no typed value', () => {

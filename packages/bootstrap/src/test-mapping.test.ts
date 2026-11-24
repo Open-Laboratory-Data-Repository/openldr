@@ -56,6 +56,16 @@ describe('test mapping: read side and rebuild', () => {
     expect((await mapping.observed({ status: 'all', q: '', limit: 25, offset: 0 })).rows).toEqual([]);
   });
 
+  it('names a mapped target by id and Test code in the Observed list and the target list', async () => {
+    const { internalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'tst-0a1b2c3d4e5f6a7b', 'HIV viral load', { loinc: '25836-8', testCode: 'VL' });
+    await seedMapping(internalDb, 'm1', DISA, 'HIVVL', 'tst-0a1b2c3d4e5f6a7b');
+
+    const { rows } = await mapping.observed({ status: 'all', q: '', limit: 25, offset: 0 });
+    expect(rows.map((r) => r.catalog)).toEqual([{ code: 'tst-0a1b2c3d4e5f6a7b', testCode: 'VL', name: 'HIV viral load', loinc: '25836-8' }]);
+    expect(await mapping.targets()).toEqual([{ code: 'tst-0a1b2c3d4e5f6a7b', testCode: 'VL', name: 'HIV viral load', loinc: '25836-8', retired: false }]);
+  });
+
   it('ignores a mapping from the Test code system, so it cannot collide with the self row', async () => {
     const { internalDb, mapping } = await buildMapping();
     await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
@@ -235,8 +245,8 @@ describe('test mapping: read side and rebuild', () => {
     await seedCatalogTest(internalDb, 'VL', 'HIV viral load', { loinc: '25836-8' });
     await seedCatalogTest(internalDb, 'CD4', 'CD4 count', { status: 'DEPRECATED' });
     expect(await mapping.targets()).toEqual([
-      { code: 'CD4', name: 'CD4 count', loinc: null, retired: true },
-      { code: 'VL', name: 'HIV viral load', loinc: '25836-8', retired: false },
+      { code: 'CD4', testCode: 'CD4', name: 'CD4 count', loinc: null, retired: true },
+      { code: 'VL', testCode: 'VL', name: 'HIV viral load', loinc: '25836-8', retired: false },
     ]);
   });
 
