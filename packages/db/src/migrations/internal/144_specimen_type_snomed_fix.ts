@@ -161,7 +161,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 }
 
 // down undoes only what up wrote, found by id, and only while it still says what up wrote. BM's row
-// goes back to 122592007. SERPL's link is removed. As in 143, the concept and the value set code stay:
+// goes back to 122592007. SERPL's link is removed while it is still active and unchanged. As in 143,
+// the concept and the value set code stay:
 // a lab may have used SERPL on tests and orders since, and nothing marks which rows up inserted.
 export async function down(db: Kysely<unknown>): Promise<void> {
   const seedDb = db as Kysely<any>;
@@ -174,10 +175,8 @@ export async function down(db: Kysely<unknown>): Promise<void> {
   for (const s of SPECIMENS) {
     const id = `${MAPPING_ID_PREFIX}${s.code}`;
     const row = await seedDb.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirst();
-    if (!row) continue;
-    const unchanged = row.from_system === LOCAL_CS && row.from_code === s.code && row.to_system === SNOMED
-      && row.to_code === s.snomed && row.map_type === 'SAME-AS';
-    if (!unchanged) continue;
+    // A row the lab switched off or edited is the lab's now, so it stays.
+    if (!isSeededLink(row, s.code, s.snomed)) continue;
     await seedDb.deleteFrom('term_mappings').where('id', '=', id).execute();
     // Keep the mirror when another active row still makes the same link.
     const other = await seedDb.selectFrom('term_mappings').select('id')

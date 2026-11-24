@@ -162,4 +162,19 @@ describe('144_specimen_type_snomed_fix', () => {
     expect((await snomedLinks(edited, 'SERPL')).mappings).toEqual([{ id: 'tm-m144-SERPL', to_code: '999', map_type: 'SAME-AS', is_active: true }]);
     expect((await snomedLinks(edited, 'BM')).mappings).toEqual([{ id: 'tm-m143-BM', to_code: '119359002', map_type: 'SAME-AS', is_active: true }]);
   });
+
+  it('down keeps a SERPL link the lab switched off or edited', async () => {
+    const off = await makeMigratedDb();
+    await off.updateTable('term_mappings').set({ is_active: false }).where('id', '=', 'tm-m144-SERPL').execute();
+    await down(off);
+    expect((await snomedLinks(off, 'SERPL')).mappings).toEqual([{ id: 'tm-m144-SERPL', to_code: '122592007', map_type: 'SAME-AS', is_active: false }]);
+
+    const edited = await makeMigratedDb();
+    await edited.updateTable('term_mappings').set({ to_display: 'Kept by the lab' }).where('id', '=', 'tm-m144-SERPL').execute();
+    await down(edited);
+    expect(await snomedLinks(edited, 'SERPL')).toEqual({
+      mappings: [{ id: 'tm-m144-SERPL', to_code: '122592007', map_type: 'SAME-AS', is_active: true }],
+      elements: [{ target_code: '122592007', equivalence: 'SAME-AS' }],
+    });
+  });
 });

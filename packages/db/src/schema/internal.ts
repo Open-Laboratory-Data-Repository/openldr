@@ -1159,7 +1159,8 @@ export interface FormEntriesTable {
   facility_code: string | null;
   facility_name: string | null;
   entry_key: string | null;
-  summary: JSONColumnType<{ label: string; value: string }[]>;
+  /** `value` is true or false for a yes/no answer. Entries saved before hold the text "true" or "false". */
+  summary: JSONColumnType<{ label: string; value: string | boolean }[]>;
   entered_by: string;
   entered_by_name: string;
   entered_at: Generated<Date>;
