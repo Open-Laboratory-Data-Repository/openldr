@@ -159,7 +159,8 @@ function toBand(value: unknown): ResultBand | null {
 /** The settings one param stored for its own type, each only when set. */
 function settingsFor(resultType: ResultType, e: Record<string, unknown>): Partial<TestResultParam> {
   const out: Partial<TestResultParam> = {};
-  if (typeof e.required === 'boolean') out.required = e.required;
+  // Required is the default, so only false is stored. Re-saving a test never adds required: true.
+  if (e.required === false) out.required = false;
   for (const key of settingsOf(resultType)) {
     if (key === 'dateLimit') {
       // Any is the default, so it is never stored.

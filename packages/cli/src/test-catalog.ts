@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { extname } from 'node:path';
 import { loadConfig } from '@openldr/config';
 import {
-  catalogChangeAction, catalogColumnMapSchema, catalogImportAudit, catalogUpdateAudit, catalogValueMapSchema, createAppContext,
+  ALL_TYPE_SETTINGS, catalogChangeAction, catalogColumnMapSchema, catalogImportAudit, catalogUpdateAudit, catalogValueMapSchema, createAppContext,
   parseCatalogListQuery, parseResultParams, readCatalogImportFile, readHoursCell, recordAuditEvent, type CatalogTestInput,
   type CatalogColumnMap, type CatalogImportFile, type CatalogImportReport, type CatalogValueMap,
   type TestResultParam,
@@ -62,7 +62,7 @@ export function formatResultParams(params: TestResultParam[]): string {
   if (params.length === 0) return '(no result parameters)';
   return params
     .map((p) => {
-      const settings = (['min', 'max', 'decimals', 'minLength', 'maxLength', 'dateLimit'] as const)
+      const settings = ALL_TYPE_SETTINGS
         .filter((key) => p[key] !== undefined && p[key] !== null)
         .map((key) => `${key} ${String(p[key])}`)
         .join(', ');

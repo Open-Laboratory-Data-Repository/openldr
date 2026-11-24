@@ -16,6 +16,7 @@ vi.mock('@openldr/bootstrap', async () => {
     createAppContext: mocks.createAppContext,
     parseCatalogListQuery: actual.parseCatalogListQuery,
     parseResultParams: actual.parseResultParams,
+    ALL_TYPE_SETTINGS: actual.ALL_TYPE_SETTINGS,
     readHoursCell: actual.readHoursCell,
     catalogUpdateAudit: actual.catalogUpdateAudit,
     recordAuditEvent: mocks.recordAuditEvent,

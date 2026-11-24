@@ -391,11 +391,21 @@ describe('result parameters: field settings and the new types (plan B, Task 1)',
       { system: S, code: 'SYM', resultType: 'multicoded', valueSetUrl: 'urn:x:vs:symptoms' },
     ])).toEqual([
       { system: S, code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [], required: false, min: 0, max: 30, decimals: 1 },
-      { system: S, code: 'NOTE', resultType: 'text', valueSetUrl: null, bands: [], required: true, minLength: 2, maxLength: 200 },
+      { system: S, code: 'NOTE', resultType: 'text', valueSetUrl: null, bands: [], minLength: 2, maxLength: 200 },
       { system: S, code: 'SEEN', resultType: 'date', valueSetUrl: null, bands: [], dateLimit: 'past' },
       { system: S, code: 'POS', resultType: 'boolean', valueSetUrl: null, bands: [] },
       { system: S, code: 'SYM', resultType: 'multicoded', valueSetUrl: 'urn:x:vs:symptoms', bands: [] },
     ]);
+  });
+
+  // Required is the default, so it is kept only when false. Re-saving a test never adds required: true.
+  it('drops required: true, the default, and keeps required: false', () => {
+    const [on, off] = parseResultParams([
+      { system: S, code: 'A', resultType: 'text', required: true },
+      { system: S, code: 'B', resultType: 'text', required: false },
+    ]);
+    expect('required' in on).toBe(false);
+    expect(off.required).toBe(false);
   });
 
   it('drops the settings of another type', () => {
