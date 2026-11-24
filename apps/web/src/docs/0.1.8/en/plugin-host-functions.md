@@ -138,6 +138,8 @@ A merged patient's row also has `replacedByPluginRef`, the `pluginRef` of the re
 
 A `pluginRef` belongs to the plugin id, not to one install. If you remove a plugin and later install one under the same id, it can open the refs the earlier one stored. A factory reset keeps the links working.
 
+`testCatalog.get` and `testCatalog.list` answer each test with `code` and `testCode`. `code` is the fixed id of the test. It never changes, so store it and pass it back to CE. `testCode` is the national Test code. It can change, and a test saved before this change reads the same as its `code`. Show `testCode` to people.
+
 ### Result parameters for one patient
 
 `testCatalog.resultParams` gives each test's result parameters, with the reference range that fits one patient. Send `{ "tests": [{ "system": "...", "code": "..." }], "patientRef": "p1...." }`. It needs `patients.view` or `patients.find`, as the patient ops do. A patient outside the caller's limit gives `NOT_FOUND`.
