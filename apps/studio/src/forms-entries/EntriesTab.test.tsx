@@ -82,6 +82,32 @@ describe('EntriesTab', () => {
     expect(api.listFormEntries).toHaveBeenCalledWith('form-1', expect.objectContaining({ limit: 25, offset: 0 }));
   });
 
+  it('says a yes/no summary answer in the reader\'s language', async () => {
+    vi.spyOn(api, 'listFormEntries').mockResolvedValue({ entries: [
+      entry({ id: 'e-9', entryKey: 'CS-0009', summary: [{ label: 'Pregnant', value: true }, { label: 'Fasting', value: false }] }),
+    ], total: 1 });
+    const { default: i18n } = await import('@/i18n');
+    await i18n.changeLanguage('fr');
+    try {
+      render(<EntriesTab formId="form-1" refreshKey={0} />);
+      await screen.findByText('CS-0009');
+      expect(screen.getAllByText('Oui, Non').length).toBeGreaterThan(0);
+      expect(screen.queryByText(/true|false/)).not.toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('shows an entry saved before as the text it holds', async () => {
+    // An entry saved before yes/no answers stayed booleans holds the text "true". It is not migrated.
+    vi.spyOn(api, 'listFormEntries').mockResolvedValue({ entries: [
+      entry({ id: 'e-8', entryKey: 'CS-0008', summary: [{ label: 'Pregnant', value: 'true' }] }),
+    ], total: 1 });
+    render(<EntriesTab formId="form-1" refreshKey={0} />);
+    await screen.findByText('CS-0008');
+    expect(screen.getAllByText('true').length).toBeGreaterThan(0);
+  });
+
   it('fits a phone: the date moves under the summary, and the Entered and By columns hide below sm', async () => {
     render(<EntriesTab formId="form-1" refreshKey={0} />);
     await screen.findByText('CS-0003');

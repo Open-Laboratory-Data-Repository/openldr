@@ -2165,7 +2165,7 @@ export type FormEntryStatus = 'active' | 'incomplete' | 'entered-in-error';
 export interface FormEntry {
   id: string; formId: string;
   facilityId: string | null; facilityCode: string | null; facilityName: string | null;
-  entryKey: string | null; summary: { label: string; value: string }[];
+  entryKey: string | null; summary: { label: string; value: string | boolean }[];
   enteredBy: string; enteredByName: string; enteredAt: string;
   status: FormEntryStatus; statusBy: string | null; statusAt: string | null; statusReason: string | null;
   /** Who marked it in error, by name. Null when nobody did, or the user no longer exists. */

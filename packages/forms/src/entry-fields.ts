@@ -107,10 +107,16 @@ function displayValue(value: unknown): string | null {
   return text || null
 }
 
-/** One answer as a short display string for the list summary. */
-function summaryValue(value: unknown): string | null {
+/** One answer as a short display string for the list summary. A yes/no stays true or false, so the
+ *  studio can say it in the reader's language. */
+function summaryValue(value: unknown): string | boolean | null {
+  if (typeof value === 'boolean') return value
   return displayValue(value)?.slice(0, SUMMARY_VALUE_MAX) ?? null
 }
+
+/** One answer in an entry's list summary. `value` is true or false for a yes/no answer. An entry
+ *  saved before yes/no answers stayed booleans holds the text "true" or "false" instead. */
+export interface EntrySummaryItem { label: string; value: string | boolean }
 
 /** One answer on a saved form copy as display text: a quantity as its value and unit, anything else
  *  as the summary writes a single value, not cut short. */
@@ -175,7 +181,7 @@ export function entryAnswersOfResponse(schema: FormSchema, response: Questionnai
 export function entryValuesOf(schema: FormSchema, answers: Record<string, unknown>): {
   entryKey: string | null
   facility: PickedFacility | null
-  summary: { label: string; value: string }[]
+  summary: EntrySummaryItem[]
 } {
   const { keyFieldId, facilityFieldId } = entryFieldsOf(schema)
 
@@ -188,7 +194,7 @@ export function entryValuesOf(schema: FormSchema, answers: Record<string, unknow
   const flagged = single.filter((f) => f.entriesList === true)
   const candidates = flagged.length > 0 ? flagged : single.filter((f) => f.id !== keyFieldId)
 
-  const summary: { label: string; value: string }[] = []
+  const summary: EntrySummaryItem[] = []
   for (const field of candidates) {
     if (summary.length >= SUMMARY_MAX) break
     const value = summaryValue(answers[field.id])

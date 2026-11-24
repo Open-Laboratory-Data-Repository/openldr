@@ -162,7 +162,10 @@ export function EntriesTab({ formId, refreshKey }: {
                 const word = statusWord(e.status);
                 const key = e.entryKey ?? t(`${P}.noKey`);
                 const struck = voided ? 'line-through text-muted-foreground' : '';
-                const summaryText = e.summary.map((s) => s.value).join(', ') || '-';
+                // A yes/no is true or false, said in the reader's language. An entry saved before holds the text.
+                const summaryText = e.summary
+                  .map((s) => (typeof s.value === 'boolean' ? t(s.value ? 'forms.entryYes' : 'forms.entryNo') : s.value))
+                  .join(', ') || '-';
                 const enteredAt = formatEnteredAt(e.enteredAt, i18n.language);
                 return (
                   <TableRow

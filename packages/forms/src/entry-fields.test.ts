@@ -119,8 +119,14 @@ describe('entryValuesOf', () => {
     expect(v.summary).toEqual([
       { label: 'A', value: 'x'.repeat(80) },
       { label: 'B', value: '2026-11-22' },
-      { label: 'C', value: 'false' },
+      // A yes/no stays a boolean, so the studio says it in the reader's language.
+      { label: 'C', value: false },
     ])
+  })
+
+  it('keeps a yes answer as true, not the text "true"', () => {
+    const form = requisition([{ id: 'c', displayLabel: 'Pregnant', fieldType: 'boolean', order: 1, entriesList: true }])
+    expect(entryValuesOf(form, { c: true }).summary).toEqual([{ label: 'Pregnant', value: true }])
   })
 
   it('shows a coding by its code when it has no display', () => {

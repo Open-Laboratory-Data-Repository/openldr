@@ -12,7 +12,7 @@ export interface FormEntrySaved { responseId: string | null; resources: { resour
 export interface FormEntry {
   id: string; formId: string;
   facilityId: string | null; facilityCode: string | null; facilityName: string | null;
-  entryKey: string | null; summary: { label: string; value: string }[];
+  entryKey: string | null; summary: { label: string; value: string | boolean }[];
   enteredBy: string; enteredByName: string; enteredAt: string;
   status: FormEntryStatus; statusBy: string | null; statusAt: string | null; statusReason: string | null;
   saved: FormEntrySaved | null;
@@ -20,7 +20,7 @@ export interface FormEntry {
 
 export interface NewFormEntry {
   formId: string; facilityId: string | null; facilityCode: string | null; facilityName: string | null;
-  entryKey: string | null; summary: { label: string; value: string }[]; enteredBy: string; enteredByName: string;
+  entryKey: string | null; summary: { label: string; value: string | boolean }[]; enteredBy: string; enteredByName: string;
 }
 
 /** The requisition number is already held by an active or incomplete entry. `existing` is that entry. */

@@ -40,6 +40,13 @@ describe('form entry store: one row per saved submission (migration 136)', () =>
     await db.destroy();
   });
 
+  it('a_yes_no_summary_value_stays_a_boolean_and_an_old_text_one_stays_text', async () => {
+    const { db, store } = await world();
+    const made = await store.create(entry({ summary: [{ label: 'Pregnant', value: true }, { label: 'Fasting', value: 'false' }] }));
+    expect((await store.get(made.id))!.summary).toEqual([{ label: 'Pregnant', value: true }, { label: 'Fasting', value: 'false' }]);
+    await db.destroy();
+  });
+
   it('a_second_active_entry_with_the_same_form_facility_and_key_throws_the_repeat_carrying_the_first', async () => {
     const { db, store } = await world();
     const first = await store.create(entry());
