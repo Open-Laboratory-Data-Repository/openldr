@@ -1578,8 +1578,15 @@ describe('copy: who drives', () => {
       await a.start({ ...START, pageSize: 2 });
       // Page 2's results query hangs: its key and requests queries have answered.
       w.source.holdNext(/LabResults.*'REQ0003'/);
+      // Page 2 is read ahead while page 1 is still being written, so page 2's query alone does not
+      // mean page 1 has ended. Hold page 1's write until page 2's query is sent, then wait for the
+      // save that marks page 1's end. On a busy machine the heartbeat once came before that save.
+      const pageOneWrite = w.holdReplace();
       await a.tick();
+      await pageOneWrite.reached;
       await vi.waitFor(() => expect(w.source.statements.some((s) => /LabResults.*'REQ0003'/.test(s))).toBe(true));
+      pageOneWrite.release();
+      await vi.waitFor(() => expect(w.runSaves.some((r) => r.sets.requests?.cursor === 'REQ0002')).toBe(true));
       const before = w.runSaves.length;
       w.clock.now += 30_000;
       vi.advanceTimersByTime(30_000);
