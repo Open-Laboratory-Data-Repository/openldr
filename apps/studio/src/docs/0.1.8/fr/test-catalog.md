@@ -34,6 +34,8 @@ Sélectionnez **Add test**. Le panneau du test s'ouvre.
 
 ![Choisissez Add test pour saisir un test manuellement.](test-catalog-guide-add-menu.png)
 
+Le panneau se lit de haut en bas dans cet ordre : **LOINC**, **Informations de base**, **Types de prélèvement**, **Paramètres de résultat**, **Valeurs de référence** et **Ce laboratoire**. Informations de base contient le code, le nom, le nom court, la catégorie, les deux délais de rendu et la vérification. Lorsque LOINC est chargé, choisissez d'abord le code LOINC. Il remplit les champs vides en dessous. [Remplir un examen depuis LOINC](#remplir-un-examen-depuis-loinc) explique ce qu'il remplit. Les étapes ci-dessous remplissent les mêmes champs à la main.
+
 ### 4. Saisir le code
 
 Saisissez le code stable de votre catalogue. L'exemple fictif utilise `EXAMPLE-ALPHA`. Laissez vide uniquement si le code LOINC doit devenir le code. Un code enregistré ne peut plus être changé.
@@ -66,7 +68,7 @@ Continuez dans le panneau ouvert. Vous pourrez configurer ce laboratoire et les 
 
 ### 1. Vérifier le champ LOINC
 
-Saisissez un code LOINC confirmé si vous en avez un, sinon laissez vide. Lorsque LOINC est chargé, recherchez et sélectionnez un terme. Ici il n'est pas chargé, donc seul le format des codes saisis est vérifié. Lorsque LOINC est chargé, choisir un code remplit aussi certains champs vides. [Remplir un examen depuis LOINC](#remplir-un-examen-depuis-loinc) explique ce qu'il remplit.
+Le champ LOINC est en haut du panneau. Saisissez un code LOINC confirmé si vous en avez un, sinon laissez vide. Lorsque LOINC est chargé, recherchez et sélectionnez un terme. Ici il n'est pas chargé, donc seul le format des codes saisis est vérifié. Lorsque LOINC est chargé, choisir un code remplit aussi certains champs vides. [Remplir un examen depuis LOINC](#remplir-un-examen-depuis-loinc) explique ce qu'il remplit.
 
 ![LOINC est facultatif. Sans dictionnaire, l'installation vérifie uniquement le format des codes saisis.](test-catalog-guide-loinc.png)
 
@@ -276,13 +278,13 @@ Choisissez **Numeric**, **Coded** ou **Text** pour chaque champ sélectionné. U
 
 ### 3. Ouvrir les actions du champ numérique
 
-Pour un champ numérique nécessitant un intervalle de référence, sélectionnez les points à côté du type de résultat.
+Allez à **Valeurs de référence**, sous les paramètres de résultat. Chaque champ numérique coché y a son propre titre, avec son propre menu à points. Sélectionnez les points à côté du champ qui a besoin d'un intervalle de référence. Si aucun champ numérique n'est coché, la section le dit.
 
 ![Les champs numériques ont leurs propres actions d'intervalle.](test-catalog-guide-parameter-actions.png)
 
 ### 4. Choisir Add range
 
-Sélectionnez **Add range**. Un formulaire d'intervalle de référence apparaît sous le champ.
+Sélectionnez **Add range**. Un formulaire d'intervalle de référence apparaît sous le titre du champ.
 
 ![Add range crée un intervalle de référence pour ce champ de résultat.](test-catalog-guide-add-range.png)
 
@@ -337,7 +339,7 @@ Ouvrez les points du panneau de test et sélectionnez **Save**.
 Indiquez en combien de temps les résultats de cet examen doivent revenir, et si une seconde personne les vérifie. CE les enregistre avec l'examen. Le plugin de laboratoire ne les utilise pas encore.
 
 1. Ouvrez les points de la ligne et sélectionnez **Modifier**.
-2. Saisissez dans **Délai attendu (heures)**, après la liste **Paramètres de résultat**, les heures visées entre la réception et la validation. L'exemple utilise `4`.
+2. Saisissez dans **Délai attendu (heures)**, sous **Informations de base** après la catégorie, les heures visées entre la réception et la validation. L'exemple utilise `4`.
 3. Saisissez dans **Délai critique (heures)** les heures après lesquelles l'examen est en retard, ou laissez vide.
 4. Laissez **Vérification requise** activé quand une seconde personne doit vérifier chaque résultat. Désactivez-le si ce n'est pas nécessaire.
 5. Ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
@@ -346,18 +348,47 @@ Indiquez en combien de temps les résultats de cet examen doivent revenir, et si
 
 ## Remplir un examen depuis LOINC
 
-Lorsque LOINC est chargé, choisir un code LOINC dans le panneau de l'examen remplit une partie de l'examen. Il remplit seulement les champs encore vides. Il ne change jamais un champ que vous avez rempli ni un paramètre de résultat déjà coché.
+Lorsque LOINC est chargé, choisir un code LOINC dans le panneau de l'examen remplit une partie de l'examen. Il remplit seulement les champs encore vides. Il ne change jamais un champ que vous avez rempli ni un paramètre de résultat que vous avez coché. Rien n'est écrit avant l'enregistrement.
 
 1. Ouvrez le panneau de l'examen avec **Ajouter un examen** ou **Modifier**.
-2. Saisissez une partie du nom ou du code dans **Code LOINC** et choisissez le terme.
-3. Lisez la ligne sous **Catégorie**. Si la classe LOINC correspond à une catégorie ici, elle est choisie quand la catégorie était vide. Sinon la ligne indique `LOINC suggère Chemistry.` ou que la classe ne correspond à aucune catégorie.
-4. Lisez la ligne sous les prélèvements. Si la liste était vide et qu'un seul type de prélèvement correspond exactement, il est coché. Les autres correspondances sont seulement suggérées.
-5. Ouvrez les points à côté de **Paramètres de résultat** et sélectionnez **Utiliser le champ de résultat de LOINC**. Pour un code de panel, sélectionnez plutôt **Remplir depuis le panel**.
-6. Vérifiez chaque paramètre ajouté, puis ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
+2. Saisissez une partie du nom ou du code dans **Code LOINC**. Chaque résultat affiche une deuxième ligne avec le nom court, la classe et l'unité de LOINC. Choisissez le terme.
+3. Vérifiez **Nom** et **Nom court**. Un nom vide prend le nom long de LOINC. Un nom court vide prend le nom court de LOINC.
+4. Lisez sous **Catégorie**. Si la catégorie était vide et que la classe LOINC correspond à une catégorie ici, elle est choisie. Si la catégorie contient autre chose, un bouton indique `Chemistry, suggérée`. Sélectionnez-le pour prendre la catégorie de LOINC. Si la classe ne correspond à aucune catégorie ici, une ligne le dit.
+5. Lisez **Types de prélèvement**. Si la liste était vide et qu'un seul type de prélèvement correspond clairement, il est coché. Les autres types qui correspondent affichent **suggéré** à côté. Cochez-les si l'examen les accepte.
+6. Lisez **Paramètres de résultat**. Si l'examen n'a encore aucun champ de résultat, le champ de résultat de LOINC est ajouté et coché. Un champ qui n'est pas encore dans le dictionnaire des résultats affiche **Nouveau, enregistré avec le test**.
+7. Vérifiez chaque paramètre de résultat, puis ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
 
-**Résultat attendu :** **Utiliser le champ de résultat de LOINC** coche un champ de résultat pour le code. **Remplir depuis le panel** coche un champ pour chaque examen du panel, dans l'ordre de LOINC. Un champ déjà dans le dictionnaire est réutilisé, donc relancer l'un ou l'autre n'ajoute rien de nouveau. Un nouvel intervalle commence avec l'unité du champ. Pour un champ créé par LOINC, c'est l'unité de LOINC. Un champ codé reçoit la liste de réponses de LOINC comme jeu de valeurs.
+**Résultat attendu :** l'enregistrement crée d'abord chaque nouveau champ coché dans le dictionnaire des résultats, puis enregistre l'examen. Un nouveau champ décoché avant l'enregistrement n'est jamais créé. Le champ prend son nom du composant LOINC, par exemple `Cholesterol` pour 2093-3. Un code de quantité devient un champ numérique avec l'unité de LOINC. Un code ordinal avec une liste de réponses devient un champ codé, avec cette liste comme jeu de valeurs. Tout autre code devient un champ texte. Un nouvel intervalle commence avec l'unité du champ.
 
-Ouvrir un examen enregistré affiche les lignes LOINC mais ne remplit rien. Seul un code choisi dans le panneau remplit des champs. Un type de prélèvement n'est coché tout seul que s'il est associé à son code SNOMED dans [Terminologie](/docs/terminology).
+Choisissez un autre code, ou effacez le code, et le panneau retire le champ de résultat ajouté par le dernier choix. Les champs que vous avez cochés à la main restent. Un nom, un nom court, une catégorie ou un prélèvement rempli par un choix reste jusqu'à ce que vous le changiez.
+
+### Ajouter les champs de LOINC à un examen qui a déjà des champs
+
+Un choix n'ajoute aucun champ de résultat si l'examen en a déjà un. Utilisez plutôt les points de **Paramètres de résultat**.
+
+1. Sélectionnez **Utiliser le champ de résultat de LOINC** pour cocher le champ de LOINC à côté de ceux qui sont là.
+2. Pour un code de panel, sélectionnez **Remplir depuis le panel**. Il coche un champ pour chaque examen du panel, dans l'ordre de LOINC.
+3. Si l'examen a déjà des champs de résultat, Remplir depuis le panel demande d'abord. Choisissez **Remplacer** pour les échanger contre ceux du panel, ou **Ajouter** pour ajouter seulement ceux qui manquent.
+4. Ouvrez les points du panneau de l'examen et sélectionnez **Enregistrer**.
+
+**Résultat attendu :** les deux attendent l'enregistrement, comme un choix. Un champ déjà dans le dictionnaire est réutilisé, donc relancer l'un ou l'autre n'ajoute rien de nouveau. Un examen du panel pour lequel LOINC ne donne aucun champ de résultat n'est pas ajouté, et un message le nomme.
+
+### Parcourir LOINC
+
+Utilisez ceci quand vous connaissez le genre d'examen mais pas son nom ni son code.
+
+1. Sélectionnez les points à côté de **Code LOINC** et choisissez **Parcourir LOINC**.
+2. Ouvrez les branches de l'arbre LOINC et choisissez le code.
+
+**Résultat attendu :** l'arbre se ferme. Le code remplit l'examen de la même façon qu'un choix dans la recherche.
+
+### Types de prélèvement et SNOMED
+
+Une nouvelle installation a 15 types de prélèvement : Blood, Urine, CSF, Sputum, Plasma, Serum, Stool, Pleural fluid, Ascitic fluid, Saliva, Wound specimen, Throat swab, Nasal swab, Synovial fluid et Bone marrow. Chacun est lié à son code SNOMED dans la table de correspondance locale. Un choix LOINC trouve un type de prélèvement par ce lien.
+
+Une installation mise à jour depuis une version antérieure reçoit les types et liens manquants lors de la mise à jour. La mise à jour ajoute seulement ce qui manque. Un type que vous avez retiré de la liste reste retiré. Un lien SNOMED que vous avez changé ou désactivé reste tel que vous l'avez laissé.
+
+Ouvrir un examen enregistré affiche les lignes LOINC mais ne remplit rien. Seul un code choisi dans le panneau remplit des champs. Pour qu'un autre type de prélèvement soit trouvé, associez-le à son code SNOMED dans [Terminologie](/docs/terminology).
 
 ## Ajouter un champ de résultat depuis l'examen
 
@@ -557,14 +588,14 @@ Pour une installation Linux ou macOS, utilisez `./openldr` plutôt que `pnpm ope
 
 ## Avant d'utiliser les suggestions LOINC
 
-Les suggestions LOINC, **Utiliser le champ de résultat de LOINC** et **Remplir depuis le panel** exigent LOINC chargé sur cette installation, avec son ontologie construite. Sans eux, le panneau de l'examen n'affiche aucune ligne LOINC ni aucune action LOINC. **Ajouter un champ** fonctionne toujours. Un administrateur charge LOINC depuis le CLI, à partir d'un dossier qui contient la version LOINC décompressée :
+Les suggestions LOINC, **Parcourir LOINC**, **Utiliser le champ de résultat de LOINC** et **Remplir depuis le panel** exigent LOINC chargé sur cette installation, avec son ontologie construite. Sans eux, le panneau de l'examen n'affiche aucune ligne LOINC ni aucune action LOINC. **Ajouter un champ** fonctionne toujours. Un administrateur charge LOINC depuis le CLI, à partir d'un dossier qui contient la version LOINC décompressée :
 
 ```shell
 ./openldr terminology import loinc data/loinc --accept-license
 ./openldr terminology ontology build cs-url-LOINC data/loinc
 ```
 
-Sous Windows, utilisez `.\openldr.ps1` au lieu de `./openldr`. Une installation qui a chargé LOINC avant l'ajout des suggestions LOINC doit importer LOINC de nouveau. Sinon, LOINC ne suggère aucune unité. La page CLI du site web liste les commandes des suggestions LOINC et des champs de résultat.
+Sous Windows, utilisez `.\openldr.ps1` au lieu de `./openldr`. Une installation qui a chargé LOINC avant l'ajout des suggestions LOINC doit importer LOINC de nouveau. Sinon, LOINC ne suggère aucune unité. Une installation qui a chargé LOINC avant l'ajout des noms courts doit aussi l'importer de nouveau pour les obtenir. Lancez la même commande `terminology import loinc`. Sinon, un choix laisse **Nom court** vide et la recherche n'affiche aucun nom court. La page CLI du site web liste les commandes des suggestions LOINC et des champs de résultat.
 
 ## Avant de modifier les données partagées du catalogue
 
@@ -591,6 +622,10 @@ Retirer un test le masque de la liste active par défaut. Il peut être restaur�
 **Aucune ligne LOINC n'apparaît sous un champ.** LOINC ou son ontologie n'est pas chargé sur cette installation. Voir [Avant d'utiliser les suggestions LOINC](#avant-d-utiliser-les-suggestions-loinc).
 
 **LOINC ne suggère aucune unité.** Cette installation a chargé LOINC avant l'ajout des suggestions LOINC. Importez LOINC de nouveau.
+
+**Un choix LOINC laisse Nom court vide.** Cette installation a chargé LOINC avant la lecture des noms courts. Importez LOINC de nouveau avec `terminology import loinc`. Voir [Avant d'utiliser les suggestions LOINC](#avant-d-utiliser-les-suggestions-loinc).
+
+**Un choix n'ajoute aucun champ de résultat.** L'examen avait déjà un champ de résultat, ou le code est un panel. Utilisez **Utiliser le champ de résultat de LOINC** ou **Remplir depuis le panel** dans les points de Paramètres de résultat.
 
 **Un intervalle affiche Pas une unité UCUM.** L'unité gardée n'est pas dans la liste UCUM. Elle est enregistrée telle que saisie. Choisissez la même unité dans la liste si elle existe.
 

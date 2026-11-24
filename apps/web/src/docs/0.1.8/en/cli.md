@@ -504,7 +504,7 @@ Read the hints for a LOINC code, and make result fields from LOINC:
 
 ![Read LOINC hints and make result fields.](guide:operator-cli-en-21)
 
-- `loinc-hints <code>` prints LOINC's name, class and the category it matches, the result type and unit, the specimens, the answers and, for a panel, its member tests. `--json` prints the same as JSON. Without LOINC and its ontology, it says there are no hints.
+- `loinc-hints <code>` prints LOINC's name, its short name and component, the class and the category it matches, the result type and unit, the specimens, the answers and, for a panel, its member tests. `--json` prints the same as JSON. Without LOINC and its ontology, it says there are no hints. An install that loaded LOINC before short names were added prints no short name until it runs `terminology import loinc` again.
 - `result-fields from-loinc <code...>` makes a result field for each code. With `--panel`, it makes one for each member test of each panel. A field or answer set that is already there is reused, so running it again makes nothing new.
 - `result-fields add --display <text>` adds one field to the result dictionary. `--code` sets its code. Without it, the code is made from the name, such as `HAEMOGLOBIN_A1C`. `--unit` sets its UCUM unit. A code that is already there is refused.
 - Neither command ticks the field on a test. Tick it in the test sheet, or with `test-catalog params --set`. A lab that receives its dictionary from central cannot add fields.

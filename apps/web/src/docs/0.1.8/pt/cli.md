@@ -511,7 +511,7 @@ Ler as sugestões de um código LOINC, e criar campos de resultado a partir do L
 
 ![Ler as sugestões LOINC e criar campos de resultado.](guide:operator-cli-pt-21)
 
-- `loinc-hints <code>` mostra o nome LOINC, a classe e a categoria que lhe corresponde, o tipo de resultado e a unidade, as amostras, as respostas e, para um painel, os seus testes membros. `--json` mostra o mesmo em JSON. Sem o LOINC e a sua ontologia, o comando diz que não há sugestões.
+- `loinc-hints <code>` mostra o nome LOINC, o seu nome curto e o seu componente, a classe e a categoria que lhe corresponde, o tipo de resultado e a unidade, as amostras, as respostas e, para um painel, os seus testes membros. `--json` mostra o mesmo em JSON. Sem o LOINC e a sua ontologia, o comando diz que não há sugestões. Uma instalação que carregou o LOINC antes de existirem os nomes curtos não mostra nome curto até executar de novo `terminology import loinc`.
 - `result-fields from-loinc <code...>` cria um campo de resultado para cada código. Com `--panel`, cria um para cada teste membro de cada painel. Um campo ou conjunto de respostas que já existe é reutilizado, por isso repetir não cria nada de novo.
 - `result-fields add --display <texto>` adiciona um campo ao dicionário de resultados. `--code` define o código. Sem ele, o código é feito a partir do nome, por exemplo `HAEMOGLOBIN_A1C`. `--unit` define a unidade UCUM. Um código que já existe é recusado.
 - Nenhum dos comandos marca o campo num teste. Marque-o no painel do exame, ou com `test-catalog params --set`. Um laboratório que recebe o dicionário do central não pode adicionar campos.

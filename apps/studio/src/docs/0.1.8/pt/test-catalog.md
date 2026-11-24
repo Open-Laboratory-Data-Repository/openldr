@@ -34,6 +34,8 @@ Selecione **Add test**. Abre o painel do teste.
 
 ![Escolha Add test para introduzir um teste à mão.](test-catalog-guide-add-menu.png)
 
+O painel lê-se de cima para baixo nesta ordem: **LOINC**, **Informações básicas**, **Tipos de amostra**, **Parâmetros de resultado**, **Valores de referência** e **Este laboratório**. Informações básicas tem o código, o nome, o nome curto, a categoria, os dois tempos de resposta e a verificação. Quando LOINC está carregado, escolha primeiro o código LOINC. Ele preenche os campos vazios abaixo. [Preencher um exame a partir do LOINC](#preencher-um-exame-a-partir-do-loinc) explica o que preenche. Os passos abaixo preenchem os mesmos campos à mão.
+
 ### 4. Introduzir o código
 
 Introduza o código estável do catálogo. O exemplo fictício usa `EXAMPLE-ALPHA`. Deixe vazio apenas se o código LOINC deve tornar-se o código. Um código guardado não pode ser alterado.
@@ -66,7 +68,7 @@ Continue no painel aberto. Pode configurar este laboratório e os campos de resu
 
 ### 1. Verificar o campo LOINC
 
-Introduza um código LOINC confirmado se o tiver, ou deixe vazio. Quando LOINC estiver carregado, pesquise e selecione um termo. Aqui não está carregado, pelo que apenas verifica o formato dos códigos introduzidos. Quando LOINC está carregado, escolher um código também preenche alguns campos vazios. [Preencher um exame a partir do LOINC](#preencher-um-exame-a-partir-do-loinc) explica o que preenche.
+O campo LOINC está no topo do painel. Introduza um código LOINC confirmado se o tiver, ou deixe vazio. Quando LOINC estiver carregado, pesquise e selecione um termo. Aqui não está carregado, pelo que apenas verifica o formato dos códigos introduzidos. Quando LOINC está carregado, escolher um código também preenche alguns campos vazios. [Preencher um exame a partir do LOINC](#preencher-um-exame-a-partir-do-loinc) explica o que preenche.
 
 ![LOINC é opcional. Sem o dicionário, a instalação verifica apenas o formato dos códigos introduzidos.](test-catalog-guide-loinc.png)
 
@@ -276,13 +278,13 @@ Escolha **Numeric**, **Coded** ou **Text** para cada campo selecionado. Um campo
 
 ### 3. Abrir as ações do campo numérico
 
-Num campo numérico que precisa de intervalo de referência, selecione os pontos junto ao seletor do tipo.
+Vá a **Valores de referência**, abaixo dos parâmetros de resultado. Cada campo numérico marcado tem aí o seu próprio título, com o seu próprio menu de pontos. Selecione os pontos junto ao campo que precisa de intervalo de referência. Sem nenhum campo numérico marcado, a secção di-lo.
 
 ![Os campos numéricos têm as suas próprias ações de intervalo.](test-catalog-guide-parameter-actions.png)
 
 ### 4. Escolher Add range
 
-Selecione **Add range**. Aparece um formulário de intervalo de referência abaixo do campo de resultado.
+Selecione **Add range**. Aparece um formulário de intervalo de referência abaixo do título do campo.
 
 ![Add range cria um intervalo de referência para este campo.](test-catalog-guide-add-range.png)
 
@@ -337,7 +339,7 @@ Abra os pontos do painel do teste e selecione **Save**.
 Registe em quanto tempo os resultados deste exame devem voltar, e se uma segunda pessoa os verifica. O CE guarda-os com o exame. O plugin de laboratório ainda não os usa.
 
 1. Abra os pontos da linha e selecione **Editar**.
-2. Escreva em **Tempo de resposta esperado (horas)**, depois da lista **Parâmetros de resultado**, as horas da receção à libertação que o laboratório pretende. O exemplo usa `4`.
+2. Escreva em **Tempo de resposta esperado (horas)**, em **Informações básicas** depois da categoria, as horas da receção à libertação que o laboratório pretende. O exemplo usa `4`.
 3. Escreva em **Tempo de resposta crítico (horas)** as horas após as quais o exame está atrasado, ou deixe vazio.
 4. Deixe **Requer verificação** ligado quando uma segunda pessoa tem de verificar cada resultado. Desligue-o quando não for preciso.
 5. Abra os pontos do painel do exame e selecione **Guardar**.
@@ -346,18 +348,47 @@ Registe em quanto tempo os resultados deste exame devem voltar, e se uma segunda
 
 ## Preencher um exame a partir do LOINC
 
-Quando LOINC está carregado, escolher um código LOINC no painel do exame preenche parte do exame. Preenche apenas os campos ainda vazios. Nunca altera um campo que preencheu nem um parâmetro de resultado já marcado.
+Quando LOINC está carregado, escolher um código LOINC no painel do exame preenche parte do exame. Preenche apenas os campos ainda vazios. Nunca altera um campo que preencheu nem um parâmetro de resultado que marcou. Nada é escrito antes de guardar.
 
 1. Abra o painel do exame com **Adicionar exame** ou **Editar**.
-2. Escreva parte do nome ou do código em **Código LOINC** e escolha o termo.
-3. Leia a linha abaixo de **Categoria**. Quando a classe LOINC corresponde a uma categoria aqui, é escolhida se a categoria estava vazia. Caso contrário, a linha diz `O LOINC sugere Chemistry.` ou que a classe não corresponde a nenhuma categoria.
-4. Leia a linha abaixo das amostras. Quando a lista estava vazia e um só tipo de amostra corresponde exatamente, fica marcado. As outras correspondências são apenas sugeridas.
-5. Abra os pontos ao lado de **Parâmetros de resultado** e selecione **Usar o campo de resultado do LOINC**. Para um código de painel, selecione **Preencher a partir do painel**.
-6. Verifique cada parâmetro adicionado, depois abra os pontos do painel do exame e selecione **Guardar**.
+2. Escreva parte do nome ou do código em **Código LOINC**. Cada resultado mostra uma segunda linha com o nome curto, a classe e a unidade do LOINC. Escolha o termo.
+3. Verifique **Nome** e **Nome curto**. Um nome vazio recebe o nome longo do LOINC. Um nome curto vazio recebe o nome curto do LOINC.
+4. Leia abaixo de **Categoria**. Quando a categoria estava vazia e a classe LOINC corresponde a uma categoria aqui, é escolhida. Quando a categoria tem outro valor, um botão diz `Chemistry, sugerida`. Selecione-o para usar a categoria do LOINC. Quando a classe não corresponde a nenhuma categoria aqui, uma linha di-lo.
+5. Leia **Tipos de amostra**. Quando a lista estava vazia e um só tipo de amostra corresponde claramente, fica marcado. Os outros tipos que correspondem mostram **sugerido** ao lado. Marque-os se o exame os aceitar.
+6. Leia **Parâmetros de resultado**. Quando o exame ainda não tem campos de resultado, o campo de resultado do LOINC é adicionado e marcado. Um campo que ainda não está no dicionário de resultados mostra **Novo, guardado com o teste**.
+7. Verifique cada parâmetro de resultado, depois abra os pontos do painel do exame e selecione **Guardar**.
 
-**Resultado esperado:** **Usar o campo de resultado do LOINC** marca um campo de resultado para o código. **Preencher a partir do painel** marca um campo para cada exame do painel, pela ordem do LOINC. Um campo que já está no dicionário é reutilizado, por isso repetir qualquer um deles não adiciona nada de novo. Um novo intervalo começa com a unidade do campo. Para um campo criado pelo LOINC, é a unidade do LOINC. Um campo codificado recebe a lista de respostas do LOINC como conjunto de valores.
+**Resultado esperado:** Guardar cria primeiro cada campo novo marcado no dicionário de resultados, e depois guarda o exame. Um campo novo que desmarque antes de guardar nunca é criado. O campo recebe o nome do componente LOINC, por exemplo `Cholesterol` para 2093-3. Um código de quantidade torna-se um campo numérico com a unidade do LOINC. Um código ordinal com lista de respostas torna-se um campo codificado, com essa lista como conjunto de valores. Qualquer outro código torna-se um campo de texto. Um novo intervalo começa com a unidade do campo.
 
-Abrir um exame guardado mostra as linhas LOINC mas não preenche nada. Só um código escolhido no painel preenche campos. Um tipo de amostra só fica marcado sozinho quando está associado ao seu código SNOMED em [Terminologia](/docs/terminology).
+Escolha outro código, ou limpe o código, e o painel retira o campo de resultado que a última escolha adicionou. Os campos que marcou à mão ficam. Um nome, nome curto, categoria ou amostra que uma escolha preencheu fica até o alterar.
+
+### Adicionar os campos do LOINC a um exame que já tem campos
+
+Uma escolha não adiciona campo de resultado quando o exame já tem um. Use antes os pontos de **Parâmetros de resultado**.
+
+1. Selecione **Usar o campo de resultado do LOINC** para marcar o campo do LOINC ao lado dos que já existem.
+2. Para um código de painel, selecione **Preencher a partir do painel**. Marca um campo para cada exame do painel, pela ordem do LOINC.
+3. Quando o exame já tem campos de resultado, Preencher a partir do painel pergunta primeiro. Escolha **Substituir** para os trocar pelos do painel, ou **Adicionar** para adicionar só os que faltam.
+4. Abra os pontos do painel do exame e selecione **Guardar**.
+
+**Resultado esperado:** ambos esperam por Guardar, como uma escolha. Um campo que já está no dicionário é reutilizado, por isso repetir qualquer um deles não adiciona nada de novo. Um exame do painel para o qual o LOINC não dá campo de resultado não é adicionado, e uma mensagem indica-o.
+
+### Procurar no LOINC
+
+Use isto quando sabe o tipo de exame mas não o nome nem o código.
+
+1. Selecione os pontos ao lado de **Código LOINC** e escolha **Procurar no LOINC**.
+2. Abra os ramos da árvore LOINC e escolha o código.
+
+**Resultado esperado:** a árvore fecha. O código preenche o exame da mesma forma que uma escolha na pesquisa.
+
+### Tipos de amostra e SNOMED
+
+Uma instalação nova tem 15 tipos de amostra: Blood, Urine, CSF, Sputum, Plasma, Serum, Stool, Pleural fluid, Ascitic fluid, Saliva, Wound specimen, Throat swab, Nasal swab, Synovial fluid e Bone marrow. Cada um está ligado ao seu código SNOMED na tabela de correspondência local. Uma escolha LOINC encontra um tipo de amostra por essa ligação.
+
+Uma instalação atualizada a partir de uma versão anterior recebe os tipos e ligações em falta na atualização. A atualização só adiciona o que falta. Um tipo que retirou da lista continua retirado. Uma ligação SNOMED que alterou ou desligou fica como a deixou.
+
+Abrir um exame guardado mostra as linhas LOINC mas não preenche nada. Só um código escolhido no painel preenche campos. Para que outro tipo de amostra seja encontrado, associe-o ao seu código SNOMED em [Terminologia](/docs/terminology).
 
 ## Adicionar um campo de resultado a partir do exame
 
@@ -557,14 +588,14 @@ Numa instalação Linux ou macOS, use `./openldr` em vez de `pnpm openldr`. No W
 
 ## Antes de usar as sugestões LOINC
 
-As sugestões LOINC, **Usar o campo de resultado do LOINC** e **Preencher a partir do painel** precisam do LOINC carregado nesta instalação, com a sua ontologia construída. Sem eles, o painel do exame não mostra linhas LOINC nem ações LOINC. **Adicionar campo** continua a funcionar. Um administrador carrega o LOINC a partir do CLI, de uma pasta com a versão LOINC descompactada:
+As sugestões LOINC, **Procurar no LOINC**, **Usar o campo de resultado do LOINC** e **Preencher a partir do painel** precisam do LOINC carregado nesta instalação, com a sua ontologia construída. Sem eles, o painel do exame não mostra linhas LOINC nem ações LOINC. **Adicionar campo** continua a funcionar. Um administrador carrega o LOINC a partir do CLI, de uma pasta com a versão LOINC descompactada:
 
 ```shell
 ./openldr terminology import loinc data/loinc --accept-license
 ./openldr terminology ontology build cs-url-LOINC data/loinc
 ```
 
-No Windows, use `.\openldr.ps1` em vez de `./openldr`. Uma instalação que carregou o LOINC antes de existirem as sugestões LOINC tem de importar o LOINC de novo. Até lá, o LOINC não sugere nenhuma unidade. A página CLI do site lista os comandos das sugestões LOINC e dos campos de resultado.
+No Windows, use `.\openldr.ps1` em vez de `./openldr`. Uma instalação que carregou o LOINC antes de existirem as sugestões LOINC tem de importar o LOINC de novo. Até lá, o LOINC não sugere nenhuma unidade. Uma instalação que carregou o LOINC antes de existirem os nomes curtos também tem de o importar de novo para os obter. Execute o mesmo comando `terminology import loinc`. Até lá, uma escolha deixa **Nome curto** vazio e a pesquisa não mostra nome curto. A página CLI do site lista os comandos das sugestões LOINC e dos campos de resultado.
 
 ## Antes de alterar dados partilhados do catálogo
 
@@ -591,6 +622,10 @@ Retirar um teste oculta-o da lista ativa predefinida. Pode ser restaurado. Os te
 **Não aparece nenhuma linha LOINC abaixo de um campo.** O LOINC ou a sua ontologia não está carregado nesta instalação. Veja [Antes de usar as sugestões LOINC](#antes-de-usar-as-sugestoes-loinc).
 
 **O LOINC não sugere nenhuma unidade.** Esta instalação carregou o LOINC antes de existirem as sugestões LOINC. Importe o LOINC de novo.
+
+**Uma escolha LOINC deixa Nome curto vazio.** Esta instalação carregou o LOINC antes de serem lidos os nomes curtos. Importe o LOINC de novo com `terminology import loinc`. Veja [Antes de usar as sugestões LOINC](#antes-de-usar-as-sugestoes-loinc).
+
+**Uma escolha não adiciona campo de resultado.** O exame já tinha um campo de resultado, ou o código é um painel. Use **Usar o campo de resultado do LOINC** ou **Preencher a partir do painel** nos pontos de Parâmetros de resultado.
 
 **Um intervalo mostra Não é uma unidade UCUM.** A unidade que manteve não está na lista UCUM. Fica guardada como foi escrita. Escolha a mesma unidade na lista, se existir.
 

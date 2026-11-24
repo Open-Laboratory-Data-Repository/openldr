@@ -34,6 +34,8 @@ Select **Add test**. The test sheet opens.
 
 ![Choose Add test to enter one test by hand.](test-catalog-guide-add-menu.png)
 
+The sheet runs from top to bottom in this order: **LOINC**, **Basic information**, **Specimen types**, **Result parameters**, **Reference ranges** and **This lab**. Basic information holds the code, name, short name, category, the two turnaround times and review. When LOINC is loaded, pick the LOINC code first. It fills the empty fields below it. [Fill a test from LOINC](#fill-a-test-from-loinc) explains what it fills. The steps below fill the same fields by hand.
+
 ### 4. Enter the code
 
 Enter the stable code from your own catalog. The fictional example uses `EXAMPLE-ALPHA`. Leave it empty only if the LOINC code should become the code. A saved code cannot be changed.
@@ -66,7 +68,7 @@ Continue in the open test sheet. You can configure this lab and result fields af
 
 ### 1. Check the LOINC field
 
-Enter a confirmed LOINC code if you have one, or leave it blank. When LOINC is loaded, search and select a term. Here it is not loaded, so typed codes are checked for format only. When LOINC is loaded, picking a code also fills some empty fields. [Fill a test from LOINC](#fill-a-test-from-loinc) explains what it fills.
+The LOINC field is at the top of the sheet. Enter a confirmed LOINC code if you have one, or leave it blank. When LOINC is loaded, search and select a term. Here it is not loaded, so typed codes are checked for format only. When LOINC is loaded, picking a code also fills some empty fields. [Fill a test from LOINC](#fill-a-test-from-loinc) explains what it fills.
 
 ![LOINC is optional. If the dictionary is absent, this installation checks typed code format only.](test-catalog-guide-loinc.png)
 
@@ -276,13 +278,13 @@ Choose **Numeric**, **Coded** or **Text** for each selected result field. A code
 
 ### 3. Open the numeric field actions
 
-For a numeric field needing a reference band, select the dots beside its result-type selector.
+Go to **Reference ranges**, below the result parameters. Each ticked numeric field has its own heading there, with its own dots menu. Select the dots beside the field that needs a reference band. With no numeric field ticked, the section says so.
 
 ![Numeric fields have their own range actions.](test-catalog-guide-parameter-actions.png)
 
 ### 4. Choose Add range
 
-Select **Add range**. A reference-band form appears below the result field.
+Select **Add range**. A reference-band form appears below the field's heading.
 
 ![Add a range creates one reference band for this result field.](test-catalog-guide-add-range.png)
 
@@ -337,7 +339,7 @@ Open the test sheet dots menu and select **Save**.
 Record how fast results of this test should come back, and whether a second person checks them. TAT means turnaround time. CE stores these with the test. The lab plugin does not use them yet.
 
 1. Open the test row dots menu and select **Edit**.
-2. Type in **Expected TAT (hours)**, after the **Result parameters** list, the hours from receipt to release that the lab aims for. The example uses `4`.
+2. Type in **Expected TAT (hours)**, under **Basic information** after the category, the hours from receipt to release that the lab aims for. The example uses `4`.
 3. Type in **Critical TAT (hours)** the hours after which the test is overdue, or leave it empty.
 4. Leave **Requires verification** on when a second person must check each result. Switch it off when it is not needed.
 5. Open the test sheet dots menu and select **Save**.
@@ -346,18 +348,47 @@ Record how fast results of this test should come back, and whether a second pers
 
 ## Fill a test from LOINC
 
-When LOINC is loaded, picking a LOINC code in the test sheet fills some of the test for you. It fills only fields that are still empty. It never changes a field you filled or a result parameter already ticked.
+When LOINC is loaded, picking a LOINC code in the test sheet fills some of the test for you. It fills only fields that are still empty. It never changes a field you filled or a result parameter you ticked. Nothing is written until you save.
 
 1. Open the test sheet with **Add test** or **Edit**.
-2. Type part of the name or code in the LOINC field and pick the term.
-3. Read the line under **Category**. When LOINC's class matches a category here, it is chosen if the category was empty. Otherwise the line says `LOINC suggests Chemistry.` or that the class matches no category.
-4. Read the line under the specimens. When the list was empty and one specimen type matches exactly, it is ticked. Other matches are only suggested.
-5. Open the dots menu beside **Result parameters** and select **Use LOINC's result field**. For a panel code, select **Fill from panel** instead.
-6. Check each result parameter added, then open the test sheet dots menu and select **Save**.
+2. Type part of the name or code in **LOINC code**. Each result shows a second line with LOINC's short name, class and unit. Pick the term.
+3. Check **Name** and **Short name**. An empty name takes LOINC's long name. An empty short name takes LOINC's short name.
+4. Read under **Category**. When the category was empty and LOINC's class matches one here, it is chosen. When the category holds something else, a button reads `Chemistry, suggested`. Select it to take LOINC's category. When the class matches no category here, a line says so.
+5. Read **Specimen types**. When the list was empty and one specimen type clearly matches, it is ticked. Other matching types show **suggested** beside them. Tick them if the test takes them.
+6. Read **Result parameters**. When the test has no result fields yet, LOINC's result field is added and ticked. A field not yet in the result dictionary shows **New, saved with the test**.
+7. Check each result parameter, then open the test sheet dots menu and select **Save**.
 
-**Expected result:** **Use LOINC's result field** ticks one result field for the code. **Fill from panel** ticks one field for each test in the panel, in LOINC's order. A field already in the dictionary is reused, so running either one again adds nothing new. A new range starts with the field's own unit. For a field LOINC made, that is LOINC's unit. A coded field gets LOINC's answer list as its value set.
+**Expected result:** Save first makes each ticked new field in the result dictionary, then saves the test. A new field you untick before Save is never made. The field takes its name from LOINC's component, such as `Cholesterol` for 2093-3. A quantity code becomes a number field with LOINC's unit. An ordinal code with an answer list becomes a coded field, with that list as its value set. Any other code becomes a text field. A new range starts with the field's unit.
 
-Opening a saved test shows the LOINC lines but fills nothing. Only a code you pick in the sheet fills fields. A specimen type is ticked by itself only when it is mapped to its SNOMED code in [Terminology](/docs/terminology).
+Pick another code, or clear the code, and the sheet takes back the result field the last pick added. Fields you ticked by hand stay. A name, short name, category or specimen a pick filled stays until you change it.
+
+### Add LOINC's fields to a test that has fields
+
+A pick adds no result field when the test already has one. Use the **Result parameters** dots menu instead.
+
+1. Select **Use LOINC's result field** to tick LOINC's field beside the ones there.
+2. For a panel code, select **Fill from panel**. It ticks one field for each test in the panel, in LOINC's order.
+3. When the test already has result fields, Fill from panel asks first. Choose **Replace** to swap them for the panel's fields, or **Add** to add only the ones it lacks.
+4. Open the test sheet dots menu and select **Save**.
+
+**Expected result:** Both wait for Save, like a pick. A field already in the dictionary is reused, so running either one again adds nothing new. A panel test that LOINC gives no result field for is not added, and a message names it.
+
+### Browse LOINC
+
+Use this when you know the kind of test but not its name or code.
+
+1. Select the dots beside **LOINC code** and choose **Browse LOINC**.
+2. Open the branches of the LOINC tree and pick the code.
+
+**Expected result:** The tree closes. The code fills the test the same way a search pick does.
+
+### Specimen types and SNOMED
+
+A new install has 15 specimen types: Blood, Urine, CSF, Sputum, Plasma, Serum, Stool, Pleural fluid, Ascitic fluid, Saliva, Wound specimen, Throat swab, Nasal swab, Synovial fluid and Bone marrow. Each one is linked to its SNOMED code in the local map. A LOINC pick finds a specimen type through that link.
+
+An install upgraded from an earlier release gets the missing types and links when it updates. The update only adds what is missing. A type you removed from the list stays removed. A SNOMED link you changed or switched off stays as you left it.
+
+Opening a saved test shows the LOINC lines but fills nothing. Only a code you pick in the sheet fills fields. To have another specimen type found, map it to its SNOMED code in [Terminology](/docs/terminology).
 
 ## Add a result field from the test
 
@@ -557,14 +588,14 @@ For an installed Linux or macOS copy, use `./openldr` instead of `pnpm openldr`.
 
 ## Before using LOINC hints
 
-LOINC hints, **Use LOINC's result field** and **Fill from panel** need LOINC loaded on this install, with its ontology built. Without them, the test sheet shows no LOINC lines and no LOINC menu items. **Add field** still works. An administrator loads LOINC from the CLI, from a folder that holds the unzipped LOINC release:
+LOINC hints, **Browse LOINC**, **Use LOINC's result field** and **Fill from panel** need LOINC loaded on this install, with its ontology built. Without them, the test sheet shows no LOINC lines and no LOINC menu items. **Add field** still works. An administrator loads LOINC from the CLI, from a folder that holds the unzipped LOINC release:
 
 ```shell
 ./openldr terminology import loinc data/loinc --accept-license
 ./openldr terminology ontology build cs-url-LOINC data/loinc
 ```
 
-On Windows, use `.\openldr.ps1` instead of `./openldr`. An install that loaded LOINC before LOINC hints were added must import LOINC again. Until then, LOINC suggests no unit. The website's CLI page lists the commands for LOINC hints and result fields.
+On Windows, use `.\openldr.ps1` instead of `./openldr`. An install that loaded LOINC before LOINC hints were added must import LOINC again. Until then, LOINC suggests no unit. An install that loaded LOINC before short names were added must also import it again to get them. Run the same `terminology import loinc` command. Until then, a pick leaves **Short name** empty and the search shows no short name. The website's CLI page lists the commands for LOINC hints and result fields.
 
 ## Before changing shared catalog data
 
@@ -591,6 +622,10 @@ Retiring a test hides it from the default active list. It can be restored. Catal
 **No LOINC line appears under a field.** LOINC or its ontology is not loaded on this install. See [Before using LOINC hints](#before-using-loinc-hints).
 
 **LOINC suggests no unit.** This install loaded LOINC before LOINC hints were added. Import LOINC again.
+
+**A LOINC pick leaves Short name empty.** This install loaded LOINC before short names were read. Import LOINC again with `terminology import loinc`. See [Before using LOINC hints](#before-using-loinc-hints).
+
+**A pick adds no result field.** The test already had a result field, or the code is a panel. Use **Use LOINC's result field** or **Fill from panel** in the Result parameters dots menu.
 
 **A range shows Not a UCUM unit.** The unit you kept is not in the UCUM list. It is saved as typed. Pick the same unit from the list if one exists.
 

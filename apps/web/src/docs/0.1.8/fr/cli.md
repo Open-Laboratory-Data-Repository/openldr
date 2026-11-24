@@ -486,7 +486,7 @@ Lire les suggestions d'un code LOINC, et créer des champs de résultat depuis L
 
 ![Lire les suggestions LOINC et créer des champs de résultat.](guide:operator-cli-fr-21)
 
-- `loinc-hints <code>` affiche le nom LOINC, la classe et la catégorie qui lui correspond, le type de résultat et l'unité, les prélèvements, les réponses et, pour un panel, ses examens membres. `--json` affiche la même chose en JSON. Sans LOINC et son ontologie, la commande indique qu'il n'y a aucune suggestion.
+- `loinc-hints <code>` affiche le nom LOINC, son nom court et son composant, la classe et la catégorie qui lui correspond, le type de résultat et l'unité, les prélèvements, les réponses et, pour un panel, ses examens membres. `--json` affiche la même chose en JSON. Sans LOINC et son ontologie, la commande indique qu'il n'y a aucune suggestion. Une installation qui a chargé LOINC avant l'ajout des noms courts n'affiche aucun nom court avant d'avoir relancé `terminology import loinc`.
 - `result-fields from-loinc <code...>` crée un champ de résultat pour chaque code. Avec `--panel`, il en crée un pour chaque examen membre de chaque panel. Un champ ou un jeu de réponses déjà présent est réutilisé, donc une nouvelle exécution ne crée rien de nouveau.
 - `result-fields add --display <texte>` ajoute un champ au dictionnaire des résultats. `--code` fixe son code. Sans lui, le code est fait à partir du nom, par exemple `HAEMOGLOBIN_A1C`. `--unit` fixe son unité UCUM. Un code déjà présent est refusé.
 - Aucune de ces commandes ne coche le champ sur un examen. Cochez-le dans le panneau de l'examen, ou avec `test-catalog params --set`. Un laboratoire qui reçoit son dictionnaire du central ne peut pas ajouter de champ.
