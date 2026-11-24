@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "7384968db",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "An ontology build named by the system's URL is stored under the system id"
+        },
+        {
           "hash": "764173ad8",
           "type": "fix",
           "scope": "",
