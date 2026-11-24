@@ -81,13 +81,25 @@ async function client(words: string[], env: NodeJS.ProcessEnv): Promise<Run> {
   return { code, out, err };
 }
 
-/** A port on 127.0.0.1 that nothing listens on: bound by the system, then closed. */
+/**
+ * A port on 127.0.0.1 that nothing listens on. It comes from 20000 to 31999, below the range the
+ * system hands out for port 0 (32768 up on Linux, 49152 up on Windows and macOS). A server another
+ * test file starts on port 0 can then never take it. It is bound and closed first, to show it is free.
+ */
 async function closedPort(): Promise<number> {
-  const s = createServer();
-  await new Promise<void>((done) => s.listen(0, '127.0.0.1', done));
-  const { port } = s.address() as AddressInfo;
-  await new Promise<void>((done) => s.close(() => done()));
-  return port;
+  for (let tries = 0; tries < 50; tries++) {
+    const port = 20000 + Math.floor(Math.random() * 12000);
+    const s = createServer();
+    const free = await new Promise<boolean>((done) => {
+      s.once('error', () => done(false));
+      s.listen(port, '127.0.0.1', () => done(true));
+    });
+    if (free) {
+      await new Promise<void>((done) => s.close(() => done()));
+      return port;
+    }
+  }
+  throw new Error('no free port between 20000 and 31999');
 }
 
 /** A server on 127.0.0.1 port 0 that records each request and answers 500. Nothing here should reach it. */
@@ -166,6 +178,14 @@ function lineFor(cmd: Command, path: string, files: { file: string; dir: string;
 }
 
 describe('the switch', () => {
+  it('names a closed port the system never hands to a server on port 0', () => {
+    // Test files run side by side. A port from the port-0 range can go to another file's server,
+    // which then answers the commands this file sends to a port that should refuse them.
+    const port = Number(new URL(closed).port);
+    expect(port).toBeGreaterThan(1024);
+    expect(port).toBeLessThan(32768);
+  });
+
   it('sends an app command through the app even when the database settings are present', async () => {
     const files = { file: join(dir, 'in.txt'), dir: join(dir, 'in-dir'), out: join(dir, 'out') };
     await writeFile(files.file, 'x');
