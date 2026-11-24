@@ -1,5 +1,6 @@
 import { createServer, connect, type AddressInfo, type Server, type Socket } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
+import { freeLowPort } from './test-support/free-port';
 import { newControlToken, pingControl, requestStop, startControl, type ControlServer } from './control.js';
 import { isLockLive } from './state.js';
 
@@ -35,11 +36,7 @@ async function stranger(onConnection: (sock: Socket) => void): Promise<number> {
 
 /** A port that nothing listens on: bind it, then let it go. */
 async function deadPort(): Promise<number> {
-  const s = createServer();
-  await new Promise<void>((resolve) => s.listen(0, '127.0.0.1', () => resolve()));
-  const { port } = s.address() as AddressInfo;
-  await new Promise<void>((resolve) => s.close(() => resolve()));
-  return port;
+  return freeLowPort();
 }
 
 /** Sends raw bytes and collects everything the server sends until it closes the connection. */

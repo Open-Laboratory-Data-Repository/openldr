@@ -4,6 +4,7 @@ import { createServer, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { freeLowPort } from './test-support/free-port';
 import {
   RECOVERY_NOTICE_MS,
   START_TIMEOUT_MS,
@@ -72,10 +73,7 @@ function close(s: Server): Promise<void> {
 }
 
 async function unusedPort(): Promise<number> {
-  const s = await listen(0);
-  const port = (s.address() as { port: number }).port;
-  await close(s);
-  return port;
+  return freeLowPort();
 }
 
 const settings = (port: number): PostgresSettings => ({ port, superPassword: 'su-x', appPassword: 'app-x' });

@@ -5,6 +5,7 @@ import { createServer, type AddressInfo, type Server, type Socket } from 'node:n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { freeLowPort } from './test-support/free-port';
 import type { Config } from '@openldr/config';
 import type { RunningServer } from '@openldr/server/start';
 import {
@@ -294,20 +295,13 @@ async function hold(port: number): Promise<void> {
 }
 
 async function deadPort(): Promise<number> {
-  const s = createServer();
-  await new Promise<void>((r) => s.listen(0, '127.0.0.1', () => r()));
-  const { port } = s.address() as AddressInfo;
-  await new Promise<void>((r) => s.close(() => r()));
-  return port;
+  return freeLowPort();
 }
 
-/** Two different ports the operating system picked, both free again when this returns. */
+/** Two different free ports, from below the range the system hands out for port 0. */
 async function twoFreePorts(): Promise<[number, number]> {
-  const servers = [createServer(), createServer()];
-  await Promise.all(servers.map((s) => new Promise<void>((r) => s.listen(0, '127.0.0.1', () => r()))));
-  const ports = servers.map((s) => (s.address() as AddressInfo).port);
-  await Promise.all(servers.map((s) => new Promise<void>((r) => s.close(() => r()))));
-  return [ports[0]!, ports[1]!];
+  const first = await freeLowPort();
+  return [first, await freeLowPort([first])];
 }
 
 /** What a failed start must leave: no lock, no Postgres, and (checked in afterEach) no listener. */

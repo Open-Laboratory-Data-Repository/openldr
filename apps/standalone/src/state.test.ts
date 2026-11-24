@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { inspect } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { freeLowPort } from './test-support/free-port';
 import { parseSecretKey } from '@openldr/core';
 import { newControlToken, startControl, type ControlServer } from './control.js';
 import {
@@ -62,11 +63,7 @@ async function liveLock(pid: number): Promise<LockInfo> {
 
 /** A port that nothing listens on. */
 async function deadPort(): Promise<number> {
-  const s = createServer();
-  await new Promise<void>((r) => s.listen(0, '127.0.0.1', () => r()));
-  const { port } = s.address() as AddressInfo;
-  await new Promise<void>((r) => s.close(() => r()));
-  return port;
+  return freeLowPort();
 }
 
 async function deadLock(): Promise<LockInfo> {
