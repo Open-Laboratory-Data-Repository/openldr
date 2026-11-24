@@ -275,8 +275,10 @@ export interface TestCatalog {
   /** The specimens at least one of these tests accepts, by this lab's lists. Codings outside the
    *  catalog are ignored. Empty means there is nothing to narrow by (test catalog S4). */
   specimensFor(tests: Array<{ system: string; code: string }>): Promise<CatalogSpecimenOption[]>;
-  /** Each catalog test's LOINC coding, keyed `system|code` of the test, for tests with an active link. */
-  loincCodingsFor(tests: Array<{ system: string; code: string }>): Promise<Map<string, { system: string; code: string }>>;
+  /** The codings an order writes in front of each catalog test's own (test identity spec, call 7):
+   *  its LOINC when it has an active link, then its Test code. Keyed `system|code` of the test, so by
+   *  the id. Codings outside the catalog, and ids with no test, are left out. */
+  orderCodingsFor(tests: Array<{ system: string; code: string }>): Promise<Map<string, Array<{ system: string; code: string }>>>;
   /** Each test's result parameters, with each parameter's unit, display and the band that fits this
    *  patient. Codings outside the catalog are ignored (bench result entry, spec 7). */
   resultParamsFor(
@@ -369,7 +371,7 @@ export function testCodeKey(code: string): string {
 }
 
 /** A concept's Test code: its testCode property, else its concept code (a test saved before Test codes). */
-function testCodeOf(code: string, properties: unknown): string {
+export function testCodeOf(code: string, properties: unknown): string {
   const p = (parseJson(properties) ?? {}) as Record<string, unknown>;
   return typeof p.testCode === 'string' && p.testCode.trim() !== '' ? p.testCode : code;
 }
@@ -1263,9 +1265,13 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return (await expandEntries(SPECIMEN_TYPE_VALUE_SET)).filter((s) => accepted.has(codingKey(s))).sort(byLabel);
   }
 
-  async function loincCodingsFor(tests: Array<{ system: string; code: string }>): Promise<Map<string, { system: string; code: string }>> {
+  async function orderCodingsFor(tests: Array<{ system: string; code: string }>): Promise<Map<string, Array<{ system: string; code: string }>>> {
     const codes = [...new Set(tests.filter((t) => t.system === TEST_CATALOG_SYSTEM).map((t) => t.code))];
     if (codes.length === 0) return new Map();
+    const concepts = await db.selectFrom('terminology_concepts').select(['code', 'properties'])
+      .where('system', '=', TEST_CATALOG_SYSTEM)
+      .where('code', 'in', codes)
+      .execute();
     const links = await db.selectFrom('term_mappings').select(['from_code', 'to_code'])
       .where('from_system', '=', TEST_CATALOG_SYSTEM)
       .where('from_code', 'in', codes)
@@ -1273,7 +1279,14 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       .where('map_type', '=', LOINC_MAP_TYPE)
       .where('is_active', '=', true)
       .execute();
-    return new Map(links.map((l) => [`${TEST_CATALOG_SYSTEM}|${l.from_code}`, { system: LOINC_SYSTEM, code: l.to_code }]));
+    const loinc = new Map(links.map((l) => [l.from_code, l.to_code]));
+    return new Map(concepts.map((c) => {
+      const link = loinc.get(c.code);
+      return [`${TEST_CATALOG_SYSTEM}|${c.code}`, [
+        ...(link ? [{ system: LOINC_SYSTEM, code: link }] : []),
+        { system: TEST_CODE_SYSTEM, code: testCodeOf(c.code, c.properties) },
+      ]];
+    }));
   }
 
   async function resultParamsFor(
@@ -1328,7 +1341,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     importApply,
     exportCsv,
     specimensFor,
-    loincCodingsFor,
+    orderCodingsFor,
     resultParamsFor,
   };
 }

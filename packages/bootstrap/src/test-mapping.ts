@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import { testMapId, type ExternalSchema, type InternalSchema, type MapType, type TerminologyAdminStore, type TestMapLevel } from '@openldr/db';
 import { LOINC_SYSTEM, RESULT_PARAM_SYSTEM } from '@openldr/terminology';
 import { toCsv } from '@openldr/reporting';
-import { TEST_CATALOG_SYSTEM, TestCatalogError } from './test-catalog';
+import { TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM, TestCatalogError, testCodeKey, testCodeOf } from './test-catalog';
 import { readTableFile, TableFileError } from './table-file';
 
 // Test mapping (docs/superpowers/specs/2026-10-11-test-mapping-design.md) and result field mapping
@@ -28,6 +28,10 @@ export type MapLevel = TestMapLevel;
 /** Where each level's mappings point. A code in this system is a target already and needs no mapping. */
 export const MAP_TARGET_SYSTEM: Record<MapLevel, string> = { test: TEST_CATALOG_SYSTEM, result: RESULT_PARAM_SYSTEM };
 const TARGET_SYSTEMS = new Set(Object.values(MAP_TARGET_SYSTEM));
+/** The systems CE's own orders and results carry, so their codes need no mapping. A test-level order
+ *  leads with LOINC, else the Test code, and orders saved before Test codes carry the catalog id
+ *  (test identity spec, call 7). */
+const OWN_SYSTEMS: Record<MapLevel, readonly string[]> = { test: [TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM], result: [RESULT_PARAM_SYSTEM] };
 /** How each level names its target in messages. Slice 1's test-level wording is kept exactly. */
 const TARGET_NOUN: Record<MapLevel, string> = { test: 'catalog test', result: 'result field' };
 
@@ -94,7 +98,8 @@ export interface TestMappingDeps {
 }
 
 type MappingRow = { id: string; from_system: string; from_code: string; to_code: string; to_display: string | null; map_type: string; managed_origin: string | null };
-type CatalogEntry = { name: string | null; category: string | null; loinc: string | null; retired: boolean };
+/** `published` is the code test_map names the target by: a test's Test code, a field's own code. */
+type CatalogEntry = { published: string; name: string | null; category: string | null; loinc: string | null; retired: boolean };
 type Resolved =
   | { kind: 'mapped'; catalogCode: string }
   | { kind: 'ambiguous'; catalogCodes: string[] }
@@ -226,6 +231,7 @@ export function createTestMapping(deps: TestMappingDeps) {
       .where('map_type', '=', MAP_TYPE).where('is_active', '=', true).execute();
     const loinc = new Map(links.map((l) => [l.from_code, l.to_code]));
     return new Map(concepts.map((c) => [c.code, {
+      published: testCodeOf(c.code, c.properties),
       name: c.display, category: categoryOf(c.properties), loinc: loinc.get(c.code) ?? null, retired: c.status === RETIRED,
     }]));
   }
@@ -240,7 +246,7 @@ export function createTestMapping(deps: TestMappingDeps) {
       .where('map_type', '=', MAP_TYPE).where('is_active', '=', true).execute();
     const loinc = new Map(links.map((l) => [l.from_code, l.to_code]));
     return new Map(concepts.map((c) => [c.code, {
-      name: c.display, category: null, loinc: loinc.get(c.code) ?? null, retired: c.status === RETIRED,
+      published: c.code, name: c.display, category: null, loinc: loinc.get(c.code) ?? null, retired: c.status === RETIRED,
     }]));
   }
 
@@ -252,8 +258,8 @@ export function createTestMapping(deps: TestMappingDeps) {
     return internalDb.selectFrom('term_mappings')
       .select(MAPPING_COLUMNS)
       .where('to_system', '=', MAP_TARGET_SYSTEM[level]).where('is_active', '=', true)
-      // A row from the target system to itself would collide with that code's self row on the key.
-      .where('from_system', '!=', MAP_TARGET_SYSTEM[level]).execute();
+      // A row from one of CE's own systems would collide with a self row on the key.
+      .where('from_system', 'not in', [...OWN_SYSTEMS[level]]).execute();
   }
 
   function resolveAll(rows: MappingRow[], catalog: Map<string, CatalogEntry>): Map<string, { system: string; code: string; resolved: Resolved; central: boolean }> {
@@ -289,12 +295,24 @@ export function createTestMapping(deps: TestMappingDeps) {
       const entry = targets.get(targetCode)!;
       return {
         id: testMapId(level, system, code), level, source_system: system, source_code: code,
-        catalog_code: targetCode, catalog_name: entry.name, category: entry.category, loinc: entry.loinc,
+        catalog_code: entry.published, catalog_name: entry.name, category: entry.category, loinc: entry.loinc,
       };
     };
     const mapped = resolved.flatMap((r) => (r.resolved.kind === 'mapped' ? [row(r.system, r.code, r.resolved.catalogCode)] : []));
     // CE's own orders and results already carry the target's code, so each target maps to itself.
-    const self = [...targets.keys()].sort(compare).map((code) => row(MAP_TARGET_SYSTEM[level], code, code));
+    const ids = [...targets.keys()].sort(compare);
+    const self = ids.map((code) => row(MAP_TARGET_SYSTEM[level], code, code));
+    // A test also maps from its Test code, which a new order leads with when it has no LOINC link. Test
+    // codes are unique ignoring case; should two ever match, the first id keeps it, so the key never collides.
+    if (level === 'test') {
+      const taken = new Set<string>();
+      for (const id of ids) {
+        const testCode = targets.get(id)!.published;
+        if (taken.has(testCodeKey(testCode))) continue;
+        taken.add(testCodeKey(testCode));
+        self.push(row(TEST_CODE_SYSTEM, testCode, id));
+      }
+    }
     return {
       rows: [...mapped, ...self],
       selfRows: self.length,
@@ -384,8 +402,8 @@ export function createTestMapping(deps: TestMappingDeps) {
       ])
       .where('panel_system', 'is not', null)
       .where('panel_code', 'is not', null)
-      // CE's own orders carry catalog codes, which self rows map already.
-      .where('panel_system', '!=', TEST_CATALOG_SYSTEM)
+      // CE's own orders carry catalog ids or Test codes, which self rows map already.
+      .where('panel_system', 'not in', [...OWN_SYSTEMS.test])
       .groupBy(['panel_system', 'panel_code'])
       .execute();
     return rows.map(toGroup);
@@ -459,9 +477,23 @@ export function createTestMapping(deps: TestMappingDeps) {
       .where('to_system', '=', MAP_TARGET_SYSTEM[level]).where('is_active', '=', true).execute();
   }
 
-  /** A code in the target system is a target already. Mapping it would collide with its self row. */
+  /** A code in one of CE's own systems is a target already. Mapping it would collide with its self row. */
   function selfSystemReason(system: string, level: MapLevel): string | null {
-    return system === MAP_TARGET_SYSTEM[level] ? `${system} codes are ${TARGET_NOUN[level]}s already and need no mapping` : null;
+    return OWN_SYSTEMS[level].includes(system) ? `${system} codes are ${TARGET_NOUN[level]}s already and need no mapping` : null;
+  }
+
+  /** The target a typed code names, keyed by id. A test is found by its Test code first, trimmed and
+   *  case ignored, then by its id, the rule TestCatalogService.resolve keeps. A field by its code. */
+  function findTarget(targets: Map<string, CatalogEntry>, typed: string, level: MapLevel): [string, CatalogEntry] | null {
+    if (level === 'test') {
+      const key = testCodeKey(typed);
+      for (const [id, entry] of targets) if (testCodeKey(entry.published) === key) return [id, entry];
+      const id = typed.trim();
+      const entry = targets.get(id);
+      return entry ? [id, entry] : null;
+    }
+    const entry = targets.get(typed);
+    return entry ? [typed, entry] : null;
   }
 
   function assertSource(system: string, code: string, level: MapLevel): void {
@@ -499,13 +531,15 @@ export function createTestMapping(deps: TestMappingDeps) {
 
   async function set(system: string, code: string, targetCode: string, level: MapLevel = 'test'): Promise<TestMappingChange> {
     assertSource(system, code, level);
-    const entry = (await readTargets(level)).get(targetCode);
-    if (!entry) throw new TestCatalogError(`no ${TARGET_NOUN[level]} has code ${targetCode}`, 'invalid');
+    const found = findTarget(await readTargets(level), targetCode, level);
+    if (!found) throw new TestCatalogError(`no ${TARGET_NOUN[level]} has code ${targetCode}`, 'invalid');
+    const [targetId, entry] = found;
     const existing = await activeFor(system, code, level);
     assertNotCentral(existing, code);
     const before = existing.map((r) => r.to_code).sort(compare)[0] ?? null;
-    await writeMapping(system, code, targetCode, entry.name, level);
-    return { system, code, before, after: targetCode, rebuild: await rebuildNow() };
+    // The mapping stores the id, so a later change of Test code keeps it.
+    await writeMapping(system, code, targetId, entry.name, level);
+    return { system, code, before, after: targetId, rebuild: await rebuildNow() };
   }
 
   async function clear(system: string, code: string, level: MapLevel = 'test'): Promise<TestMappingChange> {

@@ -1083,7 +1083,8 @@ describe('forms routes', () => {
     expect(serviceRequest.authoredOn).toEqual(expect.any(String));
   });
 
-  it('writes each catalog test LOINC coding in front of it on the derived ServiceRequest', async () => {
+  it('writes each catalog test LOINC coding and Test code in front of it on the derived ServiceRequest', async () => {
+    const TEST_CODE = 'urn:openldr:codesystem:test-catalog:test-code';
     const ctx = fakeCtx();
     const runs: any[] = [];
     const asked: unknown[] = [];
@@ -1091,9 +1092,12 @@ describe('forms routes', () => {
       runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
     };
     (ctx as any).testCatalog = {
-      loincCodingsFor: async (tests: unknown) => {
+      orderCodingsFor: async (tests: unknown) => {
         asked.push(tests);
-        return new Map([['urn:openldr:codesystem:test-catalog|HIVVL', { system: 'http://loinc.org', code: '25836-8' }]]);
+        return new Map([
+          ['urn:openldr:codesystem:test-catalog|HIVVL', [{ system: 'http://loinc.org', code: '25836-8' }, { system: TEST_CODE, code: 'VL' }]],
+          ['urn:openldr:codesystem:test-catalog|CD4', [{ system: TEST_CODE, code: 'CD4C' }]],
+        ]);
       },
     };
     const app = authedApp(ctx);
@@ -1116,12 +1120,15 @@ describe('forms routes', () => {
       { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL' },
       { system: 'urn:openldr:codesystem:test-catalog', code: 'CD4' },
     ]]);
-    // One ServiceRequest per test (lab slice 1b): each carries its own test, LOINC link first.
+    // One ServiceRequest per test (lab slice 1b): each carries its own test, LOINC link first, then
+    // the Test code (test identity spec, call 7), then the id.
     const serviceRequests = runs[0].body.entry.map((e: any) => e.resource).filter((r: any) => r.resourceType === 'ServiceRequest');
     expect(serviceRequests.map((r: any) => r.code.coding)).toEqual([
-      [{ system: 'http://loinc.org', code: '25836-8' }, { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL', display: 'Viral load' }],
-      [{ system: 'urn:openldr:codesystem:test-catalog', code: 'CD4', display: 'CD4 count' }],
+      [{ system: 'http://loinc.org', code: '25836-8' }, { system: TEST_CODE, code: 'VL' }, { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL', display: 'Viral load' }],
+      [{ system: TEST_CODE, code: 'CD4C' }, { system: 'urn:openldr:codesystem:test-catalog', code: 'CD4', display: 'CD4 count' }],
     ]);
+    // The warehouse keeps the first coding: LOINC for one, the Test code for the other.
+    expect(serviceRequests.map((r: any) => projectServiceRequest(r, {}).panel_code)).toEqual(['25836-8', 'CD4C']);
     // The warehouse keeps the first coding, the nameless LOINC link, so each order's name rides on
     // code.text (lab_requests.panel_desc).
     expect(serviceRequests.map((r: any) => r.code.text)).toEqual(['Viral load', 'CD4 count']);
@@ -1160,7 +1167,7 @@ describe('forms routes', () => {
 
   it('does not ask the catalog when no answer is a catalog test', async () => {
     const ctx = fakeCtx();
-    (ctx as any).testCatalog = { loincCodingsFor: async () => { throw new Error('the catalog was asked'); } };
+    (ctx as any).testCatalog = { orderCodingsFor: async () => { throw new Error('the catalog was asked'); } };
     const app = authedApp(ctx);
     const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: referenceSchema, targetPages: ['forms'] } });
     const res = await app.inject({
@@ -1178,7 +1185,7 @@ describe('forms routes', () => {
     };
     // The order carries catalog tests, so S4's LOINC lookup runs too, and the submit checks the band.
     (ctx as any).testCatalog = {
-      loincCodingsFor: async () => new Map(),
+      orderCodingsFor: async () => new Map(),
       resultParamsFor: async () => [{
         test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
         params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [],
@@ -1216,7 +1223,7 @@ describe('forms routes', () => {
       runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
     };
     (ctx as any).testCatalog = {
-      loincCodingsFor: async () => new Map(),
+      orderCodingsFor: async () => new Map(),
       resultParamsFor: async () => [{
         test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
         params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [],
@@ -1254,7 +1261,7 @@ describe('forms routes', () => {
       runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
     };
     (ctx as any).testCatalog = {
-      loincCodingsFor: async () => new Map(),
+      orderCodingsFor: async () => new Map(),
       resultParamsFor: async () => [],
     };
     const app = authedApp(ctx);
@@ -1288,7 +1295,7 @@ describe('forms routes', () => {
       runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
     };
     (ctx as any).testCatalog = {
-      loincCodingsFor: async () => new Map(),
+      orderCodingsFor: async () => new Map(),
       resultParamsFor: async () => [{
         test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
         params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [],
@@ -1325,7 +1332,7 @@ describe('forms routes', () => {
     };
     const named = { name: 'Highland women', low: 12, high: 16, unit: 'g/dL', sex: 'female', ageLow: 15, ageHigh: null };
     (ctx as any).testCatalog = {
-      loincCodingsFor: async () => new Map(),
+      orderCodingsFor: async () => new Map(),
       resultParamsFor: async () => [{
         test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
         params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [], bands: [named] }],
@@ -1357,7 +1364,7 @@ describe('forms routes', () => {
     };
     const neonatal = { name: null, low: 14, high: 22, unit: 'g/dL', sex: null, ageLow: 0, ageHigh: 28, ageUnit: 'd' };
     (ctx as any).testCatalog = {
-      loincCodingsFor: async () => new Map(),
+      orderCodingsFor: async () => new Map(),
       resultParamsFor: async () => [{
         test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
         params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [], bands: [neonatal] }],
@@ -1396,7 +1403,7 @@ describe('forms routes', () => {
       runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
     };
     (ctx as any).testCatalog = {
-      loincCodingsFor: async () => new Map(),
+      orderCodingsFor: async () => new Map(),
       resultParamsFor: async () => [{
         test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
         params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [],
@@ -1434,7 +1441,7 @@ describe('forms routes', () => {
       runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
     };
     (ctx as any).testCatalog = {
-      loincCodingsFor: async () => new Map(),
+      orderCodingsFor: async () => new Map(),
       resultParamsFor: async () => { throw new Error('the catalog should not be asked: the only band belongs to a rejected test'); },
     };
     const app = authedApp(ctx);
@@ -2261,7 +2268,7 @@ describe('form entries on submit', () => {
         },
         fhir: { get: async (type: string, id: string) => stored.get(`${type}/${id}`) ?? null },
       });
-      (w.ctx as any).testCatalog = { loincCodingsFor: async () => new Map() };
+      (w.ctx as any).testCatalog = { orderCodingsFor: async () => new Map() };
       const schema = entrySchema('register');
       const createOrderForm = async (name = 'Order') => (await w.appFor().inject({
         method: 'POST', url: '/api/forms',
@@ -2369,7 +2376,7 @@ describe('form entries on submit', () => {
       const { labOrderId } = await import('@openldr/forms');
       // Nothing is stored yet, so the order check finds no order.
       const w = await world({ fhir: { get: async () => null } });
-      (w.ctx as any).testCatalog = { loincCodingsFor: async () => new Map() };
+      (w.ctx as any).testCatalog = { orderCodingsFor: async () => new Map() };
       const schema = entrySchema('free-text');
       const formId = (await w.appFor().inject({
         method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: { ...schema, fields: [...schema.fields, testsField] }, targetPages: ['forms'] },

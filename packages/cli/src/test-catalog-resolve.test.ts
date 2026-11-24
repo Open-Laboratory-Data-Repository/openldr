@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
+import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import { createFhirStore, createTerminologyAdminStore, createTerminologyStore, type ValueSetProjection } from '@openldr/db';
 import { createOperations } from '@openldr/terminology';
 
@@ -14,8 +15,9 @@ vi.mock('@openldr/bootstrap', async () => {
   return { ...actual, createAppContext: mocks.createAppContext, recordAuditEvent: mocks.recordAuditEvent };
 });
 
-import { createTestCatalog } from '@openldr/bootstrap';
+import { createTestCatalog, createTestMapping, TEST_CATALOG_SYSTEM } from '@openldr/bootstrap';
 import { runTestCatalogChange, runTestCatalogSet } from './test-catalog';
+import { runTestMappingSet } from './test-mapping';
 
 async function realCatalog() {
   const db = await makeMigratedDb();
@@ -41,8 +43,10 @@ async function realCatalog() {
     translate: (q) => store.translate(q),
   });
   const catalog = createTestCatalog({ db, admin, ops });
-  mocks.createAppContext.mockResolvedValue({ testCatalog: catalog, close: async () => {} });
-  return catalog;
+  const externalDb = await makeMigratedExternalDb();
+  const testMapping = createTestMapping({ internalDb: db, externalDb, admin, logger: { warn: () => {} } });
+  mocks.createAppContext.mockResolvedValue({ testCatalog: catalog, testMapping, close: async () => {} });
+  return Object.assign(catalog, { db, externalDb });
 }
 
 describe('openldr test-catalog over a real catalog', () => {
@@ -74,5 +78,26 @@ describe('openldr test-catalog over a real catalog', () => {
     expect((await catalog.get(hb.code))?.testCode).toBe('HGB');
     expect(await runTestCatalogSet('HGB', { testCode: 'glu', json: false })).toBe(1);
     expect(err.join('')).toContain('Test code GLU is already used by Glucose');
+  });
+
+  it('map set finds its target by Test code, then id, stores the id, and publishes the Test code', async () => {
+    const catalog = await realCatalog();
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    const glu = await catalog.create({ testCode: 'GLU', display: 'Glucose' });
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const stored = (code: string) => catalog.db.selectFrom('term_mappings').select('to_code')
+      .where('from_system', '=', 'urn:disa').where('from_code', '=', code)
+      .where('to_system', '=', TEST_CATALOG_SYSTEM).where('is_active', '=', true).execute();
+
+    expect(await runTestMappingSet('urn:disa', 'HGB', ' hb ', { json: false })).toBe(0);
+    expect(await stored('HGB')).toEqual([{ to_code: hb.code }]);
+    expect(await runTestMappingSet('urn:disa', 'GLUC', glu.code, { json: false })).toBe(0);
+    expect(await stored('GLUC')).toEqual([{ to_code: glu.code }]);
+    expect(mocks.recordAuditEvent.mock.calls[0][2]).toMatchObject({ after: { catalogCode: hb.code } });
+    const published = await catalog.externalDb.selectFrom('test_map').select(['source_code', 'catalog_code'])
+      .where('source_system', '=', 'urn:disa').orderBy('source_code').execute();
+    expect(published).toEqual([{ source_code: 'GLUC', catalog_code: 'GLU' }, { source_code: 'HGB', catalog_code: 'HB' }]);
+    expect(await runTestMappingSet('urn:disa', 'X', 'NOPE', { json: false })).toBe(1);
   });
 });

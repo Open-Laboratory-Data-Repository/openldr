@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { LOINC_SYSTEM, RESULT_PARAM_SYSTEM } from '@openldr/terminology';
-import { TEST_CATALOG_SYSTEM } from './test-catalog';
+import { TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM } from './test-catalog';
 import { isTestMapRelevantRecord, mappingTouchesTestMap, parseMapLevel } from './test-mapping';
 import { buildMapping, seedCatalogTest, seedMapping, seedParam, seedRequest, seedResult, seedResultMapping } from './test-support/test-mapping-fixture';
 
@@ -32,10 +32,12 @@ describe('test mapping: result level rebuild', () => {
 
     const result = await mapping.publish({ apply: true });
 
-    expect([result.selfRows, result.written]).toEqual([2, 2]);
+    // A test has two self rows: its id, and its Test code (test identity spec, call 7).
+    expect([result.selfRows, result.written]).toEqual([3, 3]);
     const rows = await externalDb.selectFrom('test_map').selectAll().orderBy('id').execute();
     expect(rows.map(cols)).toEqual([
       [`result|${PARAMS}|CD4`, 'result', PARAMS, 'CD4', 'CD4', 'CD4 count', null, null],
+      [`test|${TEST_CATALOG_SYSTEM}:test-code|VL`, 'test', TEST_CODE_SYSTEM, 'VL', 'VL', 'HIV viral load', 'MOL', '25836-8'],
       [`test|${TEST_CATALOG_SYSTEM}|VL`, 'test', TEST_CATALOG_SYSTEM, 'VL', 'VL', 'HIV viral load', 'MOL', '25836-8'],
     ]);
   });
@@ -68,7 +70,8 @@ describe('test mapping: result level rebuild', () => {
 
     const outcome = await mapping.rebuildNow();
 
-    expect(outcome).toMatchObject({ ok: true, result: { written: 2, selfRows: 2 } });
+    // One field self row, and two for the test: its id and its Test code.
+    expect(outcome).toMatchObject({ ok: true, result: { written: 3, selfRows: 3 } });
   });
 
   // Review focus 2.
@@ -76,7 +79,7 @@ describe('test mapping: result level rebuild', () => {
     const { internalDb, mapping } = await buildMapping();
     await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
     const result = await mapping.publish({ apply: true });
-    expect([result.results, result.selfRows, result.written]).toEqual([NO_RESULTS, 1, 1]);
+    expect([result.results, result.selfRows, result.written]).toEqual([NO_RESULTS, 2, 2]);
   });
 
   it('writes a large dictionary in chunks', async () => {

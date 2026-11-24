@@ -9,6 +9,7 @@ import { makeField, makeSchema, definitionOf } from './__fixtures__/forms'
 import { isOrderRejectionField, orderRejectionFieldId } from './order-rejection-path'
 import { linkToOrder } from './link-to-order'
 import { labOrderId } from './extract/order-ids'
+import { projectServiceRequest } from '@openldr/db'
 
 const ctx = { subject: { reference: 'Patient/p1' }, authored: '2026-06-04T00:00:00Z' }
 
@@ -135,6 +136,7 @@ describe('ServiceRequestExtractor requisition number', () => {
 
 describe('ServiceRequestExtractor tests codings (test catalog S4)', () => {
   const CATALOG = 'urn:openldr:codesystem:test-catalog'
+  const TEST_CODE = 'urn:openldr:codesystem:test-catalog:test-code'
   const order = (fieldType: 'reference' | 'text') =>
     makeSchema({
       id: 'o', name: 'Order', fhirResourceType: 'ServiceRequest',
@@ -158,16 +160,45 @@ describe('ServiceRequestExtractor tests codings (test catalog S4)', () => {
   it('names each order after its own test, so the warehouse keeps a test name', () => {
     // The warehouse keeps the first coding, which is the LOINC link and carries no name, so
     // panel_desc came out empty for every order taken in the studio. code.text is read first.
-    const codingBefore = new Map([[`${CATALOG}|HIVVL`, { system: 'http://loinc.org', code: '25836-8' }]])
-    expect(requests(order('reference'), twoTests, { codingBefore }).map((r) => r.code.text)).toEqual(['Viral load', 'CD4 count'])
+    const codingsBefore = new Map([[`${CATALOG}|HIVVL`, [{ system: 'http://loinc.org', code: '25836-8' }]]])
+    expect(requests(order('reference'), twoTests, { codingsBefore }).map((r) => r.code.text)).toEqual(['Viral load', 'CD4 count'])
   })
 
-  it('writes the coding the context names in front of its own test only', () => {
-    const codingBefore = new Map([[`${CATALOG}|HIVVL`, { system: 'http://loinc.org', code: '25836-8' }]])
-    expect(requests(order('reference'), twoTests, { codingBefore }).map((r) => r.code.coding)).toEqual([
-      [{ system: 'http://loinc.org', code: '25836-8' }, { system: CATALOG, code: 'HIVVL', display: 'Viral load' }],
+  it('writes the codings the context names in front of its own test only, in order', () => {
+    const codingsBefore = new Map([[`${CATALOG}|HIVVL`, [{ system: 'http://loinc.org', code: '25836-8' }, { system: TEST_CODE, code: 'VL' }]]])
+    expect(requests(order('reference'), twoTests, { codingsBefore }).map((r) => r.code.coding)).toEqual([
+      [{ system: 'http://loinc.org', code: '25836-8' }, { system: TEST_CODE, code: 'VL' }, { system: CATALOG, code: 'HIVVL', display: 'Viral load' }],
       [{ system: CATALOG, code: 'CD4', display: 'CD4 count' }],
     ])
+  })
+
+  // Test identity spec, call 7: what leaves CE carries the Test code. The catalog's answer is the id.
+  const savedTest = { tests: [{ system: CATALOG, code: 'tst-0a1b2c3d4e5f6a7b', display: 'Viral load' }] }
+
+  it('leads with LOINC, then the Test code, then the id, for a test with a LOINC link', () => {
+    const codingsBefore = new Map([[`${CATALOG}|tst-0a1b2c3d4e5f6a7b`, [{ system: 'http://loinc.org', code: '25836-8' }, { system: TEST_CODE, code: 'VL' }]]])
+    const [r] = requests(order('reference'), savedTest, { codingsBefore })
+    expect(r.code.coding).toEqual([
+      { system: 'http://loinc.org', code: '25836-8' },
+      { system: TEST_CODE, code: 'VL' },
+      { system: CATALOG, code: 'tst-0a1b2c3d4e5f6a7b', display: 'Viral load' },
+    ])
+    expect(projectServiceRequest({ ...r, id: 'sr-1' }, {})).toMatchObject({ panel_system: 'http://loinc.org', panel_code: '25836-8' })
+  })
+
+  it('leads with the Test code for a test with no LOINC link, so panel_code is never an id', () => {
+    const codingsBefore = new Map([[`${CATALOG}|tst-0a1b2c3d4e5f6a7b`, [{ system: TEST_CODE, code: 'VL' }]]])
+    const [r] = requests(order('reference'), savedTest, { codingsBefore })
+    expect(r.code.coding).toEqual([{ system: TEST_CODE, code: 'VL' }, { system: CATALOG, code: 'tst-0a1b2c3d4e5f6a7b', display: 'Viral load' }])
+    expect(projectServiceRequest({ ...r, id: 'sr-1' }, {})).toMatchObject({ panel_system: TEST_CODE, panel_code: 'VL', panel_desc: 'Viral load' })
+  })
+
+  it('keeps hashing the id into the order id, so a saved order keeps its ServiceRequest id', () => {
+    const codingsBefore = new Map([[`${CATALOG}|HIVVL`, [{ system: TEST_CODE, code: 'NEWCODE' }]]])
+    const orderIdFor = (t: { system: string; code: string }) => labOrderId('FAC-1', 'CS-1', t)
+    const [r] = requests(order('reference'), { tests: [twoTests.tests[0]] }, { codingsBefore, orderIdFor })
+    // The id from before the Test code existed: the catalog system and the id, nothing else.
+    expect(r.id).toBe(labOrderId('FAC-1', 'CS-1', { system: CATALOG, code: 'HIVVL' }))
   })
 
   it('writes one ServiceRequest per test, each carrying the same requisition number', () => {

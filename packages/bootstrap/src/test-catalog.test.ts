@@ -8,7 +8,7 @@ import {
 import { createOperations, LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { createTerminologyBulkSync } from '@openldr/sync';
 import {
-  createTestCatalog, newTestId, parseCatalogListQuery, catalogChangeAction, readCatalogImportFile, TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM,
+  createTestCatalog, newTestId, parseCatalogListQuery, catalogChangeAction, readCatalogImportFile, TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM, TEST_CODE_SYSTEM,
   LAB_TESTS_VALUE_SET, TEST_CATEGORY_VALUE_SET, withLabTestsList,
   type CatalogListQuery, type CatalogListResult, type CatalogTestInput, type CatalogImportInput,
 } from './test-catalog';
@@ -866,14 +866,27 @@ describe('test catalog: what an order needs', () => {
     expect(await catalog.specimensFor([test('CD4'), test('NOPE')])).toEqual([]);
   });
 
-  it('names each catalog test LOINC coding, for tests with an active link only', async () => {
+  it('names the codings an order writes in front of each catalog test: LOINC when linked, then the Test code', async () => {
     const { catalog } = await buildCatalog();
     await catalog.create({ testCode: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
     await catalog.create({ testCode: 'CD4', display: 'CD4 count' });
     await catalog.create({ testCode: 'GLU', display: 'Glucose', loinc: '2345-7' });
     await catalog.update('GLU', { display: 'Glucose', loinc: null });
-    const found = await catalog.loincCodingsFor([test('HIVVL'), test('CD4'), test('GLU'), { system: LOINC_SYSTEM, code: '718-7' }]);
-    expect([...found]).toEqual([[`${TEST_CATALOG_SYSTEM}|HIVVL`, { system: LOINC_SYSTEM, code: '25836-8' }]]);
+    const found = await catalog.orderCodingsFor([test('HIVVL'), test('CD4'), test('GLU'), test('NOPE'), { system: LOINC_SYSTEM, code: '718-7' }]);
+    expect([...found].sort(([a], [b]) => a.localeCompare(b))).toEqual([
+      [`${TEST_CATALOG_SYSTEM}|CD4`, [{ system: TEST_CODE_SYSTEM, code: 'CD4' }]],
+      [`${TEST_CATALOG_SYSTEM}|GLU`, [{ system: TEST_CODE_SYSTEM, code: 'GLU' }]],
+      [`${TEST_CATALOG_SYSTEM}|HIVVL`, [{ system: LOINC_SYSTEM, code: '25836-8' }, { system: TEST_CODE_SYSTEM, code: 'HIVVL' }]],
+    ]);
+  });
+
+  it('keys the codings by the id and names the Test code a test has now', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const made = await catalog.create({ testCode: 'VL', display: 'HIV viral load' });
+    expect(made.code).toMatch(/^tst-/);
+    await catalog.update(made.code, { display: 'HIV viral load', testCode: 'HIVVL2' });
+    const found = await catalog.orderCodingsFor([test(made.code)]);
+    expect([...found]).toEqual([[`${TEST_CATALOG_SYSTEM}|${made.code}`, [{ system: TEST_CODE_SYSTEM, code: 'HIVVL2' }]]]);
   });
 });
 

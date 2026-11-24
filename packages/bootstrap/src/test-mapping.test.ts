@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseObservedQuery } from './test-mapping';
+import { TEST_CATALOG_SYSTEM, TEST_CODE_SYSTEM } from './test-catalog';
 import { buildMapping, seedCatalogTest, seedMapping, seedRequest } from './test-support/test-mapping-fixture';
 
 const DISA = 'urn:openldr:disa';
@@ -14,12 +15,53 @@ describe('test mapping: read side and rebuild', () => {
 
     const result = await mapping.publish({ apply: true });
 
-    expect(result).toEqual({ mapped: 2, ambiguous: [], targetMissing: [], results: NO_RESULTS, selfRows: 1, written: 3 });
+    expect(result).toEqual({ mapped: 2, ambiguous: [], targetMissing: [], results: NO_RESULTS, selfRows: 2, written: 4 });
     const rows = await externalDb.selectFrom('test_map').selectAll().where('source_system', '=', DISA).orderBy('source_code').execute();
     expect(rows.map((r) => [r.id, r.level, r.source_system, r.source_code, r.catalog_code, r.catalog_name, r.category, r.loinc])).toEqual([
       [`test|${DISA}|HIVVL`, 'test', DISA, 'HIVVL', 'VL', 'HIV viral load', 'MOL', '25836-8'],
       [`test|${DISA}|POCVR`, 'test', DISA, 'POCVR', 'VL', 'HIV viral load', 'MOL', '25836-8'],
     ]);
+  });
+
+  it('publishes the Test code as catalog_code, never the id, and stores the id in the mapping', async () => {
+    const { internalDb, externalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'tst-0a1b2c3d4e5f6a7b', 'HIV viral load', { loinc: '25836-8', testCode: 'VL' });
+    await seedMapping(internalDb, 'm1', DISA, 'HIVVL', 'tst-0a1b2c3d4e5f6a7b');
+
+    await mapping.publish({ apply: true });
+
+    const rows = await externalDb.selectFrom('test_map').select(['source_system', 'source_code', 'catalog_code', 'loinc'])
+      .orderBy('source_system').orderBy('source_code').execute();
+    expect(rows).toEqual([
+      // Orders saved before Test codes carry the id in the catalog system, so that self row stays.
+      { source_system: TEST_CATALOG_SYSTEM, source_code: 'tst-0a1b2c3d4e5f6a7b', catalog_code: 'VL', loinc: '25836-8' },
+      // New orders lead with the Test code when the test has no LOINC link.
+      { source_system: TEST_CODE_SYSTEM, source_code: 'VL', catalog_code: 'VL', loinc: '25836-8' },
+      { source_system: DISA, source_code: 'HIVVL', catalog_code: 'VL', loinc: '25836-8' },
+    ]);
+  });
+
+  it('joins a new order that leads with the Test code, and an order saved before, to the same test', async () => {
+    const { internalDb, externalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'CD4', 'CD4 count', { testCode: 'CD4C' });
+    await seedRequest(externalDb, 'r-old', TEST_CATALOG_SYSTEM, 'CD4', 'CD4 count', '2026-11-01');
+    await seedRequest(externalDb, 'r-new', TEST_CODE_SYSTEM, 'CD4C', 'CD4 count', '2026-11-24');
+    await mapping.publish({ apply: true });
+
+    const joined = await externalDb.selectFrom('lab_requests as lr')
+      .innerJoin('test_map as tm', (j) => j.on('tm.level', '=', 'test').onRef('tm.source_system', '=', 'lr.panel_system').onRef('tm.source_code', '=', 'lr.panel_code'))
+      .select(['lr.id', 'tm.catalog_code']).orderBy('lr.id').execute();
+    expect(joined).toEqual([{ id: 'r-new', catalog_code: 'CD4C' }, { id: 'r-old', catalog_code: 'CD4C' }]);
+    // CE's own orders are not lab codes to map.
+    expect((await mapping.observed({ status: 'all', q: '', limit: 25, offset: 0 })).rows).toEqual([]);
+  });
+
+  it('ignores a mapping from the Test code system, so it cannot collide with the self row', async () => {
+    const { internalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    await seedMapping(internalDb, 'bad', TEST_CODE_SYSTEM, 'VL', 'VL');
+
+    expect(await mapping.rebuildNow()).toMatchObject({ ok: true, result: { mapped: 0, selfRows: 2, written: 2 } });
   });
 
   it('leaves out an ambiguous code and a code whose catalog test is gone, and reports both', async () => {
