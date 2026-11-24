@@ -15,16 +15,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { TermPicker } from '@/terminology/TermPicker';
 import { OntologyPickerDialog } from '@/terminology/ontology/OntologyPickerDialog';
 import {
   createCatalogTest, getLoincHints, resultFieldsFromLoinc, setCatalogLabSettings, termExists, updateCatalogTest,
-  type LoincHints, type Term,
+  type LoincFieldPlan, type LoincHints, type Term,
   type CatalogLabSettingsInput, type CatalogTestResultParam, type CatalogSpecimenCoding, type CatalogTest, type CatalogTestInput,
   type CatalogAgeUnit, type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
 import { criteriaLabel, sexLabel, type RangeCopy } from '@/forms-runtime/rangeLabel';
 import { AddResultFieldSheet } from './AddResultFieldSheet';
+import { addFromLoinc, dropLoincAdded, type LoincAdded } from './loinc-draft';
 
 // Test catalog S2 (spec 4.3): add or edit one test, and this lab's own settings for it. Copies
 // forms-builder/FieldEditorSheet.tsx (AGENTS.md section 5).
@@ -78,6 +83,11 @@ function addParams(list: CatalogTestResultParam[], params: CatalogTestResultPara
   const next = [...list];
   for (const p of params) if (!next.some((k) => k.code === p.code)) next.push(p);
   return next;
+}
+
+/** The record of what a pick or a fill put on the draft. Only the plans it added can be made on Save. */
+function loincRecord(loinc: string, plans: LoincFieldPlan[], added: string[]): LoincAdded {
+  return { loinc, params: added, newFields: plans.filter((p) => !p.exists && added.includes(p.code)) };
 }
 
 function setParam(list: CatalogTestResultParam[], code: string, next: CatalogTestResultParam): CatalogTestResultParam[] {
@@ -168,8 +178,14 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   // What LOINC says about the test's code. Null when LOINC or its ontology is not loaded, and then the
   // sheet shows no hint and offers no LOINC action (spec, call 7).
   const [hints, setHints] = useState<LoincHints | null>(null);
-  /** The field codes from-loinc answered for a LOINC code. A reused field may have its own code (CHOL for 2093-3). */
-  const [loincTaken, setLoincTaken] = useState<{ loinc: string; codes: string[] } | null>(null);
+  // What the last LOINC pick put on the draft, so another pick or clearing the code takes it back (plan
+  // call 4). Each panel fill keeps its own record, which a pick never drops.
+  const [loincPick, setLoincPick] = useState<LoincAdded | null>(null);
+  const loincPickNow = useRef(loincPick);
+  loincPickNow.current = loincPick;
+  const [loincFills, setLoincFills] = useState<LoincAdded[]>([]);
+  // A panel fill on a test that has fields waits here for Replace, Add or Cancel.
+  const [fillAsk, setFillAsk] = useState<{ loinc: string; plans: LoincFieldPlan[] } | null>(null);
   const hintsAsked = useRef(0);
   // The draft as last drawn, for the steps that run after a request comes back.
   const draftNow = useRef(draft);
@@ -197,6 +213,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     setDraft(draftFrom(test));
     setSaved(test);
     setAddedParams([]);
+    setLoincPick(null);
+    setLoincFills([]);
   }, [target]);
 
   // A saved code shows its hints, but fills nothing: only a code picked here fills empty fields. Keyed
@@ -222,29 +240,65 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     }
   }
 
-  /** Make or reuse LOINC's result fields and tick them. One already ticked keeps its type, value set and ranges. */
-  async function takeFromLoinc(h: LoincHints, panel: boolean): Promise<void> {
-    try {
-      const answer = await resultFieldsFromLoinc([h.code], panel);
-      setLoincTaken({ loinc: h.code, codes: answer.params.map((p) => p.code) });
-      const names = new Map<string, string | null>(panel ? h.panelMembers.map((m) => [m.code, m.display]) : [[h.code, h.display]]);
-      const ticked = draftNow.current.resultParams;
-      const fresh = answer.params.filter((p) => !ticked.some((k) => k.code === p.code));
-      takeParams(
-        answer.params.map((p) => ({ system: p.system, code: p.code, display: names.get(p.code) ?? p.code, units: panel ? null : h.unit })),
-        answer.params,
-      );
-      toast.success(fresh.length > 0
-        ? t('testCatalog.sheet.loincFieldsAdded', { count: fresh.length })
-        : t('testCatalog.sheet.loincFieldsKept'));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+  // A plan carries no system. Every result field is in the one result dictionary, so a new param takes
+  // its system, and Save puts the server's answer in its place.
+  const fieldSystem = options.resultParams[0]?.system ?? '';
+
+  /** Use LOINC's result field: put it on the draft as a pick does, and count it as the pick's. */
+  function takeLoincField(h: LoincHints, plan: LoincFieldPlan): void {
+    const out = addFromLoinc(draftNow.current.resultParams, [plan], 'add', fieldSystem);
+    set({ resultParams: out.params });
+    const rec = loincRecord(h.code, [plan], out.added);
+    const last = loincPickNow.current;
+    setLoincPick(last && last.loinc === h.code
+      ? { loinc: h.code, params: [...last.params, ...rec.params], newFields: [...last.newFields, ...rec.newFields] }
+      : rec);
+    toast.success(out.added.length > 0
+      ? t('testCatalog.sheet.loincFieldsAdded', { count: out.added.length })
+      : t('testCatalog.sheet.loincFieldsKept'));
+  }
+
+  /** Fill from panel (spec call 4): into the draft only, like a pick (plan call 2). A test that has
+   *  fields is asked first whether to replace them or add the missing ones. */
+  function fillFromPanel(h: LoincHints): void {
+    const skipped = h.panelMembers.filter((m) => !m.field);
+    if (skipped.length > 0) {
+      const list = skipped.map((m) => (m.fieldProblem ? `${m.display} (${m.fieldProblem})` : m.display)).join(', ');
+      toast.error(t('testCatalog.sheet.panelSkipped', { list }));
     }
+    const plans = h.panelMembers.flatMap((m) => (m.field ? [m.field] : []));
+    if (plans.length === 0) return;
+    if (draftNow.current.resultParams.length === 0) applyFill(h.code, plans, 'add');
+    else setFillAsk({ loinc: h.code, plans });
+  }
+
+  function applyFill(loinc: string, plans: LoincFieldPlan[], mode: 'add' | 'replace'): void {
+    setFillAsk(null);
+    const out = addFromLoinc(draftNow.current.resultParams, plans, mode, fieldSystem);
+    set({ resultParams: out.params });
+    const rec = loincRecord(loinc, plans, out.added);
+    if (mode === 'replace') {
+      // Replace took every param off the draft, so no earlier record has anything left to take back.
+      setLoincPick(null);
+      setLoincFills([rec]);
+    } else {
+      setLoincFills((prev) => [...prev, rec]);
+    }
+    toast.success(out.added.length > 0
+      ? t('testCatalog.sheet.loincFieldsAdded', { count: out.added.length })
+      : t('testCatalog.sheet.loincFieldsKept'));
   }
 
   /** A LOINC code picked here, from the search or the tree: fill an empty name, short name, category and
    *  specimen from its hints, and leave the rest to the hint lines. */
   async function pickLoinc(code: string): Promise<void> {
+    // Plan call 4: another pick, or clearing the code, first takes back what the last pick added.
+    const last = loincPickNow.current;
+    if (last) {
+      setDraft((d) => ({ ...d, resultParams: dropLoincAdded(d.resultParams, last) }));
+      setLoincPick(null);
+      loincPickNow.current = null;
+    }
     set({ loinc: code });
     const h = await readHints(code);
     if (!h) return;
@@ -260,16 +314,37 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     if (d.specimens.length === 0 && only && options.specimenTypes.some((o) => sameCoding(o, only))) {
       patch.specimens = [{ system: only.system, code: only.code }];
     }
+    // Spec call 2, plan call 3: LOINC's result field, only on a test with no other result field, as
+    // Corlix seeds a field only on an empty list. A panel adds none; it offers Fill from panel. A new
+    // field is made on Save, never here.
+    // The draft read here may not show the drop above yet, so drop again. It takes nothing twice.
+    const params = dropLoincAdded(d.resultParams, last);
+    if (h.field && h.panelMembers.length === 0 && params.length === 0) {
+      const out = addFromLoinc(params, [h.field], 'add', fieldSystem);
+      patch.resultParams = out.params;
+      setLoincPick(loincRecord(h.code, [h.field], out.added));
+    }
     if (Object.keys(patch).length > 0) set(patch);
-    // A pick writes nothing. LOINC's result field is only a hint line until someone chooses Use LOINC's
-    // result field or Fill from panel from the Result parameters menu (spec call 6).
   }
 
   const isNew = saved === null;
-  const paramOptions: ParamOption[] = [
+  const knownParams: ParamOption[] = [
     ...options.resultParams,
     ...addedParams.filter((a) => !options.resultParams.some((o) => o.code === a.code)),
   ];
+  // The new fields a pick or fill put on the draft, not in the dictionary until Save makes them. Shown in
+  // the field list by the plan's name, with its unit for a new range.
+  const pendingFields: LoincFieldPlan[] = [];
+  for (const plan of [...(loincPick?.newFields ?? []), ...loincFills.flatMap((f) => f.newFields)]) {
+    if (!knownParams.some((o) => o.code === plan.code) && !pendingFields.some((p) => p.code === plan.code)) pendingFields.push(plan);
+  }
+  const paramOptions: ParamOption[] = [
+    ...knownParams,
+    ...pendingFields.map((p) => ({ system: fieldSystem, code: p.code, display: p.display, units: p.unit })),
+  ];
+  const isPending = (code: string) => pendingFields.some((p) => p.code === code);
+  const loincFieldOffer = hints && hints.panelMembers.length === 0 && hints.field
+    && !(loincPick?.loinc === hints.code && loincPick.params.includes(hints.field.code)) ? hints.field : null;
   /** Show these new dictionary fields and tick their parameters, keeping any already ticked as they are. */
   const takeParams = (fields: ParamOption[], params: CatalogTestResultParam[]): void => {
     setAddedParams((prev) => [...prev, ...fields.filter((f) => !prev.some((p) => p.code === f.code))]);
@@ -298,9 +373,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
   const specimenMapHint = unmatched.length > 0;
   const resultHint = !hints ? null
     : hints.panelMembers.length > 0 ? t('testCatalog.sheet.hintPanel', { count: hints.panelMembers.length })
-      // Gone once the field is ticked: LOINC's own code, or the field from-loinc answered for it.
-      : draft.resultParams.some((p) => p.code === hints.code
-        || (loincTaken?.loinc === hints.code && loincTaken.codes.includes(p.code))) ? null
+      // Gone once the field is ticked: LOINC's own code, or the field that stands for it (CHOL for 2093-3).
+      : draft.resultParams.some((p) => p.code === hints.code || p.code === hints.field?.code) ? null
         : t('testCatalog.sheet.hintResult', { name: hints.display ?? hints.code, unit: hints.unit ? ` (${hints.unit})` : '' });
   // The lab chooses from the catalog list being edited here, or from central's list at a lab.
   const offered = ownedHere ? draft.specimens : saved?.specimenTypes ?? [];
@@ -332,12 +406,28 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
     try {
       let test = saved;
       if (ownedHere) {
+        // The ticked new fields are made first. An unticked one is never made. When the test save fails
+        // after this, the next Save asks again and the server reuses what it made (review focus 2).
+        const making = pendingFields.filter((p) => draft.resultParams.some((r) => r.code === p.code));
+        let resultParams = draft.resultParams;
+        let made: ParamOption[] = [];
+        if (making.length > 0) {
+          const answer = await resultFieldsFromLoinc(
+            making.map((p) => p.loinc), false, Object.fromEntries(making.map((p) => [p.loinc, p.display])),
+          );
+          const systemOf = (code: string) => answer.params.find((a) => a.code === code)?.system;
+          resultParams = resultParams.map((p) => {
+            const system = systemOf(p.code);
+            return system ? { ...p, system } : p;
+          });
+          made = making.map((p) => ({ system: systemOf(p.code) ?? fieldSystem, code: p.code, display: p.display, units: p.unit }));
+        }
         const input: CatalogTestInput = {
           display: draft.display,
           shortName: draft.shortName.trim() || null,
           category: draft.category || null,
           specimenTypes: draft.specimens,
-          resultParams: draft.resultParams,
+          resultParams,
           loinc: draft.loinc.trim() || null,
           active: draft.active,
           expectedTatHours: draft.expectedTatHours,
@@ -348,6 +438,13 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
           ? await updateCatalogTest(test.code, input)
           : await createCatalogTest({ ...input, code: draft.code.trim() || null });
         setSaved(test);
+        if (made.length > 0) {
+          // Now ordinary dictionary fields: shown as added, no longer marked new.
+          setAddedParams((prev) => [...prev, ...made.filter((f) => !prev.some((p) => p.code === f.code))]);
+          setLoincPick((p) => (p ? { ...p, newFields: [] } : p));
+          setLoincFills((prev) => prev.map((f) => ({ ...f, newFields: [] })));
+          onOptionsChanged?.();
+        }
       }
       if (!test) return;
       const lab = labInput(draft, test.specimenTypes);
@@ -578,13 +675,13 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                       <DropdownMenuItem data-testid="add-field" onSelect={() => setAddingField(true)}>
                         {t('testCatalog.sheet.addField')}
                       </DropdownMenuItem>
-                      {hints && hints.panelMembers.length === 0 ? (
-                        <DropdownMenuItem data-testid="use-loinc-field" onSelect={() => void takeFromLoinc(hints, false)}>
+                      {hints && loincFieldOffer ? (
+                        <DropdownMenuItem data-testid="use-loinc-field" onSelect={() => takeLoincField(hints, loincFieldOffer)}>
                           {t('testCatalog.sheet.useLoincField')}
                         </DropdownMenuItem>
                       ) : null}
                       {hints && hints.panelMembers.length > 0 ? (
-                        <DropdownMenuItem data-testid="fill-from-panel" onSelect={() => void takeFromLoinc(hints, true)}>
+                        <DropdownMenuItem data-testid="fill-from-panel" onSelect={() => fillFromPanel(hints)}>
                           {t('testCatalog.sheet.fillFromPanel')}
                         </DropdownMenuItem>
                       ) : null}
@@ -612,6 +709,11 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
                             onCheckedChange={(c) => set({ resultParams: toggleParam(draft.resultParams, p, !!c) })}
                           />
                           <span className="min-w-0 flex-1 break-words text-foreground">{p.display ?? p.code}</span>
+                          {chosen && isPending(p.code) ? (
+                            <Badge variant="secondary" data-testid={`new-${p.code}`} className="shrink-0 px-1.5 py-0 text-[10px] font-normal">
+                              {t('testCatalog.sheet.newWithTest')}
+                            </Badge>
+                          ) : null}
                           <span className="font-mono text-xs text-muted-foreground">{p.code}</span>
                         </label>
                         {chosen ? (
@@ -891,6 +993,31 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved, onOpti
             onPick={(node) => { void pickLoinc(node.code); }}
           />
         ) : null}
+        {/* A confirm prompt with three answers, so a dialog, not a sheet (AGENTS.md section 5).
+            ConfirmDialog holds one action only. */}
+        <AlertDialog open={fillAsk !== null} onOpenChange={(o) => { if (!o) setFillAsk(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('testCatalog.sheet.fillFromPanelTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('testCatalog.sheet.fillFromPanelDescription')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="fill-cancel">{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                data-testid="fill-add" className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                onClick={() => { if (fillAsk) applyFill(fillAsk.loinc, fillAsk.plans, 'add'); }}
+              >
+                {t('testCatalog.sheet.fillAdd')}
+              </AlertDialogAction>
+              <AlertDialogAction
+                data-testid="fill-replace"
+                onClick={() => { if (fillAsk) applyFill(fillAsk.loinc, fillAsk.plans, 'replace'); }}
+              >
+                {t('testCatalog.sheet.fillReplace')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <AddResultFieldSheet
         open={addingField}
         ucum={options.ucum ?? null}

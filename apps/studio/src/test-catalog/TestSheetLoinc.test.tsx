@@ -11,9 +11,10 @@ vi.mock('@/terminology/TermPicker', () => ({
     detail?: (t: { shortName: string | null; class: string | null; unit: string | null }) => string | null;
   }) => (
     <div>
-      {['6429-5', '2093-3', '24331-1'].map((code) => (
+      {['6429-5', '2093-3', '2571-8', '24331-1'].map((code) => (
         <button key={code} type="button" data-testid={`pick-${code}`} aria-label={ariaLabel} onClick={() => onChange({ system: 'http://loinc.org', code, display: null })}>{code}</button>
       ))}
+      <button type="button" data-testid="pick-clear" onClick={() => onChange(null)}>clear</button>
       {detail ? <span data-testid="detail-sample">{detail({ shortName: 'Cholest SerPl-mCnc', class: 'CHEM', unit: null })}</span> : null}
     </div>
   ),
@@ -70,13 +71,18 @@ const CHOL: api.LoincHints = {
   field: { loinc: '2093-3', code: '2093-3', display: 'Cholesterol', resultType: 'numeric', unit: 'mg/dL', valueSetUrl: null, exists: false },
   fieldProblem: null,
 };
+const TRIG_PLAN: api.LoincFieldPlan = { loinc: '2571-8', code: '2571-8', display: 'Triglyceride', resultType: 'numeric', unit: 'mg/dL', valueSetUrl: null, exists: false };
+const TRIG: api.LoincHints = {
+  ...CHOL, code: '2571-8', display: 'Triglyceride [Mass/volume] in Serum or Plasma', shortName: 'Trigl SerPl-mCnc',
+  component: 'Triglyceride', field: TRIG_PLAN,
+};
 const LIPID: api.LoincHints = {
   ...NO_FIELD,
   code: '24331-1', display: 'Lipid panel', class: 'PANEL.CHEM', categorySuggestion: null, unit: null, resultType: 'text',
   specimens: [], answers: [],
   panelMembers: [
-    { code: '2093-3', display: 'Cholesterol', required: true, field: null, fieldProblem: null },
-    { code: '2571-8', display: 'Triglyceride', required: false, field: null, fieldProblem: null },
+    { code: '2093-3', display: 'Cholesterol', required: true, field: CHOL.field, fieldProblem: null },
+    { code: '2571-8', display: 'Triglyceride', required: false, field: TRIG_PLAN, fieldProblem: null },
   ],
 };
 const param = (code: string, over: Partial<api.CatalogTestResultParam> = {}): api.CatalogTestResultParam => (
@@ -130,45 +136,28 @@ describe('TestSheet: LOINC hints fill empty fields', () => {
     expect(screen.queryByTestId('hint-category')).toBeNull();
   });
 
-  it("Use LOINC's result field makes and ticks it, and a new range on it starts with LOINC's unit", async () => {
+  it("a pick ticks LOINC's result field, and a new range on it starts with LOINC's unit", async () => {
     hintsFor({ '2093-3': CHOL });
-    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));
     renderSheet();
     await pickLoinc('2093-3');
-    await choose('result-params-menu', 'use-loinc-field');
-    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['2093-3'], false);
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
     expect(checked('param-2093-3')).toBe(true);
-    expect(toast.success).toHaveBeenCalledWith('1 result field from LOINC ticked on this test.');
     expect(screen.queryByTestId('hint-result')).toBeNull();
     await choose('param-menu-2093-3', 'add-band-2093-3');
     expect(screen.getByRole('textbox', { name: 'unit for 2093-3 band 1' })).toHaveProperty('value', 'mg/dL');
   });
 
-  it("drops the hint after Use LOINC's result field reused a field with its own code", async () => {
-    hintsFor({ '2093-3': CHOL });
-    const options = { ...OPTIONS, resultParams: [...OPTIONS.resultParams, { system: RESULT, code: 'CHOL', display: 'Cholesterol', units: 'mg/dL' }] };
-    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue({ params: [param('CHOL')], created: [], reused: ['CHOL'], valueSetsCreated: [] });
-    renderSheet(NEW_TEST(), options);
-    await pickLoinc('2093-3');
-    expect(screen.getByTestId('hint-result')).toBeTruthy();
-    await choose('result-params-menu', 'use-loinc-field');
-    expect(checked('param-CHOL')).toBe(true);
-    expect(screen.queryByTestId('hint-result')).toBeNull();
-  });
-
-  it('picking one code and then another ticks nothing until the menu is used, and the menu uses the last code', async () => {
+  it('picking a code with no field and then one with a field ticks only the last one, made on Save', async () => {
     hintsFor({ '2093-3': CHOL, '6429-5': HIV });
     vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));
     renderSheet();
     await pickLoinc('6429-5');
+    expect(screen.queryByTestId('param-6429-5')).toBeNull();
     await pickLoinc('2093-3');
     expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
-    expect(screen.queryByTestId('param-6429-5')).toBeNull();
-    expect(screen.getByTestId('hint-result').textContent).toBe("LOINC's result field: Cholesterol [Mass/volume] in Serum or Plasma (mg/dL).");
-    await choose('result-params-menu', 'use-loinc-field');
-    expect(api.resultFieldsFromLoinc).toHaveBeenCalledTimes(1);
-    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['2093-3'], false);
     expect(await savedParams()).toEqual([param('2093-3')]);
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledTimes(1);
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['2093-3'], false, { '2093-3': 'Cholesterol' });
   });
 
   // Review focus 3.
@@ -189,14 +178,14 @@ describe('TestSheet: LOINC hints fill empty fields', () => {
   });
 
   it("Use LOINC's result field keeps a parameter already ticked, its value set included", async () => {
-    hintsFor({ '6429-5': HIV });
-    const kept = param('6429-5', { resultType: 'coded', valueSetUrl: 'urn:openldr:valueset:mine' });
-    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('6429-5', { resultType: 'text' })]));
-    renderSheet(NEW_TEST({ loinc: '6429-5', resultParams: [kept] }));
-    await waitFor(() => expect(api.getLoincHints).toHaveBeenCalledWith('6429-5'));
+    hintsFor({ '2093-3': CHOL });
+    const kept = param('2093-3', { resultType: 'coded', valueSetUrl: 'urn:openldr:valueset:mine' });
+    renderSheet(NEW_TEST({ loinc: '2093-3', resultParams: [kept] }));
+    await waitFor(() => expect(api.getLoincHints).toHaveBeenCalledWith('2093-3'));
     await choose('result-params-menu', 'use-loinc-field');
     expect(toast.success).toHaveBeenCalledWith("LOINC's result fields are already on this test.");
     expect(await savedParams()).toEqual([kept]);
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
   });
 
   it('opens a saved code with its hints but fills nothing', async () => {
@@ -210,23 +199,65 @@ describe('TestSheet: LOINC hints fill empty fields', () => {
 });
 
 describe('TestSheet: Fill from panel', () => {
-  it('adds the members in LOINC order and keeps one already ticked', async () => {
+  it('asks on a test with fields, and Add keeps one already ticked and adds the rest in LOINC order', async () => {
     hintsFor({ '24331-1': LIPID });
     const kept = param('2093-3', { bands: [{ name: null, low: 0, high: 5, unit: 'mmol/L', sex: null, ageLow: null, ageHigh: null }] });
-    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3'), param('2571-8')]));
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2571-8')]));
     renderSheet(NEW_TEST({ resultParams: [param('HGB'), kept] }));
     await pickLoinc('24331-1');
-    // A panel has no result of its own, so picking it makes no field by itself.
-    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    // A panel has no result of its own, so picking it adds no field by itself.
+    expect([checked('param-HGB'), screen.queryByTestId('param-2571-8')]).toEqual([true, null]);
     expect(screen.getByTestId('hint-result').textContent).toBe('This LOINC code is a panel of 2 tests. Fill from panel adds them.');
     await openMenu('result-params-menu');
     expect(screen.queryByTestId('use-loinc-field')).toBeNull();
     await act(async () => { fireEvent.click(screen.getByTestId('fill-from-panel')); });
-    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['24331-1'], true);
-    // Named in the field list. As a numeric field it also heads its own Reference ranges block.
+    expect(await screen.findByRole('alertdialog')).toBeTruthy();
+    expect(screen.getByText('Fill from the panel')).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByTestId('fill-add')); });
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    // Named in the field list from the plan, and marked as made on Save.
     expect(screen.getByTestId('param-2571-8').closest('label')!.textContent).toContain('Triglyceride');
+    expect(screen.getByTestId('new-2571-8').textContent).toBe('New, saved with the test');
     expect(toast.success).toHaveBeenCalledWith('1 result field from LOINC ticked on this test.');
     expect(await savedParams()).toEqual([param('HGB'), kept, param('2571-8')]);
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['2571-8'], false, { '2571-8': 'Triglyceride' });
+  });
+
+  it('Replace leaves only the members, and Cancel changes nothing', async () => {
+    hintsFor({ '24331-1': LIPID });
+    renderSheet(NEW_TEST({ loinc: '24331-1', resultParams: [param('HGB')] }));
+    await waitFor(() => expect(api.getLoincHints).toHaveBeenCalled());
+    await choose('result-params-menu', 'fill-from-panel');
+    await act(async () => { fireEvent.click(await screen.findByTestId('fill-cancel')); });
+    expect([checked('param-HGB'), screen.queryByTestId('param-2093-3')]).toEqual([true, null]);
+    await choose('result-params-menu', 'fill-from-panel');
+    await act(async () => { fireEvent.click(await screen.findByTestId('fill-replace')); });
+    expect([checked('param-HGB'), checked('param-2093-3'), checked('param-2571-8')]).toEqual([false, true, true]);
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3'), param('2571-8')]));
+    expect(await savedParams()).toEqual([param('2093-3'), param('2571-8')]);
+  });
+
+  it('adds the members in order on an empty test without asking', async () => {
+    hintsFor({ '24331-1': LIPID });
+    renderNew();
+    await pickLoinc('24331-1');
+    await choose('result-params-menu', 'fill-from-panel');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    const ids = [...document.querySelectorAll('[data-testid^="param-"]')].map((e) => e.getAttribute('data-testid'));
+    expect(ids.filter((id) => !id!.startsWith('param-menu-'))).toEqual(['param-HGB', 'param-2093-3', 'param-2571-8']);
+    expect([checked('param-2093-3'), checked('param-2571-8')]).toEqual([true, true]);
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+  });
+
+  it('skips a member with no usable field and names it with the reason', async () => {
+    const problem = 'CHOL is a different kind of result';
+    hintsFor({ '24331-1': { ...LIPID, panelMembers: [{ ...LIPID.panelMembers[0], field: null, fieldProblem: problem }, LIPID.panelMembers[1]] } });
+    renderNew();
+    await pickLoinc('24331-1');
+    await choose('result-params-menu', 'fill-from-panel');
+    expect(screen.queryByTestId('param-2093-3')).toBeNull();
+    expect(checked('param-2571-8')).toBe(true);
+    expect(toast.error).toHaveBeenCalledWith(`Not added from the panel: Cholesterol (${problem}).`);
   });
 
   it('keeps the ticks when the page reads the choices again', async () => {
@@ -400,5 +431,149 @@ describe('TestSheet: Browse LOINC and the search line', () => {
   it("gives each search result LOINC's short name, class and unit, skipping empty ones", () => {
     renderNew();
     expect(screen.getByTestId('detail-sample').textContent).toBe('Cholest SerPl-mCnc · CHEM');
+  });
+});
+
+// Spec call 2, plan calls 2 to 4.
+describe("TestSheet: LOINC's result field goes into the unsaved test", () => {
+  async function saveNew(): Promise<void> {
+    await choose('test-sheet-menu', 'test-sheet-save');
+  }
+
+  it('picking 2093-3 on a new test ticks a Cholesterol field marked new, and asks nothing before Save', async () => {
+    hintsFor({ '2093-3': CHOL });
+    renderNew();
+    await pickLoinc('2093-3');
+    expect(checked('param-2093-3')).toBe(true);
+    expect(screen.getByTestId('param-2093-3').closest('label')!.textContent).toContain('Cholesterol');
+    expect(screen.getByTestId('new-2093-3').textContent).toBe('New, saved with the test');
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+  });
+
+  it('Save makes the new field first, then the test with its param', async () => {
+    hintsFor({ '2093-3': CHOL });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));
+    vi.mocked(api.createCatalogTest).mockResolvedValue(NEW_TEST());
+    const onOptionsChanged = vi.fn();
+    render(<TestSheet target={{ kind: 'create' }} options={OPTIONS} ownedHere onSaved={vi.fn()} onClose={vi.fn()} onOptionsChanged={onOptionsChanged} />);
+    await pickLoinc('2093-3');
+    await saveNew();
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledWith(['2093-3'], false, { '2093-3': 'Cholesterol' });
+    expect(vi.mocked(api.createCatalogTest).mock.calls[0][0].resultParams).toEqual([param('2093-3')]);
+    const fromLoinc = vi.mocked(api.resultFieldsFromLoinc).mock.invocationCallOrder[0];
+    const create = vi.mocked(api.createCatalogTest).mock.invocationCallOrder[0];
+    expect(fromLoinc).toBeLessThan(create);
+    expect(onOptionsChanged.mock.invocationCallOrder[0]).toBeGreaterThan(create);
+  });
+
+  it('never makes a new field that was unticked', async () => {
+    hintsFor({ '2093-3': CHOL });
+    vi.mocked(api.createCatalogTest).mockResolvedValue(NEW_TEST());
+    renderNew();
+    await pickLoinc('2093-3');
+    fireEvent.click(screen.getByTestId('param-2093-3'));
+    await saveNew();
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    expect(vi.mocked(api.createCatalogTest).mock.calls[0][0].resultParams).toEqual([]);
+  });
+
+  it('another pick drops the last pick\'s field and adds its own, and clearing drops that', async () => {
+    hintsFor({ '2093-3': CHOL, '2571-8': TRIG });
+    renderNew();
+    await pickLoinc('2093-3');
+    await pickLoinc('2571-8');
+    expect(screen.queryByTestId('param-2093-3')).toBeNull();
+    expect(checked('param-2571-8')).toBe(true);
+    expect(screen.getByTestId('param-2571-8').closest('label')!.textContent).toContain('Triglyceride');
+    await act(async () => { fireEvent.click(screen.getByTestId('pick-clear')); });
+    expect(screen.queryByTestId('param-2571-8')).toBeNull();
+    expect(checked('param-HGB')).toBe(false);
+  });
+
+  it('keeps a field ticked by hand after the pick when another code is picked', async () => {
+    hintsFor({ '2093-3': CHOL, '2571-8': TRIG });
+    renderNew();
+    await pickLoinc('2093-3');
+    fireEvent.click(screen.getByTestId('param-HGB'));
+    await pickLoinc('2571-8');
+    // HGB is a field the pick did not add, so the new pick adds nothing.
+    expect(checked('param-HGB')).toBe(true);
+    expect(screen.queryByTestId('param-2093-3')).toBeNull();
+    expect(screen.queryByTestId('param-2571-8')).toBeNull();
+  });
+
+  // Review focus 5.
+  it('a field the dictionary already has under its own code is ticked, not made', async () => {
+    const options = { ...OPTIONS, resultParams: [...OPTIONS.resultParams, { system: RESULT, code: 'CHOL', display: 'Cholesterol', units: 'mg/dL' }] };
+    hintsFor({ '2093-3': { ...CHOL, field: { ...CHOL.field!, code: 'CHOL', exists: true } } });
+    vi.mocked(api.createCatalogTest).mockResolvedValue(NEW_TEST());
+    renderNew(options);
+    await pickLoinc('2093-3');
+    expect(checked('param-CHOL')).toBe(true);
+    expect(screen.queryByTestId('new-CHOL')).toBeNull();
+    expect(screen.queryByTestId('hint-result')).toBeNull();
+    await saveNew();
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    expect(vi.mocked(api.createCatalogTest).mock.calls[0][0].resultParams).toEqual([param('CHOL')]);
+  });
+
+  // Review focus 1.
+  it("adds nothing to a test with a field ticked by hand, and offers Use LOINC's result field", async () => {
+    hintsFor({ '2093-3': CHOL });
+    renderSheet(NEW_TEST({ resultParams: [param('HGB')] }));
+    await pickLoinc('2093-3');
+    expect(screen.queryByTestId('param-2093-3')).toBeNull();
+    await choose('result-params-menu', 'use-loinc-field');
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    expect([checked('param-HGB'), checked('param-2093-3')]).toEqual([true, true]);
+    expect(screen.getByTestId('new-2093-3')).toBeTruthy();
+    expect(toast.success).toHaveBeenCalledWith('1 result field from LOINC ticked on this test.');
+  });
+
+  it("has no Use LOINC's result field once the pick added it", async () => {
+    hintsFor({ '2093-3': CHOL });
+    renderNew();
+    await pickLoinc('2093-3');
+    await openMenu('result-params-menu');
+    expect(screen.queryByTestId('use-loinc-field')).toBeNull();
+  });
+
+  // Review focus 2.
+  it('a test save that fails after the fields were made sends both again on the next Save', async () => {
+    hintsFor({ '2093-3': CHOL });
+    vi.mocked(api.resultFieldsFromLoinc).mockResolvedValue(answer([param('2093-3')]));
+    vi.mocked(api.createCatalogTest).mockRejectedValueOnce(new Error('a test with code T1 already exists')).mockResolvedValueOnce(NEW_TEST());
+    renderNew();
+    await pickLoinc('2093-3');
+    await saveNew();
+    expect(toast.error).toHaveBeenCalledWith('a test with code T1 already exists');
+    expect(screen.getByTestId('new-2093-3')).toBeTruthy();
+    await saveNew();
+    expect(api.resultFieldsFromLoinc).toHaveBeenCalledTimes(2);
+    expect(api.createCatalogTest).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.resultFieldsFromLoinc).mock.invocationCallOrder[1]).toBeLessThan(vi.mocked(api.createCatalogTest).mock.invocationCallOrder[1]);
+  });
+
+  it('a failed field call sends nothing else and says why', async () => {
+    hintsFor({ '2093-3': CHOL });
+    vi.mocked(api.resultFieldsFromLoinc).mockRejectedValue(new Error('LOINC is not loaded'));
+    renderNew();
+    await pickLoinc('2093-3');
+    await saveNew();
+    expect(toast.error).toHaveBeenCalledWith('LOINC is not loaded');
+    expect(api.createCatalogTest).not.toHaveBeenCalled();
+  });
+
+  // Review focus 3.
+  it('without LOINC loaded, a typed code adds nothing and Save never makes a field', async () => {
+    vi.mocked(api.createCatalogTest).mockResolvedValue(NEW_TEST());
+    renderNew({ ...OPTIONS, loinc: null });
+    fireEvent.change(textbox('Name'), { target: { value: 'Cholesterol' } });
+    fireEvent.change(textbox('LOINC code'), { target: { value: '2093-3' } });
+    expect(screen.queryByTestId('param-2093-3')).toBeNull();
+    await saveNew();
+    expect(api.getLoincHints).not.toHaveBeenCalled();
+    expect(api.resultFieldsFromLoinc).not.toHaveBeenCalled();
+    expect(vi.mocked(api.createCatalogTest).mock.calls[0][0].resultParams).toEqual([]);
   });
 });
