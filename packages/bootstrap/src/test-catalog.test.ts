@@ -1296,12 +1296,49 @@ describe('test catalog: an internal id and a Test code', () => {
     expect((await catalog.resolve('HB'))?.code).toBe(hb.code);
     expect((await catalog.resolve(hb.code))?.code).toBe(hb.code);
     expect(await catalog.resolve('NOPE')).toBeNull();
-    // A saved test whose Test code moved away from its id: the Test code another test now holds wins.
+    // Trimmed and case ignored.
+    expect((await catalog.resolve(' hb '))?.code).toBe(hb.code);
+    // A saved test whose Test code moved away from its id is still found by both.
     await seedTest(db, 'GLU', 'Glucose', null);
     await catalog.update('GLU', { testCode: 'GLUC', display: 'Glucose' });
-    const glu = await catalog.create({ testCode: 'GLU', display: 'Glucose, fasting' });
-    expect((await catalog.resolve('GLU'))?.code).toBe(glu.code);
-    expect((await catalog.resolve('GLUC'))?.code).toBe('GLU');
+    expect((await catalog.resolve('GLU'))?.code).toBe('GLU');
+    expect((await catalog.resolve('gluc'))?.code).toBe('GLU');
+  });
+
+  it('compares Test codes trimmed and ignoring case, and keeps the one stored as typed', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await expect(catalog.create({ testCode: ' hb ', display: 'Again' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: `Test code HB is already used by Haemoglobin (${hb.code}).` });
+    const glu = await catalog.create({ testCode: 'Glu', display: 'Glucose' });
+    expect(glu.testCode).toBe('Glu');
+    await expect(catalog.update(glu.code, { testCode: 'hb', display: 'Glucose' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: `Test code HB is already used by Haemoglobin (${hb.code}).` });
+    expect((await catalog.findByTestCode('GLU'))?.code).toBe(glu.code);
+  });
+
+  it('refuses a Test code that is another test id, and lets a test use its own id', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    await seedTest(db, 'GLU', 'Glucose', null);
+    await catalog.update('GLU', { testCode: 'GLUC', display: 'Glucose' });
+    // GLU is no longer a Test code, but it is still the id of the test that had it.
+    await expect(catalog.create({ testCode: 'glu', display: 'Glucose, fasting' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: 'Test code glu is the id of another test, Glucose (GLU).' });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    await expect(catalog.update(hb.code, { testCode: 'GLU', display: 'Haemoglobin' }))
+      .rejects.toMatchObject({ kind: 'conflict', message: 'Test code GLU is the id of another test, Glucose (GLU).' });
+    await expect(catalog.create({ testCode: hb.code.toUpperCase(), display: 'Copy' }))
+      .rejects.toMatchObject({ kind: 'conflict' });
+    // The test itself may go back to its own id.
+    expect((await catalog.update('GLU', { testCode: 'glu', display: 'Glucose' })).testCode).toBe('glu');
+    // Now GLU's Test code is its own id again, so a row giving it to another test names the holder.
+    const report = await catalog.importPreview({
+      table: { headers: ['id', 'code', 'name'], rows: [[hb.code, 'GLU', 'Haemoglobin']] },
+      columnMap: { id: 'id', code: 'code', name: 'name' },
+    });
+    expect(report.refused).toEqual([
+      { line: 2, code: 'GLU', reason: 'Test code glu is already used by Glucose (GLU).' },
+    ]);
   });
 
   it('exports an id column beside the Test code, and an edited Test code imports back onto the same test', async () => {
@@ -1318,6 +1355,22 @@ describe('test catalog: an internal id and a Test code', () => {
     const report = await catalog.importApply({ table: file, columnMap: file.suggested });
     expect(report.counts).toEqual({ new: 0, changed: 1, unchanged: 0, refused: 0 });
     expect((await catalog.list(q())).rows.map((t) => [t.code, t.testCode])).toEqual([[hb.code, 'HGB']]);
+  });
+
+  it('matches a row on its Test code trimmed and ignoring case, and makes no second test', async () => {
+    const { catalog } = await buildCatalog({ realIds: true });
+    const hb = await catalog.create({ testCode: 'HB', display: 'Haemoglobin' });
+    const report = await catalog.importApply(importInput([['hb', 'Haemoglobin, total', '', '', '', '']]));
+    expect(report.counts).toEqual({ new: 0, changed: 1, unchanged: 0, refused: 0 });
+    expect((await catalog.list(q())).rows.map((t) => [t.code, t.display])).toEqual([[hb.code, 'Haemoglobin, total']]);
+  });
+
+  it('refuses an import row whose Test code is another test id', async () => {
+    const { db, catalog } = await buildCatalog({ realIds: true });
+    await seedTest(db, 'GLU', 'Glucose', null);
+    await catalog.update('GLU', { testCode: 'GLUC', display: 'Glucose' });
+    const report = await catalog.importPreview(importInput([['glu', 'Glucose, fasting', '', '', '', '']]));
+    expect(report.refused).toEqual([{ line: 2, code: 'glu', reason: 'Test code glu is the id of another test, Glucose (GLU).' }]);
   });
 
   it('matches a row with no id on its Test code, and makes a new test with its own id for a new one', async () => {

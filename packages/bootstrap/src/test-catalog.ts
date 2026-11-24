@@ -362,6 +362,12 @@ function readHours(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
+/** How two Test codes, or a Test code and an id, are compared: trimmed, case ignored. The stored value
+ *  keeps the case it was typed in. */
+export function testCodeKey(code: string): string {
+  return code.trim().toLowerCase();
+}
+
 /** A concept's Test code: its testCode property, else its concept code (a test saved before Test codes). */
 function testCodeOf(code: string, properties: unknown): string {
   const p = (parseJson(properties) ?? {}) as Record<string, unknown>;
@@ -605,22 +611,37 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   }
 
   async function findByTestCode(testCode: string): Promise<CatalogTest | null> {
-    const hit = (await testCodes()).find((t) => t.testCode === testCode);
+    const key = testCodeKey(testCode);
+    const hit = (await testCodes()).find((t) => testCodeKey(t.testCode) === key);
     return hit ? get(hit.id) : null;
   }
 
   async function resolve(codeOrId: string): Promise<CatalogTest | null> {
-    return (await findByTestCode(codeOrId)) ?? get(codeOrId);
+    const typed = codeOrId.trim();
+    if (!typed) return null;
+    return (await findByTestCode(typed)) ?? get(typed);
   }
 
   function heldBy(holder: { id: string; testCode: string; display: string }): TestCatalogError {
     return new TestCatalogError(`Test code ${holder.testCode} is already used by ${holder.display} (${holder.id}).`, 'conflict');
   }
 
-  /** Refuses a Test code another test holds. `self` is the test being edited, which may keep its own. */
+  function isAnId(testCode: string, holder: { id: string; display: string }): TestCatalogError {
+    return new TestCatalogError(`Test code ${testCode} is the id of another test, ${holder.display} (${holder.id}).`, 'conflict');
+  }
+
+  /**
+   * Refuses a Test code another test holds, or one that is another test's id, so resolve can never
+   * send a Test code to a different test than the id means. `self` is the test being edited, which may
+   * keep its own Test code and may use its own id (a saved test's Test code is its id).
+   */
   async function refuseTakenTestCode(testCode: string, self: string | null): Promise<void> {
-    const holder = (await testCodes()).find((t) => t.testCode === testCode && t.id !== self);
+    const key = testCodeKey(testCode);
+    const others = (await testCodes()).filter((t) => t.id !== self);
+    const holder = others.find((t) => testCodeKey(t.testCode) === key);
     if (holder) throw heldBy(holder);
+    const idHolder = others.find((t) => testCodeKey(t.id) === key);
+    if (idHolder) throw isAnId(testCode, idHolder);
   }
 
   function invalid(message: string): TestCatalogError {
@@ -1009,7 +1030,9 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
 
     const all = await readTests();
     const tests = new Map(all.map((t) => [t.code, t]));
-    const byTestCode = new Map(all.map((t) => [t.testCode, t]));
+    // Test codes and ids are matched by testCodeKey: trimmed, case ignored.
+    const byTestCode = new Map(all.map((t) => [testCodeKey(t.testCode), t]));
+    const byIdKey = new Map(all.map((t) => [testCodeKey(t.code), t]));
     const storedByCode = new Map((await db.selectFrom('terminology_concepts').select(['code', 'properties'])
       .where('system', '=', TEST_CATALOG_SYSTEM).execute()).map((r) => [r.code, r.properties as unknown]));
     const ctx = await loadCheckContext(rows.flatMap((r) => (r.values.loinc ? [r.values.loinc] : [])));
@@ -1060,22 +1083,29 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         report.refused.push({ line, code: null, reason: 'A test needs a Test code.' });
         continue;
       }
-      const before = byId ?? byTestCode.get(code);
-      const key = before ? before.code : `new|${code}`;
-      const first = firstLine.get(key) ?? claimed.get(code);
+      const codeKey = testCodeKey(code);
+      const before = byId ?? byTestCode.get(codeKey);
+      const key = before ? before.code : `new|${codeKey}`;
+      const first = firstLine.get(key) ?? claimed.get(codeKey);
       if (first !== undefined) {
         const what = before && firstLine.has(key) ? `Test ${before.testCode}` : `Test code ${code}`;
         report.refused.push({ line, code, reason: `${what} is already on row ${first} of this file.` });
         continue;
       }
       // Another saved test may hold the Test code this row gives its own test.
-      const holder = byTestCode.get(code);
+      const holder = byTestCode.get(codeKey);
       if (holder && holder.code !== before?.code) {
         report.refused.push({ line, code, reason: heldBy({ id: holder.code, testCode: holder.testCode, display: holder.display }).message });
         continue;
       }
+      // Or it may be another test's id.
+      const idHolder = byIdKey.get(codeKey);
+      if (idHolder && idHolder.code !== before?.code) {
+        report.refused.push({ line, code, reason: isAnId(code, { id: idHolder.code, display: idHolder.display }).message });
+        continue;
+      }
       firstLine.set(key, line);
-      claimed.set(code, line);
+      claimed.set(codeKey, line);
 
       const problems: string[] = [];
       // undefined means the column is not mapped, so the test keeps what it has (decision 4).
