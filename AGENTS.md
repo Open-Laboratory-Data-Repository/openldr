@@ -220,6 +220,23 @@ Four more traps from that pass, all still live:
 - `typecheck` green does not pin a route's wire shape. Route tests are the only thing that does.
 - If you could not prove it, write **"HONEST NON-PROOF"** and say what would prove it.
 
+### Plugin live checks run on the dev stack
+
+A plugin's live check runs against the running dev stack: server on 3000, Postgres on 5433.
+Do not start a throwaway install on a new port for it. The operator decided this on 2026-11-25,
+because every session was taking a new port.
+
+- The lab plugin does it with `TARGET=dev` in `tools/live-check/` (plugin main `a446c65`):
+  `TARGET=dev CE=<this checkout> tools/live-check/all.sh`. Its README has the details.
+- Never start, stop or restart the dev stack for a check. Install a plugin build through the
+  dev registry folder and `POST /api/marketplace/install`, which needs no restart.
+- A check run there leaves its data behind. Reuse test users and data, and put back any
+  setting the check changes.
+- Say what the dev stack cannot show. Its only Postgres login is a superuser, so row-level
+  security is invisible there.
+- CE branch code is different. The dev stack runs the main checkout, so an unmerged CE branch
+  still needs its own install. Say so before starting one.
+
 ---
 
 ## 8. Never hardcode clinical vocabulary
