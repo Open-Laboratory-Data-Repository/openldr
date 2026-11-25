@@ -1,6 +1,6 @@
 {
   "name": "@openldr/studio",
-  "version": "0.1.12",
+  "version": "0.1.13-rc.1",
   "private": true,
   "type": "module",
   "scripts": {
