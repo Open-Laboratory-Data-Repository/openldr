@@ -102,9 +102,10 @@ describe('fhirStore.saveMany', () => {
     await base.destroy();
   }, 60_000);
 
-  // New minor M2: on PostgreSQL the lock query orders by the byte order ("C"), the same order the
-  // ids are sorted in before the chunks, so the two cannot disagree for mixed-case ids.
-  it('ownedBy on PostgreSQL locks in byte order, and the chunks follow it', async () => {
+  // New minor M2 and its review: COLLATE "C" goes in the lock only where the database takes it. pg-mem
+  // cannot parse it, so here the lock keeps a plain order and the save works, whatever the save mode.
+  // The byte order on real PostgreSQL is pinned in fhir-store-save-many.live.test.ts.
+  it('ownedBy on pg-mem locks without COLLATE and saves', async () => {
     const base = await makeMigratedDb();
     const sqls: string[] = [];
     const spy: KyselyPlugin = {
@@ -115,12 +116,10 @@ describe('fhirStore.saveMany', () => {
       },
       async transformResult(args) { return args.result; },
     };
-    // saveMode 'set' takes the PostgreSQL path; pg-mem cannot parse the collation, so the save fails
-    // after the lock query is built.
-    const store = createFhirStore(base.withPlugin(spy) as never, { saveMode: 'set' } as never);
-    await expect(store.saveMany([{ resourceType: 'Patient', id: 'b' }, { resourceType: 'Patient', id: 'B' }] as never,
-      { pluginId: 'lab' }, { ownedBy: 'lab' })).rejects.toThrow();
-    expect(sqls[0]).toMatch(/order by "?id"? collate "C"/i);
+    const store = createFhirStore(base.withPlugin(spy) as never);
+    await store.saveMany([{ resourceType: 'Patient', id: 'b' }, { resourceType: 'Patient', id: 'B' }] as never, { pluginId: 'lab' }, { ownedBy: 'lab' });
+    expect(sqls).toHaveLength(1);
+    expect(sqls[0]).not.toMatch(/collate/i);
     await base.destroy();
   });
 

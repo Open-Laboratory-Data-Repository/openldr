@@ -459,37 +459,48 @@ export async function pluginDataRoleStatus(db: Kysely<any>): Promise<PluginDataR
 
 /** What CE keeps of the role check, per process. An answer is kept; a check that could not run is
  *  not, so the next request checks again (one failed query does not turn the second guard off for
- *  good). Before the first switch the role is granted every plugin schema; if that grant fails, that
- *  request answers `missing` (CE's own filter guards it) and the next one tries again. `forget`
- *  drops the kept answer: a request that finds the role gone calls it, then checks again. */
+ *  good). Before the first switch the role is granted every plugin schema; if that grant fails, CE
+ *  answers `missing` (its own filter guards) for GRANT_RETRY_MS, then tries again, so a passing
+ *  failure does not last and a lasting one costs one try a minute. `forget` drops the kept answer: a
+ *  request that finds the role gone calls it, then checks again. */
 export function createRoleStatus(
   read: () => Promise<PluginDataRoleStatus | 'unknown'>,
   grantAll: () => Promise<void>,
+  now: () => number = Date.now,
 ): { get: () => Promise<PluginDataRoleStatus>; forget: () => void } {
   let kept: Promise<PluginDataRoleStatus> | null = null;
+  // When a kept `missing` from a failed grant runs out; null for an answer kept for good.
+  let until: number | null = null;
   return {
     get() {
-      if (kept) return kept;
-      const answer: Promise<PluginDataRoleStatus> = (async (): Promise<{ status: PluginDataRoleStatus; keep: boolean }> => {
+      if (kept && (until === null || now() < until)) return kept;
+      until = null;
+      const answer: Promise<PluginDataRoleStatus> = (async (): Promise<{ status: PluginDataRoleStatus; keep: 'yes' | 'no' | 'a while' }> => {
         const s = await read();
-        if (s === 'unknown') return { status: 'not-needed', keep: false };
-        if (s !== 'switch') return { status: s, keep: true };
+        if (s === 'unknown') return { status: 'not-needed', keep: 'no' };
+        if (s !== 'switch') return { status: s, keep: 'yes' };
         try {
           await grantAll();
-          return { status: 'switch', keep: true };
+          return { status: 'switch', keep: 'yes' };
         } catch {
-          return { status: 'missing', keep: false };
+          return { status: 'missing', keep: 'a while' };
         }
       })().then(({ status, keep }) => {
-        if (!keep && kept === answer) kept = null;
+        if (kept === answer) {
+          if (keep === 'no') kept = null;
+          if (keep === 'a while') until = now() + GRANT_RETRY_MS;
+        }
         return status;
       });
       kept = answer;
       return answer;
     },
-    forget() { kept = null; },
+    forget() { kept = null; until = null; },
   };
 }
+
+/** How long a failed grant keeps `missing` before CE tries again. */
+const GRANT_RETRY_MS = 60_000;
 
 /** SET ROLE on a role dropped while CE runs: Postgres answers 22023 (invalid_parameter_value),
  *  "role ... does not exist". */

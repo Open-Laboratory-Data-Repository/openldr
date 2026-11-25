@@ -525,8 +525,26 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
     return setBased;
   }
 
+  // Whether this database takes COLLATE "C", for the owner check's lock order. Asked once, outside
+  // any transaction, as useSetBased. pg-mem cannot parse it; PostgreSQL always can, whatever saveMode
+  // says. A passing failure answers no for this save and asks again on the next.
+  let collateC: boolean | null = null;
+  async function useCollateC(): Promise<boolean> {
+    if (collateC === null) {
+      try {
+        await sql`select 'a' collate "C" as x`.execute(db);
+        collateC = true;
+      } catch (err) {
+        const text = err instanceof Error ? err.message : String(err);
+        if (/collat|not supported|not implemented|failed to parse/i.test(text)) collateC = false;
+        else return false;
+      }
+    }
+    return collateC;
+  }
+
   /** Locks the stored rows of the records and refuses one another writer holds (SaveManyOpts.ownedBy). */
-  async function checkOwner(trx: Kysely<InternalSchema>, resources: FhirResource[], ownedBy: string, postgres: boolean): Promise<void> {
+  async function checkOwner(trx: Kysely<InternalSchema>, resources: FhirResource[], ownedBy: string, collateC: boolean): Promise<void> {
     const byType = new Map<string, Set<string>>();
     for (const r of resources) {
       if (typeof r.id !== 'string' || r.id.length === 0) continue;
@@ -548,7 +566,7 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
           .select(['id', 'plugin_id'])
           .where('resource_type', '=', resourceType)
           .where('id', 'in', all.slice(i, i + 1000))
-          .orderBy(postgres ? sql`id collate "C"` : sql`id`)
+          .orderBy(collateC ? sql`id collate "C"` : sql`id`)
           .forUpdate()
           .execute();
         const other = rows.find((row) => row.plugin_id !== ownedBy);
@@ -561,8 +579,9 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
     if (resources.length === 0) return [];
     const site = await resolveSiteId();
     const write = (await useSetBased()) ? writeManySet : writeMany;
+    const collate = opts.ownedBy !== undefined && (await useCollateC());
     const { refs, written } = await db.transaction().execute(async (trx) => {
-      if (opts.ownedBy !== undefined) await checkOwner(trx, resources, opts.ownedBy, write === writeManySet);
+      if (opts.ownedBy !== undefined) await checkOwner(trx, resources, opts.ownedBy, collate);
       return write(trx, resources, provenance, site, opts.skipUnchanged === true);
     });
     // A call that skipped every record changed nothing, so there is nothing to wake anyone for.
