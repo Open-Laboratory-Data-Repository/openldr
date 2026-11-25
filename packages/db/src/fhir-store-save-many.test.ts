@@ -102,6 +102,28 @@ describe('fhirStore.saveMany', () => {
     await base.destroy();
   }, 60_000);
 
+  // New minor M2: on PostgreSQL the lock query orders by the byte order ("C"), the same order the
+  // ids are sorted in before the chunks, so the two cannot disagree for mixed-case ids.
+  it('ownedBy on PostgreSQL locks in byte order, and the chunks follow it', async () => {
+    const base = await makeMigratedDb();
+    const sqls: string[] = [];
+    const spy: KyselyPlugin = {
+      transformQuery(args) {
+        const c = base.getExecutor().compileQuery(args.node, args.queryId);
+        if (/for update/i.test(c.sql) && c.sql.includes('fhir_current')) sqls.push(c.sql);
+        return args.node;
+      },
+      async transformResult(args) { return args.result; },
+    };
+    // saveMode 'set' takes the PostgreSQL path; pg-mem cannot parse the collation, so the save fails
+    // after the lock query is built.
+    const store = createFhirStore(base.withPlugin(spy) as never, { saveMode: 'set' } as never);
+    await expect(store.saveMany([{ resourceType: 'Patient', id: 'b' }, { resourceType: 'Patient', id: 'B' }] as never,
+      { pluginId: 'lab' }, { ownedBy: 'lab' })).rejects.toThrow();
+    expect(sqls[0]).toMatch(/order by "?id"? collate "C"/i);
+    await base.destroy();
+  });
+
   it('ownedBy saves new records and records the same plugin wrote', async () => {
     const db = await makeMigratedDb();
     const store = createFhirStore(db as never);

@@ -459,9 +459,9 @@ export async function pluginDataRoleStatus(db: Kysely<any>): Promise<PluginDataR
 
 /** What CE keeps of the role check, per process. An answer is kept; a check that could not run is
  *  not, so the next request checks again (one failed query does not turn the second guard off for
- *  good). Before the first switch the role is granted every plugin schema; if that grant fails, CE
- *  keeps `missing` and its own filter guards. `forget` drops the kept answer: a request that finds
- *  the role gone calls it, then checks again. */
+ *  good). Before the first switch the role is granted every plugin schema; if that grant fails, that
+ *  request answers `missing` (CE's own filter guards it) and the next one tries again. `forget`
+ *  drops the kept answer: a request that finds the role gone calls it, then checks again. */
 export function createRoleStatus(
   read: () => Promise<PluginDataRoleStatus | 'unknown'>,
   grantAll: () => Promise<void>,
@@ -470,23 +470,20 @@ export function createRoleStatus(
   return {
     get() {
       if (kept) return kept;
-      const p = (async (): Promise<PluginDataRoleStatus | 'unknown'> => {
+      const answer: Promise<PluginDataRoleStatus> = (async (): Promise<{ status: PluginDataRoleStatus; keep: boolean }> => {
         const s = await read();
-        if (s !== 'switch') return s;
+        if (s === 'unknown') return { status: 'not-needed', keep: false };
+        if (s !== 'switch') return { status: s, keep: true };
         try {
           await grantAll();
-          return 'switch';
+          return { status: 'switch', keep: true };
         } catch {
-          return 'missing';
+          return { status: 'missing', keep: false };
         }
-      })().then((s) => {
-        if (s === 'unknown') {
-          if (kept === answer) kept = null;
-          return 'not-needed' as const;
-        }
-        return s;
+      })().then(({ status, keep }) => {
+        if (!keep && kept === answer) kept = null;
+        return status;
       });
-      const answer = p;
       kept = answer;
       return answer;
     },
