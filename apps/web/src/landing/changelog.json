@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "845fd7579",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Dashboard widget retries once after a network error"
+        },
+        {
           "hash": "d8e15ba64",
           "type": "fix",
           "scope": "cli",
