@@ -12,6 +12,7 @@ import { appError } from '@openldr/core';
 import { createConnectorDialectLookup, listDatasetsWithState, DEFAULT_CONNECTOR_NAME, type AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
+import { gateTerminologyReads } from './terminology-read-gate';
 import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
 import { registerTestCatalogRoutes } from './test-catalog-routes';
 import { registerTestMappingRoutes } from './test-mapping-routes';
@@ -172,6 +173,8 @@ export async function buildApp(ctx: AppContext) {
   registerConfigRoute(app, ctx);
   registerLocalAuthRoutes(app, ctx);
   registerReportRoutes(app, ctx);
+  // Before the terminology and ontology routes, so each of their GETs gets the read gate.
+  gateTerminologyReads(app);
   registerTerminologyRoutes(app, ctx);
   registerTerminologyAdminRoutes(app, ctx);
   registerTestCatalogRoutes(app, ctx);
