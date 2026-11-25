@@ -81,6 +81,47 @@ describe('DashboardWidget refresh lifecycle', () => {
     expect(view.getByText('8')).toBeTruthy();
   });
 
+  // The browser's own "Failed to fetch" is a TypeError: no response came back at all. Seen once on a
+  // phone on 2026-11-25, every widget red, gone after a refresh. One retry covers a short drop.
+  it('retries once after a network error and shows the result', async () => {
+    vi.useFakeTimers();
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValue(response(8));
+    const view = render(<DashboardWidget config={cfg} filterValues={{}} />);
+    await act(async () => {});
+    expect(view.queryByText('Failed to fetch')).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(view.getByText('8')).toBeTruthy();
+  });
+
+  it('shows the network error when the retry fails too', async () => {
+    vi.useFakeTimers();
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+    const view = render(<DashboardWidget config={cfg} filterValues={{}} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(view.getByText('Failed to fetch')).toBeTruthy();
+  });
+
+  it('does not retry an error the server sent', async () => {
+    vi.useFakeTimers();
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ error: 'boom' }), { status: 500 }));
+    const view = render(<DashboardWidget config={cfg} filterValues={{}} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(view.getByText(/boom/)).toBeTruthy();
+  });
+
+  it('does not retry after unmount', async () => {
+    vi.useFakeTimers();
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+    const view = render(<DashboardWidget config={cfg} filterValues={{}} />);
+    await act(async () => {});
+    view.unmount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('does not poll when automatic refresh is disabled', async () => {
     vi.useFakeTimers();
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(7));

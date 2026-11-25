@@ -7,6 +7,9 @@ import { renderWidget } from './widgets';
 export { bindQuery } from '@openldr/dashboards/pure';
 import { bindQuery } from '@openldr/dashboards/pure';
 
+/** Pause before the one retry after a network error. */
+const NETWORK_RETRY_MS = 1000;
+
 /** `savedDashboardId`: the widget is saved on that dashboard, so it runs by id and the server builds
  *  the query. Absent while the dashboard has unsaved changes: the free-form route, editors only. */
 export function DashboardWidget({ config, filterValues, savedDashboardId }: { config: WidgetConfig; filterValues: Record<string, unknown>; savedDashboardId?: string }) {
@@ -19,11 +22,23 @@ export function DashboardWidget({ config, filterValues, savedDashboardId }: { co
     const controller = new AbortController();
     const ms = config.refreshIntervalSec * 1000;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const fetchOnce = () => savedDashboardId
+      ? runSavedWidget(savedDashboardId, config.id, filterValues, controller.signal)
+      : runWidgetQuery(bindQuery(config.query, filterValues), controller.signal);
     const run = async () => {
       try {
-        const next = savedDashboardId
-          ? await runSavedWidget(savedDashboardId, config.id, filterValues, controller.signal)
-          : await runWidgetQuery(bindQuery(config.query, filterValues), controller.signal);
+        let next: ReportResult;
+        try {
+          next = await fetchOnce();
+        } catch (e) {
+          // fetch rejects with a TypeError ("Failed to fetch") only when no response came back at
+          // all: a dropped connection, not an answer from the server. Try once more after a pause.
+          // Seen on a phone on 2026-11-25: every widget red, fine after a refresh.
+          if (!(e instanceof TypeError) || controller.signal.aborted) throw e;
+          await new Promise((resolve) => setTimeout(resolve, NETWORK_RETRY_MS));
+          if (controller.signal.aborted) return;
+          next = await fetchOnce();
+        }
         if (controller.signal.aborted) return;
         setResult(next);
         setError(undefined);
