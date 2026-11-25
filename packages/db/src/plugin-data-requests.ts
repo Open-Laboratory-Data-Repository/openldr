@@ -1,6 +1,6 @@
 import { type Expression, type Kysely, type SqlBool, sql } from 'kysely';
 import { z } from 'zod';
-import { pluginSchemaName, SHAPES_TABLE, FACILITIES_SETTING, PLUGIN_DATA_ROLE } from './plugin-schema';
+import { pluginSchemaName, SHAPES_TABLE, FACILITIES_SETTING, PLUGIN_DATA_ROLE, grantPluginDataRoleAll } from './plugin-schema';
 import {
   CE_MANAGED_COLUMNS, PLUGIN_IDENTIFIER, tableShapeSchema, type ColumnType, type TableShape,
 } from './plugin-table-shape';
@@ -444,9 +444,21 @@ export async function pluginDataRoleStatus(db: Kysely<any>): Promise<PluginDataR
 }
 
 export function createPluginRequests(db: Kysely<any>): PluginRequests {
-  // Read once per process: migrations run before CE serves, so the answer does not change while it runs.
+  // Read once per process, at the first request. Before switching, the role is granted every plugin
+  // schema, so one made while the role was missing works too; if that grant fails, CE does not switch
+  // and its own filter guards, as before. A server started before migration 145 ran switches after a
+  // restart.
   let roleStatus: Promise<PluginDataRoleStatus> | null = null;
-  const status = (): Promise<PluginDataRoleStatus> => (roleStatus ??= pluginDataRoleStatus(db));
+  const status = (): Promise<PluginDataRoleStatus> => (roleStatus ??= (async () => {
+    const s = await pluginDataRoleStatus(db);
+    if (s !== 'switch') return s;
+    try {
+      await grantPluginDataRoleAll(db);
+      return 'switch';
+    } catch {
+      return 'missing';
+    }
+  })());
 
   /** Inside the request's transaction: set the timeout and the facility setting, then read the
    *  recorded shapes for the named tables and check the declared ones fit inside them. Returns the

@@ -36,6 +36,12 @@ describe.skipIf(!url)('plugin data requests on disposable PostgreSQL', () => {
   beforeEach(async () => {
     pool = new pg.Pool({ connectionString: url, max: 4 });
     db = new Kysely<any>({ dialect: new PostgresDialect({ pool }) });
+    // These tests drop openldr_plugin_data, which belongs to the whole server. Refuse to run where
+    // another database on the server uses it (the dev install, say), so they never take it away.
+    const used = await sql<{ n: number }>`
+      select count(*)::int as n from pg_shdepend d join pg_database x on x.oid = d.dbid
+      where d.refobjid = (select oid from pg_roles where rolname = 'openldr_plugin_data') and x.datname <> current_database()`.execute(db);
+    if (used.rows[0].n > 0) throw new Error('openldr_plugin_data is used by another database on this server: run these tests on a server of their own');
     pluginId = `test.data-${randomUUID().slice(0, 8)}`;
     const schemas = createPluginSchemas(db);
     schema = schemas.schemaName(pluginId);
@@ -171,8 +177,12 @@ describe.skipIf(!url)('plugin data requests on disposable PostgreSQL', () => {
     await migrate145(db);
     try {
       expect(await pluginDataRoleStatus(db)).toBe('switch');
+      // One factory, as CE keeps one: its first request grants the role, so take the right away after it.
+      const req = createPluginRequests(db);
+      const read = () => req.select(pluginId, shapes, all, { table: 'samples', columns: ['id'] });
+      expect((await read()).rows.length).toBe(3);
       await sql`revoke select on ${sql.id(schema, 'samples')} from ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
-      await expect(ids(db, all)).rejects.toThrow(/permission denied/);
+      await expect(read()).rejects.toThrow(/permission denied/);
     } finally {
       await dropRole();
     }
@@ -203,4 +213,17 @@ describe.skipIf(!url)('plugin data requests on disposable PostgreSQL', () => {
     expect(await ids(db, all)).toEqual([1, 2, 3]);
     expect(await ids(db, site1)).toEqual([1, 2]);
   });
+
+  it('a role made by hand after the schema existed: the first request grants the schema and works (review)', async () => {
+    await dropRole();
+    // The schema exists with no grant (made while the role was missing); a DBA then makes the role.
+    await sql`create role ${sql.id(PLUGIN_DATA_ROLE)} nologin nosuperuser nobypassrls`.execute(db);
+    try {
+      expect(await pluginDataRoleStatus(db)).toBe('switch');
+      expect(await ids(db, all)).toEqual([1, 2, 3]);
+    } finally {
+      await dropRole();
+    }
+  });
 });
+

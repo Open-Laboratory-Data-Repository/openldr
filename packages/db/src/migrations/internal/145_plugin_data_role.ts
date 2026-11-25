@@ -33,14 +33,24 @@ async function roleExists(db: Kysely<any>): Promise<boolean> {
   return r.rows[0].n === 1;
 }
 
+async function isMember(db: Kysely<any>): Promise<boolean> {
+  const r = await sql<{ m: boolean }>`
+    select pg_has_role(current_user, oid, 'MEMBER') as m from pg_roles where rolname = ${ROLE}`.execute(db);
+  return r.rows[0]?.m === true;
+}
+
 export async function up(db: Kysely<any>): Promise<void> {
   const me = await login(db);
   if (!me || (!me.rolsuper && !me.rolcreaterole)) return;
   if (!(await roleExists(db))) {
     await sql`create role ${sql.id(ROLE)} nologin nosuperuser nobypassrls`.execute(db);
+  } else if (!me.rolsuper && !(await isMember(db))) {
+    // Another login made the role and this one may not grant it to itself (Postgres 16): leave it.
+    // CE then reports the role as missing and its own filter guards.
+    return;
   }
   // A CREATEROLE login must be a member to switch to the role; a superuser may switch to any role.
-  if (!me.rolsuper) await sql`grant ${sql.id(ROLE)} to current_user`.execute(db);
+  if (!me.rolsuper && !(await isMember(db))) await sql`grant ${sql.id(ROLE)} to current_user`.execute(db);
   for (const schema of await pluginSchemas(db)) {
     await sql`grant usage on schema ${sql.id(schema)} to ${sql.id(ROLE)}`.execute(db);
     await sql`grant select, insert, update, delete on all tables in schema ${sql.id(schema)} to ${sql.id(ROLE)}`.execute(db);

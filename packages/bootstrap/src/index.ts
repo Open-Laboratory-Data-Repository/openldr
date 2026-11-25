@@ -2148,7 +2148,7 @@ const reporting: ReportingApi = {
   // the login bypasses it and migration 145 could not make the plugin data role.
   void pluginDataRoleStatus(internal.db as unknown as Kysely<any>).then((s) => {
     if (s === 'missing') {
-      logger.warn({ role: 'openldr_plugin_data' }, 'CE logs in to Postgres with a login that bypasses row-level security, and the plugin data role is missing, so the facility policy does not guard plugin data. CE\'s own facility filter still does. Run CE\'s migrations once with a login that may create roles.');
+      logger.warn({ role: 'openldr_plugin_data' }, 'CE logs in to Postgres with a login that bypasses row-level security, and the plugin data role is missing, so the facility policy does not guard plugin data. CE\'s own facility filter still does. Create the role (CREATE ROLE openldr_plugin_data NOLOGIN NOSUPERUSER NOBYPASSRLS) with a login that may, then restart CE: it grants the role the plugin schemas itself.');
     }
   });
   const pluginHost = createPluginHost({
