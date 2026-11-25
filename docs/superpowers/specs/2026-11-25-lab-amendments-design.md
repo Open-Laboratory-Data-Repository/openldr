@@ -53,7 +53,8 @@ authorised result"), held by the lab admin and lab manager roles
   `entered-in-error`, so the warehouse does not keep a withdrawn value as final. The Provenance of
   the amendment is a new resource (its own id per amendment), activity `amend`, with the reason.
 - **History.** The result's history shows "Amended" with the reason and who did it. The values CE
-  held before the amendment are kept in the amend's audit row (the result's events keep no values).
+  held before the amendment are kept on the amend event (a new `values` column), which only the
+  results actions read. The audit row, which the order's history shows to the desk, keeps no values.
 - **Page.** On an authorised result, the order sheet's Results row gets **Amend** in its dots menu
   (for a holder of `lab.results.amend`). It opens a sheet with the reason; Save from the sheet's
   dots menu, a toast, and the test moves to the Results tab.
