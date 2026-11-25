@@ -139,7 +139,7 @@ Ces cas ont été reproduits sous Linux avec le lanceur installé et la véritab
 | `pipeline` | Examine les lots d'ingestion : `status`, `retry`, `logs`. |
 | `queue` | Examine la file d'événements. |
 | `provenance` | Outils d'audit de provenance. |
-| `plugin` | Gère les plugins d'ingestion WASM : `install`, `list`, `test`, `run`, `remove`. |
+| `plugin` | Gère les plugins d'ingestion WASM : `install`, `list`, `test`, `run`, `remove`, `call`. |
 | `report` | `list` et `run` pour les rapports analytiques ; `glass-export`. |
 | `audit` | Lit le journal d'audit, en ajout seul. |
 | `user` | Gère les utilisateurs : `list`, `show`, `create`, `set-role`, `activate`, `deactivate`. Les changements de statut mettent aussi à jour les comptes liés chez le fournisseur. `export` est une commande de jeu de données de premier niveau. |
@@ -618,3 +618,11 @@ openldr lab requisitions rebuild --force
 ```
 
 La commande vide l'index et indexe de nouveau chaque demande actuelle. Elle affiche `Indexed <n> orders by requisition number.`, et `--json` affiche `{"indexed":<n>}`. Elle refuse sans `--force`, avec `Refusing to rebuild the requisition index without --force.`, car elle réécrit tout l'index. Connecté, le compte doit avoir **Zone de danger**. Chaque reconstruction est inscrite dans l'audit sous `lab.requisitions.rebuild`.
+
+## Appeler une action d'un plugin
+
+`openldr plugin call <plugin> <action> --input '<json>'` exécute une action d'un plugin installé, comme le fait la page du plugin. Utilisez-la pour les paramètres d'un plugin dans un laboratoire qui fonctionne sans navigateur. Par exemple, `openldr plugin call lab lab_settings_get` affiche les paramètres du plugin de laboratoire.
+
+- La permission propre à l'action s'applique. Sur cette machine, la CLI a toutes les permissions. Par le serveur, elle n'a que les permissions et la limite de données du compte connecté, et le compte doit aussi avoir **View marketplace**.
+- `--input` est l'entrée de l'action en JSON. Sans elle, l'action reçoit `{}`.
+- La commande affiche la réponse du plugin. Elle se termine avec le code 1 quand le plugin ou CE refuse, et dit pourquoi. `--json` affiche la réponse en JSON.

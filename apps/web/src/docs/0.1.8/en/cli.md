@@ -139,7 +139,7 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
 | `queue` | Inspect the event queue. |
 | `provenance` | Provenance audit tooling. |
-| `plugin` | Manage WASM ingest plugins: `install`, `list`, `test`, `run`, `remove`. |
+| `plugin` | Manage WASM ingest plugins: `install`, `list`, `test`, `run`, `remove`, `call`. |
 | `report` | `list` and `run` analytics reports; `glass-export`. |
 | `audit` | Read the append-only audit log. |
 | `user` | Manage users: `list`, `show`, `create`, `set-role`, `activate`, `deactivate`. Status changes also update linked provider accounts. `export` is a top-level dataset command. |
@@ -636,3 +636,11 @@ openldr lab requisitions rebuild --force
 ```
 
 It empties the index and indexes every current order again. It prints `Indexed <n> orders by requisition number.`, and `--json` prints `{"indexed":<n>}`. It refuses without `--force`, with `Refusing to rebuild the requisition index without --force.`, because it rewrites the whole index. Signed in, the account needs **Danger zone**. Each rebuild is audited as `lab.requisitions.rebuild`.
+
+## Call a plugin action
+
+`openldr plugin call <plugin> <action> --input '<json>'` runs one action of an installed plugin, as the plugin's page does. Use it for a plugin's settings on a lab that runs without a browser. For example, `openldr plugin call lab lab_settings_get` prints the lab plugin's settings.
+
+- The action's own permission applies. On this machine, the CLI holds every permission. Through the server, it holds only the signed-in account's permissions and data limit, and the account also needs **View marketplace**.
+- `--input` is the action's input as JSON. Without it the action gets `{}`.
+- The command prints the plugin's answer. It exits 1 when the plugin or CE refuses, and says why. `--json` prints the answer as JSON.

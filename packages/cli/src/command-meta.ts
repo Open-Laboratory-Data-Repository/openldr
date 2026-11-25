@@ -351,6 +351,9 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
     ],
   },
   'plugin list': { kind: 'app', capability: 'marketplace.view' },
+  // No route does the same thing. marketplace.view lets the account see plugins at all; the broker
+  // then checks the action's own permission and the caller's data limit, as for the plugin's page.
+  'plugin call': { kind: 'app', capability: 'marketplace.view' },
   'plugin remove': { kind: 'app', capability: 'marketplace.manage', destructive: true },
   'plugin run': { kind: 'app', capability: 'marketplace.manage', paths: [inFile('input')] },
   'plugin test': { kind: 'app', capability: 'marketplace.manage' },
