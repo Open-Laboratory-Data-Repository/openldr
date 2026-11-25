@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@/i18n';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { toast } from 'sonner';
@@ -58,6 +59,31 @@ describe('TermsTable', () => {
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('import terms failed: bad header'));
     expect(screen.queryByText('import terms failed: bad header')).not.toBeInTheDocument();
+  });
+
+  it('a finished import says how many terms came in', async () => {
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [], total: 0 } as never);
+    vi.spyOn(api, 'importTerms').mockResolvedValue({ imported: 12 } as never);
+    render(<TermsTable systemId="sys1" onOpenTerm={() => {}} />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['code,display'], 'terms.csv')] } });
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('12 terms imported'));
+  });
+
+  it('a deleted term says so in a toast', async () => {
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [term('AMP', 'Ampicillin')], total: 1 } as never);
+    vi.spyOn(api, 'deleteTerm').mockResolvedValue(undefined as never);
+    const user = userEvent.setup();
+    render(<TermsTable systemId="sys1" onOpenTerm={() => {}} />);
+    await screen.findByText('Ampicillin');
+
+    await user.click(screen.getByRole('button', { name: 'Actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: /delete/i }));
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Deleted AMP'));
   });
 
   it('accepts structured terminology source files for imports', async () => {

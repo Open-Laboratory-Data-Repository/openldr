@@ -48,7 +48,7 @@ import { Button } from '../components/ui/button';
 import { StripedEmpty } from '../components/ui/striped-empty';
 import { EmptyState } from '../components/ui/empty-state';
 import { LoadingState } from '../components/ui/spinner';
-import { LoadFailed, useLoadErrorToast } from '../components/ui/load-failed';
+import { LoadFailed, LoadStale, useLoadErrorToast } from '../components/ui/load-failed';
 import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
@@ -601,6 +601,7 @@ export function Terminology(): JSX.Element {
 
             {/* Publisher list */}
             <div className={cn('flex-1 overflow-auto', railCollapsed && 'hidden')}>
+              {!loading && loadError && sections.length > 0 && <LoadStale className="px-3" />}
               {loading ? (
                 <LoadingState label="Loading…" className="min-h-40" />
               ) : loadError && sections.length === 0 ? (

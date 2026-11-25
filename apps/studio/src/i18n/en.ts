@@ -142,6 +142,7 @@ export const en = {
     next: 'Next',
     close: 'Close',
     loadFailed: 'Could not load this list. Reload the page to try again.',
+    loadStale: 'Could not refresh this list, so it may be out of date. Reload the page to try again.',
     formLoadFailed: 'Could not load this form. Reload the page to try again.',
   },
   table: {

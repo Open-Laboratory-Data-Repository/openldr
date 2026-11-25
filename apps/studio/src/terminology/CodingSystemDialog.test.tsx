@@ -1,9 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { toast } from 'sonner';
 import { CodingSystemDialog } from './CodingSystemDialog';
 import * as api from '../api';
+
+/** Opens the sheet's ⋯ menu and picks one action. */
+async function pick(label: RegExp | string): Promise<void> {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Coding system actions' }));
+  await user.click(await screen.findByRole('menuitem', { name: label }));
+}
 
 describe('CodingSystemDialog', () => {
   beforeEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
@@ -33,7 +41,7 @@ describe('CodingSystemDialog', () => {
     );
     fireEvent.change(screen.getByLabelText('System code'), { target: { value: 'x' } });
     fireEvent.change(screen.getByLabelText('System name'), { target: { value: 'X sys' } });
-    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+    await pick(/create/i);
     await waitFor(() =>
       expect(api.createCodingSystem).toHaveBeenCalledWith(
         expect.objectContaining({ systemCode: 'X', systemName: 'X sys' }),
@@ -50,7 +58,7 @@ describe('CodingSystemDialog', () => {
     render(<CodingSystemDialog open system={null} onOpenChange={onOpenChange} onSaved={onSaved} />);
     fireEvent.change(screen.getByLabelText('System code'), { target: { value: 'x' } });
     fireEvent.change(screen.getByLabelText('System name'), { target: { value: 'X sys' } });
-    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+    await pick(/create/i);
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('create coding system failed: code taken'));
     expect(screen.queryByText('create coding system failed: code taken')).not.toBeInTheDocument();
     expect(screen.getByLabelText('System name')).toHaveValue('X sys');
@@ -87,7 +95,10 @@ describe('CodingSystemDialog', () => {
     );
     await act(async () => {});
     expect(screen.getByLabelText('System code')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Coding system actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Save' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(create|save)$/i })).not.toBeInTheDocument();
   });
 
   it('populates the publisher select from listPublishers', async () => {

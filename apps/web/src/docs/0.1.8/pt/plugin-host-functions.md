@@ -101,6 +101,13 @@ Insere, atualiza e elimina numa só transação. Se um passo falhar, nenhum fica
 
 Uma `key` indica exatamente as colunas da chave primária. Um pedido tem até 500 passos. Uma inserção numa tabela de unidade sanitária tem de indicar a coluna da unidade. A resposta é `{ "results": [{ "rowCount": 1 }, ...] }`, uma por passo. Um passo sobre uma linha fora das unidades de quem chama não muda nada e dá `rowCount` 0.
 
+Uma atualização ou eliminação pode ser condicional. `where` aceita os mesmos filtros que `db_select`, e o CE junta-os à chave. `expect` é o número de linhas que o passo tem de mudar. Quando o passo muda outro número, o CE não guarda nada do pedido e responde `REQUEST_CONFLICT`, indicando o passo e a tabela. Use-o quando outra chamada pode ter mudado a linha depois de a ler.
+
+```json
+{ "op": "update", "table": "order_tests", "key": { "id": "t1" }, "set": { "status": "rejected" },
+  "where": [{ "column": "hold", "op": "is_null", "value": true }], "expect": 1 }
+```
+
 `db_select` e `db_write` param cada um ao fim de 5 segundos.
 
 ## ce_read
@@ -179,7 +186,7 @@ O CE recusa isto antes de correr qualquer SQL:
 - uma inserção ou atualização de `created_at` ou `updated_at`
 - um campo que a forma do pedido não tem, como `pluginId` ou `facilities`
 
-Os códigos comuns são `REQUEST_INVALID`, `REQUEST_TABLE`, `REQUEST_COLUMN`, `REQUEST_VALUE`, `REQUEST_KEY` e `REQUEST_FACILITY` para pedidos sobre tabelas. `ce_read` e `fhir_emit` usam `INVALID_REQUEST`, `UNKNOWN_OP`, `FORBIDDEN`, `NOT_FOUND`, `OUTSIDE_DATA_LIMIT`, `RESOURCE_TYPE_NOT_ALLOWED` e `VALIDATION_FAILED`. Um pedido ou resposta acima de 1 MB dá `TOO_LARGE`. Um erro dentro do CE dá `HOST_ERROR`, e os detalhes vão para o registo do CE, não para o plugin.
+Os códigos comuns são `REQUEST_INVALID`, `REQUEST_TABLE`, `REQUEST_COLUMN`, `REQUEST_VALUE`, `REQUEST_KEY`, `REQUEST_FACILITY` e `REQUEST_CONFLICT` para pedidos sobre tabelas. `ce_read` e `fhir_emit` usam `INVALID_REQUEST`, `UNKNOWN_OP`, `FORBIDDEN`, `NOT_FOUND`, `OUTSIDE_DATA_LIMIT`, `RESOURCE_TYPE_NOT_ALLOWED` e `VALIDATION_FAILED`. Um pedido ou resposta acima de 1 MB dá `TOO_LARGE`. Um erro dentro do CE dá `HOST_ERROR`, e os detalhes vão para o registo do CE, não para o plugin.
 
 ## A partir de Rust
 

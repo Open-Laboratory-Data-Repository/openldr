@@ -48,6 +48,9 @@ export interface CapabilityDiagnosis {
     ok: string[];
     revoked: string[];
     pending: string[];
+    /** A custom role holds this system slug. Boot leaves it alone and makes no system role, so the
+     *  preset is not compared with it (ok, revoked and pending stay empty). */
+    blocked?: { roleId: string; name: string };
   }>;
   /** Stays empty. A stored key the catalog does not list is kept on purpose (see `kept`), so no
    *  stored key is an orphan any more. The field stays so the `--json` shape does not change. */
@@ -442,6 +445,12 @@ export function createRoleStore(db: Kysely<InternalSchema>, opts: RoleStoreOptio
         const existing = await store.getBySlug(def.slug);
         if (!existing) {
           roles.push({ slug: def.slug, present: false, ok: [], revoked: [], pending: [] });
+          continue;
+        }
+        // The seed skips a custom role on a system slug (see seedSystemRoles), so its keys are the
+        // lab's own, not drift from the preset.
+        if (!existing.isSystem) {
+          roles.push({ slug: def.slug, present: true, ok: [], revoked: [], pending: [], blocked: { roleId: existing.id, name: existing.name } });
           continue;
         }
         const have = new Set(existing.capabilities);

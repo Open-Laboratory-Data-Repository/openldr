@@ -6,7 +6,7 @@ Un **éditeur** regroupe les listes selon l'organisme qui les maintient. Un **sy
 
 Les données d'exemple de la documentation ne sont pas nécessaires. Les captures utilisent une liste intégrée et un exemple temporaire appelé `DOCS-GUIDE-REVIEW`. Utilisez vos propres noms, codes et URL pour créer les listes de votre laboratoire.
 
-La lecture nécessite l'autorisation de consulter la terminologie. La création, la modification et l'import nécessitent l'autorisation de gérer la terminologie.
+La lecture nécessite l'autorisation de consulter la terminologie. La création, la modification et l'import nécessitent l'autorisation de gérer la terminologie. D'autres pages lisent aussi des codes : les formulaires, Facilities, Settings et le mappage des workflows. Une personne qui ne peut ouvrir aucune de ces pages ne peut lire aucun code.
 
 ## Ouvrir le navigateur d'ontologie
 

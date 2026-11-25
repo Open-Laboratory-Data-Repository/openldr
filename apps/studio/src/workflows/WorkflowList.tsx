@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
-import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
+import { LoadFailed, LoadStale, useLoadErrorToast } from '@/components/ui/load-failed';
 import { LoadingState } from '@/components/ui/spinner';
 import { fetchWorkflows, createWorkflow, deleteWorkflow, duplicateWorkflow, resetWorkflow, setWorkflowEnabled, type Workflow } from '@/api';
 import { workflowCreateFromImport } from './workflow-import';
@@ -176,6 +176,7 @@ export function WorkflowList() {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {!loading && loadError && rows.length > 0 && <LoadStale />}
           <Table wrapperClassName={pageRows.length > 0 ? 'min-h-0 flex-1' : undefined}>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>

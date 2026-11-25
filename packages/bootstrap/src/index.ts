@@ -935,10 +935,11 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   // Gate enforcement is wired via `validationStrictness`, defined below alongside the rest of the
   // app-settings-backed services — this closure isn't invoked until after bootstrap() returns, so
   // the forward reference resolves by the time a caller actually persists.
-  const workflowPersist = async (resources: unknown[], prov: Provenance) =>
+  const workflowPersist = async (resources: unknown[], prov: Provenance, extra: { ownedBy?: string } = {}) =>
     persistResources({ fhirStore: canonicalFhirStore, logger }, resources, prov, {
       level: await validationStrictness.get(),
       resolveServiceRequest: (id: string) => canonicalFhirStore.exists('ServiceRequest', id),
+      ...(extra.ownedBy !== undefined ? { ownedBy: extra.ownedBy } : {}),
     });
   // The import check's saves. The same path, but a record whose content is already the latest stored
   // version is not written again (item 16): the plugin sends the same Organization with every

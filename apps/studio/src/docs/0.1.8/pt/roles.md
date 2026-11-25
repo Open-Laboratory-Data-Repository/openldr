@@ -196,6 +196,8 @@ Numa instalação de teste, crie a função `Documentation reader`. Selecione ap
 
 Administrator está bloqueado. As restantes funções do sistema podem ser editadas, mas não eliminadas. Não pode alterar um slug guardado.
 
+Uma função personalizada criada com o slug de uma função do sistema, como `lab_technician`, bloqueia essa função do sistema. O CE não cria a função do sistema enquanto o slug estiver ocupado. `openldr roles doctor` indica essa função como BLOCKED e termina com o código 1. Passe as suas pessoas para outra função e elimine-a. O arranque seguinte cria a função do sistema.
+
 Criar uma função não a atribui a ninguém. As atribuições são geridas em Users. Confira as pessoas afetadas antes de alterar ou eliminar uma função atribuída.
 
 ## Permissões dos plugins e Encontrar um paciente

@@ -24,6 +24,16 @@ export function LoadFailed({ className, message, detail }: {
 }
 
 /**
+ * What a list shows above its rows when a reload failed but the rows from the last good load are
+ * still there. The rows stay, since they are what the person last saw; this line says they may be
+ * out of date, so a toast that has closed is not the only sign.
+ */
+export function LoadStale({ className }: { className?: string }) {
+  const { t } = useTranslation();
+  return <p className={cn('m-0 px-6 py-2 text-xs text-muted-foreground', className)}>{t('common.loadStale')}</p>;
+}
+
+/**
  * Shows a load error as a toast, once. The same message again does not toast again, so a list
  * that reloads on every filter or page change toasts one failure once. A null error (a load that
  * worked) clears it, so a later failure toasts again.

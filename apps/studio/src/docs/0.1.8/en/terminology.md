@@ -6,7 +6,7 @@ A **publisher** groups lists by who maintains them. A **code system** is a list 
 
 You do not need documentation sample data. The screenshots use a built-in list and a temporary example called `DOCS-GUIDE-REVIEW`. Use your own names, codes and URLs when creating your lab's lists.
 
-Reading needs permission to browse terminology. Creating, changing and importing need permission to manage terminology.
+Reading needs permission to browse terminology. Creating, changing and importing need permission to manage terminology. Other pages read codes too: forms, Facilities, Settings and workflow mapping. A person who can open none of those pages cannot read codes at all.
 
 ## Open the ontology browser
 

@@ -6,7 +6,7 @@ Um **publicador** agrupa listas pela entidade que as mantém. Um **sistema de c�
 
 Não precisa dos dados de exemplo da documentação. As capturas usam uma lista integrada e um exemplo temporário chamado `DOCS-GUIDE-REVIEW`. Use os seus nomes, códigos e URLs ao criar listas para o laboratório.
 
-A leitura exige permissão para consultar terminologia. Criar, alterar e importar exige permissão para gerir terminologia.
+A leitura exige permissão para consultar terminologia. Criar, alterar e importar exige permissão para gerir terminologia. Outras páginas também leem códigos: formulários, Facilities, Settings e o mapeamento de workflows. Uma pessoa que não pode abrir nenhuma dessas páginas não pode ler códigos.
 
 ## Abrir o navegador de ontologia
 

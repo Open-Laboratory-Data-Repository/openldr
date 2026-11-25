@@ -1,9 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { toast } from 'sonner';
 import { PublisherDialog } from './PublisherDialog';
 import * as api from '../api';
+
+/** Opens the sheet's ⋯ menu and picks one action. */
+async function pick(label: RegExp | string): Promise<void> {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Publisher actions' }));
+  await user.click(await screen.findByRole('menuitem', { name: label }));
+}
 
 describe('PublisherDialog', () => {
   beforeEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
@@ -14,7 +22,7 @@ describe('PublisherDialog', () => {
     const onSaved = vi.fn();
     render(<PublisherDialog open publisher={null} onOpenChange={() => {}} onSaved={onSaved} />);
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'My Lab' } });
-    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+    await pick(/create/i);
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(created));
   });
 
@@ -24,7 +32,7 @@ describe('PublisherDialog', () => {
     const onOpenChange = vi.fn();
     render(<PublisherDialog open publisher={null} onOpenChange={onOpenChange} onSaved={onSaved} />);
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'My Lab' } });
-    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+    await pick(/create/i);
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('create publisher failed: name taken'));
     expect(screen.queryByText('create publisher failed: name taken')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Name')).toHaveValue('My Lab');
@@ -38,11 +46,18 @@ describe('PublisherDialog', () => {
     vi.spyOn(api, 'updatePublisher').mockResolvedValue(updated as never);
     const onSaved = vi.fn();
     render(<PublisherDialog open publisher={existing as never} onOpenChange={() => {}} onSaved={onSaved} />);
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Lab 2' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await pick('Save');
     await waitFor(() => expect(api.updatePublisher).toHaveBeenCalledWith('p1', expect.objectContaining({ name: 'Lab 2' })));
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(updated));
+  });
+
+  it('has no footer buttons: Cancel in the ⋯ menu closes the sheet', async () => {
+    const onOpenChange = vi.fn();
+    render(<PublisherDialog open publisher={null} onOpenChange={onOpenChange} onSaved={() => {}} />);
+    expect(screen.queryByRole('button', { name: /^(create|save|cancel)$/i })).not.toBeInTheDocument();
+    await pick('Cancel');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('disables the Role control for a seeded publisher', () => {

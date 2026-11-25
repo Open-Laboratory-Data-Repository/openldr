@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { appError } from '@openldr/core';
-import { PluginRequestError, type PluginCaller } from '@openldr/db';
+import { FhirOwnershipError, PluginRequestError, type PluginCaller } from '@openldr/db';
 import type { Capability } from '@openldr/marketplace';
 import type { HostPlugin } from '@openldr/plugins';
 import { createPluginHost, CE_READ_OPS, type PluginHostDeps } from './plugin-host';
@@ -238,7 +238,7 @@ describe('plugin host: ce_read', () => {
     const fns = createPluginHost(deps).forCall(plugin(REGISTERS), SITE);
     const patient = { resourceType: 'Patient', id: 'lab-p-1', managingOrganization: { reference: 'Organization/fac-1' } };
     expect(await fns.ce_read({ op: 'patients.register', input: { patient } })).toEqual({ ok: true, result: { id: 'lab-p-1', pluginRef: pluginPatientRefs(KEY, 'lab').encode('lab-p-1') } });
-    expect(deps.persist).toHaveBeenCalledWith([patient], { pluginId: 'lab', pluginVersion: '0.2.0', sourceSystem: 'plugin:lab' });
+    expect(deps.persist).toHaveBeenCalledWith([patient], { pluginId: 'lab', pluginVersion: '0.2.0', sourceSystem: 'plugin:lab' }, { ownedBy: 'lab' });
     expect(deps.audit).toHaveBeenCalledWith(
       { actorType: 'user', actorId: 'u-site', actorName: 'Site User' },
       { action: 'patients.register', entityType: 'patient', entityId: 'lab-p-1', metadata: { pluginId: 'lab', pluginVersion: '0.2.0' } },
@@ -393,7 +393,7 @@ describe('plugin host: fhir_emit', () => {
     const fns = createPluginHost(deps).forCall(emit(['Observation']), EVERYONE);
     const resources = [{ resourceType: 'Observation', id: 'o1' }];
     expect(await fns.fhir_emit({ resources })).toEqual({ ok: true, result: { saved: 1 } });
-    expect(deps.persist).toHaveBeenCalledWith(resources, { pluginId: 'lab', pluginVersion: '0.2.0', sourceSystem: 'plugin:lab' });
+    expect(deps.persist).toHaveBeenCalledWith(resources, { pluginId: 'lab', pluginVersion: '0.2.0', sourceSystem: 'plugin:lab' }, { ownedBy: 'lab' });
     const forged = await fns.fhir_emit({ resources, provenance: { pluginId: 'cdr-source' } }) as any;
     expect(forged.error.code).toBe('INVALID_REQUEST');
     expect(deps.persist).toHaveBeenCalledTimes(1);
@@ -410,6 +410,18 @@ describe('plugin host: fhir_emit', () => {
       expect(deps.persist).not.toHaveBeenCalled();
       expect(deps.audit).not.toHaveBeenCalled();
     }
+  });
+
+  // The store checks again inside its transaction (ownedBy). When another writer took the record
+  // between the first check and the save, the plugin gets the same refusal and no audit row.
+  it('a record taken over between the check and the save is refused as FORBIDDEN', async () => {
+    const deps = fakeDeps({ persist: vi.fn(async () => { throw new FhirOwnershipError('Observation', 'o1', 'lab'); }) });
+    const out = await createPluginHost(deps).forCall(emit(['Observation']), EVERYONE).fhir_emit({
+      resources: [{ resourceType: 'Observation', id: 'o1' }],
+    }) as any;
+    expect(out.error.code).toBe('FORBIDDEN');
+    expect(out.error.message).toMatch(/fhir_emit: Observation\/o1 was not written by this plugin/);
+    expect(deps.audit).not.toHaveBeenCalled();
   });
 
   it('updates a record this plugin wrote', async () => {

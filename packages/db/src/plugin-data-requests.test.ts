@@ -346,4 +346,69 @@ describe('plugin data requests (pg-mem)', () => {
       expect(words).not.toContain('commit');
     });
   });
+
+  // Design 2026-11-25-plugin-conditional-write: `where` and `expect` on update and delete.
+  describe('conditional steps', () => {
+    const note = async (id: number) =>
+      (await req.select(PLUGIN, shapes, all, { table: 'samples', columns: ['note'], where: [{ column: 'id', op: 'eq', value: id }] })).rows[0]?.note;
+
+    it('an update with where changes only a row that still matches', async () => {
+      const hit = await req.write(PLUGIN, shapes, all, { steps: [
+        { op: 'update', table: 'samples', key: { id: 1 }, set: { note: 'x' }, where: [{ column: 'code', op: 'eq', value: 'abc' }] },
+      ] });
+      expect(hit.results).toEqual([{ rowCount: 1 }]);
+      const miss = await req.write(PLUGIN, shapes, all, { steps: [
+        { op: 'update', table: 'samples', key: { id: 2 }, set: { note: 'changed' }, where: [{ column: 'code', op: 'eq', value: 'nope' }] },
+      ] });
+      expect(miss.results).toEqual([{ rowCount: 0 }]);
+      expect(await note(1)).toBe('x');
+      expect(await note(2)).toBe('x');
+    });
+
+    it('expect refuses a wrong count, names the step and table, and rolls the request back', async () => {
+      const err = await req.write(PLUGIN, shapes, all, { steps: [
+        { op: 'update', table: 'samples', key: { id: 1 }, set: { note: 'a' } },
+        { op: 'update', table: 'samples', key: { id: 2 }, set: { note: 'b' }, where: [{ column: 'code', op: 'eq', value: 'nope' }], expect: 1 },
+      ] }).then(() => null, (e: unknown) => e);
+      expect(err).toBeInstanceOf(PluginRequestError);
+      expect((err as PluginRequestError).reason).toBe('conflict');
+      expect((err as Error).message).toMatch(/step 2 on table samples: expected 1 rows to change, 0 did; nothing was saved/);
+      const words = queries.map((q) => q.trim().split(/\s+/)[0].toLowerCase());
+      expect(words.at(-1)).toBe('rollback');
+      expect(words).not.toContain('commit');
+    });
+
+    it('expect 0 passes when nothing matches, and a delete takes where too', async () => {
+      const r = await req.write(PLUGIN, shapes, all, { steps: [
+        { op: 'delete', table: 'samples', key: { id: 99 }, expect: 0 },
+        { op: 'delete', table: 'samples', key: { id: 4 }, where: [{ column: 'note', op: 'is_null', value: false }] },
+        { op: 'delete', table: 'samples', key: { id: 5 }, where: [{ column: 'note', op: 'is_null', value: false }], expect: 1 },
+      ] });
+      expect(r.results).toEqual([{ rowCount: 0 }, { rowCount: 0 }, { rowCount: 1 }]);
+      expect(await ids(all, {})).toEqual([1, 2, 3, 4]);
+    });
+
+    it("a facility-limited caller's conditional step on another facility's row conflicts", async () => {
+      await expect(refusal(req.write(PLUGIN, shapes, siteA, { steps: [
+        { op: 'update', table: 'samples', key: { id: 3 }, set: { note: 'mine' }, where: [{ column: 'code', op: 'eq', value: 'abe' }], expect: 1 },
+      ] }))).resolves.toBe('conflict');
+      expect(await note(3)).toBe('y');
+    });
+
+    it('where on an undeclared column is refused before anything runs', async () => {
+      await expect(refusal(req.write(PLUGIN, shapes, all, { steps: [
+        { op: 'update', table: 'samples', key: { id: 1 }, set: { note: 'x' }, where: [{ column: 'secret', op: 'eq', value: 1 }] },
+      ] }))).resolves.toBe('column');
+      expect(queries).toEqual([]);
+    });
+
+    it('expect must be a whole number, 0 or more', async () => {
+      for (const expectCount of [-1, 1.5, '1']) {
+        await expect(refusal(req.write(PLUGIN, shapes, all, { steps: [
+          { op: 'update', table: 'samples', key: { id: 1 }, set: { note: 'x' }, expect: expectCount },
+        ] } as never))).resolves.toBe('invalid');
+      }
+      expect(queries).toEqual([]);
+    });
+  });
 });

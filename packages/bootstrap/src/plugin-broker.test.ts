@@ -54,7 +54,9 @@ function broker(opts: {
 }) {
   const data = memData();
   const manifest: any = opts.caps === undefined ? {} : { capabilities: opts.caps };
-  if (opts.requiredRoles) manifest.payload = { ui: { requiredRoles: opts.requiredRoles, ...(opts.requiredCapabilities ? { requiredCapabilities: opts.requiredCapabilities } : {}) } };
+  if (opts.requiredRoles || opts.requiredCapabilities) {
+    manifest.payload = { ui: { ...(opts.requiredRoles ? { requiredRoles: opts.requiredRoles } : {}), ...(opts.requiredCapabilities ? { requiredCapabilities: opts.requiredCapabilities } : {}) } };
+  }
   const row = { id: 'p1', version: '1.0.0', enabled: true, active: true, manifest };
   const audited: Array<{ pluginId: string; op: string; outcome: string; reason?: string }> = [];
   const logged: Array<{ obj: any; msg: string }> = [];
@@ -363,6 +365,20 @@ describe('plugin broker', () => {
       expect((await b.handle('p1', admin, { kind: 'storage.get', collection: 'c', key: 'k' })).ok).toBe(true);
       expect((await b.handle('p1', admin, { kind: 'storage.list', collection: 'c' })).ok).toBe(true);
       expect((await b.handle('p1', admin, { kind: 'invoke', entrypoint: 'e', input: { hi: 1 } })).ok).toBe(true);
+    });
+
+    it('a refusal names the permissions when the plugin lists capabilities only, and never an empty role list', async () => {
+      const { b } = broker({ caps: [], requiredCapabilities: ['patients.view'], loadSink: async () => ({ invoke: async () => ({}) }) });
+      const r = await b.handle('p1', tech, { kind: 'storage.list', collection: 'c' });
+      expect(r.ok).toBe(false);
+      expect((r as any).error).not.toMatch(/roles: *$/);
+      expect((r as any).error).toMatch(/needs one of these permissions: View patient index/);
+    });
+
+    it('a refusal names both lists when the plugin lists roles and capabilities', async () => {
+      const { b } = broker({ caps: [], requiredRoles: ['lab_admin'], requiredCapabilities: ['patients.view'], loadSink: async () => ({ invoke: async () => ({}) }) });
+      const r = await b.handle('p1', tech, { kind: 'storage.list', collection: 'c' });
+      expect((r as any).error).toMatch(/requires one of roles: lab_admin, or one of these permissions: View patient index/);
     });
 
     it('a plugin with NO requiredRoles leaves storage.* open to any authed caller (unchanged)', async () => {

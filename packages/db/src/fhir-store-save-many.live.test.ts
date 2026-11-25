@@ -87,6 +87,34 @@ describe.skipIf(!url)('saveMany on disposable PostgreSQL', () => {
     }
   });
 
+  // SaveManyOpts.ownedBy locks the stored rows before it checks them. A writer that is taking the
+  // record over in an open transaction makes the plugin save wait, and the save then sees the new
+  // owner and refuses, instead of writing over it.
+  it('ownedBy waits for a writer holding the record, then refuses it', async () => {
+    const store = createFhirStore(db);
+    const id = `own-${randomUUID()}`;
+    await store.saveMany([{ resourceType: 'Patient', id }] as never, { pluginId: 'lab' });
+    const holder = await pool.connect();
+    try {
+      await holder.query('begin');
+      await holder.query("update fhir.fhir_current set plugin_id = null, source_system = 'ingest' where resource_type = 'Patient' and id = $1", [id]);
+      let settled = false;
+      const save = store.saveMany([{ resourceType: 'Patient', id, gender: 'male' }] as never, { pluginId: 'lab' }, { ownedBy: 'lab' })
+        .then(() => null, (e: unknown) => e)
+        .finally(() => { settled = true; });
+      await new Promise((r) => setTimeout(r, 300));
+      expect(settled).toBe(false);
+      await holder.query('commit');
+      const err = await save;
+      expect((err as { name?: string } | null)?.name).toBe('FhirOwnershipError');
+    } finally {
+      await holder.query('rollback').catch(() => undefined);
+      holder.release();
+    }
+    const row = await db.selectFrom('fhir.fhir_resources').select(['version', 'plugin_id']).where('id', '=', id).executeTakeFirstOrThrow();
+    expect([Number(row.version), row.plugin_id]).toEqual([1, null]);
+  });
+
   it('persistResources saves a whole request or none of it', async () => {
     const logger = { info() {}, warn() {}, error() {}, debug() {} } as never;
     const ids = ['b1', 'b2', 'b3'].map((x) => `${x}-${randomUUID()}`);

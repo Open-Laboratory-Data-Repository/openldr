@@ -89,6 +89,21 @@ describe('Forms page', () => {
     expect(screen.queryByText('list forms failed: insufficient capability')).not.toBeInTheDocument();
   });
 
+  it('a failed refresh keeps the rows and says they may be out of date', async () => {
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+    vi.spyOn(api, 'listForms').mockRejectedValue(new Error('list forms failed: 503'));
+
+    const trigger = screen.getByRole('button', { name: 'Form actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Refresh')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Refresh'));
+
+    expect(await screen.findByText('Could not refresh this list, so it may be out of date. Reload the page to try again.')).toBeInTheDocument();
+    expect(screen.getByText('Specimen intake')).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith('list forms failed: 503');
+  });
+
   it('a failed publish shows a toast, not a box in the page', async () => {
     vi.spyOn(api, 'publishForm').mockRejectedValue(new Error('publish form: forms.publish required'));
     render(<MemoryRouter><Forms /></MemoryRouter>);
