@@ -135,6 +135,15 @@ export class CorrectionError extends Error {
   }
 }
 
+/** A save that names its owner (`SaveManyOpts.ownedBy`) found a stored record some other writer
+ *  holds. Nothing in the list was saved. */
+export class FhirOwnershipError extends Error {
+  constructor(readonly resourceType: string, readonly id: string, readonly ownedBy: string) {
+    super(`${resourceType}/${id} was not written by ${ownedBy}, so it cannot change it; nothing was saved`);
+    this.name = 'FhirOwnershipError';
+  }
+}
+
 export interface FhirStore {
   save(resource: FhirResource, provenance?: Provenance): Promise<SavedRef>;
   /** Saves every resource in one transaction, in order, with one projection wake-up after the
@@ -168,7 +177,14 @@ export interface FhirStore {
 
 /** `skipUnchanged`: do not write a record whose content is the latest stored version of it
  *  (item 16, design 2026-11-19-check-skip-unchanged). Only the import check asks for it. */
-export interface SaveManyOpts { skipUnchanged?: boolean }
+export interface SaveManyOpts {
+  skipUnchanged?: boolean;
+  /** A plugin id. Each record already stored must have been written by this plugin, checked inside
+   *  the save's own transaction with the stored rows locked, so another writer cannot change one
+   *  between the check and the write. A record held by anyone else fails the whole save with
+   *  FhirOwnershipError. A record with no stored row is new and passes. */
+  ownedBy?: string;
+}
 
 function contentHash(serialized: string): string {
   return createHash('sha256').update(serialized).digest('hex');
@@ -509,11 +525,40 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
     return setBased;
   }
 
+  /** Locks the stored rows of the records and refuses one another writer holds (SaveManyOpts.ownedBy). */
+  async function checkOwner(trx: Kysely<InternalSchema>, resources: FhirResource[], ownedBy: string): Promise<void> {
+    const byType = new Map<string, Set<string>>();
+    for (const r of resources) {
+      if (typeof r.id !== 'string' || r.id.length === 0) continue;
+      if (!byType.has(r.resourceType)) byType.set(r.resourceType, new Set());
+      byType.get(r.resourceType)!.add(r.id);
+    }
+    for (const [resourceType, ids] of byType) {
+      const all = [...ids];
+      for (let i = 0; i < all.length; i += 1000) {
+        // fhir_current, not the fhir_resources view: a view over a join cannot be locked.
+        const rows = await trx
+          .selectFrom('fhir.fhir_current')
+          .select(['id', 'plugin_id'])
+          .where('resource_type', '=', resourceType)
+          .where('id', 'in', all.slice(i, i + 1000))
+          .orderBy('id')
+          .forUpdate()
+          .execute();
+        const other = rows.find((row) => row.plugin_id !== ownedBy);
+        if (other) throw new FhirOwnershipError(resourceType, other.id, ownedBy);
+      }
+    }
+  }
+
   async function saveMany(resources: FhirResource[], provenance: Provenance = {}, opts: SaveManyOpts = {}): Promise<SavedRef[]> {
     if (resources.length === 0) return [];
     const site = await resolveSiteId();
     const write = (await useSetBased()) ? writeManySet : writeMany;
-    const { refs, written } = await db.transaction().execute((trx) => write(trx, resources, provenance, site, opts.skipUnchanged === true));
+    const { refs, written } = await db.transaction().execute(async (trx) => {
+      if (opts.ownedBy !== undefined) await checkOwner(trx, resources, opts.ownedBy);
+      return write(trx, resources, provenance, site, opts.skipUnchanged === true);
+    });
     // A call that skipped every record changed nothing, so there is nothing to wake anyone for.
     if (written === 0) return refs;
     // Best-effort wakeup for the projection worker; interval polling is the correctness-bearing

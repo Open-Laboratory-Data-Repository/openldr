@@ -57,6 +57,36 @@ describe('fhirStore.saveMany', () => {
     await db.destroy();
   });
 
+  // A plugin save names its plugin. The owner check then runs inside the save's own transaction,
+  // so no other writer can take a record over between the check and the write.
+  it('ownedBy refuses a record another writer holds, and saves none of the list', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    await store.saveMany([{ resourceType: 'Patient', id: 'p1' }] as never, { sourceSystem: 'ingest' });
+    await store.saveMany([{ resourceType: 'Patient', id: 'p2' }] as never, { pluginId: 'lab' });
+
+    await expect(store.saveMany([
+      { resourceType: 'Patient', id: 'p2', gender: 'male' },
+      { resourceType: 'Patient', id: 'p1', gender: 'male' },
+    ] as never, { pluginId: 'lab' }, { ownedBy: 'lab' })).rejects.toMatchObject({ name: 'FhirOwnershipError', resourceType: 'Patient', id: 'p1' });
+
+    const rows = await db.selectFrom('fhir.fhir_resources').select(['id', 'version']).where('id', 'in', ['p1', 'p2']).orderBy('id').execute();
+    expect(rows.map((r: any) => [r.id, Number(r.version)])).toEqual([['p1', 1], ['p2', 1]]);
+    await db.destroy();
+  });
+
+  it('ownedBy saves new records and records the same plugin wrote', async () => {
+    const db = await makeMigratedDb();
+    const store = createFhirStore(db as never);
+    await store.saveMany([{ resourceType: 'Patient', id: 'p2' }] as never, { pluginId: 'lab' });
+    const refs = await store.saveMany([
+      { resourceType: 'Patient', id: 'p2', gender: 'male' },
+      { resourceType: 'Patient', id: 'p9' },
+    ] as never, { pluginId: 'lab' }, { ownedBy: 'lab' });
+    expect(refs.map((r) => [r.id, r.version])).toEqual([['p2', 2], ['p9', 1]]);
+    await db.destroy();
+  });
+
   it('sends one notify per call, not one per record', async () => {
     const db = await makeMigratedDb();
     const n = countNotifies();

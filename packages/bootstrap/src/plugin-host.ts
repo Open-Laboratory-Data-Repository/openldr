@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Logger } from '@openldr/core';
 import { AppError } from '@openldr/core';
 import { allowedResourceTypes } from '@openldr/marketplace';
-import { PluginRequestError, type PluginCaller, type PluginRequests, type Provenance } from '@openldr/db';
+import { FhirOwnershipError, PluginRequestError, type PluginCaller, type PluginRequests, type Provenance } from '@openldr/db';
 import type { FacilityRegistryStore } from '@openldr/db';
 import { TerminologyError, type Operations } from '@openldr/terminology';
 import type { HostFn, HostPlugin, PluginHost } from '@openldr/plugins';
@@ -49,8 +49,9 @@ export interface PluginHostDeps {
   fhirGetWithProvenance(resourceType: string, id: string): Promise<{ resource: unknown; provenance: Provenance } | null>;
   /** The lab's time zone (lab.timezone), which decides a patient's age in days. Undefined means UTC. */
   labTimeZone?(): Promise<string | undefined>;
-  /** CE's FHIR save path with validation (bootstrap index.ts `workflowPersist`). */
-  persist(resources: unknown[], provenance: Provenance): Promise<unknown>;
+  /** CE's FHIR save path with validation (bootstrap index.ts `workflowPersist`). `ownedBy` repeats
+   *  the owner check inside the save's own transaction (FhirStore SaveManyOpts.ownedBy). */
+  persist(resources: unknown[], provenance: Provenance, opts?: { ownedBy?: string }): Promise<unknown>;
   audit(actor: AuditActor, details: AuditDetails): Promise<void>;
   logger: Logger;
 }
@@ -240,6 +241,19 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
 
       const allowedTypes = new Set(allowedResourceTypes(plugin.capabilities));
 
+      /** Saves as this plugin. The store checks again, inside its transaction, that every stored
+       *  record is this plugin's, so a write by someone else just after ownedOrNew cannot be lost. */
+      const persistOwned = async (fn: string, resources: unknown[], provenance: Provenance): Promise<void> => {
+        try {
+          await deps.persist(resources, provenance, { ownedBy: plugin.id });
+        } catch (err) {
+          if (err instanceof FhirOwnershipError) {
+            throw new HostInputError('FORBIDDEN', `${fn}: ${err.resourceType}/${err.id} was not written by this plugin, so it cannot change it; nothing was saved`);
+          }
+          throw err;
+        }
+      };
+
       /** A stored record with this id, if this plugin wrote it; null when there is none. A record
        *  another plugin or an ingest wrote is refused, so a plugin cannot rewrite it. */
       const ownedOrNew = async (fn: string, resourceType: string, id: string): Promise<unknown | null> => {
@@ -423,7 +437,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
           if (existing && scope !== '*' && !inScope(scope, (existing as { managingOrganization?: { reference?: unknown } }).managingOrganization?.reference)) {
             throw new HostInputError('OUTSIDE_DATA_LIMIT', 'patients.register: a patient with this id is held by a facility outside the caller\'s data limit');
           }
-          await deps.persist([patient], provenance);
+          await persistOwned('patients.register', [patient], provenance);
           await deps.audit(actor, { action: 'patients.register', entityType: 'patient', entityId: id, metadata: auditMeta });
           return { id, pluginRef: (await refsFor()).encode(id) };
         },
@@ -577,7 +591,7 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
               savedIds.push(`${r.resourceType}/${r.id}`);
             }
           }
-          await deps.persist(resources, provenance);
+          await persistOwned('fhir_emit', resources, provenance);
           const types = [...new Set((resources as Array<{ resourceType: string }>).map((r) => r.resourceType))].sort();
           await deps.audit(actor, {
             action: 'fhir.emit', entityType: 'fhir', entityId: savedIds[0] ?? 'batch',
