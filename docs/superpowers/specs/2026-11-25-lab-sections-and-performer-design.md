@@ -50,7 +50,9 @@ on 2026-11-25.
   with a facility limit is refused, as today.
 - Each DiagnosticReport gets `performer: [{ identifier: { system: <facility register>, value:
   <facilityCode> }, display: <name> }]`, the same form as the ServiceRequest's requester. A
-  facility CE no longer has keeps its name only.
+  facility must have a register code to be set. A facility CE no longer has, or one that lost its
+  code, sends no performer (changed after review, 2026-11-25: a name alone becomes a facility in the
+  warehouse that matches no register entry).
 - The Settings tab shows "This lab's facility" with a facility search picker, saved at once with a
   toast, as the self-authorise switch is.
 - CLI: `openldr plugin call lab lab_settings_set --input '{"labFacilityId":"..."}'`.
