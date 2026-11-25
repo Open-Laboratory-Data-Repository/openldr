@@ -2232,7 +2232,8 @@ const reporting: ReportingApi = {
     // malformed op) and every completed sensitive op (wasm invoke / live egress). High-frequency
     // reads (storage/reports/fhir/list) are not emitted. safeRecord is best-effort (never throws).
     audit: (e) => safeRecord(audit, logger, {
-      actorType: 'user', actorId: e.principal.id, actorName: e.principal.username ?? e.principal.id,
+      // A CLI call (openldr plugin call) names its own actor; the page's caller is a user.
+      ...(e.principal.auditActor ?? { actorType: 'user', actorId: e.principal.id, actorName: e.principal.username ?? e.principal.id }),
       ...brokerAccessDetails({ pluginId: e.pluginId, op: e.op, outcome: e.outcome, roles: e.principal.roles, reason: e.reason }),
     }),
   });

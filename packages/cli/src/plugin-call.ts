@@ -1,4 +1,5 @@
-import { createAppContext, type BrokerPrincipal, type PluginBroker } from '@openldr/bootstrap';
+import { createAppContext, type AuditActor, type BrokerPrincipal, type PluginBroker } from '@openldr/bootstrap';
+import type { DataScope } from '@openldr/db';
 import { loadConfig } from '@openldr/config';
 import { EVERYTHING } from '@openldr/rbac';
 import { cliActor } from './cli-actor';
@@ -40,6 +41,23 @@ export async function callPlugin(
 }
 
 /**
+ * Who a call runs as. A local run is the machine's operator: every capability in the catalog (CE's
+ * and installed plugins' keys), no data limit, and the Administrator role a plugin page may ask
+ * for. A served run is the signed-in account, with its role names (as the page route passes them,
+ * never role ids), capabilities and data limit. Either way CE audits it as `actor` (cliActor()).
+ */
+export async function principalFor(
+  deps: { catalogKeys: () => Promise<string[]>; roleSlugs: (userId: string) => Promise<string[]> },
+  served: 'local' | { id: string; roleIds: string[]; capabilities: string[]; dataScope: DataScope },
+  actor: AuditActor,
+): Promise<BrokerPrincipal> {
+  if (served === 'local') {
+    return { id: 'cli', username: actor.actorName ?? 'cli', displayName: actor.actorName ?? 'cli', roles: ['lab_admin'], capabilities: [...(await deps.catalogKeys())], dataScope: EVERYTHING, auditActor: actor };
+  }
+  return { id: served.id, username: actor.actorName ?? served.id, displayName: actor.actorName ?? null, roles: await deps.roleSlugs(served.id), capabilities: served.capabilities, dataScope: served.dataScope, auditActor: actor };
+}
+
+/**
  * `openldr plugin call <plugin> <action> [--input <json>] [--json]`. A local run is the machine's
  * operator: every capability in the catalog (CE's and installed plugins' keys) and no data limit.
  * A served run is the signed-in caller, with their own capabilities and data limit.
@@ -53,9 +71,10 @@ export async function runPluginCall(plugin: string, action: string, opts: { inpu
       process.stderr.write('the signed-in account was not found\n');
       return 1;
     }
-    const principal: BrokerPrincipal = served === 'local'
-      ? { id: 'cli', username: actor.actorName ?? 'cli', displayName: actor.actorName ?? 'cli', roles: ['lab_admin'], capabilities: [...(await ctx.capabilityCatalog.keys())], dataScope: EVERYTHING }
-      : { id: served.id, username: actor.actorName ?? served.id, displayName: actor.actorName ?? null, roles: served.roleIds, capabilities: served.capabilities, dataScope: served.dataScope };
+    const principal = await principalFor({
+      catalogKeys: () => ctx.capabilityCatalog.keys(),
+      roleSlugs: async (userId) => (await ctx.roles.rolesForUser((await ctx.users.get(userId))?.subject ?? userId)).map((r) => r.slug),
+    }, served, actor);
     const out = await callPlugin({ broker: ctx.pluginBroker, principal }, plugin, action, opts.input);
     if (opts.json) process.stdout.write(`${JSON.stringify(out.exitCode === 0 ? out.answer : { error: out.message, answer: out.answer })}\n`);
     else (out.exitCode === 0 ? process.stdout : process.stderr).write(`${out.message}\n`);

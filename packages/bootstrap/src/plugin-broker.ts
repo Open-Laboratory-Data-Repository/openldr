@@ -1,3 +1,4 @@
+import type { AuditActor } from './record-audit';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { beginOp } from '@openldr/core';
@@ -20,6 +21,9 @@ export interface BrokerPrincipal {
   username?: string;
   /** The person's display name from the CE session. Plugin host functions audit under it. */
   displayName?: string | null;
+  /** Who to audit the call as, when it is not the page user: `openldr plugin call` passes
+   *  cliActor(). Absent, the audit names the principal as a user, as for the page. */
+  auditActor?: AuditActor;
   /** The caller's capabilities. A holder of `imports.correct_held` may use the Feedback tab of an
    *  import plugin without the plugin's role (design 2026-11-18-held-corrections). */
   capabilities?: string[];
@@ -458,6 +462,7 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
       displayName: principal.displayName ?? principal.username ?? null,
       capabilities: [...(principal.capabilities ?? [])],
       facilities,
+      ...(principal.auditActor ? { auditActor: principal.auditActor } : {}),
     };
   }
 

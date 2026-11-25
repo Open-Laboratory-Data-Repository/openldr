@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { BrokerPrincipal } from '@openldr/bootstrap';
 import { EVERYTHING } from '@openldr/rbac';
-import { callPlugin } from './plugin-call';
+import { callPlugin, principalFor } from './plugin-call';
 
 const principal: BrokerPrincipal = { id: 'cli', username: 'ops', roles: ['lab_admin'], capabilities: ['lab.settings'], dataScope: EVERYTHING };
 
@@ -43,5 +43,23 @@ describe('openldr plugin call', () => {
     expect(out.exitCode).toBe(1);
     expect(out.message).toContain('refused: x');
     expect(out.answer).toEqual({ error: { code: 'refused', message: 'x' } });
+  });
+});
+
+describe('the caller of openldr plugin call', () => {
+  const deps = { catalogKeys: async () => ['lab.settings', 'roles.manage'], roleSlugs: vi.fn(async () => ['lab_manager']) };
+
+  it('a local run is the machine operator, audited as the CLI', async () => {
+    const actor = { actorType: 'cli' as const, actorId: null, actorName: 'ops' };
+    const p = await principalFor(deps, 'local', actor);
+    expect(p).toMatchObject({ id: 'cli', username: 'ops', roles: ['lab_admin'], capabilities: ['lab.settings', 'roles.manage'], dataScope: EVERYTHING, auditActor: actor });
+  });
+
+  it('a served run is the signed-in account, with its role names (not role ids), audited with the CLI origin', async () => {
+    const actor = { actorType: 'user' as const, actorId: 'u9', actorName: 'neema', origin: { via: 'cli' as const } };
+    const served = { id: 'u9', roleIds: ['3f0c-uuid'], capabilities: ['lab.receive'], dataScope: EVERYTHING };
+    const p = await principalFor(deps, served, actor);
+    expect(deps.roleSlugs).toHaveBeenCalledWith('u9');
+    expect(p).toMatchObject({ id: 'u9', roles: ['lab_manager'], capabilities: ['lab.receive'], auditActor: actor });
   });
 });
