@@ -22,10 +22,15 @@ describe('the kept plugin data role answer', () => {
     expect(read).toHaveBeenCalledTimes(1);
   });
 
-  it('a grant that fails answers missing for that request, and is not kept (new minor M6)', async () => {
+  it('a grant that fails keeps missing for a minute, then tries again (M6 and its review)', async () => {
+    let clock = 1_000_000;
     const grantAll = vi.fn().mockRejectedValueOnce(new Error('lock timeout')).mockResolvedValueOnce(undefined);
-    const roles = createRoleStatus(async () => 'switch' as const, grantAll);
+    const roles = createRoleStatus(async () => 'switch' as const, grantAll, () => clock);
     expect(await roles.get()).toBe('missing');
+    clock += 30_000;
+    expect(await roles.get()).toBe('missing');
+    expect(grantAll).toHaveBeenCalledTimes(1);
+    clock += 31_000;
     expect(await roles.get()).toBe('switch');
     expect(await roles.get()).toBe('switch');
     expect(grantAll).toHaveBeenCalledTimes(2);

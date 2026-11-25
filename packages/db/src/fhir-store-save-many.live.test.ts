@@ -37,7 +37,9 @@ describe.skipIf(!url)('saveMany on disposable PostgreSQL', () => {
   beforeAll(async () => {
     admin = new pg.Client({ connectionString: url });
     await admin.connect();
-    await admin.query(`create database ${name}`);
+    // An ICU collation, where 'a' sorts before 'B' as on most Linux servers. Alpine's C library sorts
+    // every locale by bytes, which would hide a lock taken in the database's own order.
+    await admin.query(`create database ${name} template template0 locale_provider icu icu_locale 'en-US'`);
     const target = new URL(url!);
     target.pathname = `/${name}`;
     pool = new pg.Pool({ connectionString: target.toString(), max: 4 });
@@ -209,4 +211,30 @@ describe.skipIf(!url)('saveMany on disposable PostgreSQL', () => {
     expect(await counts([won[0].own])).toEqual({ resources: 1, history: 1, changeLog: 1 });
     expect(await counts([shared])).toEqual({ resources: 1, history: 1, changeLog: 1 });
   }, 30_000);
+
+  // Review minor of M2: the owner check locks in byte order on PostgreSQL whatever the save mode, so
+  // two saves with mixed-case ids cannot lock the same rows in opposite orders.
+  it('ownedBy locks mixed-case ids in byte order, with the set-based save and with the row save', async () => {
+    const bytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
+    for (const saveMode of ['set', 'rows'] as const) {
+      const ids = Array.from({ length: 1002 }, (_, i) => `${i % 2 === 0 ? 'a' : 'B'}-${saveMode}-${String(i).padStart(4, '0')}`);
+      await createFhirStore(db, { saveMode }).saveMany(ids.map((id) => ({ resourceType: 'Patient', id })) as never, { pluginId: 'lab' });
+      const lockQueries = new Set<string>();
+      const locked: string[] = [];
+      const spy: KyselyPlugin = {
+        transformQuery(args) {
+          const c = db.getExecutor().compileQuery(args.node, args.queryId);
+          if (/for update/i.test(c.sql) && c.sql.includes('fhir_current')) lockQueries.add(args.queryId.queryId);
+          return args.node;
+        },
+        async transformResult(args) {
+          if (lockQueries.has(args.queryId.queryId)) locked.push(...(args.result.rows as Array<{ id: string }>).map((r) => r.id));
+          return args.result;
+        },
+      };
+      await createFhirStore(db.withPlugin(spy), { saveMode }).saveMany(ids.map((id) => ({ resourceType: 'Patient', id, gender: 'male' })) as never,
+        { pluginId: 'lab' }, { ownedBy: 'lab' });
+      expect(locked, saveMode).toEqual([...ids].sort(bytes));
+    }
+  }, 120_000);
 });
