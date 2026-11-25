@@ -53,6 +53,9 @@ export interface PluginSchemas {
 export const SHAPES_TABLE = '_openldr_shapes';
 export const FACILITY_POLICY = 'openldr_facility_scope';
 export const FACILITIES_SETTING = 'openldr.facilities';
+/** The no-login role plugin data requests switch to under a login that bypasses row-level
+ *  security (migration 145, design 2026-11-25-plugin-data-rls-role). */
+export const PLUGIN_DATA_ROLE = 'openldr_plugin_data';
 
 /** The SQL type for each declared type. Looked up here, never passed through from the manifest. */
 const SQL_TYPES: Readonly<Record<ColumnType, string>> = Object.freeze({
@@ -332,6 +335,14 @@ export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHO
     }
   }
 
+  /** Grants the plugin data role the schema and all its tables, when the role exists. */
+  async function grantPluginDataRole(trx: Kysely<any>, schema: string): Promise<void> {
+    const r = await sql<{ n: number }>`select count(*)::int as n from pg_roles where rolname = ${PLUGIN_DATA_ROLE}`.execute(trx);
+    if (r.rows[0].n !== 1) return;
+    await sql`grant usage on schema ${sql.id(schema)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(trx);
+    await sql`grant select, insert, update, delete on all tables in schema ${sql.id(schema)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(trx);
+  }
+
   async function createIndex(trx: Kysely<any>, schema: string, table: string, i: { name: string; columns: string[]; unique: boolean }): Promise<void> {
     let b = trx.schema.withSchema(schema).createIndex(checkCeName(i.name)).on(checkName(table, 'table'))
       .columns(i.columns.map((k) => checkName(k, 'index column')));
@@ -373,6 +384,8 @@ export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHO
           await record(trx, p.schema, pluginId, t, true);
           created.push(t.name);
         }
+        // The plugin data role reads and writes the schema's tables, the shapes table among them.
+        if (rls && p.createTables.length > 0) await grantPluginDataRole(trx, p.schema);
         for (const a of p.addColumns) {
           const def = columnDefault(a.column);
           await trx.schema.withSchema(p.schema).alterTable(checkName(a.table, 'table'))
