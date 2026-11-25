@@ -31,9 +31,12 @@ on 2026-11-25.
 - `order_tests` gains `category` (text, nullable): the catalog category code, copied when the test is
   registered, as its name is (my call: quick filters with no catalog read per row). A test
   registered before this version has none and shows under no section.
-- `lab_results_worklist` and `lab_orders_list` take an optional `category`. The worklist keeps tests
-  of that category; the order list keeps orders with at least one test of that category.
-- The Results, Review and Orders tabs get a Section filter: a picker of CE's test categories
+- `lab_results_worklist` takes an optional `category` and keeps tests of that category.
+- The Orders list gets no Section filter (ruling, 2026-11-25): an order matches through its tests,
+  CE's structured filters cannot say "has a test of this category", and reading the matching order
+  ids first stops at 1,000 orders without saying so. The bench, which works by section, uses the
+  Results and Review tabs.
+- The Results and Review tabs get a Section filter: a picker of CE's test categories
   (`valueset.expand` of `urn:openldr:valueset:test-category`), with "All sections". It sits beside
   the existing filters and works at phone width.
 - On authorise, the DiagnosticReport's `category` is the test's catalog category read live from CE
