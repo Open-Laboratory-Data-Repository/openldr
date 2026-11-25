@@ -101,6 +101,13 @@ Insère, met à jour et supprime en une transaction. Si une étape échoue, aucu
 
 Une `key` nomme exactement les colonnes de la clé primaire. Une requête a jusqu'à 500 étapes. Une insertion dans une table d'établissement doit indiquer la colonne d'établissement. La réponse est `{ "results": [{ "rowCount": 1 }, ...] }`, une par étape. Une étape sur une ligne hors des établissements de l'appelant ne change rien et donne `rowCount` 0.
 
+Une mise à jour ou une suppression peut être conditionnelle. `where` prend les mêmes filtres que `db_select`, et CE les ajoute à la clé. `expect` est le nombre de lignes que l'étape doit changer. Quand l'étape en change un autre nombre, CE n'enregistre rien de la requête et répond `REQUEST_CONFLICT`, en nommant l'étape et la table. Utilisez-le quand un autre appel a pu changer la ligne depuis votre lecture.
+
+```json
+{ "op": "update", "table": "order_tests", "key": { "id": "t1" }, "set": { "status": "rejected" },
+  "where": [{ "column": "hold", "op": "is_null", "value": true }], "expect": 1 }
+```
+
 `db_select` et `db_write` s'arrêtent chacun après 5 secondes.
 
 ## ce_read
@@ -179,7 +186,7 @@ CE refuse ceci avant toute instruction SQL :
 - une insertion ou une mise à jour de `created_at` ou `updated_at`
 - un champ que la forme de la requête n'a pas, comme `pluginId` ou `facilities`
 
-Les codes courants sont `REQUEST_INVALID`, `REQUEST_TABLE`, `REQUEST_COLUMN`, `REQUEST_VALUE`, `REQUEST_KEY` et `REQUEST_FACILITY` pour les requêtes sur les tables. `ce_read` et `fhir_emit` utilisent `INVALID_REQUEST`, `UNKNOWN_OP`, `FORBIDDEN`, `NOT_FOUND`, `OUTSIDE_DATA_LIMIT`, `RESOURCE_TYPE_NOT_ALLOWED` et `VALIDATION_FAILED`. Une requête ou une réponse de plus de 1 Mo donne `TOO_LARGE`. Une erreur dans CE donne `HOST_ERROR`, et les détails vont dans le journal de CE, pas au plugin.
+Les codes courants sont `REQUEST_INVALID`, `REQUEST_TABLE`, `REQUEST_COLUMN`, `REQUEST_VALUE`, `REQUEST_KEY`, `REQUEST_FACILITY` et `REQUEST_CONFLICT` pour les requêtes sur les tables. `ce_read` et `fhir_emit` utilisent `INVALID_REQUEST`, `UNKNOWN_OP`, `FORBIDDEN`, `NOT_FOUND`, `OUTSIDE_DATA_LIMIT`, `RESOURCE_TYPE_NOT_ALLOWED` et `VALIDATION_FAILED`. Une requête ou une réponse de plus de 1 Mo donne `TOO_LARGE`. Une erreur dans CE donne `HOST_ERROR`, et les détails vont dans le journal de CE, pas au plugin.
 
 ## Depuis Rust
 

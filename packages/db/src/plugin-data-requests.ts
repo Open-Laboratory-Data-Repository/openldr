@@ -27,7 +27,8 @@ export type PluginCaller = {
   facilities: string[] | '*';
 };
 
-export type PluginRequestErrorReason = 'invalid' | 'table' | 'column' | 'value' | 'key' | 'facility' | 'shape';
+/** `conflict`: a conditional step (`expect`) changed a different number of rows; nothing was saved. */
+export type PluginRequestErrorReason = 'invalid' | 'table' | 'column' | 'value' | 'key' | 'facility' | 'shape' | 'conflict';
 
 export class PluginRequestError extends Error {
   constructor(readonly reason: PluginRequestErrorReason, message: string) {
@@ -71,8 +72,15 @@ export type SelectRequest = z.infer<typeof selectRequestSchema>;
 const rowValues = z.record(identifier, z.unknown());
 const writeStepSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('insert'), table: identifier, values: rowValues }).strict(),
-  z.object({ op: z.literal('update'), table: identifier, key: rowValues, set: rowValues }).strict(),
-  z.object({ op: z.literal('delete'), table: identifier, key: rowValues }).strict(),
+  // `where` and `expect` make a step conditional (design 2026-11-25-plugin-conditional-write).
+  z.object({
+    op: z.literal('update'), table: identifier, key: rowValues, set: rowValues,
+    where: z.array(filterSchema).max(MAX_FILTERS).optional(), expect: z.number().int().min(0).optional(),
+  }).strict(),
+  z.object({
+    op: z.literal('delete'), table: identifier, key: rowValues,
+    where: z.array(filterSchema).max(MAX_FILTERS).optional(), expect: z.number().int().min(0).optional(),
+  }).strict(),
 ]);
 export type WriteStep = z.infer<typeof writeStepSchema>;
 
@@ -317,12 +325,12 @@ interface PlannedSelect {
   count: boolean;
 }
 
-function planSelect(tables: Map<string, TableFacts>, req: SelectRequest): PlannedSelect {
-  const t = tableOf(tables, req.table);
-  const all = [...t.types.keys(), ...CE_MANAGED_COLUMNS];
-  const columns = req.columns ?? all;
-  for (const c of columns) readable(t, c);
-  const filters = (req.where ?? []).map((f) => {
+/** A filter checked against the table, with its bound value, ready to apply. */
+type PlannedFilter = { column: string; type: ColumnType; f: SelectFilter; bound: unknown };
+
+/** Checks filters against the declared columns. A select's `where` and a conditional step's use it. */
+function planFilters(t: TableFacts, where: SelectFilter[]): PlannedFilter[] {
+  return where.map((f) => {
     const type = readable(t, f.column);
     let bound: unknown;
     switch (f.op) {
@@ -346,6 +354,26 @@ function planSelect(tables: Map<string, TableFacts>, req: SelectRequest): Planne
     }
     return { column: f.column, type, f, bound };
   });
+}
+
+/** Adds planned filters to a select, update or delete. */
+function applyFilters(q: any, filters: PlannedFilter[]): any {
+  let out = q;
+  for (const { column, f, bound } of filters) {
+    if (f.op === 'is_null') out = out.where(column, bound ? 'is' : 'is not', null);
+    else if (f.op === 'prefix') out = out.where(column, 'like', bound);
+    else if (f.op === 'in') out = out.where(column, 'in', bound);
+    else out = out.where(column, OPS[f.op], bound);
+  }
+  return out;
+}
+
+function planSelect(tables: Map<string, TableFacts>, req: SelectRequest): PlannedSelect {
+  const t = tableOf(tables, req.table);
+  const all = [...t.types.keys(), ...CE_MANAGED_COLUMNS];
+  const columns = req.columns ?? all;
+  for (const c of columns) readable(t, c);
+  const filters = planFilters(t, req.where ?? []);
   const order = (req.orderBy ?? []).map((o) => {
     const type = readable(t, o.column);
     if (type === 'jsonb') throw new PluginRequestError('column', `table ${t.name}: cannot order by jsonb column ${o.column}`);
@@ -359,8 +387,8 @@ function planSelect(tables: Map<string, TableFacts>, req: SelectRequest): Planne
 /** A write step, checked and ready to build. */
 type PlannedStep =
   | { op: 'insert'; table: TableFacts; values: Record<string, unknown> }
-  | { op: 'update'; table: TableFacts; key: [string, unknown][]; set: Record<string, unknown> }
-  | { op: 'delete'; table: TableFacts; key: [string, unknown][] };
+  | { op: 'update'; table: TableFacts; key: [string, unknown][]; set: Record<string, unknown>; filters: PlannedFilter[]; expect?: number }
+  | { op: 'delete'; table: TableFacts; key: [string, unknown][]; filters: PlannedFilter[]; expect?: number };
 
 function planStep(tables: Map<string, TableFacts>, step: WriteStep, facilities: string[] | '*'): PlannedStep {
   const t = tableOf(tables, step.table);
@@ -383,9 +411,9 @@ function planStep(tables: Map<string, TableFacts>, step: WriteStep, facilities: 
       return { op: 'insert', table: t, values: v };
     }
     case 'update':
-      return { op: 'update', table: t, key: checkKey(t, step.key), set: values(step.set, 'an update') };
+      return { op: 'update', table: t, key: checkKey(t, step.key), set: values(step.set, 'an update'), filters: planFilters(t, step.where ?? []), expect: step.expect };
     case 'delete':
-      return { op: 'delete', table: t, key: checkKey(t, step.key) };
+      return { op: 'delete', table: t, key: checkKey(t, step.key), filters: planFilters(t, step.where ?? []), expect: step.expect };
   }
 }
 
@@ -432,13 +460,7 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
           let out = q;
           const ff = facilityFilter(t, facilities);
           if (ff) out = out.where(ff);
-          for (const { column, f, bound } of p.filters) {
-            if (f.op === 'is_null') out = out.where(column, bound ? 'is' : 'is not', null);
-            else if (f.op === 'prefix') out = out.where(column, 'like', bound);
-            else if (f.op === 'in') out = out.where(column, 'in', bound);
-            else out = out.where(column, OPS[f.op], bound);
-          }
-          return out;
+          return applyFilters(out, p.filters);
         };
         let q = scoped(trx.withSchema(schema).selectFrom(t.name).select(p.columns));
         for (const o of p.order) q = q.orderBy(o.column, o.direction);
@@ -466,7 +488,7 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
           }
         }
         const results: { rowCount: number }[] = [];
-        for (const s of req.steps) {
+        for (const [i, s] of req.steps.entries()) {
           const p = planStep(declared, s, facilities);
           const t = p.table;
           if (p.op === 'insert') {
@@ -480,8 +502,14 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
           for (const [k, v] of p.key) q = q.where(k, '=', v);
           const ff = facilityFilter(t, facilities);
           if (ff) q = q.where(ff);
+          q = applyFilters(q, p.filters);
           const r = await q.executeTakeFirst();
-          results.push({ rowCount: Number((p.op === 'update' ? r.numUpdatedRows : r.numDeletedRows) ?? 0n) });
+          const n = Number((p.op === 'update' ? r.numUpdatedRows : r.numDeletedRows) ?? 0n);
+          // Thrown inside the transaction, so every step of the request is rolled back.
+          if (p.expect !== undefined && n !== p.expect) {
+            throw new PluginRequestError('conflict', `step ${i + 1} on table ${t.name}: expected ${p.expect} rows to change, ${n} did; nothing was saved`);
+          }
+          results.push({ rowCount: n });
         }
         return { results };
       });

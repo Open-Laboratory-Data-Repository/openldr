@@ -101,6 +101,13 @@ Inserts, updates and deletes in one transaction. If one step fails, none is kept
 
 A `key` names exactly the primary key columns. A request has up to 500 steps. An insert into a facility table must set the facility column. The answer is `{ "results": [{ "rowCount": 1 }, ...] }`, one per step. A step on a row outside the caller's facilities changes nothing and gives `rowCount` 0.
 
+An update or delete can be conditional. `where` takes the same filters as `db_select`, and CE adds them to the key. `expect` is the number of rows the step must change. When the step changes a different number, CE saves nothing of the request and answers `REQUEST_CONFLICT`, naming the step and the table. Use it when another call may have changed the row since you read it.
+
+```json
+{ "op": "update", "table": "order_tests", "key": { "id": "t1" }, "set": { "status": "rejected" },
+  "where": [{ "column": "hold", "op": "is_null", "value": true }], "expect": 1 }
+```
+
 `db_select` and `db_write` each stop after 5 seconds.
 
 ## ce_read
@@ -179,7 +186,7 @@ CE refuses these before any SQL runs:
 - an insert or update of `created_at` or `updated_at`
 - a field the request shape does not have, such as `pluginId` or `facilities`
 
-Common codes are `REQUEST_INVALID`, `REQUEST_TABLE`, `REQUEST_COLUMN`, `REQUEST_VALUE`, `REQUEST_KEY` and `REQUEST_FACILITY` for table requests. `ce_read` and `fhir_emit` use `INVALID_REQUEST`, `UNKNOWN_OP`, `FORBIDDEN`, `NOT_FOUND`, `OUTSIDE_DATA_LIMIT`, `RESOURCE_TYPE_NOT_ALLOWED` and `VALIDATION_FAILED`. A request or answer over 1 MB gives `TOO_LARGE`. An error inside CE gives `HOST_ERROR`, and the details go to CE's log, not to the plugin.
+Common codes are `REQUEST_INVALID`, `REQUEST_TABLE`, `REQUEST_COLUMN`, `REQUEST_VALUE`, `REQUEST_KEY`, `REQUEST_FACILITY` and `REQUEST_CONFLICT` for table requests. `ce_read` and `fhir_emit` use `INVALID_REQUEST`, `UNKNOWN_OP`, `FORBIDDEN`, `NOT_FOUND`, `OUTSIDE_DATA_LIMIT`, `RESOURCE_TYPE_NOT_ALLOWED` and `VALIDATION_FAILED`. A request or answer over 1 MB gives `TOO_LARGE`. An error inside CE gives `HOST_ERROR`, and the details go to CE's log, not to the plugin.
 
 ## From Rust
 

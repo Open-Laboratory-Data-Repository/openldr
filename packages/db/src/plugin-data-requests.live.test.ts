@@ -108,6 +108,31 @@ describe.skipIf(!url)('plugin data requests on disposable PostgreSQL', () => {
     expect(rows).toEqual([{ id: 1, code: 'a_b' }, { id: 2, code: 'axb' }, { id: 3, code: 'a_c' }]);
   });
 
+  // Design 2026-11-25-plugin-conditional-write: a conditional step that waits on a row another
+  // writer is changing sees the committed row, matches nothing, and the request saves nothing.
+  it('a conditional update loses to a change committed first, and saves nothing', async () => {
+    const holder = await pool.connect();
+    try {
+      await holder.query('begin');
+      await holder.query(`update "${schema}".samples set code = 'theirs' where id = 1`);
+      let settled = false;
+      const write = createPluginRequests(db).write(pluginId, shapes, all, { steps: [
+        { op: 'insert', table: 'samples', values: { id: 4, facility: F1, code: 'new' } },
+        { op: 'update', table: 'samples', key: { id: 1 }, set: { code: 'mine' }, where: [{ column: 'code', op: 'eq', value: 'a_b' }], expect: 1 },
+      ] }).then(() => null, (e: unknown) => e).finally(() => { settled = true; });
+      await new Promise((r) => setTimeout(r, 300));
+      expect(settled).toBe(false);
+      await holder.query('commit');
+      const err = await write;
+      expect((err as { reason?: string } | null)?.reason).toBe('conflict');
+    } finally {
+      await holder.query('rollback').catch(() => undefined);
+      holder.release();
+    }
+    const rows = await db.withSchema(schema).selectFrom('samples').select(['id', 'code']).orderBy('id').execute();
+    expect(rows).toEqual([{ id: 1, code: 'theirs' }, { id: 2, code: 'axb' }, { id: 3, code: 'a_c' }]);
+  });
+
   it('a prefix matches only itself: _ and % are not wildcards', async () => {
     const r = await createPluginRequests(db).select(pluginId, shapes, all, { table: 'samples', columns: ['id'], where: [{ column: 'code', op: 'prefix', value: 'a_' }] });
     expect(r.rows.map((x) => x.id)).toEqual([1, 3]);
