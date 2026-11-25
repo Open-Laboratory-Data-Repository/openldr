@@ -35,6 +35,13 @@ describe('terminology reads', () => {
     }
   });
 
+  // Fastify adds a HEAD route for each GET, which answers the status and the body size. Gated too.
+  it('a HEAD request is refused as its GET is', async () => {
+    const res = await appWith(['reports.view']).inject({ method: 'HEAD', url: '/api/terminology/ValueSet/$expand' });
+    expect(res.statusCode).toBe(403);
+    expect((await appWith(['forms.submit']).inject({ method: 'HEAD', url: '/api/terminology/systems' })).statusCode).toBe(200);
+  });
+
   it('401 with no one signed in', async () => {
     const res = await appWith(null).inject({ method: 'GET', url: '/api/terminology/systems' });
     expect(res.statusCode).toBe(401);

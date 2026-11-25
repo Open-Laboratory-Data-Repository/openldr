@@ -29,7 +29,8 @@ export function gateTerminologyReads(app: FastifyInstance<any, any, any, any>): 
   const gate = requireAnyCapability(...TERMINOLOGY_READ_CAPABILITIES);
   app.addHook('onRoute', (route) => {
     const methods = Array.isArray(route.method) ? route.method : [route.method];
-    if (!methods.includes('GET')) return;
+    // HEAD too: Fastify adds one for each GET, and it answers the status and the body size.
+    if (!methods.includes('GET') && !methods.includes('HEAD')) return;
     if (!route.url.startsWith('/api/terminology/')) return;
     if (route.preHandler) return;
     route.preHandler = gate;
