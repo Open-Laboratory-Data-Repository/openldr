@@ -156,7 +156,9 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
   async function load(id: string, version?: string): Promise<Converter | undefined> {
     const row = await deps.store.get(id, version);
     if (!row) return undefined;
-    const key = `${row.id}@${row.version}`;
+    // The code's hash is part of the key: the row is read on every load, so a reinstall of the same
+    // version by another process (the CLI, or another server) is picked up here without a restart.
+    const key = `${row.id}@${row.version}#${row.sha256}`;
     const cached = cache.get(key);
     if (cached) return cached;
     const wasm = await loadWasm(row);
@@ -175,7 +177,9 @@ export function createPluginRuntime(deps: PluginRuntimeDeps): PluginRuntime {
   async function loadSink(id: string, version?: string): Promise<WasmSink | undefined> {
     const row = await deps.store.get(id, version);
     if (!row) return undefined;
-    const key = `${row.id}@${row.version}`;
+    // The code's hash is part of the key: the row is read on every load, so a reinstall of the same
+    // version by another process (the CLI, or another server) is picked up here without a restart.
+    const key = `${row.id}@${row.version}#${row.sha256}`;
     const cached = sinkCache.get(key);
     if (cached) return cached;
     const manifest = pluginManifestFromRow(row);
