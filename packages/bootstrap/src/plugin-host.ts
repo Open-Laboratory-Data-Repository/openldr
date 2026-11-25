@@ -224,7 +224,8 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
     forCall(plugin, caller) {
       const kinds = new Set(plugin.capabilities.map((c) => c.kind));
       const scope = scopeOf(caller);
-      const actor: AuditActor = { actorType: 'user', actorId: caller.userId, actorName: caller.displayName ?? caller.userId };
+      // A CLI call names its own actor (openldr plugin call); the page's caller is a user.
+      const actor: AuditActor = (caller.auditActor as AuditActor | undefined) ?? { actorType: 'user', actorId: caller.userId, actorName: caller.displayName ?? caller.userId };
       const auditMeta = { pluginId: plugin.id, pluginVersion: plugin.version };
       // The studio's own rule: identifiers show only to a person who holds patients.view_identifiers.
       const unmask = caller.capabilities.includes('patients.view_identifiers');

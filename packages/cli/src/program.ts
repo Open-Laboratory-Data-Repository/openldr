@@ -1,3 +1,4 @@
+import { runPluginCall } from './plugin-call';
 import { Command, Option, type ParseOptions } from 'commander';
 import { loadConfig } from '@openldr/config';
 import { createAppContext } from '@openldr/bootstrap';
@@ -1521,6 +1522,14 @@ export function buildProgram(): Command {
       try {
         process.exitCode = opts.version ? await runPluginVersionRemove(id, opts.version, opts) : await runWholePluginRemove(id, opts);
       } catch (err) { process.stderr.write(`plugin remove failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  plugin
+    .command('call <plugin> <action>')
+    .description("Run one plugin action through the plugin broker, as the plugin's page does. The action's own permission applies")
+    .option('--input <json>', 'the action input, as JSON (default {})')
+    .option('--json', 'emit JSON', false)
+    .action(async (pluginId: string, action: string, opts: { input?: string; json: boolean }) => {
+      try { process.exitCode = await runPluginCall(pluginId, action, opts); } catch (err) { process.stderr.write(`plugin call failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
   const report = program.command('report').description('Domain reports over the analytics DB');

@@ -1395,6 +1395,15 @@ describe('plugin broker: the caller passed to plugin code (plugin host 2a task 6
     expect(resolveFacilities).not.toHaveBeenCalled();
   });
 
+  // A CLI call (openldr plugin call) names who to audit as; the plugin host records that actor.
+  it('passes a principal\'s audit actor on to the plugin code\'s caller', async () => {
+    const invoke = vi.fn(async () => ({ done: true }));
+    const { b } = hostBroker([{ kind: 'host:db' }], { invoke });
+    const auditActor = { actorType: 'cli' as const, actorId: null, actorName: 'ops' };
+    await b.handle('p1', { ...person, dataScope: { limited: false }, auditActor }, { kind: 'invoke', entrypoint: 'run', input: {} });
+    expect(invoke).toHaveBeenCalledWith('run', {}, expect.objectContaining({ caller: expect.objectContaining({ auditActor }) }));
+  });
+
   it('gives an unlimited caller *, and a caller with no data limit at all no facilities', async () => {
     const invoke = vi.fn(async () => ({}));
     const { b, resolveFacilities } = hostBroker([{ kind: 'host:ce-read' }], { invoke });

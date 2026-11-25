@@ -440,6 +440,13 @@ describe('plugin host: fhir_emit', () => {
     expect(deps.persist).not.toHaveBeenCalled();
   });
 
+  it('audits as the caller\'s audit actor when the call names one (a CLI call)', async () => {
+    const deps = fakeDeps();
+    const cli = { actorType: 'cli' as const, actorId: null, actorName: 'ops' };
+    await createPluginHost(deps).forCall(emit(['Observation']), { ...EVERYONE, auditActor: cli }).fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o1' }] });
+    expect(deps.audit).toHaveBeenCalledWith(cli, expect.objectContaining({ action: 'fhir.emit' }));
+  });
+
   it('writes one audit row per call, with the caller, types, count and ids', async () => {
     const deps = fakeDeps();
     await createPluginHost(deps).forCall(emit(['Observation', 'ServiceRequest']), EVERYONE).fhir_emit({

@@ -25,6 +25,9 @@ export type PluginCaller = {
   displayName: string | null;
   capabilities: string[];
   facilities: string[] | '*';
+  /** Who CE audits the call as, when it is not the signed-in page user: `openldr plugin call`
+   *  passes the CLI's actor (actor type `cli`, or the user with `origin: { via: 'cli' }`). */
+  auditActor?: { actorType: string; actorId?: string | null; actorName?: string | null; origin?: unknown };
 };
 
 /** `conflict`: a conditional step (`expect`) changed a different number of rows; nothing was saved. */
