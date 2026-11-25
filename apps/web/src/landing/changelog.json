@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "9cbaad768",
+          "type": "fix",
+          "scope": "db",
+          "title": "The plugin data role check is kept only when it ran, a dropped role is checked again, Postgres 16 checks SET, the role only reads the shapes table, down leaves a role other databases use, and the owner check locks in one order"
+        },
+        {
+          "hash": "cd8fddbba",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Plugin call refuses --input that is not JSON before CE starts"
+        },
+        {
           "hash": "317e21fc8",
           "type": "fix",
           "scope": "db",
