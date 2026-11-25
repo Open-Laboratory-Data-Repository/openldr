@@ -44,8 +44,9 @@ code. The lab's sentences say what to do next, and those words are kept.
 - **Words.** `error.<key>` in fr and pt, in `ui/src/i18n.ts` or a file beside it. English lives
   only in Rust, so the two cannot drift.
 - **Tests.** A UI test reads every key and template from `src/*.rs` and checks that fr and pt
-  each have the key, with the same `{placeholders}` as the template. A Rust test checks that no
-  `LabError` is made without a key, apart from CE's passed-on errors. Existing tests that compare
+  each have the key, with the same `{placeholders}` as the template. The plugin's error
+  constructors take only a catalog entry, so an error without a key does not compile, apart from
+  CE's passed-on errors (changed from a Rust test at build time, 2026-11-25). Existing tests that compare
   a message keep working, because the English is unchanged.
 
 ## Not covered
