@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "ed8e4163b",
+          "type": "fix",
+          "scope": "db",
+          "title": "The owner check locks in byte order on PostgreSQL, the same order its chunks are cut in, and a failed plugin data role grant is not kept"
+        },
+        {
           "hash": "9cbaad768",
           "type": "fix",
           "scope": "db",
