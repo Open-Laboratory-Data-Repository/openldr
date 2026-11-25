@@ -75,6 +75,33 @@ describe('fhirStore.saveMany', () => {
     await db.destroy();
   });
 
+  // 2a2: two plugin saves that lock the same records must take the locks in one order, or each can
+  // wait on the other. The owner check locks by resource type, then id, across its 1000-id chunks.
+  it('ownedBy locks the records in resource type and id order, whatever order the list has', async () => {
+    const base = await makeMigratedDb();
+    const locks: Array<{ type: unknown; ids: unknown[] }> = [];
+    const spy: KyselyPlugin = {
+      transformQuery(args) {
+        const c = base.getExecutor().compileQuery(args.node, args.queryId);
+        if (/for update/i.test(c.sql) && c.sql.includes('fhir_current')) locks.push({ type: c.parameters[0], ids: c.parameters.slice(1) });
+        return args.node;
+      },
+      async transformResult(args) { return args.result; },
+    };
+    const store = createFhirStore(base.withPlugin(spy) as never);
+    const ids = Array.from({ length: 1200 }, (_, i) => `p${String(i).padStart(4, '0')}`).reverse();
+    await store.saveMany([
+      ...ids.map((id) => ({ resourceType: 'Patient', id })),
+      { resourceType: 'Observation', id: 'o2' }, { resourceType: 'Observation', id: 'o1' },
+    ] as never, { pluginId: 'lab' }, { ownedBy: 'lab' });
+
+    expect(locks.map((l) => l.type)).toEqual(['Observation', 'Patient', 'Patient']);
+    const seen = locks.flatMap((l) => l.ids.map((id) => `${String(l.type)}/${String(id)}`));
+    expect(seen).toEqual([...seen].sort());
+    expect(seen).toHaveLength(1202);
+    await base.destroy();
+  }, 60_000);
+
   it('ownedBy saves new records and records the same plugin wrote', async () => {
     const db = await makeMigratedDb();
     const store = createFhirStore(db as never);

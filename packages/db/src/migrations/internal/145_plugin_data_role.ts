@@ -64,5 +64,11 @@ export async function down(db: Kysely<any>): Promise<void> {
     await sql`revoke all on all tables in schema ${sql.id(schema)} from ${sql.id(ROLE)}`.execute(db);
     await sql`revoke usage on schema ${sql.id(schema)} from ${sql.id(ROLE)}`.execute(db);
   }
+  // Roles belong to the whole server. When another database on it still grants this role something,
+  // DROP ROLE would fail (2BP01) and abort the migration: leave the role to that database.
+  const elsewhere = await sql<{ n: number }>`
+    select count(*)::int as n from pg_shdepend d join pg_database x on x.oid = d.dbid
+    where d.refobjid = (select oid from pg_roles where rolname = ${ROLE}) and x.datname <> current_database()`.execute(db);
+  if (elsewhere.rows[0].n > 0) return;
   await sql`drop role ${sql.id(ROLE)}`.execute(db);
 }

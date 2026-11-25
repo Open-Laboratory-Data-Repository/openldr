@@ -284,10 +284,15 @@ export async function grantPluginDataRoleAll(db: Kysely<any>): Promise<void> {
   const r = await sql<{ nspname: string }>`
     select n.nspname from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where c.relname = ${SHAPES_TABLE} and c.relkind = 'r'`.execute(db);
-  for (const { nspname } of r.rows) {
-    await sql`grant usage on schema ${sql.id(nspname)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
-    await sql`grant select, insert, update, delete on all tables in schema ${sql.id(nspname)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
-  }
+  for (const { nspname } of r.rows) await grantRoleSchema(db, nspname);
+}
+
+/** The role's rights in one plugin schema: use it, read and write its tables, and only read the
+ *  shapes table. Requests read the recorded shapes; only CE's own login writes them. */
+async function grantRoleSchema(db: Kysely<any>, schema: string): Promise<void> {
+  await sql`grant usage on schema ${sql.id(schema)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
+  await sql`grant select, insert, update, delete on all tables in schema ${sql.id(schema)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
+  await sql`revoke insert, update, delete, truncate on ${sql.id(schema, SHAPES_TABLE)} from ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
 }
 
 export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHOUT_RLS): PluginSchemas {
@@ -361,8 +366,7 @@ export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHO
 
   /** Grants the plugin data role the schema and all its tables. */
   async function grantPluginDataRole(trx: Kysely<any>, schema: string): Promise<void> {
-    await sql`grant usage on schema ${sql.id(schema)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(trx);
-    await sql`grant select, insert, update, delete on all tables in schema ${sql.id(schema)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(trx);
+    await grantRoleSchema(trx, schema);
   }
 
   async function createIndex(trx: Kysely<any>, schema: string, table: string, i: { name: string; columns: string[]; unique: boolean }): Promise<void> {
@@ -409,7 +413,7 @@ export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHO
           await record(trx, p.schema, pluginId, t, true);
           created.push(t.name);
         }
-        // The plugin data role reads and writes the schema's tables, the shapes table among them.
+        // The plugin data role reads and writes the schema's tables, and only reads the shapes table.
         if (roleExists && p.createTables.length > 0) await grantPluginDataRole(trx, p.schema);
         for (const a of p.addColumns) {
           const def = columnDefault(a.column);

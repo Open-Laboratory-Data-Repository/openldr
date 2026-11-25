@@ -429,36 +429,96 @@ function planStep(tables: Map<string, TableFacts>, step: WriteStep, facilities: 
  *    make it). The CE filter alone guards, as before. */
 export type PluginDataRoleStatus = 'switch' | 'not-needed' | 'missing';
 
-export async function pluginDataRoleStatus(db: Kysely<any>): Promise<PluginDataRoleStatus> {
+/** The check itself. `unknown` when it could not run (a failed query); pg-mem is `not-needed`. A
+ *  login may switch to the role when it holds SET on it (Postgres 16 and later) or is a member
+ *  (before 16); a superuser always may. */
+async function readPluginDataRoleStatus(db: Kysely<any>): Promise<PluginDataRoleStatus | 'unknown'> {
   try {
+    const v = await sql<{ v: number }>`select current_setting('server_version_num')::int as v`.execute(db);
+    const option = (v.rows[0]?.v ?? 0) >= 160000 ? 'SET' : 'MEMBER';
     const r = await sql<{ bypass: boolean; usable: boolean }>`
       select (me.rolsuper or me.rolbypassrls) as bypass,
-             coalesce((select pg_has_role(current_user, r.oid, 'MEMBER') from pg_roles r where r.rolname = ${PLUGIN_DATA_ROLE}), false) as usable
+             coalesce((select pg_has_role(current_user, r.oid, ${option}) from pg_roles r where r.rolname = ${PLUGIN_DATA_ROLE}), false) as usable
       from pg_roles me where me.rolname = current_user`.execute(db);
     const row = r.rows[0];
     if (!row || !row.bypass) return 'not-needed';
     return row.usable ? 'switch' : 'missing';
-  } catch {
-    return 'not-needed';
+  } catch (e) {
+    // pg-mem has no roles and no current_setting: its error has no SQLSTATE code and says "does not
+    // exist". Real Postgres always gives a code, so that answer lasts. Anything else may pass.
+    const err = e as { code?: unknown; message?: unknown } | null;
+    if (err?.code === undefined && /does not exist/.test(String(err?.message ?? ''))) return 'not-needed';
+    return 'unknown';
   }
 }
 
+export async function pluginDataRoleStatus(db: Kysely<any>): Promise<PluginDataRoleStatus> {
+  const s = await readPluginDataRoleStatus(db);
+  return s === 'unknown' ? 'not-needed' : s;
+}
+
+/** What CE keeps of the role check, per process. An answer is kept; a check that could not run is
+ *  not, so the next request checks again (one failed query does not turn the second guard off for
+ *  good). Before the first switch the role is granted every plugin schema; if that grant fails, CE
+ *  keeps `missing` and its own filter guards. `forget` drops the kept answer: a request that finds
+ *  the role gone calls it, then checks again. */
+export function createRoleStatus(
+  read: () => Promise<PluginDataRoleStatus | 'unknown'>,
+  grantAll: () => Promise<void>,
+): { get: () => Promise<PluginDataRoleStatus>; forget: () => void } {
+  let kept: Promise<PluginDataRoleStatus> | null = null;
+  return {
+    get() {
+      if (kept) return kept;
+      const p = (async (): Promise<PluginDataRoleStatus | 'unknown'> => {
+        const s = await read();
+        if (s !== 'switch') return s;
+        try {
+          await grantAll();
+          return 'switch';
+        } catch {
+          return 'missing';
+        }
+      })().then((s) => {
+        if (s === 'unknown') {
+          if (kept === answer) kept = null;
+          return 'not-needed' as const;
+        }
+        return s;
+      });
+      const answer = p;
+      kept = answer;
+      return answer;
+    },
+    forget() { kept = null; },
+  };
+}
+
+/** SET ROLE on a role dropped while CE runs: Postgres answers 22023 (invalid_parameter_value),
+ *  "role ... does not exist". */
+const roleGone = (e: unknown): boolean => {
+  const err = e as { code?: unknown; message?: unknown } | null;
+  return err?.code === '22023' && /role .* does not exist/.test(String(err?.message ?? ''));
+};
+
 export function createPluginRequests(db: Kysely<any>): PluginRequests {
-  // Read once per process, at the first request. Before switching, the role is granted every plugin
-  // schema, so one made while the role was missing works too; if that grant fails, CE does not switch
-  // and its own filter guards, as before. A server started before migration 145 ran switches after a
-  // restart.
-  let roleStatus: Promise<PluginDataRoleStatus> | null = null;
-  const status = (): Promise<PluginDataRoleStatus> => (roleStatus ??= (async () => {
-    const s = await pluginDataRoleStatus(db);
-    if (s !== 'switch') return s;
+  // Read at the first request and kept (createRoleStatus). A server started before migration 145
+  // ran switches after a restart.
+  const roles = createRoleStatus(() => readPluginDataRoleStatus(db), () => grantPluginDataRoleAll(db));
+
+  /** Runs one request's transaction with the role answer. If the role was dropped while CE runs,
+   *  SET ROLE fails and the transaction rolls back: forget the answer, check again, and run once
+   *  more (CE then does not switch, and its own filter guards). */
+  async function withRole<T>(run: (role: PluginDataRoleStatus) => Promise<T>): Promise<T> {
+    const role = await roles.get();
     try {
-      await grantPluginDataRoleAll(db);
-      return 'switch';
-    } catch {
-      return 'missing';
+      return await run(role);
+    } catch (e) {
+      if (role !== 'switch' || !roleGone(e)) throw e;
+      roles.forget();
+      return run(await roles.get());
     }
-  })());
+  }
 
   /** Inside the request's transaction: set the timeout and the facility setting, then read the
    *  recorded shapes for the named tables and check the declared ones fit inside them. Returns the
@@ -497,8 +557,7 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
       const declared = declaredTables(shapes, 'the declared shapes');
       planSelect(declared, req);
 
-      const role = await status();
-      return db.transaction().execute(async (trx) => {
+      return withRole((role) => db.transaction().execute(async (trx) => {
         await begin(trx, pluginId, schema, declared, new Set([req.table]), facilities, role);
         const p = planSelect(declared, req);
         const t = p.table;
@@ -514,7 +573,7 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
         if (!p.count) return { rows };
         const c = await scoped(trx.withSchema(schema).selectFrom(t.name).select((eb: any) => eb.fn.countAll().as('n'))).executeTakeFirst();
         return { rows, count: Number(c?.n ?? 0) };
-      });
+      }));
     },
 
     async write(pluginId, shapes, caller, input) {
@@ -524,8 +583,7 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
       const declared = declaredTables(shapes, 'the declared shapes');
       for (const s of req.steps) planStep(declared, s, facilities);
 
-      const role = await status();
-      return db.transaction().execute(async (trx) => {
+      return withRole((role) => db.transaction().execute(async (trx) => {
         const recorded = await begin(trx, pluginId, schema, declared, new Set(req.steps.map((s) => s.table)), facilities, role);
         for (const s of req.steps) {
           if (s.op !== 'insert') continue;
@@ -559,7 +617,7 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
           results.push({ rowCount: n });
         }
         return { results };
-      });
+      }));
     },
   };
 }

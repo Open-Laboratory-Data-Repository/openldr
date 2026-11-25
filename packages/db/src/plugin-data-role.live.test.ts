@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 import { createPluginSchemas, PLUGIN_DATA_ROLE } from './plugin-schema';
-import { up as migrate145 } from './migrations/internal/145_plugin_data_role';
+import { up as migrate145, down as unmigrate145 } from './migrations/internal/145_plugin_data_role';
 import type { TableShape } from './plugin-table-shape';
 
 // The plugin data role (design 2026-11-25-plugin-data-rls-role): roles, grants and SET ROLE, which
@@ -118,5 +118,26 @@ describe.skipIf(!url)('the plugin data role on disposable PostgreSQL', () => {
     });
     expect(await roleExists()).toBe(true);
   });
-});
 
+  it('migration 145 down leaves the role when another database on the server uses it (R5)', async () => {
+    await migrate145(db);
+    const other = `rls_other_${randomUUID().slice(0, 8)}`;
+    await sql`create database ${sql.id(other)}`.execute(db);
+    const u = new URL(url!);
+    u.pathname = `/${other}`;
+    const otherPool = new pg.Pool({ connectionString: u.toString(), max: 1 });
+    const otherDb = new Kysely<any>({ dialect: new PostgresDialect({ pool: otherPool }) });
+    try {
+      await sql`create schema held`.execute(otherDb);
+      await sql`grant usage on schema held to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(otherDb);
+      // As the migrator runs it: inside a transaction, which a failed DROP ROLE would abort.
+      await db.transaction().execute(async (trx) => { await unmigrate145(trx); });
+      expect(await roleExists()).toBe(true);
+    } finally {
+      await otherDb.destroy();
+      await sql`drop database ${sql.id(other)}`.execute(db);
+    }
+    await db.transaction().execute(async (trx) => { await unmigrate145(trx); });
+    expect(await roleExists()).toBe(false);
+  });
+});
