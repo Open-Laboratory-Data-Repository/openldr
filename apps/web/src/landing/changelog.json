@@ -1,6 +1,78 @@
 {
-  "generatedAt": "2026-11-24",
+  "generatedAt": "2026-11-25",
   "days": [
+    {
+      "date": "2026-11-25",
+      "version": null,
+      "entries": [
+        {
+          "hash": "26b601a70",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "A HEAD request to a terminology read needs the same permission as its GET"
+        },
+        {
+          "hash": "f9fa6fd6e",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Conditional update and delete steps in db_write"
+        },
+        {
+          "hash": "46cbdfae1",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A plugin's save checks record ownership inside its own transaction, with the rows locked"
+        },
+        {
+          "hash": "72259b4d7",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Reading codes needs a permission whose page reads them"
+        },
+        {
+          "hash": "44659b760",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Validate-code accepts every code expand lists, stored expansions too"
+        },
+        {
+          "hash": "71c631b14",
+          "type": "fix",
+          "scope": "roles",
+          "title": "Roles doctor reports a custom role on a system slug as blocked, as boot treats it"
+        },
+        {
+          "hash": "50b4ad1e1",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A list whose refresh failed says it may be out of date, on Forms, Workflows and the terminology publishers"
+        },
+        {
+          "hash": "848b96c3a",
+          "type": "fix",
+          "scope": "docs",
+          "title": "The terminology, layouts, setup checks and laboratory guides follow their page's permission"
+        },
+        {
+          "hash": "ddc2df7ac",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "The publisher and coding system sheets keep their actions in the ⋯ menu, labels left"
+        },
+        {
+          "hash": "a256d7eeb",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Importing or deleting terms says so in a toast"
+        },
+        {
+          "hash": "c236be64e",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A refusal to open a plugin names its permissions, never an empty role list"
+        }
+      ]
+    },
     {
       "date": "2026-11-24",
       "version": null,
