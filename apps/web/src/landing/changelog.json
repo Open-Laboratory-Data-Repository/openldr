@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "6a8a913d7",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A running server picks up a same-version reinstall made by the CLI"
+        },
+        {
           "hash": "845fd7579",
           "type": "fix",
           "scope": "studio",
