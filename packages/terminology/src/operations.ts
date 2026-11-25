@@ -52,13 +52,20 @@ export function createOperations(source: ConceptSource): Operations {
     return vs;
   }
 
-  async function expand(url: string, opts: ExpandOptions): Promise<ValueSet> {
-    const vs = await loadValueSet(url);
+  /** The codes of a value set: its compose, or its stored expansion when the compose finds none.
+   *  $expand and $validate-code both read this, so a code one lists the other accepts. */
+  async function codesOf(vs: ValueSet, url: string): Promise<{ codes: Awaited<ReturnType<typeof expandCompose>>['codes']; total: number }> {
     let { codes, total } = await expandCompose((vs.compose ?? { include: [] }) as VsCompose, makeDeps(source), { seedUrls: [url] });
     if (codes.length === 0 && source.storedExpansion) {
       codes = await source.storedExpansion(url);
       total = codes.length;
     }
+    return { codes, total };
+  }
+
+  async function expand(url: string, opts: ExpandOptions): Promise<ValueSet> {
+    const vs = await loadValueSet(url);
+    const { codes, total } = await codesOf(vs, url);
     // FHIR $expand `filter`: a case-insensitive substring over code and display. Applied
     // before paging so `total` reflects the filtered set, which is what a type-ahead needs.
     const needle = opts.filter?.trim().toLowerCase();
@@ -91,7 +98,7 @@ export function createOperations(source: ConceptSource): Operations {
     async validateCode(input) {
       if ('valueSetUrl' in input) {
         const vs = await loadValueSet(input.valueSetUrl);
-        const { codes } = await expandCompose((vs.compose ?? { include: [] }) as VsCompose, makeDeps(source), { seedUrls: [input.valueSetUrl] });
+        const { codes } = await codesOf(vs, input.valueSetUrl);
         const ok = codes.some((c) => c.code === input.code && (!input.system || c.system === input.system));
         return { result: ok, message: ok ? `${input.code} is in ${input.valueSetUrl}` : `${input.code} not in ${input.valueSetUrl}` };
       }

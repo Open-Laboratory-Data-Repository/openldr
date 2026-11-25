@@ -208,6 +208,16 @@ describe('expand falls back to the stored expansion', () => {
     expect(r.expansion?.contains?.map((c) => c.code)).toEqual(['f']);
   });
 
+  // validateCode must answer from the same codes $expand lists (2026-11-25: $expand listed "male"
+  // in administrative-gender while $validate-code said it was not there).
+  it('validateCode finds a code that only the stored expansion holds', async () => {
+    const ops = createOperations({ ...memSource([], { [genderVs.url]: genderVs }), storedExpansion: async () => stored });
+    expect((await ops.validateCode({ valueSetUrl: genderVs.url, code: 'm' })).result).toBe(true);
+    expect((await ops.validateCode({ valueSetUrl: genderVs.url, code: 'm', system: genderSystem })).result).toBe(true);
+    expect((await ops.validateCode({ valueSetUrl: genderVs.url, code: 'm', system: 'urn:other' })).result).toBe(false);
+    expect((await ops.validateCode({ valueSetUrl: genderVs.url, code: 'x' })).result).toBe(false);
+  });
+
   it('never reads the stored codes when the compose finds concepts', async () => {
     let read = 0;
     const ops = createOperations({
