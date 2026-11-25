@@ -141,7 +141,8 @@ export function TermsTable({
     e.target.value = '';
     setImportBusy(true);
     try {
-      await importTerms(systemId, file);
+      const out = await importTerms(systemId, file);
+      toast.success(`${out.imported} ${out.imported === 1 ? 'term' : 'terms'} imported`);
       setLocalReload((n) => n + 1);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -157,6 +158,7 @@ export function TermsTable({
     setConfirmDelete(null);
     try {
       await deleteTerm(systemId, code);
+      toast.success(`Deleted ${code}`);
       setLocalReload((n) => n + 1);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
