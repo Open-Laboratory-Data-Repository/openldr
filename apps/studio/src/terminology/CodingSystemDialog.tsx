@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CodingSystem, CodingSystemInput, Publisher } from '../api';
 import { createCodingSystem, listPublishers, updateCodingSystem } from '../api';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -17,7 +25,6 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '../components/ui/sheet';
@@ -106,23 +113,42 @@ export function CodingSystemDialog({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
-          <div className="space-y-1">
-            <Label htmlFor="systemCode" className="text-xs">System code</Label>
-            <Input
-              id="systemCode"
-              value={systemCode}
-              onChange={(e) => setSystemCode(e.target.value.toUpperCase())}
-              placeholder="LOINC"
-              className="h-9 text-sm font-mono"
-              disabled={editing}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Short uppercase identifier, e.g. LOINC, SNOMED-CT, ICD-10. Immutable once created.
-            </p>
+        <div className="flex-1 overflow-y-auto">
+          {/* Actions sit in a ⋯ menu on the section row, as FieldEditorSheet does (AGENTS.md section 5). */}
+          <div className="flex items-center justify-between px-6 py-3">
+            <h3 className="text-sm font-medium text-foreground">Details</h3>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Coding system actions">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={saving || !canSave} onClick={() => void handleSave()}>
+                  {saving ? 'Saving…' : editing ? 'Save' : 'Create'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onOpenChange(false)}>Cancel</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+          <div className="border-t border-border" />
 
-          <div className="space-y-1">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-6 py-4">
+            <Label htmlFor="systemCode" className="self-start pt-2 text-xs">System code</Label>
+            <div className="space-y-1">
+              <Input
+                id="systemCode"
+                value={systemCode}
+                onChange={(e) => setSystemCode(e.target.value.toUpperCase())}
+                placeholder="LOINC"
+                className="h-9 text-sm font-mono"
+                disabled={editing}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Short uppercase identifier, e.g. LOINC, SNOMED-CT, ICD-10. Immutable once created.
+              </p>
+            </div>
+
             <Label htmlFor="systemName" className="text-xs">System name</Label>
             <Input
               id="systemName"
@@ -131,11 +157,9 @@ export function CodingSystemDialog({
               placeholder="Logical Observation Identifiers Names and Codes"
               className="h-9 text-sm"
             />
-          </div>
 
-          <div className="grid grid-cols-[1fr_140px] gap-3">
+            <Label htmlFor="systemUrl" className="self-start pt-2 text-xs">Canonical URL</Label>
             <div className="space-y-1">
-              <Label htmlFor="systemUrl" className="text-xs">Canonical URL</Label>
               <Input
                 id="systemUrl"
                 value={url}
@@ -147,30 +171,25 @@ export function CodingSystemDialog({
                 Used in FHIR Coding.system. Leave blank for custom systems.
               </p>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="systemVersion" className="text-xs">Version</Label>
-              <Input
-                id="systemVersion"
-                value={systemVersion}
-                onChange={(e) => setSystemVersion(e.target.value)}
-                placeholder="2.76"
-                className="h-9 text-sm font-mono"
-              />
-            </div>
-          </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="systemDescription" className="text-xs">Description</Label>
-            <textarea
+            <Label htmlFor="systemVersion" className="text-xs">Version</Label>
+            <Input
+              id="systemVersion"
+              value={systemVersion}
+              onChange={(e) => setSystemVersion(e.target.value)}
+              placeholder="2.76"
+              className="h-9 text-sm font-mono"
+            />
+
+            <Label htmlFor="systemDescription" className="self-start pt-2 text-xs">Description</Label>
+            <Textarea
               id="systemDescription"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="resize-none text-sm"
             />
-          </div>
 
-          <div className="space-y-1">
             <Label htmlFor="systemPublisher" className="text-xs">Publisher</Label>
             <Select value={publisherId} onValueChange={setPublisherId}>
               <SelectTrigger id="systemPublisher" className="h-9 text-sm">
@@ -184,22 +203,15 @@ export function CodingSystemDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
 
-          <label className="flex items-center gap-2 text-sm">
+            <Label htmlFor="systemActive" className="text-xs">Active</Label>
             <Checkbox
+              id="systemActive"
               checked={active}
               onCheckedChange={(v) => setActive(v === true)}
             />
-            <span>Active</span>
-          </label>
+          </div>
         </div>
-
-        <SheetFooter className="border-t border-border px-6 py-4 sm:justify-end">
-          <Button disabled={saving || !canSave} onClick={() => void handleSave()}>
-            {saving ? 'Saving…' : editing ? 'Save' : 'Create'}
-          </Button>
-        </SheetFooter>
       </SheetContent>
     </Sheet>
   );

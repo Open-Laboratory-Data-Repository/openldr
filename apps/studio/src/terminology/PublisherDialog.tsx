@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Publisher, PublisherInput } from '../api';
 import { createPublisher, updatePublisher } from '../api';
 import { Button } from '../components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import {
@@ -16,7 +23,6 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
-  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '../components/ui/sheet';
@@ -84,8 +90,27 @@ export function PublisherDialog({ open, onOpenChange, publisher, onSaved }: Prop
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
-          <div className="space-y-1">
+        <div className="flex-1 overflow-y-auto">
+          {/* Actions sit in a ⋯ menu on the section row, as FieldEditorSheet does (AGENTS.md section 5). */}
+          <div className="flex items-center justify-between px-6 py-3">
+            <h3 className="text-sm font-medium text-foreground">Details</h3>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Publisher actions">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={saving || !canSave} onClick={() => void handleSave()}>
+                  {saving ? 'Saving…' : editing ? 'Save' : 'Create'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onOpenChange(false)}>Cancel</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <div className="border-t border-border" />
+
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-6 py-4">
             <Label htmlFor="publisherName" className="text-xs">Name</Label>
             <Input
               id="publisherName"
@@ -94,49 +119,43 @@ export function PublisherDialog({ open, onOpenChange, publisher, onSaved }: Prop
               placeholder="Your Lab"
               className="h-9 text-sm"
             />
-          </div>
 
-          <div className="space-y-1">
             <Label htmlFor="publisherRole" className="text-xs">Role</Label>
-            <Select
-              value={role}
-              onValueChange={(v) => setRole(v as 'local' | 'external')}
-              disabled={seeded}
-            >
-              <SelectTrigger id="publisherRole" className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="local">Local</SelectItem>
-                <SelectItem value="external">External</SelectItem>
-              </SelectContent>
-            </Select>
-            {seeded && (
-              <p className="text-[11px] text-muted-foreground">
-                Built-in publishers have a fixed role.
-              </p>
-            )}
-          </div>
+            <div className="space-y-1">
+              <Select
+                value={role}
+                onValueChange={(v) => setRole(v as 'local' | 'external')}
+                disabled={seeded}
+              >
+                <SelectTrigger id="publisherRole" className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="local">Local</SelectItem>
+                  <SelectItem value="external">External</SelectItem>
+                </SelectContent>
+              </Select>
+              {seeded && (
+                <p className="text-[11px] text-muted-foreground">
+                  Built-in publishers have a fixed role.
+                </p>
+              )}
+            </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="publisherIcon" className="text-xs">Icon</Label>
-            <Input
-              id="publisherIcon"
-              value={icon}
-              onChange={(e) => setIcon(e.target.value)}
-              className="h-9 text-sm"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Optional short glyph or emoji shown in the rail.
-            </p>
+            <Label htmlFor="publisherIcon" className="self-start pt-2 text-xs">Icon</Label>
+            <div className="space-y-1">
+              <Input
+                id="publisherIcon"
+                value={icon}
+                onChange={(e) => setIcon(e.target.value)}
+                className="h-9 text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Optional short glyph or emoji shown in the rail.
+              </p>
+            </div>
           </div>
         </div>
-
-        <SheetFooter className="border-t border-border px-6 py-4 sm:justify-end">
-          <Button disabled={saving || !canSave} onClick={() => void handleSave()}>
-            {saving ? 'Saving…' : editing ? 'Save' : 'Create'}
-          </Button>
-        </SheetFooter>
       </SheetContent>
     </Sheet>
   );
