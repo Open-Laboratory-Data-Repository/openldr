@@ -36,6 +36,11 @@ describe('the guides\' permissions', () => {
     // Review D1-D3: the guide follows where its steps happen and who can open that page.
     expect(caps('report-pipeline')).toEqual(['workflows.view']);
     expect(caps('plugin-sites')).toEqual([]);
-    expect(caps('terminology')).toEqual([]);
+    // The Terminology page has needed terminology.view since 2026-11-23, so its guide follows it.
+    expect(caps('terminology')).toEqual(['terminology.view']);
+    // Each Settings guide follows the route gate of its page (App.tsx).
+    expect(caps('layouts')).toEqual(['settings.edit_general']);
+    expect(caps('setup-checks')).toEqual(['settings.view']);
+    expect(caps('laboratory')).toEqual(['settings.view']);
   });
 });
