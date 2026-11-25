@@ -89,6 +89,23 @@ describe('PluginRuntime', () => {
     expect(resources[0].resourceType).toBe('Patient');
   });
 
+  it('a server sees a same-version reinstall made by another process (the CLI) at its next load (C3)', async () => {
+    const blobMap = new Map<string, Uint8Array>();
+    const store = fakeStore();
+    // Two runtimes over one store and one blob store: the running server, and the CLI process.
+    const server = createPluginRuntime({ blob: fakeBlob(blobMap), store, runner: okRunner, logger, ...defaultNewDeps() });
+    const cli = createPluginRuntime({ blob: fakeBlob(blobMap), store, runner: okRunner, logger, ...defaultNewDeps() });
+    await cli.install(wasm, { id: 'demo', version: '0.1.0', wasmSha256: sha });
+    const first = await server.load('demo');
+    expect(first).toBeDefined();
+    // A rebuilt bundle with the same version, installed by the CLI while the server runs.
+    const rebuilt = new TextEncoder().encode('\0asm rebuilt bytes');
+    await cli.install(rebuilt, { id: 'demo', version: '0.1.0', wasmSha256: sha256Hex(rebuilt) });
+    const second = await server.load('demo');
+    expect(second).toBeDefined();
+    expect(second).not.toBe(first);
+  });
+
   it('load returns undefined for an unknown plugin', async () => {
     const rt = createPluginRuntime({ blob: fakeBlob(new Map()), store: fakeStore(), runner: okRunner, logger, ...defaultNewDeps() });
     expect(await rt.load('nope')).toBeUndefined();
