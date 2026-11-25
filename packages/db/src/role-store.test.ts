@@ -294,6 +294,29 @@ describe('RoleStore', () => {
     await db.destroy();
   });
 
+  // Boot leaves a custom role on a system slug alone (blocked), so the doctor must not compare that
+  // role with the system preset and report drift the next boot will never touch.
+  it('diagnoses a custom role holding a system slug as blocked, not as drift', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    const systemTech = (await store.getBySlug('lab_technician'))!;
+    await db.deleteFrom('role_capabilities').where('role_id', '=', systemTech.id).execute();
+    await db.deleteFrom('roles').where('id', '=', systemTech.id).execute();
+    await db.insertInto('roles').values({ id: 'r-custom-bench', slug: 'lab_technician', name: 'Bench', description: null, is_system: false }).execute();
+    await db.insertInto('role_capabilities').values({ role_id: 'r-custom-bench', capability: 'forms.view' }).execute();
+
+    const d = await store.diagnoseCapabilities();
+
+    const row = d.roles.find((r) => r.slug === 'lab_technician')!;
+    expect(row.blocked).toEqual({ roleId: 'r-custom-bench', name: 'Bench' });
+    expect(row.ok).toEqual([]);
+    expect(row.revoked).toEqual([]);
+    expect(row.pending).toEqual([]);
+    expect(d.roles.find((r) => r.slug === 'lab_admin')!.blocked).toBeUndefined();
+    await db.destroy();
+  });
+
   it('reports nothing blocked on an ordinary install', async () => {
     const db = await makeMigratedDb();
     const store = createRoleStore(db);

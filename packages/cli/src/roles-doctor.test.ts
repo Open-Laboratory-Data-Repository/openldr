@@ -58,6 +58,15 @@ describe('summarizeDiagnosis', () => {
     expect(lines.join('\n')).toContain('forms.submit');
   });
 
+  it('names a custom role that holds a system slug, and exits 1', () => {
+    const { exitCode, lines } = summarizeDiagnosis({
+      ...clean,
+      roles: [{ slug: 'lab_technician', present: true, ok: [], revoked: [], pending: [], blocked: { roleId: 'r1', name: 'Bench' } }],
+    });
+    expect(exitCode).toBe(1);
+    expect(lines.join('\n')).toContain('lab_technician\tBLOCKED: the custom role "Bench" holds this slug, so the system role cannot be made. Move its people to another role and delete it, and the next boot makes the system role.');
+  });
+
   // This is the state the live defect produces; the command exists to make it visible.
   it('exits 1 when a capability is pending', () => {
     const { exitCode, lines } = summarizeDiagnosis({

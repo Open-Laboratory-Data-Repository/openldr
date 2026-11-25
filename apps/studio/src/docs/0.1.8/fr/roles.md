@@ -196,6 +196,8 @@ Dans une installation de test, créez le rôle `Documentation reader`. Sélectio
 
 Administrator est verrouillé. Les autres rôles système sont modifiables mais ne peuvent pas être supprimés. Un slug enregistré ne peut pas changer.
 
+Un rôle personnalisé créé avec le slug d'un rôle système, comme `lab_technician`, bloque ce rôle système. CE ne crée pas le rôle système tant que le slug est pris. `openldr roles doctor` signale ce rôle comme BLOCKED et se termine avec le code 1. Déplacez ses personnes vers un autre rôle et supprimez-le. Le démarrage suivant crée le rôle système.
+
 Créer un rôle ne l'attribue à personne. Les attributions se gèrent dans Users. Vérifiez les personnes concernées avant de modifier ou supprimer un rôle attribué.
 
 ## Permissions des plugins et Trouver un patient

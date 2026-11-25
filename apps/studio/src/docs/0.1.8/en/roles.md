@@ -196,6 +196,8 @@ In a test installation, follow Create a role using `Documentation reader`. Selec
 
 Administrator is locked. Other system roles can be edited but cannot be deleted. A saved slug cannot be changed.
 
+A custom role made with a system role's slug, such as `lab_technician`, blocks that system role. CE does not make the system role while the slug is taken. `openldr roles doctor` names such a role as BLOCKED and exits 1. Move its people to another role and delete it. The next start makes the system role.
+
 Creating a role does not assign it to anyone. Role assignments are managed on Users. Check the people affected before changing or deleting an assigned role.
 
 ## Plugin permissions and Find a patient

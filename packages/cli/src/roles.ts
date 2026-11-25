@@ -242,6 +242,11 @@ export function summarizeDiagnosis(d: CapabilityDiagnosis): { lines: string[]; e
       problems = true;
       continue;
     }
+    if (r.blocked) {
+      lines.push(`${r.slug}\tBLOCKED: the custom role "${r.blocked.name}" holds this slug, so the system role cannot be made. Move its people to another role and delete it, and the next boot makes the system role.`);
+      problems = true;
+      continue;
+    }
     const bits = [`ok=${r.ok.length}`];
     if (r.revoked.length) bits.push(`revoked=[${r.revoked.join(', ')}]`);
     if (r.pending.length) {
