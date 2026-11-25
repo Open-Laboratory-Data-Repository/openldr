@@ -359,6 +359,23 @@ function actionRefusal(
     : `the action ${entrypoint} of plugin ${pluginId} is closed: it names no permission CE knows`;
 }
 
+/** Why a caller may not open a plugin at all. It names the roles and the permissions the plugin
+ *  lists, and leaves out a list the plugin does not have, so the text never ends in an empty list. */
+function pageRefusal(
+  pluginId: string, manifest: Record<string, unknown>, ui: { requiredRoles?: string[]; requiredCapabilities?: string[] } | undefined,
+): string {
+  const roles = ui?.requiredRoles ?? [];
+  const own = new Map(storedPermissions(manifest).map((p) => [p.key, p.label]));
+  const caps = (ui?.requiredCapabilities ?? []).map((k) => CE_LABELS.get(k) ?? own.get(k) ?? k);
+  const parts: string[] = [];
+  if (roles.length > 0) parts.push(`one of roles: ${roles.join(', ')}`);
+  if (caps.length > 0) parts.push(`one of these permissions: ${caps.join(', ')}`);
+  if (parts.length === 0) return `plugin ${pluginId} may not be opened`;
+  return roles.length > 0
+    ? `plugin ${pluginId} requires ${parts.join(', or ')}`
+    : `plugin ${pluginId} needs ${parts[0]}`;
+}
+
 export interface PluginBrokerDeps {
   plugins: {
     /** Every installed version of every plugin. Exactly one version of a plugin is `active`. */
@@ -485,7 +502,7 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
         const ui = (row.manifest as { payload?: { ui?: { requiredRoles?: string[]; requiredCapabilities?: string[] } } }).payload?.ui;
         const opened = uiAllows(ui, principal);
         if (!opened.allowed) {
-          return deny(op.kind, `plugin ${pluginId} requires one of roles: ${(ui?.requiredRoles ?? []).join(', ')}`);
+          return deny(op.kind, pageRefusal(pluginId, row.manifest as Record<string, unknown>, ui));
         }
         // 1c. The permission each action needs (plugin host 2b ruling 2), read from the stored row
         // of the active version, never from the op. Ruling 6: fhir_emit runs inside an action, so
