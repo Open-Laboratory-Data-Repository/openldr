@@ -533,8 +533,11 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
       if (!byType.has(r.resourceType)) byType.set(r.resourceType, new Set());
       byType.get(r.resourceType)!.add(r.id);
     }
-    for (const [resourceType, ids] of byType) {
-      const all = [...ids];
+    // Lock in one fixed order (type, then id, across the chunks too), so two saves that touch the
+    // same records cannot each hold a lock the other waits on.
+    const types = [...byType.keys()].sort();
+    for (const resourceType of types) {
+      const all = [...byType.get(resourceType)!].sort();
       for (let i = 0; i < all.length; i += 1000) {
         // fhir_current, not the fhir_resources view: a view over a join cannot be locked.
         const rows = await trx

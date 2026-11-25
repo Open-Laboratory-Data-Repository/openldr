@@ -12,6 +12,24 @@ export interface PluginCallResult {
   message: string;
 }
 
+const NOT_JSON = '--input is not JSON; nothing was sent';
+
+/** The action's input from `--input`: none is `{}`; text that is not JSON is refused. */
+function parseInput(inputText: string | undefined): { ok: true; input: unknown } | { ok: false; result: PluginCallResult } {
+  if (inputText === undefined) return { ok: true, input: {} };
+  try {
+    return { ok: true, input: JSON.parse(inputText) };
+  } catch {
+    return { ok: false, result: { exitCode: 1, answer: null, message: NOT_JSON } };
+  }
+}
+
+/** Writes one call's result: the answer (or the error) as JSON with `--json`, else a line for a person. */
+function report(out: PluginCallResult, json: boolean): void {
+  if (json) process.stdout.write(`${JSON.stringify(out.exitCode === 0 ? out.answer : { error: out.message, answer: out.answer })}\n`);
+  else (out.exitCode === 0 ? process.stdout : process.stderr).write(`${out.message}\n`);
+}
+
 /**
  * Runs one plugin action through CE's plugin broker, as the plugin's page calls it: the broker
  * checks the action's own permission and the caller's data limit, and audits the call. `inputText`
@@ -23,14 +41,9 @@ export async function callPlugin(
   action: string,
   inputText: string | undefined,
 ): Promise<PluginCallResult> {
-  let input: unknown = {};
-  if (inputText !== undefined) {
-    try {
-      input = JSON.parse(inputText);
-    } catch {
-      return { exitCode: 1, answer: null, message: '--input is not JSON; nothing was sent' };
-    }
-  }
+  const parsed = parseInput(inputText);
+  if (!parsed.ok) return parsed.result;
+  const input = parsed.input;
   const r = await deps.broker.handle(plugin, deps.principal, { kind: 'invoke', entrypoint: action, input });
   if (!r.ok) return { exitCode: 1, answer: null, message: `${plugin} ${action} refused: ${r.error}` };
   const error = (r.data as { error?: { code?: unknown; message?: unknown } } | null)?.error;
@@ -63,6 +76,12 @@ export async function principalFor(
  * A served run is the signed-in caller, with their own capabilities and data limit.
  */
 export async function runPluginCall(plugin: string, action: string, opts: { input?: string; json: boolean }): Promise<number> {
+  // Refuse bad --input before CE starts, so a typo opens no database for nothing.
+  const parsed = parseInput(opts.input);
+  if (!parsed.ok) {
+    report(parsed.result, opts.json);
+    return parsed.result.exitCode;
+  }
   const ctx = await createAppContext(loadConfig());
   try {
     const actor = cliActor();
@@ -76,8 +95,7 @@ export async function runPluginCall(plugin: string, action: string, opts: { inpu
       roleSlugs: async (userId) => (await ctx.roles.rolesForUser((await ctx.users.get(userId))?.subject ?? userId)).map((r) => r.slug),
     }, served, actor);
     const out = await callPlugin({ broker: ctx.pluginBroker, principal }, plugin, action, opts.input);
-    if (opts.json) process.stdout.write(`${JSON.stringify(out.exitCode === 0 ? out.answer : { error: out.message, answer: out.answer })}\n`);
-    else (out.exitCode === 0 ? process.stdout : process.stderr).write(`${out.message}\n`);
+    report(out, opts.json);
     return out.exitCode;
   } finally {
     await ctx.close();

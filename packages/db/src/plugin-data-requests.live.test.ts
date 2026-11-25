@@ -225,5 +225,107 @@ describe.skipIf(!url)('plugin data requests on disposable PostgreSQL', () => {
       await dropRole();
     }
   });
-});
 
+  // Deferred minors 2026-11-25 (R2, R3, R4, R6).
+  const codes: TableShape = {
+    name: 'codes',
+    columns: [{ name: 'id', type: 'integer' }, { name: 'facility', type: 'uuid' }, { name: 'label', type: 'text' }],
+    primaryKey: ['id'],
+    facilityColumn: 'facility',
+  };
+
+  it('a plugin update that adds a table: the new table works under the role (R6)', async () => {
+    await dropRole();
+    await migrate145(db);
+    try {
+      const req = createPluginRequests(db);
+      expect(await ids(db, all)).toEqual([1, 2, 3]);
+      await createPluginSchemas(db).apply(pluginId, [samples, codes]);
+      await req.write(pluginId, [samples, codes], all, { steps: [{ op: 'insert', table: 'codes', values: { id: 7, facility: F1, label: 'x' } }] });
+      const got = await req.select(pluginId, [samples, codes], site1, { table: 'codes', columns: ['id'] });
+      expect(got.rows.map((r) => r.id)).toEqual([7]);
+      const who = await db.transaction().execute(async (trx) => {
+        await sql`set local role ${sql.id(PLUGIN_DATA_ROLE)}`.execute(trx);
+        return (await sql<{ n: number }>`select count(*)::int as n from ${sql.id(schema, 'codes')}`.execute(trx)).rows[0].n;
+      });
+      expect(who).toBe(0); // no facility setting in this raw transaction: the policy shows nothing
+    } finally {
+      await dropRole();
+    }
+  });
+
+  it('counts and expect run under the role: the policy does not change them for every facility, and limits a site (R6)', async () => {
+    await dropRole();
+    await migrate145(db);
+    try {
+      const req = createPluginRequests(db);
+      expect((await req.select(pluginId, shapes, all, { table: 'samples', columns: ['id'], count: true })).count).toBe(3);
+      expect((await req.select(pluginId, shapes, site1, { table: 'samples', columns: ['id'], count: true })).count).toBe(2);
+      await req.write(pluginId, shapes, all, { steps: [{ op: 'update', table: 'samples', key: { id: 3 }, set: { code: 'z' }, expect: 1 }] });
+      await expect(req.write(pluginId, shapes, site1, { steps: [{ op: 'update', table: 'samples', key: { id: 3 }, set: { code: 'y' }, expect: 1 }] })).rejects.toThrow();
+      const row = await db.selectFrom(`${schema}.samples`).select('code').where('id', '=', 3).executeTakeFirstOrThrow();
+      expect(row.code).toBe('z');
+    } finally {
+      await dropRole();
+    }
+  });
+
+  it('the role only reads the shapes table, after migration 145, the first request and a new schema (R4)', async () => {
+    await dropRole();
+    await migrate145(db);
+    try {
+      const rights = async (sch: string) => (await sql<{ s: boolean; i: boolean; u: boolean; d: boolean }>`
+        select has_table_privilege(${PLUGIN_DATA_ROLE}, ${`"${sch}"._openldr_shapes`}, 'SELECT') as s,
+               has_table_privilege(${PLUGIN_DATA_ROLE}, ${`"${sch}"._openldr_shapes`}, 'INSERT') as i,
+               has_table_privilege(${PLUGIN_DATA_ROLE}, ${`"${sch}"._openldr_shapes`}, 'UPDATE') as u,
+               has_table_privilege(${PLUGIN_DATA_ROLE}, ${`"${sch}"._openldr_shapes`}, 'DELETE') as d`.execute(db)).rows[0];
+      await ids(db, all);
+      expect(await rights(schema)).toEqual({ s: true, i: false, u: false, d: false });
+      const other = `test.data-${randomUUID().slice(0, 8)}`;
+      const schemas = createPluginSchemas(db);
+      await schemas.apply(other, shapes);
+      try {
+        expect(await rights(schemas.schemaName(other))).toEqual({ s: true, i: false, u: false, d: false });
+      } finally {
+        await sql`drop schema if exists ${sql.id(schemas.schemaName(other))} cascade`.execute(db);
+      }
+    } finally {
+      await dropRole();
+    }
+  });
+
+  it('the role dropped while CE runs: the next request still works, by CE\'s filter (R2)', async () => {
+    await dropRole();
+    await migrate145(db);
+    const req = createPluginRequests(db);
+    const read = async (c: PluginCaller) => (await req.select(pluginId, shapes, c, { table: 'samples', columns: ['id'] })).rows.map((r) => r.id);
+    expect(await read(all)).toEqual([1, 2, 3]);
+    await dropRole();
+    expect(await read(site1)).toEqual([1, 2]);
+    expect(await read(all)).toEqual([1, 2, 3]);
+  });
+
+  it('Postgres 16: a member without SET on the role is not switched (R3)', async () => {
+    const v = (await sql<{ v: number }>`select current_setting('server_version_num')::int as v`.execute(db)).rows[0].v;
+    if (v < 160000) return;
+    await dropRole();
+    await migrate145(db);
+    role = `plugin_bypass_${randomUUID().slice(0, 8)}`;
+    const password = randomUUID();
+    await sql`create role ${sql.id(role)} login nosuperuser bypassrls password ${sql.lit(password)}`.execute(db);
+    const u = new URL(url!);
+    u.username = role;
+    u.password = password;
+    owner = new Kysely<any>({ dialect: new PostgresDialect({ pool: new pg.Pool({ connectionString: u.toString(), max: 2 }) }) });
+    try {
+      await sql`grant ${sql.id(PLUGIN_DATA_ROLE)} to ${sql.id(role)} with set false`.execute(db);
+      expect(await pluginDataRoleStatus(owner)).toBe('missing');
+      await sql`grant ${sql.id(PLUGIN_DATA_ROLE)} to ${sql.id(role)} with set true`.execute(db);
+      expect(await pluginDataRoleStatus(owner)).toBe('switch');
+    } finally {
+      await owner.destroy();
+      owner = null;
+      await dropRole();
+    }
+  });
+});
