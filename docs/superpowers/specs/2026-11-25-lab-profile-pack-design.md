@@ -39,12 +39,17 @@ collection-site pack: `build.mjs`, `check.mjs`, `PACK.md`, `README.md`, `.gitign
 | Step | Key | What it makes |
 |---|---|---|
 | `needs` | | `lab` 0.1.0 or later. |
-| `role` | `lab-receptionist` | Lab receptionist: `lab.receive`, `lab.reject`, `lab.worklist.view`, `patients.find`, `patients.view_identifiers`. |
-| `role` | `lab-technician` | Lab technician: `lab.results.enter`, `lab.worklist.view`, `patients.find`. |
-| `role` | `lab-reviewer` | Lab reviewer: `lab.results.authorise`, `lab.worklist.view`, `patients.find`. |
-| `role` | `lab-manager` | Lab manager: every `lab.*` permission (receive, reject, orders.enter, worklist.view, results.enter, results.authorise, results.amend, settings), `patients.find`, `patients.view_identifiers`. |
+| `role` | `lab-receptionist` | Laboratory receptionist: `lab.receive`, `lab.reject`, `lab.worklist.view`, `patients.find`, `patients.view`, `patients.view_identifiers`. |
+| `role` | `lab-technician` | Laboratory technician: `lab.results.enter`, `lab.worklist.view`, `patients.find`. |
+| `role` | `lab-reviewer` | Laboratory reviewer: `lab.results.authorise`, `lab.worklist.view`, `patients.find`. |
+| `role` | `lab-manager` | Laboratory manager: every `lab.*` permission (receive, reject, orders.enter, worklist.view, results.enter, results.authorise, results.amend, settings), `patients.find`, `patients.view`, `patients.view_identifiers`. |
 | `layout` | `laboratory` | Laboratory: `/x/lab`, `/patients`, `/docs`. Start page `/x/lab`. Default for the four roles. |
 
+- Role names start with Laboratory: CE seeds built-in roles named Lab Manager and Lab Technician
+  (`packages/rbac/src/presets.ts:52,55`), and a name that differs only in case is easy to pick by
+  mistake (changed after review, 2026-11-25).
+- Patients shows in the sidebar only for a role with `patients.view`, so the receptionist and the
+  manager hold it (changed after review).
 - The pack carries no clinical codes.
 - Role names are English only: CE roles have one name.
 - No site role. A site uses the collection-site pack, or an administrator makes one.
