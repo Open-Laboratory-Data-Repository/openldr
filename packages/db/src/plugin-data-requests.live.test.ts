@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 import { createPluginSchemas } from './plugin-schema';
-import { createPluginRequests, type PluginCaller } from './plugin-data-requests';
+import { createPluginRequests, pluginDataRoleStatus, type PluginCaller } from './plugin-data-requests';
+import { FACILITY_POLICY, PLUGIN_DATA_ROLE } from './plugin-schema';
+import { up as migrate145 } from './migrations/internal/145_plugin_data_role';
 import type { TableShape } from './plugin-table-shape';
 
 // The row-level security policy under CE's own requests, the 5 s timeout, rollback and LIKE
@@ -153,4 +155,52 @@ describe.skipIf(!url)('plugin data requests on disposable PostgreSQL', () => {
       holder.release();
     }
   }, 30000);
+
+  // The plugin data role (design 2026-11-25-plugin-data-rls-role). This login is a superuser, so
+  // without the switch it skips the policy. Roles belong to the whole server: run these files one at
+  // a time (--no-file-parallelism) on a disposable database.
+  async function dropRole(): Promise<void> {
+    const r = await sql<{ n: number }>`select count(*)::int as n from pg_roles where rolname = ${PLUGIN_DATA_ROLE}`.execute(db);
+    if (r.rows[0].n !== 1) return;
+    await sql`drop owned by ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
+    await sql`drop role ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
+  }
+
+  it('under a superuser login with the role, a request runs as the role', async () => {
+    await dropRole();
+    await migrate145(db);
+    try {
+      expect(await pluginDataRoleStatus(db)).toBe('switch');
+      await sql`revoke select on ${sql.id(schema, 'samples')} from ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
+      await expect(ids(db, all)).rejects.toThrow(/permission denied/);
+    } finally {
+      await dropRole();
+    }
+  });
+
+  it('under a superuser login with the role, the policy applies', async () => {
+    await dropRole();
+    await migrate145(db);
+    try {
+      expect(await ids(db, all)).toEqual([1, 2, 3]);
+      // Forced row-level security with no policy shows no row at all: only the policy lets rows through.
+      await sql`drop policy ${sql.id(FACILITY_POLICY)} on ${sql.id(schema, 'samples')}`.execute(db);
+      expect(await ids(db, all)).toEqual([]);
+    } finally {
+      await dropRole();
+    }
+  });
+
+  it('a login that does not bypass row-level security is not switched', async () => {
+    const k = await asOwner();
+    expect(await pluginDataRoleStatus(k)).toBe('not-needed');
+    expect(await ids(k, all)).toEqual([1, 2, 3]);
+  });
+
+  it('with the role missing, a superuser login still gets its rows and the status says missing', async () => {
+    await dropRole();
+    expect(await pluginDataRoleStatus(db)).toBe('missing');
+    expect(await ids(db, all)).toEqual([1, 2, 3]);
+    expect(await ids(db, site1)).toEqual([1, 2]);
+  });
 });

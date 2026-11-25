@@ -56,7 +56,7 @@ import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { canRunOffThread, createPluginStore, type PluginHost, type PluginRuntime } from '@openldr/plugins';
 import { createPluginHost } from './plugin-host';
 import { loadPluginPatientRefKey } from './plugin-patient-ref';
-import { createConnectorStore, createPluginDataStore, createPluginRequests, createPluginSchemas, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope, FACILITY_REGISTRY_SYSTEM, createFormEntryStore, type FormEntryStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, createPluginRequests, pluginDataRoleStatus, createPluginSchemas, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createCustomQueryGroupStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createJobInterruptionStore, type JobInterruptionStore, createFacilityImportRunStore, type FacilityImportRunStore, createImportCopyStore, createImportCheckHeldStore, createImportCheckCorrectionStore, createFormAccessStore, type FormAccessStore, createDashboardAccessStore, type DashboardAccessStore, createUserDataScopeStore, type UserDataScopeStore, type DataScope, FACILITY_REGISTRY_SYSTEM, createFormEntryStore, type FormEntryStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -2143,6 +2143,13 @@ const reporting: ReportingApi = {
   const pluginRemoval = createPluginRemoval({
     plugins, importCopies, importChecks, imports, pluginData, audit: importAudit,
     pluginSchemas: createPluginSchemas(internal.db as unknown as Kysely<any>), logger,
+  });
+  // Say once when row-level security cannot guard plugin data (design 2026-11-25-plugin-data-rls-role):
+  // the login bypasses it and migration 145 could not make the plugin data role.
+  void pluginDataRoleStatus(internal.db as unknown as Kysely<any>).then((s) => {
+    if (s === 'missing') {
+      logger.warn({ role: 'openldr_plugin_data' }, 'CE logs in to Postgres with a login that bypasses row-level security, and the plugin data role is missing, so the facility policy does not guard plugin data. CE\'s own facility filter still does. Run CE\'s migrations once with a login that may create roles.');
+    }
   });
   const pluginHost = createPluginHost({
     // Plugin tables live in the internal database, where install made them (plugin-registry.ts).
