@@ -6,6 +6,24 @@
       "version": null,
       "entries": [
         {
+          "hash": "317e21fc8",
+          "type": "fix",
+          "scope": "db",
+          "title": "The plugin data role is granted every plugin schema before CE switches, a CREATEROLE login skips a role it may not grant itself, and live tests refuse a server whose databases use the role"
+        },
+        {
+          "hash": "b5cd91560",
+          "type": "feat",
+          "scope": "db",
+          "title": "Plugin data requests run as the plugin data role under a superuser login"
+        },
+        {
+          "hash": "3d4864b7b",
+          "type": "feat",
+          "scope": "db",
+          "title": "A no-login role for plugin data, granted every plugin schema"
+        },
+        {
           "hash": "6a8a913d7",
           "type": "fix",
           "scope": "plugins",
