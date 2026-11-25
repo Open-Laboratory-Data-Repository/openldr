@@ -22,9 +22,13 @@ describe('the kept plugin data role answer', () => {
     expect(read).toHaveBeenCalledTimes(1);
   });
 
-  it('a grant that fails keeps missing, so CE does not switch', async () => {
-    const roles = createRoleStatus(async () => 'switch' as const, async () => { throw new Error('denied'); });
+  it('a grant that fails answers missing for that request, and is not kept (new minor M6)', async () => {
+    const grantAll = vi.fn().mockRejectedValueOnce(new Error('lock timeout')).mockResolvedValueOnce(undefined);
+    const roles = createRoleStatus(async () => 'switch' as const, grantAll);
     expect(await roles.get()).toBe('missing');
+    expect(await roles.get()).toBe('switch');
+    expect(await roles.get()).toBe('switch');
+    expect(grantAll).toHaveBeenCalledTimes(2);
   });
 
   it('forget drops the kept answer, so the next request checks again (R2)', async () => {

@@ -526,7 +526,7 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
   }
 
   /** Locks the stored rows of the records and refuses one another writer holds (SaveManyOpts.ownedBy). */
-  async function checkOwner(trx: Kysely<InternalSchema>, resources: FhirResource[], ownedBy: string): Promise<void> {
+  async function checkOwner(trx: Kysely<InternalSchema>, resources: FhirResource[], ownedBy: string, postgres: boolean): Promise<void> {
     const byType = new Map<string, Set<string>>();
     for (const r of resources) {
       if (typeof r.id !== 'string' || r.id.length === 0) continue;
@@ -534,10 +534,13 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
       byType.get(r.resourceType)!.add(r.id);
     }
     // Lock in one fixed order (type, then id, across the chunks too), so two saves that touch the
-    // same records cannot each hold a lock the other waits on.
-    const types = [...byType.keys()].sort();
+    // same records cannot each hold a lock the other waits on. The order is the byte order of the
+    // UTF-8 text: the ids are sorted so here, and PostgreSQL locks each chunk so (COLLATE "C"), so
+    // the two agree for mixed-case ids too. pg-mem cannot parse COLLATE and keeps its plain order.
+    const byBytes = (a: string, b: string): number => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+    const types = [...byType.keys()].sort(byBytes);
     for (const resourceType of types) {
-      const all = [...byType.get(resourceType)!].sort();
+      const all = [...byType.get(resourceType)!].sort(byBytes);
       for (let i = 0; i < all.length; i += 1000) {
         // fhir_current, not the fhir_resources view: a view over a join cannot be locked.
         const rows = await trx
@@ -545,7 +548,7 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
           .select(['id', 'plugin_id'])
           .where('resource_type', '=', resourceType)
           .where('id', 'in', all.slice(i, i + 1000))
-          .orderBy('id')
+          .orderBy(postgres ? sql`id collate "C"` : sql`id`)
           .forUpdate()
           .execute();
         const other = rows.find((row) => row.plugin_id !== ownedBy);
@@ -559,7 +562,7 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
     const site = await resolveSiteId();
     const write = (await useSetBased()) ? writeManySet : writeMany;
     const { refs, written } = await db.transaction().execute(async (trx) => {
-      if (opts.ownedBy !== undefined) await checkOwner(trx, resources, opts.ownedBy);
+      if (opts.ownedBy !== undefined) await checkOwner(trx, resources, opts.ownedBy, write === writeManySet);
       return write(trx, resources, provenance, site, opts.skipUnchanged === true);
     });
     // A call that skipped every record changed nothing, so there is nothing to wake anyone for.
