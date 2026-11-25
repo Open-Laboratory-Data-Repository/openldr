@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "1be3eca0d",
+          "type": "fix",
+          "scope": "db",
+          "title": "The owner check asks the database once whether it takes COLLATE \"C\", so the byte-order lock holds in every save mode, and a failed role grant waits a minute before CE tries again"
+        },
+        {
           "hash": "ed8e4163b",
           "type": "fix",
           "scope": "db",
