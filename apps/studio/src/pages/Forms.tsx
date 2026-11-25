@@ -6,7 +6,7 @@ import { ClipboardList, FileInput, MoreHorizontal } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { StripedEmpty } from '@/components/ui/striped-empty';
-import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
+import { LoadFailed, LoadStale, useLoadErrorToast } from '@/components/ui/load-failed';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
@@ -285,6 +285,7 @@ export function Forms() {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {!loading && error && rows.length > 0 && <LoadStale />}
           <Table wrapperClassName={view.rows.length > 0 ? 'min-h-0 flex-1' : undefined}>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>

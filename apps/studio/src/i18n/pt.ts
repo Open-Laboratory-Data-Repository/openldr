@@ -144,6 +144,7 @@ export const pt: EnShape = {
     next: 'Próximo',
     close: 'Fechar',
     loadFailed: 'Não foi possível carregar esta lista. Recarregue a página para tentar novamente.',
+    loadStale: 'Não foi possível atualizar esta lista, por isso pode estar desatualizada. Recarregue a página para tentar novamente.',
     formLoadFailed: 'Não foi possível carregar este formulário. Recarregue a página para tentar novamente.',
   },
   table: {
