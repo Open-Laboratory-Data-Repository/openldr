@@ -1,6 +1,6 @@
 import { type Expression, type Kysely, type SqlBool, sql } from 'kysely';
 import { z } from 'zod';
-import { pluginSchemaName, SHAPES_TABLE, FACILITIES_SETTING } from './plugin-schema';
+import { pluginSchemaName, SHAPES_TABLE, FACILITIES_SETTING, PLUGIN_DATA_ROLE, grantPluginDataRoleAll } from './plugin-schema';
 import {
   CE_MANAGED_COLUMNS, PLUGIN_IDENTIFIER, tableShapeSchema, type ColumnType, type TableShape,
 } from './plugin-table-shape';
@@ -420,13 +420,55 @@ function planStep(tables: Map<string, TableFacts>, step: WriteStep, facilities: 
   }
 }
 
+/** What a plugin data request does about the plugin data role (design 2026-11-25-plugin-data-rls-role):
+ *  - `switch`: CE's login bypasses row-level security (a superuser, or BYPASSRLS) and may use the
+ *    role, so each request runs as it and the facility policy applies.
+ *  - `not-needed`: the login does not bypass row-level security, so the forced policy already applies
+ *    (also pg-mem, which has no roles).
+ *  - `missing`: the login bypasses it but the role is missing or not usable (migration 145 could not
+ *    make it). The CE filter alone guards, as before. */
+export type PluginDataRoleStatus = 'switch' | 'not-needed' | 'missing';
+
+export async function pluginDataRoleStatus(db: Kysely<any>): Promise<PluginDataRoleStatus> {
+  try {
+    const r = await sql<{ bypass: boolean; usable: boolean }>`
+      select (me.rolsuper or me.rolbypassrls) as bypass,
+             coalesce((select pg_has_role(current_user, r.oid, 'MEMBER') from pg_roles r where r.rolname = ${PLUGIN_DATA_ROLE}), false) as usable
+      from pg_roles me where me.rolname = current_user`.execute(db);
+    const row = r.rows[0];
+    if (!row || !row.bypass) return 'not-needed';
+    return row.usable ? 'switch' : 'missing';
+  } catch {
+    return 'not-needed';
+  }
+}
+
 export function createPluginRequests(db: Kysely<any>): PluginRequests {
+  // Read once per process, at the first request. Before switching, the role is granted every plugin
+  // schema, so one made while the role was missing works too; if that grant fails, CE does not switch
+  // and its own filter guards, as before. A server started before migration 145 ran switches after a
+  // restart.
+  let roleStatus: Promise<PluginDataRoleStatus> | null = null;
+  const status = (): Promise<PluginDataRoleStatus> => (roleStatus ??= (async () => {
+    const s = await pluginDataRoleStatus(db);
+    if (s !== 'switch') return s;
+    try {
+      await grantPluginDataRoleAll(db);
+      return 'switch';
+    } catch {
+      return 'missing';
+    }
+  })());
+
   /** Inside the request's transaction: set the timeout and the facility setting, then read the
    *  recorded shapes for the named tables and check the declared ones fit inside them. Returns the
    *  recorded facts. Statements are still built from the declared facts. */
-  async function begin(trx: Kysely<any>, pluginId: string, schema: string, declared: Map<string, TableFacts>, names: Set<string>, facilities: string[] | '*'): Promise<Map<string, TableFacts>> {
+  async function begin(trx: Kysely<any>, pluginId: string, schema: string, declared: Map<string, TableFacts>, names: Set<string>, facilities: string[] | '*', role: PluginDataRoleStatus): Promise<Map<string, TableFacts>> {
     await sql`set local statement_timeout = ${sql.lit(STATEMENT_TIMEOUT)}`.execute(trx);
     await sql`select set_config(${FACILITIES_SETTING}, ${settingFor(facilities)}, true)`.execute(trx);
+    // Under a login that bypasses row-level security, run the rest of this transaction as the plugin
+    // data role, so the facility policy applies as a second guard. SET LOCAL ends with the transaction.
+    if (role === 'switch') await sql`set local role ${sql.id(PLUGIN_DATA_ROLE)}`.execute(trx);
     const rows = await trx.withSchema(schema).selectFrom(SHAPES_TABLE)
       .select(['table_name', 'plugin_id', 'shape']).where('table_name', 'in', [...names]).execute();
     const recorded = new Map<string, TableFacts>();
@@ -455,8 +497,9 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
       const declared = declaredTables(shapes, 'the declared shapes');
       planSelect(declared, req);
 
+      const role = await status();
       return db.transaction().execute(async (trx) => {
-        await begin(trx, pluginId, schema, declared, new Set([req.table]), facilities);
+        await begin(trx, pluginId, schema, declared, new Set([req.table]), facilities, role);
         const p = planSelect(declared, req);
         const t = p.table;
         const scoped = (q: any) => {
@@ -481,8 +524,9 @@ export function createPluginRequests(db: Kysely<any>): PluginRequests {
       const declared = declaredTables(shapes, 'the declared shapes');
       for (const s of req.steps) planStep(declared, s, facilities);
 
+      const role = await status();
       return db.transaction().execute(async (trx) => {
-        const recorded = await begin(trx, pluginId, schema, declared, new Set(req.steps.map((s) => s.table)), facilities);
+        const recorded = await begin(trx, pluginId, schema, declared, new Set(req.steps.map((s) => s.table)), facilities, role);
         for (const s of req.steps) {
           if (s.op !== 'insert') continue;
           const missing = undeclaredRequired(declared.get(s.table)!, recorded.get(s.table)!);

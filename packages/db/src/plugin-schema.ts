@@ -53,6 +53,9 @@ export interface PluginSchemas {
 export const SHAPES_TABLE = '_openldr_shapes';
 export const FACILITY_POLICY = 'openldr_facility_scope';
 export const FACILITIES_SETTING = 'openldr.facilities';
+/** The no-login role plugin data requests switch to under a login that bypasses row-level
+ *  security (migration 145, design 2026-11-25-plugin-data-rls-role). */
+export const PLUGIN_DATA_ROLE = 'openldr_plugin_data';
 
 /** The SQL type for each declared type. Looked up here, never passed through from the manifest. */
 const SQL_TYPES: Readonly<Record<ColumnType, string>> = Object.freeze({
@@ -263,6 +266,30 @@ function isMissingRelation(e: unknown): boolean {
   return err?.code === '42P01' || err?.code === '3F000' || /does not exist|schema not found/i.test(String(err?.message ?? ''));
 }
 
+/** True when the plugin data role exists. False when it does not, or when the question fails
+ *  (pg-mem has no pg_roles). */
+export async function pluginDataRoleExists(db: Kysely<any>): Promise<boolean> {
+  try {
+    const r = await sql<{ n: number }>`select count(*)::int as n from pg_roles where rolname = ${PLUGIN_DATA_ROLE}`.execute(db);
+    return r.rows[0].n === 1;
+  } catch {
+    return false;
+  }
+}
+
+/** Grants the plugin data role every schema CE made for a plugin (each holds the shapes table) and
+ *  all its tables. Idempotent. Run when CE switches to the role, so a schema made while the role was
+ *  missing is covered too. */
+export async function grantPluginDataRoleAll(db: Kysely<any>): Promise<void> {
+  const r = await sql<{ nspname: string }>`
+    select n.nspname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where c.relname = ${SHAPES_TABLE} and c.relkind = 'r'`.execute(db);
+  for (const { nspname } of r.rows) {
+    await sql`grant usage on schema ${sql.id(nspname)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
+    await sql`grant select, insert, update, delete on all tables in schema ${sql.id(nspname)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(db);
+  }
+}
+
 export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHOUT_RLS): PluginSchemas {
   const rls = pgMem !== PG_MEM_WITHOUT_RLS;
 
@@ -332,6 +359,12 @@ export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHO
     }
   }
 
+  /** Grants the plugin data role the schema and all its tables. */
+  async function grantPluginDataRole(trx: Kysely<any>, schema: string): Promise<void> {
+    await sql`grant usage on schema ${sql.id(schema)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(trx);
+    await sql`grant select, insert, update, delete on all tables in schema ${sql.id(schema)} to ${sql.id(PLUGIN_DATA_ROLE)}`.execute(trx);
+  }
+
   async function createIndex(trx: Kysely<any>, schema: string, table: string, i: { name: string; columns: string[]; unique: boolean }): Promise<void> {
     let b = trx.schema.withSchema(schema).createIndex(checkCeName(i.name)).on(checkName(table, 'table'))
       .columns(i.columns.map((k) => checkName(k, 'index column')));
@@ -357,6 +390,9 @@ export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHO
       const changedTables = new Set([...p.addColumns.map((a) => a.table), ...p.addIndexes.map((a) => a.table)]);
       if (p.createTables.length === 0 && changedTables.size === 0) return { created, added };
       const declared = new Map(checkShapes(shapes).map((t) => [t.name, t]));
+      // Asked before the transaction: a failed question (pg-mem has no pg_roles) is no role, and
+      // must not abort the table change.
+      const roleExists = rls && p.createTables.length > 0 && await pluginDataRoleExists(db);
       await db.transaction().execute(async (trx) => {
         if (p.createSchema) {
           // No IF NOT EXISTS: a schema that appeared since the plan is refused by Postgres, not taken over.
@@ -373,6 +409,8 @@ export function createPluginSchemas(db: Kysely<any>, pgMem?: typeof PG_MEM_WITHO
           await record(trx, p.schema, pluginId, t, true);
           created.push(t.name);
         }
+        // The plugin data role reads and writes the schema's tables, the shapes table among them.
+        if (roleExists && p.createTables.length > 0) await grantPluginDataRole(trx, p.schema);
         for (const a of p.addColumns) {
           const def = columnDefault(a.column);
           await trx.schema.withSchema(p.schema).alterTable(checkName(a.table, 'table'))
