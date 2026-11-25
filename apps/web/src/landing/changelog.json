@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "d8e15ba64",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Plugin call passes role names, and CE audits it as the CLI"
+        },
+        {
+          "hash": "02874f8c0",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr plugin call runs one plugin action through the broker"
+        },
+        {
           "hash": "26b601a70",
           "type": "fix",
           "scope": "terminology",
