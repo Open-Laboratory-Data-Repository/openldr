@@ -43,7 +43,7 @@ collection-site pack: `build.mjs`, `check.mjs`, `PACK.md`, `README.md`, `.gitign
 | `role` | `lab-technician` | Laboratory technician: `lab.results.enter`, `lab.worklist.view`, `patients.find`. |
 | `role` | `lab-reviewer` | Laboratory reviewer: `lab.results.authorise`, `lab.worklist.view`, `patients.find`. |
 | `role` | `lab-manager` | Laboratory manager: every `lab.*` permission (receive, reject, orders.enter, worklist.view, results.enter, results.authorise, results.amend, settings), `patients.find`, `patients.view`, `patients.view_identifiers`. |
-| `layout` | `laboratory` | Laboratory: `/x/lab`, `/patients`, `/docs`. Start page `/x/lab`. Default for the four roles. |
+| `layout` | `laboratory` | Laboratory: `/x/lab`, `/patients`. Start page `/x/lab`. Default for the four roles. Docs always shows (changed 2026-11-25, deferred minors). |
 
 - Role names start with Laboratory: CE seeds built-in roles named Lab Manager and Lab Technician
   (`packages/rbac/src/presets.ts:52,55`), and a name that differs only in case is easy to pick by
