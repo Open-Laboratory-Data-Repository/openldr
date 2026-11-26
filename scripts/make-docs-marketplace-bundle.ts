@@ -86,6 +86,7 @@ async function main() {
             summary: 'Training sink used by the OpenLDR web documentation',
             path: 'bundles/test-sink',
             signatureFingerprint: packed.fingerprint,
+            ceVersion: packed.manifest.compatibility.ceVersion,
           },
         ],
       },

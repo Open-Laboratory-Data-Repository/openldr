@@ -68,6 +68,20 @@ describe('HttpRegistrySource', () => {
     expect(fetchMock.mock.calls.every((c) => String(c[0]).endsWith('/index.json'))).toBe(true);
   });
 
+  it('passes on the CE range an index entry carries, and none when it has none', async () => {
+    const withRange = JSON.stringify({
+      schemaVersion: 1,
+      packages: [
+        { id: 'new', kind: 'plugin', latestVersion: '2.0.0', path: 'bundles/new-2', ceVersion: '>=0.1.13' },
+        { id: 'old', kind: 'plugin', latestVersion: '1.0.0', path: 'bundles/old-1' },
+      ],
+    });
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, headers: noHeaders, text: async () => withRange }) as unknown as Response);
+    const list = await new HttpRegistrySource(base, fetchMock as unknown as typeof fetch).list();
+    expect(list.find((l) => l.id === 'new')?.ceVersion).toBe('>=0.1.13');
+    expect(list.find((l) => l.id === 'old')).not.toHaveProperty('ceVersion');
+  });
+
   it('getBundle assembles a verifiable bundle from fetched files', async () => {
     const src = new HttpRegistrySource(base, mockFetch() as unknown as typeof fetch);
     await src.list();

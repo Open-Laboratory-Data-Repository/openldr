@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import i18n from '@/i18n';
 import type { AvailableArtifact } from '@/api';
-import { capabilityLine, newerAvailable, pluginPermissionLines } from './util';
+import { availableToEntry, capabilityLine, newerAvailable, pluginPermissionLines } from './util';
 
 describe('capabilityLine', () => {
   const t = i18n.getFixedT('en');
@@ -49,6 +49,15 @@ describe('newerAvailable', () => {
     expect(newerAvailable('cdr-source', '0.1.5', [avail('0.1.5')], ['0.1.5'])).toBeNull();
     expect(newerAvailable('cdr-source', '0.1.5', [avail('0.1.4')], ['0.1.5'])).toBeNull();
     expect(newerAvailable('other', '0.1.0', [avail('0.1.5')], ['0.1.0'])).toBeNull();
+  });
+
+  // Found 2026-11-26: Update was offered for a version this CE cannot run. The consent sheet opened,
+  // and only then did the install refuse it.
+  it('offers no version this CE cannot run', () => {
+    const cannot = { ...avail('0.2.0'), compatible: false, compatibility: { ceVersion: '>=9.0.0' } };
+    expect(newerAvailable('cdr-source', '0.1.4', [cannot], ['0.1.4'])).toBeNull();
+    expect(newerAvailable('cdr-source', '0.1.4', [cannot, avail('0.1.5')], ['0.1.4']))
+      .toEqual({ version: '0.1.5', ref: 'reg:cdr-source-0.1.5', rolledBack: false });
   });
 
   it('marks a rollback: a newer version is installed but an older one is active', () => {
@@ -118,5 +127,14 @@ describe('pluginPermissionLines', () => {
   it('a payload without permissions gives no lines', () => {
     expect(pluginPermissionLines({ kind: 'plugin' }, 'en', i18n.getFixedT('en'))).toEqual([]);
     expect(pluginPermissionLines(null, 'en', i18n.getFixedT('en'))).toEqual([]);
+  });
+});
+
+describe('availableToEntry', () => {
+  const b = { ref: 'r', id: 'lab-bench', version: '0.6.2', type: 'plugin', publisher: null } as AvailableArtifact;
+  it('names the CE range only when the list says this CE cannot run the bundle', () => {
+    expect(availableToEntry({ ...b, compatible: false, compatibility: { ceVersion: '>=0.1.13' } }, new Map()).needsCe).toBe('>=0.1.13');
+    expect(availableToEntry({ ...b, compatible: true, compatibility: { ceVersion: '*' } }, new Map()).needsCe).toBeUndefined();
+    expect(availableToEntry(b, new Map()).needsCe).toBeUndefined();
   });
 });

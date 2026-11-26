@@ -144,6 +144,9 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
             ...(l.invalidReason ? { invalidReason: l.invalidReason } : {}),
             registryId: reg.id, registryName: reg.name,
             versions: (l.versions ?? []).map((v) => ({ version: v.version, ref: packRef(reg.id, v.ref) })),
+            // Known only when the source carries the bundle's CE range (local bundles, and index
+            // entries written from 0.1.13). Unknown leaves the card as it was: the detail decides.
+            ...(l.ceVersion ? { compatibility: { ceVersion: l.ceVersion }, compatible: isCompatible(l.ceVersion, CE_VERSION) } : {}),
           });
         }
       } catch (e) {
@@ -370,6 +373,7 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         summary: b.manifest.description ?? '',
         readme: b.manifest.readme ?? '',
         path: bundlePath, signatureFingerprint: v.fingerprint,
+        ceVersion: b.manifest.compatibility.ceVersion,
       }, nowIso);
 
       const result = await openBundlePr({

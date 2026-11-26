@@ -38,7 +38,7 @@ Use **All types** para limitar a lista a plugins, modelos de formulário, relat�
 
 ### 5. Verificar o cartão
 
-Leia o identificador, a versão, o editor e o registo. Abra o cartão do pacote certo.
+Leia o identificador, a versão, o editor e o registo. Abra o cartão do pacote certo. Um cartão que mostra **Requer CE** e um intervalo de versões foi feito para uma versão mais recente do CE. Atualize o CE antes de o instalar.
 
 ![Leia o identificador, a versão, o editor e o registo do pacote.](marketplace-guide-card.png)
 
@@ -50,7 +50,7 @@ A verificação de assinatura confirma se o ficheiro corresponde à chave do edi
 
 ### 1. Verificar a assinatura
 
-Leia **Verified** ou a falha de verificação. Um cartão remoto ainda não aberto pode mostrar Unverified até os detalhes carregarem.
+Leia **Verified** ou a falha de verificação. Um cartão remoto mostra **Assinatura ainda não verificada** até o abrir. Abri-lo verifica a assinatura.
 
 ![Abrir os detalhes verifica a assinatura do editor.](marketplace-guide-signature.png)
 

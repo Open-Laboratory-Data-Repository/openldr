@@ -1118,7 +1118,8 @@ export const fr: EnShape = {
         removed: '{{id}} a été supprimé.',
       },
       verified: 'Vérifié',
-      unverified: 'Non vérifié',
+      unverified: 'Signature pas encore vérifiée',
+      needsCe: 'Demande CE {{range}}',
       firstUse: 'Nouvel éditeur',
       invalid: 'Signature invalide', // review
       invalidUi: 'Ressource UI modifiée', // review

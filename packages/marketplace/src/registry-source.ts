@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { join, basename, resolve, sep } from 'node:path';
 import { isIP } from 'node:net';
-import { readBundle, assembleBundle, payloadFileName, verifyBundle, type Bundle, type BundleInvalidReason } from './bundle-fs';
+import { readBundle, assembleBundle, payloadFileName, verifyBundle, UnreadableManifestError, type Bundle, type BundleInvalidReason } from './bundle-fs';
 import { parseIndex, type MarketplaceIndexEntry } from './index-json';
 
 // ── SEC-09: registry URL validation (SSRF guard) ──────────────────────────────
@@ -128,6 +128,8 @@ export interface RegistryListing {
   valid?: boolean;        // computed only for local (which reads bundles); undefined for http
   invalidReason?: BundleInvalidReason; // set only when valid === false (local); the specific failing check
   versions?: { version: string; ref: string }[];
+  /** The bundle's CE range (`compatibility.ceVersion`), when the source knows it. */
+  ceVersion?: string;
 }
 
 /** Compare two semver strings. >0 if a>b, <0 if a<b, 0 equal. Numeric major.minor.patch; a release
@@ -177,6 +179,23 @@ export interface RegistrySource {
   getBundle(ref: string): Promise<Bundle>;
 }
 
+/** A local bundle this CE cannot parse, listed from its raw manifest when it names its id, version and
+ *  CE range. The caller decides from the range whether this CE can run it. */
+function listUnreadable(ref: string, err: UnreadableManifestError): RegistryListing | null {
+  const raw = err.parts.raw;
+  const text = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+  const range = text((raw.compatibility as { ceVersion?: unknown } | null | undefined)?.ceVersion);
+  const id = text(raw.id), version = text(raw.version), type = text(raw.type);
+  if (!range || !id || !version || !type) return null;
+  const pub = raw.publisher as { id?: unknown; name?: unknown } | null | undefined;
+  const v = verifyBundle(err.parts);
+  return {
+    ref, id, version, type, ceVersion: range,
+    publisher: pub && text(pub.id) ? { id: text(pub.id)!, name: text(pub.name) ?? '' } : null,
+    description: text(raw.description), valid: v.valid, ...(v.reason ? { invalidReason: v.reason } : {}),
+  };
+}
+
 export class LocalRegistrySource implements RegistrySource {
   readonly kind = 'local' as const;
   private readonly dir: string;
@@ -211,10 +230,15 @@ export class LocalRegistrySource implements RegistrySource {
           ref: d.name, id: b.manifest.id, version: b.manifest.version, type: b.manifest.type,
           publisher: b.manifest.publisher ?? null, description: b.manifest.description,
           readme: b.manifest.readme,
-          license: b.manifest.license, valid: v.valid,
+          license: b.manifest.license, valid: v.valid, ceVersion: b.manifest.compatibility.ceVersion,
           ...(v.reason ? { invalidReason: v.reason } : {}),
         });
-      } catch { /* not a readable bundle dir — skip */ }
+      } catch (err) {
+        // A bundle made for a later CE still lists, with its CE range, so the list can say which CE
+        // it needs. Anything else unreadable is not a bundle dir: skip it.
+        const listed = err instanceof UnreadableManifestError ? listUnreadable(d.name, err) : null;
+        if (listed) out.push(listed);
+      }
     }
     return collapseByLatest(out);
   }
@@ -290,6 +314,7 @@ export class HttpRegistrySource implements RegistrySource {
       ref, id: e.id, version: e.latestVersion, type: e.kind,
       publisher: e.publisher ? { id: e.publisher, name: e.publisher } : null,
       summary: e.summary, readme: e.readme, signatureFingerprint: e.signatureFingerprint,
+      ...(e.ceVersion ? { ceVersion: e.ceVersion } : {}),
       versions: [{ version: e.latestVersion, ref }],
     }));
   }

@@ -1118,7 +1118,8 @@ export const pt: EnShape = {
         removed: '{{id}} foi removido.',
       },
       verified: 'Verificado',
-      unverified: 'Não verificado',
+      unverified: 'Assinatura ainda não verificada',
+      needsCe: 'Requer CE {{range}}',
       firstUse: 'Novo editor',
       invalid: 'Assinatura inválida', // review
       invalidUi: 'Recurso de UI modificado', // review

@@ -38,7 +38,7 @@ Use **All types** to narrow the list to a plugin, form template, report or conte
 
 ### 5. Check the card
 
-Read the id, version, publisher and registry. Open the correct package card.
+Read the id, version, publisher and registry. Open the correct package card. A card that says **Needs CE** and a version range was made for a newer CE. Update CE before you install it.
 
 ![Read the package id, version, publisher and registry.](marketplace-guide-card.png)
 
@@ -50,7 +50,7 @@ A signature check establishes whether the file matches the publisher key. Decide
 
 ### 1. Check the signature
 
-Read **Verified** or the verification failure. An unopened remote card can be Unverified until details load.
+Read **Verified** or the verification failure. A remote card says **Signature not checked yet** until you open it. Opening it checks the signature.
 
 ![Opening details checks the publisher signature.](marketplace-guide-signature.png)
 

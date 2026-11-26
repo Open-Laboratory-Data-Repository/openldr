@@ -38,7 +38,7 @@ Utilisez **All types** pour limiter la liste aux plugins, modèles de formulaire
 
 ### 5. Vérifier la carte
 
-Lisez l'identifiant, la version, l'éditeur et le registre. Ouvrez la bonne carte de paquet.
+Lisez l'identifiant, la version, l'éditeur et le registre. Ouvrez la bonne carte de paquet. Une carte qui affiche **Demande CE** et une plage de versions a été faite pour une version plus récente de CE. Mettez CE à jour avant de l'installer.
 
 ![Lisez l'identifiant, la version, l'éditeur et le registre du paquet.](marketplace-guide-card.png)
 
@@ -50,7 +50,7 @@ Le contrôle de signature établit si le fichier correspond à la clé de l'édi
 
 ### 1. Vérifier la signature
 
-Lisez **Verified** ou l'échec de vérification. Une carte distante non ouverte peut rester Unverified jusqu'au chargement du détail.
+Lisez **Verified** ou l'échec de vérification. Une carte distante affiche **Signature pas encore vérifiée** tant que vous ne l'ouvrez pas. L'ouvrir vérifie la signature.
 
 ![L'ouverture du détail vérifie la signature de l'éditeur.](marketplace-guide-signature.png)
 
