@@ -145,7 +145,9 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
       return;
     }
     const trimmed = q.trim();
-    if (trimmed.length < 2) { setRows([]); setError(null); return; }
+    // A value-set field lists its first codes before anything is typed; the server caps the page.
+    // Patients and code systems can be large, so they wait for two characters.
+    if (trimmed.length < 2 && !field.valueSetUrl) { setRows([]); setError(null); return; }
     const requestId = ++requestIdRef.current;
     setBusy(true); setError(null);
     try {
@@ -290,7 +292,7 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
         </div>
       )}
 
-      {open && (narrowed !== null || query.trim().length >= 2) && (
+      {open && (narrowed !== null || Boolean(field.valueSetUrl) || query.trim().length >= 2) && (
         <div
           id={`${field.id}-reference-listbox`}
           role="listbox"
