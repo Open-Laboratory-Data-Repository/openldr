@@ -14,7 +14,10 @@ export function PackageCard({ entry, onClick }: { entry: CardEntry; onClick: () 
             : <Badge variant="outline" className="border-primary text-primary">{t('settings.marketplace.updateTo', { version: entry.update.version })}</Badge>)
       : entry.active
         ? <Badge variant="outline" className="border-emerald-500 text-emerald-700">{t('settings.marketplace.active')}</Badge>
-        : <Badge variant="outline">{t('settings.marketplace.installed')}</Badge>)
+        : entry.activeVersion
+          // Another version of this plugin is the one running; this card's version is not installed.
+          ? <Badge variant="outline" className="text-muted-foreground" data-testid="card-active-version">{t('settings.marketplace.activeVersion', { version: entry.activeVersion })}</Badge>
+          : <Badge variant="outline">{t('settings.marketplace.installed')}</Badge>)
     : entry.needsCe
       ? <Badge variant="outline" className="text-muted-foreground" data-testid="card-needs-ce">{t('settings.marketplace.needsCe', { range: entry.needsCe })}</Badge>
       : <Badge variant="outline" className="opacity-70">{t('settings.marketplace.install')}</Badge>;

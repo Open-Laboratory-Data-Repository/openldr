@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import i18n from '@/i18n';
-import type { AvailableArtifact } from '@/api';
+import type { AvailableArtifact, InstalledArtifact } from '@/api';
 import { availableToEntry, capabilityLine, newerAvailable, pluginPermissionLines } from './util';
 
 describe('capabilityLine', () => {
@@ -136,5 +136,30 @@ describe('availableToEntry', () => {
     expect(availableToEntry({ ...b, compatible: false, compatibility: { ceVersion: '>=0.1.13' } }, new Map()).needsCe).toBe('>=0.1.13');
     expect(availableToEntry({ ...b, compatible: true, compatibility: { ceVersion: '*' } }, new Map()).needsCe).toBeUndefined();
     expect(availableToEntry(b, new Map()).needsCe).toBeUndefined();
+  });
+
+  // The dev stack, 2026-11-26: lab-bench 0.6.6 active and 0.6.5 installed from a local test registry,
+  // and the public registry offering 0.6.2. The public card said Active.
+  const row = (version: string, active: boolean) => ({ id: 'lab-bench', version, active, enabled: true, approvedBy: null, type: 'plugin', publisher: null, capabilities: [], legacy: false }) as InstalledArtifact;
+  const rows = [row('0.6.6', true), row('0.6.5', false)];
+  const byId = new Map([['lab-bench', rows[0]]]);
+
+  it('marks a card Active only when its own version is the active one', () => {
+    expect(availableToEntry({ ...b, version: '0.6.6' }, byId, rows)).toMatchObject({ installed: true, active: true });
+    expect(availableToEntry({ ...b, version: '0.6.6' }, byId, rows).activeVersion).toBeUndefined();
+  });
+
+  it('a card for an installed but inactive version is installed, not active', () => {
+    expect(availableToEntry({ ...b, version: '0.6.5' }, byId, rows)).toMatchObject({ installed: true, active: false });
+    expect(availableToEntry({ ...b, version: '0.6.5' }, byId, rows).activeVersion).toBeUndefined();
+  });
+
+  it('a card for a version that is not installed names the active version instead', () => {
+    expect(availableToEntry(b, byId, rows)).toMatchObject({ installed: true, active: false, activeVersion: '0.6.6' });
+  });
+
+  it('a plugin that is not installed has no installed state at all', () => {
+    expect(availableToEntry(b, new Map(), [])).toMatchObject({ installed: false, active: false });
+    expect(availableToEntry(b, new Map(), []).activeVersion).toBeUndefined();
   });
 });
