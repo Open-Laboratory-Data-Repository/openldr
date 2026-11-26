@@ -588,7 +588,9 @@ export interface SyncStatus {
 export const fetchSyncConfig = (): Promise<SyncConfigView> =>
   authFetch('/api/settings/sync').then((r) => okJson<SyncConfigView>(r, 'load sync config'));
 
-export const saveSyncConfig = (cfg: SyncConfigInput): Promise<SyncConfigView> =>
+/** A save's answer: the view, plus how many earlier records got the site id, or that it failed. */
+export type SyncConfigSaved = SyncConfigView & { stampedEarlierRecords?: number; stampFailed?: true };
+export const saveSyncConfig = (cfg: SyncConfigInput): Promise<SyncConfigSaved> =>
   authFetch('/api/settings/sync', jbody(cfg, 'PUT')).then((r) => okJson<SyncConfigView>(r, 'save sync config'));
 
 export const fetchSyncStatus = (): Promise<SyncStatus> =>

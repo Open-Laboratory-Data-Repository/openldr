@@ -886,6 +886,8 @@ export const fr: EnShape = {
       sync: {
         title: 'Synchronisation distribuée',
         saved: 'Paramètres de synchronisation enregistrés',
+        savedWithEarlier: "Paramètres de synchronisation enregistrés. {{count}} enregistrements antérieurs seront envoyés.",
+        stampFailed: "Paramètres enregistrés, mais les enregistrements antérieurs n'ont pas pu être marqués pour l'envoi. Enregistrez à nouveau pour réessayer.",
         saveFailed: "Impossible d'enregistrer : {{error}}",
         save: 'Enregistrer',
         enabled: {

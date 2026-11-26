@@ -890,6 +890,8 @@ export const en = {
       sync: {
         title: 'Distributed Sync',
         saved: 'Sync settings saved',
+        savedWithEarlier: "Sync settings saved. {{count}} earlier records will be sent.",
+        stampFailed: "Sync settings saved, but earlier records could not be marked for sending. Save again to retry.",
         saveFailed: 'Could not save: {{error}}',
         save: 'Save',
         enabled: {

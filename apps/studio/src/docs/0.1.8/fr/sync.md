@@ -102,6 +102,8 @@ Sélectionnez **Save**. Les modifications démarrent, arrêtent ou reconfigurent
 
 **Résultat attendu :** une liaison valide peut s'authentifier et transférer les données. Une notification d'enregistrement prouve l'acceptation des paramètres, pas l'accès au central.
 
+Si le laboratoire a servi avant d'être relié, l'enregistrement donne l'identifiant de site à ces enregistrements antérieurs, et la notification indique combien seront envoyés. La terminologie reste celle du central et n'est jamais envoyée.
+
 ## Lire l'activité réelle de synchronisation
 
 Utilisez Activity pour établir si la liaison enregistrée fonctionne réellement.

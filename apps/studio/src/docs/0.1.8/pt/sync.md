@@ -102,6 +102,8 @@ Selecione **Save**. As alterações iniciam, param ou reconfiguram os processos 
 
 **Resultado esperado:** uma ligação válida consegue autenticar e transferir dados. Uma notificação de gravação prova que as definições foram aceites, não que o central foi alcançado.
 
+Se o laboratório foi usado antes de ser ligado, a gravação dá o identificador do site a esses registos anteriores, e a notificação diz quantos serão enviados. A terminologia continua a ser do central e nunca é enviada.
+
 ## Ler a atividade real de sincronização
 
 Use Activity para determinar se a ligação guardada funciona.

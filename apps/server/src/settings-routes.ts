@@ -1,3 +1,4 @@
+import { stampEarlierRecords } from '@openldr/db';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
@@ -115,7 +116,9 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
     const before = await getSyncConfig(ctx.appSettings);
     let after;
     try {
-      after = await setSyncConfig(ctx.appSettings, req.body, req.user?.id ?? null, ctx.encryptSecret);
+      after = await setSyncConfig(ctx.appSettings, req.body, req.user?.id ?? null, ctx.encryptSecret, {
+        stampEarlierRecords: (siteId) => stampEarlierRecords(ctx.internalDb, siteId),
+      });
     } catch (e) {
       reply.code(400);
       return { error: e instanceof Error ? e.message : 'invalid sync config' };
