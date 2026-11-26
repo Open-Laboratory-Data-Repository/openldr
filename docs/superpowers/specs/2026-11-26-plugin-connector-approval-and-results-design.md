@@ -1,0 +1,74 @@
+# Plugin connector approval, and a results read for plugins
+
+Date: 2026-11-26. Asked for by Codex for the DHIS2 plugin. The operator chose to have Claude decide
+the open details, with Codex correcting the design. Build after 0.1.13 ships.
+
+## Why
+
+Codex's DHIS2 plugin needs two things CE does not give a plugin today:
+
+1. To send to DHIS2 through a connector an admin approved for that plugin, without the plugin ever
+   holding the DHIS2 password.
+2. To read released lab results, limited to the facilities the signed-in user may see.
+
+## What CE does today (checked 2026-11-26)
+
+- **Approval exists, for imports only.** Connectors > Plugin access (`ConnectorPluginAccessSheet.tsx`)
+  lists import plugins and lets an admin switch each on for a database connector. The CLI has
+  `openldr import allow|revoke|allowed` (`packages/cli/src/program.ts:185-193`). The broker checks it
+  for every `import.*` call (`plugin-broker.ts:641-651`, `import-run.ts:663`).
+- **The `connectors.*` page calls have no per-plugin approval.** Any plugin holding `host:connectors`
+  may list, test, read metadata from, validate against and push to any connector, when a lab admin is
+  signed in (`plugin-broker.ts:286`, `:327`). That gate is looser than the import one.
+- **`connectors.push` already sends both aggregate data and tracker events** through the connector's
+  own DHIS2 sink, with the credentials decrypted on the server and the connection pinned to the
+  connector's host (`dhis2-orchestration.ts:123`, `:158`; `connector-target.ts`).
+- **A plugin's own code gets no connector.** `invoke` passes only the caller and the host functions
+  (`plugin-broker.ts:581-583`). Workflow nodes already get a connector's config and a pinned host
+  (`plugin-node-service.ts:105`), so the pattern exists.
+- **No results read.** `ce_read` answers patients, value sets, the test catalog, facilities and the
+  caller (`plugin-host.ts:109-112`). The facility limit for results exists in the dashboard builder:
+  `scopeCondition('result', …)` in `packages/dashboards/src/scope.ts`.
+
+## Decisions (Claude's calls; Codex corrects)
+
+1. **One approval for every connector use.** Widen Connectors > Plugin access from import plugins to
+   any plugin that declares `host:connectors` or `host:import`. The broker then refuses every
+   `connectors.*` call naming a connector not switched on for that plugin, and `connectors.list`
+   answers only the approved ones. This closes the looser gate as well as serving the DHIS2 plugin.
+   It changes behaviour for plugins that use connectors today: an admin must switch them on once.
+   No lab has a plugin installed yet, so nothing in the field breaks. The CLI's `import allow`,
+   `revoke` and `allowed` keep their names and cover the same list, through shared code in
+   `@openldr/bootstrap`.
+2. **DHIS2 sending goes through `connectors.push` first.** It already does aggregate and tracker
+   events with server-held credentials. The plugin builds the payload; CE's DHIS2 sink sends it.
+3. **A connector for a plugin's own code, only if Codex shows `connectors.push` cannot do the job.**
+   If needed: `invoke` takes an optional `connectorId`. The broker checks the approval, then passes the
+   connector's decrypted config and its one host as `allowedHosts`, as workflow nodes get them. The
+   plugin must also declare `net-egress`, and the egress switch (`PLUGIN_EGRESS_ENABLED`) still applies.
+   The page never sees the config. Every such call is audited with the connector id.
+4. **"Released" means a result whose status is `final`, `amended` or `corrected`.** Preliminary,
+   registered, cancelled and entered-in-error results are not returned.
+5. **The results read.** Two `ce_read` ops, behind a new `host:results` capability:
+   - `results.list`: filters `since` and `until` (result time), `patient`, `observation` (code), and a
+     page of up to 200 with a key to read the next page, ordered by result time then id so pages never
+     shift or repeat.
+   - `results.get`: one result by id, or not found.
+   - Both apply the signed-in user's data limit with the dashboard rule (requesting facility or
+     testing lab), so a plugin can never read past what its user could.
+   - Fields per result: id, request id, patient id, observation code, system and name, value (number
+     with units and comparator, or code, or text), abnormal flag, status, result time, specimen id,
+     and the requesting facility and testing lab codes. Patient names are not included: the plugin
+     reads them through `patients.get`, which has its own masking and audit.
+   - A list is audited as one row with the count, like `patients.search`.
+
+## Not in this design
+
+- No new DHIS2 endpoints in CE's sink until Codex names one `connectors.push` lacks.
+- No change to how admins create connectors.
+
+## Open for Codex
+
+- Does `connectors.push` with a tracker mapping cover what the DHIS2 plugin sends? If not, which DHIS2
+  endpoint and payload does it need?
+- Are the result fields above enough?
