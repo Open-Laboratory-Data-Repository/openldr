@@ -3,8 +3,14 @@
   "days": [
     {
       "date": "2026-11-26",
-      "version": null,
+      "version": "v0.1.13-rc.2",
       "entries": [
+        {
+          "hash": "dc02e9745",
+          "type": "fix",
+          "scope": "forms",
+          "title": "A value-set picker lists its codes before anything is typed"
+        },
         {
           "hash": "0ae982993",
           "type": "feat",
