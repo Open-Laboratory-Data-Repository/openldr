@@ -205,10 +205,17 @@ describe('reference search', () => {
     });
   });
 
-  it('returns an empty result for a valueset-bound field under two characters, without hitting the terminology store', async () => {
-    const res = await makeApp().inject({ method: 'GET', url: url('vaccine', 'q=d') });
-    expect(res.json()).toEqual({ kind: 'coding', rows: [], total: 0 });
-    expect(opsExpand).not.toHaveBeenCalled();
+  // 2026-11-26: the facility form's Status picker (3 codes) said "No matches" until two letters
+  // were typed, so it read as empty. A value set now lists its first page from an empty box.
+  it('lists a valueset-bound field from an empty or one-letter query, capped by limit', async () => {
+    for (const q of ['q=', 'q=d']) {
+      const app = makeApp();
+      opsExpand.mockResolvedValue({ expansion: { total: 1, contains: [{ system: 's', code: 'active', display: 'Active' }] } });
+      const res = await app.inject({ method: 'GET', url: url('vaccine', `${q}&limit=5`) });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ kind: 'coding', rows: [{ system: 's', code: 'active', display: 'Active' }], total: 1 });
+      expect(opsExpand).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ filter: q.slice(2), count: 5 }));
+    }
   });
 
   // `terminology_concepts.system` holds the canonical URL, so a field bound by coding-system id

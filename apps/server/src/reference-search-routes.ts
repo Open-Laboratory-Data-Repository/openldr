@@ -47,7 +47,10 @@ export function registerReferenceSearchRoutes(
       return { kind: 'entity', rows: out.rows, total: out.total };
     }
 
-    if (q.length < MIN_QUERY) return { kind: 'coding', rows: [], total: 0 };
+    // A value set is listed from the first open, before anything is typed: a 3-code Status list that
+    // says "No matches" until two letters are typed reads as empty (2026-11-26, the facility form on
+    // the Windows desktop). `count` caps the page. A code system search keeps the minimum.
+    if (q.length < MIN_QUERY && source.mode !== 'valueset') return { kind: 'coding', rows: [], total: 0 };
 
     // The lab's test list is answered from the catalog's own list, whose search covers the Test code.
     // $expand matches only the id and the name. Both list the active tests switched on here, under the

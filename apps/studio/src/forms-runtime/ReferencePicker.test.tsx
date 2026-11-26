@@ -351,3 +351,40 @@ describe('ReferencePicker: catalog tests', () => {
   });
 });
 
+// 2026-11-26: the facility form's Status picker (3 codes) showed nothing until two letters were
+// typed, so people read it as empty. A value-set field lists its first codes from an empty box.
+describe('ReferencePicker, value-set fields', () => {
+  const statusField = {
+    id: 'fld-fac-status', displayLabel: 'Status', fieldType: 'reference',
+    valueSetUrl: 'urn:openldr:valueset:location-status',
+  } as never;
+  const codes = {
+    kind: 'coding' as const,
+    rows: [
+      { system: 'http://hl7.org/fhir/location-status', code: 'active', display: 'Active' },
+      { system: 'http://hl7.org/fhir/location-status', code: 'inactive', display: 'Inactive' },
+    ],
+    total: 2,
+  };
+
+  it('lists the value set when opened, before anything is typed', async () => {
+    vi.mocked(referenceSearch).mockResolvedValue(codes);
+    const user = userEvent.setup();
+    render(<ReferencePicker field={statusField} formDefinitionId="form-sample-facility" multiple={false} value={null} onChange={() => {}} />);
+
+    await user.click(screen.getByRole('combobox'));
+    await waitFor(() => expect(referenceSearch).toHaveBeenCalledWith('form-sample-facility', 'fld-fac-status', { q: '' }));
+    await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
+    expect(screen.getByText('Inactive')).toBeInTheDocument();
+  });
+
+  it('still waits for two characters on a patient field', async () => {
+    vi.mocked(referenceSearch).mockResolvedValue(entityResult);
+    const user = userEvent.setup();
+    render(<ReferencePicker field={field} formDefinitionId="form-7" multiple={false} value={null} onChange={() => {}} />);
+
+    await user.type(screen.getByRole('combobox'), 'd');
+    await new Promise((r) => setTimeout(r, 400));
+    expect(referenceSearch).not.toHaveBeenCalled();
+  });
+});
