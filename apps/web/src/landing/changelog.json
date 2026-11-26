@@ -6,6 +6,30 @@
       "version": "v0.1.13-rc.2",
       "entries": [
         {
+          "hash": "e6dbe8564",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A database connector's password never reaches plugin code"
+        },
+        {
+          "hash": "b501a6616",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Plugins read released results through ce_read"
+        },
+        {
+          "hash": "70506c96d",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "A plugin's own code may use a connector an admin switched on for it"
+        },
+        {
+          "hash": "3d5ba06bf",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "One approval list for every plugin that uses a connector"
+        },
+        {
           "hash": "25b7e1d35",
           "type": "feat",
           "scope": "studio",
