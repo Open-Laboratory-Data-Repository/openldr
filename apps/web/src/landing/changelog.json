@@ -6,6 +6,12 @@
       "version": "v0.1.13-rc.2",
       "entries": [
         {
+          "hash": "6cf40ed01",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "A plugin can draw its own sidebar icon from nav.iconPaths"
+        },
+        {
           "hash": "dc02e9745",
           "type": "fix",
           "scope": "forms",
