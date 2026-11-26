@@ -102,10 +102,10 @@ export function IssuedEdition() {
               {data.readings.map((v, i) => (
                 <div
                   key={i}
-                  className="grid grid-cols-[minmax(7rem,14rem)_minmax(0,1fr)] gap-3 border-b px-5 py-3 text-sm"
+                  className="grid grid-cols-1 gap-1 border-b px-5 py-3 text-sm sm:grid-cols-[minmax(7rem,14rem)_minmax(0,1fr)] sm:gap-3"
                 >
                   <dt>{v.name}</dt>
-                  <dd>
+                  <dd className="m-0 min-w-0 break-words">
                     <strong>{v.value}</strong>
                     {v.range && (
                       <p>
