@@ -4,10 +4,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError, PluginStillStopping, ActiveVersionRemoval, PackRemovalError, REMOVE_NEEDS_ROLES_MANAGE, REMOVE_KEEPS, type RemoveKeep } from '@openldr/bootstrap';
+import { CE_VERSION, createMarketplaceRegistries, readPluginSites, updatePluginSite, PluginSitesError, PluginStillStopping, ActiveVersionRemoval, PackRemovalError, REMOVE_NEEDS_ROLES_MANAGE, REMOVE_KEEPS, type RemoveKeep } from '@openldr/bootstrap';
 import {
   verifyBundle, readGrant, isCompatible, readBundle, UnreadableManifestError, requiredNewerCe,
-  LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
+  type RegistrySource, type Capability,
   openBundlePr, fetchRepoIndexJson, repoPathExists, mergeIndexEntry, parseIndex,
   payloadFileName, type RepoCoords, PublishError, parseContentPack, type Bundle, type ContentPackStep,
 } from '@openldr/marketplace';
@@ -57,20 +57,18 @@ function safeRef(ref: unknown): string | null {
 }
 
 export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, fetchImpl: typeof fetch = fetch): void {
-  const registries = createRegistryStore(ctx.internalDb);
+  const registries = createRegistryStore(ctx.internalDb); // registry CRUD below; reads go through `shared`
 
   const localRegistryRoot = ctx.cfg.MARKETPLACE_LOCAL_REGISTRY_ROOT ?? '';
   // Read the download cap live (Settings → General "Limits & tuning") so it can be tuned
   // without a restart.
-  async function sourceFor(reg: RegistryRecord): Promise<RegistrySource> {
-    const maxPayloadBytes = await ctx.numberSettings.get('marketplace.max_payload_bytes');
-    return reg.kind === 'http'
-      ? new HttpRegistrySource(reg.location, fetchImpl, undefined, maxPayloadBytes)
-      : new LocalRegistrySource(reg.location, localRegistryRoot);
-  }
-  async function enabledRegistries(): Promise<RegistryRecord[]> {
-    return (await registries.list()).filter((r) => r.enabled);
-  }
+  // The same registry reads as the CLI's market browse and market add (@openldr/bootstrap).
+  const shared = createMarketplaceRegistries({
+    internalDb: ctx.internalDb, localRoot: localRegistryRoot, fetchImpl,
+    maxPayloadBytes: () => ctx.numberSettings.get('marketplace.max_payload_bytes'),
+  });
+  const sourceFor = (reg: RegistryRecord): Promise<RegistrySource> => shared.sourceFor(reg);
+  const enabledRegistries = (): Promise<RegistryRecord[]> => shared.enabled();
 
   // The web treats `ref` opaquely, so we encode the owning registry into the ref
   // (`<registryId>::<innerRef>`). This keeps the detail/install/version-switch flow unchanged.
@@ -129,36 +127,22 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   });
 
   app.get('/api/marketplace/available', VIEW, async () => {
-    const regs = await enabledRegistries();
+    // ⛔ An unreadable registry is named in `error` with its registry name in front, and its reason
+    // kept whole: for a local registry it is the ENOENT carrying the RESOLVED absolute path, the only
+    // thing that reveals a relative `location` landing somewhere other than the operator expected.
+    const { registries: regs, listings, firstError } = await shared.listAvailable(CE_VERSION);
     if (regs.length === 0) return { configured: false, bundles: [], source: null, host: null };
-    const bundles: unknown[] = [];
-    let firstError: string | undefined;
-    for (const reg of regs) {
-      try {
-        const listing = await (await sourceFor(reg)).list();
-        for (const l of listing) {
-          bundles.push({
-            ref: packRef(reg.id, l.ref), id: l.id, version: l.version, type: l.type,
-            publisher: l.publisher, description: l.description, license: l.license,
-            summary: l.summary, signatureFingerprint: l.signatureFingerprint, valid: l.valid,
-            ...(l.invalidReason ? { invalidReason: l.invalidReason } : {}),
-            registryId: reg.id, registryName: reg.name,
-            versions: (l.versions ?? []).map((v) => ({ version: v.version, ref: packRef(reg.id, v.ref) })),
-            // Known only when the source carries the bundle's CE range (local bundles, and index
-            // entries written from 0.1.13). Unknown leaves the card as it was: the detail decides.
-            ...(l.ceVersion ? { compatibility: { ceVersion: l.ceVersion }, compatible: isCompatible(l.ceVersion, CE_VERSION) } : {}),
-          });
-        }
-      } catch (e) {
-        // ⛔ Prefixed with the registry NAME. The message reaches Browse verbatim, and with several
-        // registries configured an unlabelled reason cannot say which one is broken. The underlying
-        // text is kept whole: for a local registry it is the ENOENT carrying the RESOLVED absolute
-        // path, which is the only thing that reveals a relative `location` landing somewhere other
-        // than the operator expected (it resolves against the SERVER's cwd, not the repo root).
-        const reason = e instanceof Error ? e.message : 'registry unreachable';
-        firstError = firstError ?? `${reg.name}: ${reason}`;
-      }
-    }
+    const bundles = listings.map((l) => ({
+      ref: packRef(l.registry.id, l.ref), id: l.id, version: l.version, type: l.type,
+      publisher: l.publisher, description: l.description, license: l.license,
+      summary: l.summary, signatureFingerprint: l.signatureFingerprint, valid: l.valid,
+      ...(l.invalidReason ? { invalidReason: l.invalidReason } : {}),
+      registryId: l.registry.id, registryName: l.registry.name,
+      versions: (l.versions ?? []).map((v) => ({ version: v.version, ref: packRef(l.registry.id, v.ref) })),
+      // Known only when the source carries the bundle's CE range (local bundles, and index entries
+      // written from 0.1.13). Unknown leaves the card as it was: the detail decides.
+      ...(l.ceVersion ? { compatibility: { ceVersion: l.ceVersion }, compatible: l.compatible } : {}),
+    }));
     return {
       configured: true,
       source: regs.length === 1 ? regs[0].kind : 'multi',

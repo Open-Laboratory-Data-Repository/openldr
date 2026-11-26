@@ -29,7 +29,7 @@ import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runStorageCopy } from './storage';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge, runTerminologyJobStatus, runTerminologyJobContinue } from './terminology';
-import { runMarketVerify, runMarketInstall, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove, runMarketRemoveCommand } from './market';
+import { runMarketVerify, runMarketInstall, runMarketBrowse, runMarketAdd, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove, runMarketRemoveCommand } from './market';
 import { runMarketSites } from './market-sites';
 import { runLayoutsList, runLayoutsSet, runLayoutsDelete } from './layouts';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
@@ -1733,6 +1733,25 @@ export function buildProgram(): Command {
     .option('--json', 'emit JSON', false)
     .action(async (dir: string, opts: { approve: boolean; approvedBy?: string; dryRun: boolean; force: boolean; json: boolean }) => {
       try { process.exitCode = await runMarketUpdate(dir, opts); } catch (err) { process.stderr.write(`market update failed: ${String(err)}\n`); process.exitCode = 1; }
+    });
+  market
+    .command('browse')
+    .description('List the bundles in the enabled marketplace registries, and which need a newer CE')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      try { process.exitCode = await runMarketBrowse(opts); } catch (err) { process.stderr.write(`market browse failed: ${String(err)}\n`); process.exitCode = 1; }
+    });
+  market
+    .command('add <spec>')
+    .description('Install a bundle from an enabled registry by id: <id> or <id>@<version>')
+    .option('--registry <name>', 'the registry to take it from, when more than one has it')
+    .option('--approve', 'approve the capability grant', false)
+    .option('--approved-by <actor>', 'actor granting approval (default: cli)')
+    .option('--dry-run', 'check the bundle and list its steps without writing', false)
+    .option('--force', 'install a content pack that is already installed', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (spec: string, opts: { registry?: string; approve: boolean; approvedBy?: string; dryRun: boolean; force: boolean; json: boolean }) => {
+      try { process.exitCode = await runMarketAdd(spec, opts); } catch (err) { process.stderr.write(`market add failed: ${String(err)}\n`); process.exitCode = 1; }
     });
   market
     .command('list')

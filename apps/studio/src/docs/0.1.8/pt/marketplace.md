@@ -262,10 +262,15 @@ Um pacote cujos detalhes não carregam mantém a instalação desativada. Verifi
 
 ## Usar um pacote local pela CLI
 
-Siga [Começar aqui](/docs/start-here) para configurar a CLI. Em `openldr_ce`, a instalação pela CLI envia um diretório de pacote da sua máquina para o servidor em execução, por isso inicie sessão primeiro. Não consulta a lista de registos do Studio. Verifique e simule antes de aplicar um pacote aprovado.
+Siga [Começar aqui](/docs/start-here) para configurar a CLI. Em `openldr_ce`, a instalação pela CLI envia um diretório de pacote da sua máquina para o servidor em execução, por isso inicie sessão primeiro. Verifique e simule antes de aplicar um pacote aprovado.
+
+Para instalar a partir dos registos que o Studio consulta, liste-os com `market browse` e instale pelo identificador com `market add`. Acrescente `--registry <nome>` quando mais de um registo tem o pacote. Um pacote feito para uma versão mais recente do CE aparece com a versão do CE de que precisa, e `market add` recusa-o. Um servidor em execução carrega um plugin instalado pela CLI depois de reiniciar.
 
 ```shell
 pnpm openldr market list
+pnpm openldr market browse
+pnpm openldr market add <bundle-id> --dry-run
+pnpm openldr market add <bundle-id> --approve
 pnpm openldr market verify <bundle-directory>
 pnpm openldr market install <bundle-directory> --dry-run
 pnpm openldr market install <bundle-directory>

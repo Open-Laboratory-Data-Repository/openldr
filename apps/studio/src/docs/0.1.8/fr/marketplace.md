@@ -262,10 +262,15 @@ Un paquet dont les détails ne chargent pas garde l'installation désactivée. V
 
 ## Utiliser un paquet local depuis la CLI
 
-Suivez [Commencer ici](/docs/start-here) pour configurer la CLI. Depuis `openldr_ce`, l'installation CLI envoie un répertoire de paquet de votre machine au serveur en marche, donc connectez-vous d'abord. Elle ne parcourt pas les registres Studio. Vérifiez et simulez avant d'appliquer un paquet approuvé.
+Suivez [Commencer ici](/docs/start-here) pour configurer la CLI. Depuis `openldr_ce`, l'installation CLI envoie un répertoire de paquet de votre machine au serveur en marche, donc connectez-vous d'abord. Vérifiez et simulez avant d'appliquer un paquet approuvé.
+
+Pour installer depuis les registres que parcourt le Studio, listez-les avec `market browse`, puis installez par identifiant avec `market add`. Ajoutez `--registry <nom>` quand plusieurs registres ont le paquet. Un paquet fait pour une version plus récente de CE est listé avec la version de CE qu'il demande, et `market add` le refuse. Un serveur en marche charge un plugin installé depuis la CLI après un redémarrage.
 
 ```shell
 pnpm openldr market list
+pnpm openldr market browse
+pnpm openldr market add <bundle-id> --dry-run
+pnpm openldr market add <bundle-id> --approve
 pnpm openldr market verify <bundle-directory>
 pnpm openldr market install <bundle-directory> --dry-run
 pnpm openldr market install <bundle-directory>

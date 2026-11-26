@@ -1,4 +1,4 @@
-import { CE_VERSION, createAppContext, createIngestContext, PackRemovalError, type AppContext, type InstallerCapabilities } from '@openldr/bootstrap';
+import { CE_VERSION, createMarketplaceRegistries, createAppContext, createIngestContext, PackRemovalError, type AppContext, type InstallerCapabilities } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { createInternalDb, createMarketplaceInstallStore } from '@openldr/db';
 import { readBundle, verifyBundle, requiredNewerCe, UnreadableManifestError, type Bundle } from '@openldr/marketplace';
@@ -72,7 +72,7 @@ export async function runMarketVerify(dir: string, opts: JsonOpt): Promise<numbe
 // ---------------------------------------------------------------------------
 
 type InstallOpts = JsonOpt & { approve?: boolean; approvedBy?: string; dryRun?: boolean; force?: boolean };
-type Mode = 'install' | 'update';
+type Mode = 'install' | 'update' | 'add';
 
 export async function runMarketInstall(dir: string, opts: InstallOpts): Promise<number> {
   return installOrUpdate(dir, opts, 'install');
@@ -90,6 +90,12 @@ async function installOrUpdate(dir: string, opts: InstallOpts, mode: Mode): Prom
     process.stderr.write(`market ${mode} failed: ${unreadableReason(err, CE_VERSION)}\n`);
     return 1;
   }
+  return installBundle(bundle, opts, mode);
+}
+
+/** Install one bundle read from a folder (market install, market update) or a registry (market add).
+ *  The same checks either way: signature, CE range, and --approve for the capability grant. */
+async function installBundle(bundle: Bundle, opts: InstallOpts, mode: Mode): Promise<number> {
   const approval =
     opts.approve
       ? {
@@ -189,8 +195,8 @@ async function installPack(
       return 1;
     }
     if (existing && existing.status !== 'failed' && !opts.force) {
-      if (mode === 'install') {
-        process.stderr.write(`market install failed: ${id} is already installed; use --force to install again, or market update for a newer version\n`);
+      if (mode !== 'update') {
+        process.stderr.write(`market ${mode} failed: ${id} is already installed; use --force to install again, or market update for a newer version\n`);
         return 1;
       }
       // An unreadable version is never treated as newer: refuse rather than guess.
@@ -438,4 +444,71 @@ async function removePack(ctx: AppContext, id: string, version: string | undefin
   }
   emit(opts.json, { removed: id, roles: plan.roles, layouts: plan.layouts, formsKept: plan.formsKept }, `removed ${id}`);
   return 0;
+}
+
+// ---------------------------------------------------------------------------
+// browse / add: the enabled registries, read the same way as the studio's Browse tab
+// ---------------------------------------------------------------------------
+
+function registriesOf(ctx: AppContext) {
+  return createMarketplaceRegistries({
+    internalDb: ctx.internalDb,
+    localRoot: ctx.cfg.MARKETPLACE_LOCAL_REGISTRY_ROOT ?? '',
+    maxPayloadBytes: () => ctx.numberSettings.get('marketplace.max_payload_bytes'),
+  });
+}
+
+export async function runMarketBrowse(opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const { registries, listings, firstError } = await registriesOf(ctx).listAvailable(CE_VERSION);
+    const rows = listings.map((l) => ({
+      id: l.id, version: l.version, type: l.type, registry: l.registry.name,
+      ...(l.ceVersion ? { ceVersion: l.ceVersion } : {}),
+      ...(l.compatible === false ? { needsCe: l.ceVersion } : {}),
+    }));
+    if (opts.json) {
+      emit(true, { registries: registries.map((r) => r.name), bundles: rows, ...(firstError ? { error: firstError } : {}) }, '');
+    } else if (registries.length === 0) {
+      process.stdout.write('no marketplace registry is enabled\n');
+    } else {
+      const lines = rows.map((r) => `${r.id.padEnd(24)} ${r.version.padEnd(12)} ${r.type.padEnd(14)} ${r.registry}${r.needsCe ? `  (needs CE ${r.needsCe})` : ''}`);
+      process.stdout.write(`${lines.length ? lines.join('\n') : 'no bundles'}\n`);
+    }
+    if (firstError) process.stderr.write(`could not read ${firstError}\n`);
+    return firstError && rows.length === 0 ? 1 : 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** `<id>` or `<id>@<version>`. */
+export function parseBundleSpec(spec: string): { id: string; version?: string } | null {
+  const m = /^([a-z0-9][a-z0-9._-]*)(?:@([0-9A-Za-z.+-]+))?$/.exec(spec.trim());
+  return m ? { id: m[1], ...(m[2] ? { version: m[2] } : {}) } : null;
+}
+
+export async function runMarketAdd(spec: string, opts: InstallOpts & { registry?: string }): Promise<number> {
+  const parsed = parseBundleSpec(spec);
+  if (!parsed) {
+    process.stderr.write(`market add failed: "${spec}" is not <id> or <id>@<version>\n`);
+    return 1;
+  }
+  const ctx = await createAppContext(loadConfig());
+  let bundle: Bundle;
+  try {
+    ({ bundle } = await registriesOf(ctx).findBundle({ ...parsed, ...(opts.registry ? { registryName: opts.registry } : {}) }, CE_VERSION));
+  } catch (err) {
+    process.stderr.write(`market add failed: ${unreadableReason(err, CE_VERSION)}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+  const code = await installBundle(bundle, opts, 'add');
+  // installBundle treats anything that is not a content pack or a form as a plugin.
+  const plugin = bundle.manifest.type !== 'content-pack' && bundle.manifest.type !== 'form-template';
+  if (code === 0 && !opts.dryRun && !opts.json && plugin) {
+    process.stdout.write('a running server loads this plugin after a restart\n');
+  }
+  return code;
 }

@@ -24,8 +24,12 @@ const mockForms = vi.hoisted(() => ({
   list: vi.fn(),
 }));
 
+const mockRegs = vi.hoisted(() => ({ listAvailable: vi.fn(), findBundle: vi.fn() }));
+
 const mockCtx = vi.hoisted(() => ({
   close: vi.fn(),
+  cfg: {},
+  numberSettings: { get: vi.fn(async () => 1) },
   plugins: mockPlugins,
   marketplacePacks: mockPacks,
   marketplaceForms: mockForms,
@@ -51,6 +55,7 @@ const PackRemovalError = vi.hoisted(() => class PackRemovalError extends Error {
 
 vi.mock('@openldr/bootstrap', () => ({
   CE_VERSION: '0.1.12',
+  createMarketplaceRegistries: vi.fn(() => mockRegs),
   createIngestContext: vi.fn(async () => mockCtx),
   createAppContext: vi.fn(async () => mockCtx),
   PackRemovalError,
@@ -92,6 +97,9 @@ vi.mock('@openldr/marketplace', async (importOriginal) => {
 });
 
 import {
+  runMarketAdd,
+  runMarketBrowse,
+  parseBundleSpec,
   runMarketVerify,
   runMarketInstall,
   runMarketUpdate,
@@ -158,6 +166,61 @@ describe('market commands', () => {
         'market verify failed: lab-bench 0.6.2 cannot be read by this CLI; it asks for CE >=0.1.13\n',
         'market install failed: lab-bench 0.6.2 needs CE >=0.1.13; this CE is 0.1.12\n',
       ]);
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
+  // ------------------------------------------------------------------
+  // browse / add (M6, 2026-11-26): a headless lab installs from the marketplace by id
+  // ------------------------------------------------------------------
+  it('parseBundleSpec reads <id> and <id>@<version>, and refuses anything else', () => {
+    expect(parseBundleSpec('lab-bench')).toEqual({ id: 'lab-bench' });
+    expect(parseBundleSpec('lab-bench@0.6.2')).toEqual({ id: 'lab-bench', version: '0.6.2' });
+    expect(parseBundleSpec('../etc')).toBeNull();
+    expect(parseBundleSpec('Lab Bench')).toBeNull();
+  });
+
+  it('browse lists each bundle with its registry, and which need a newer CE', async () => {
+    mockRegs.listAvailable.mockResolvedValueOnce({
+      registries: [{ name: 'Default registry' }],
+      listings: [
+        { id: 'lab-bench', version: '0.6.2', type: 'plugin', registry: { name: 'Default registry' }, ceVersion: '>=0.1.13', compatible: false },
+        { id: 'tabular', version: '0.1.0', type: 'plugin', registry: { name: 'Default registry' } },
+      ],
+    });
+    expect(await runMarketBrowse({ json: true })).toBe(0);
+    expect(JSON.parse(writeSpy.mock.calls[0][0] as string)).toEqual({
+      registries: ['Default registry'],
+      bundles: [
+        { id: 'lab-bench', version: '0.6.2', type: 'plugin', registry: 'Default registry', ceVersion: '>=0.1.13', needsCe: '>=0.1.13' },
+        { id: 'tabular', version: '0.1.0', type: 'plugin', registry: 'Default registry' },
+      ],
+    });
+  });
+
+  it('add installs a plugin from a registry with the same checks as install, and says a server needs a restart', async () => {
+    mockRegs.findBundle.mockResolvedValueOnce({ bundle: mockBundle, listing: {} });
+    mockPlugins.install.mockResolvedValueOnce({ id: 'demo', version: '1.0.0' });
+    expect(await runMarketAdd('demo@1.0.0', { json: false, approve: true, registry: 'Default registry' })).toBe(0);
+    expect(mockRegs.findBundle).toHaveBeenCalledWith({ id: 'demo', version: '1.0.0', registryName: 'Default registry' }, '0.1.12');
+    expect(mockPlugins.install).toHaveBeenCalledWith(mockBundle.wasm, mockBundle.raw, expect.objectContaining({
+      approval: expect.objectContaining({ acknowledgedCapabilities: mockBundle.manifest.capabilities }),
+    }));
+    expect(writeSpy.mock.calls.map((c) => String(c[0]))).toContain('a running server loads this plugin after a restart\n');
+  });
+
+  it('add says why it cannot find or run a bundle, and installs nothing', async () => {
+    mockRegs.findBundle.mockRejectedValueOnce(new Error('lab-bench 0.6.2 needs CE >=0.1.13; this CE is 0.1.12'));
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      expect(await runMarketAdd('lab-bench', { json: false })).toBe(1);
+      expect(await runMarketAdd('not a spec', { json: false })).toBe(1);
+      expect(errSpy.mock.calls.map((c) => String(c[0]))).toEqual([
+        'market add failed: lab-bench 0.6.2 needs CE >=0.1.13; this CE is 0.1.12\n',
+        'market add failed: "not a spec" is not <id> or <id>@<version>\n',
+      ]);
+      expect(mockPlugins.install).not.toHaveBeenCalled();
     } finally {
       errSpy.mockRestore();
     }
