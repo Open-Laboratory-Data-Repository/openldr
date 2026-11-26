@@ -549,6 +549,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     pluginBroker: {} as never,
     pluginHost: {} as never,
     imports: {} as never,
+    connectorAccess: {} as never,
     importCopies: {} as never,
     importChecks: {} as never,
     pluginRemoval: {} as never,
