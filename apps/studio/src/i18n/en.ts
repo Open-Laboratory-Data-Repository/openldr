@@ -1010,10 +1010,12 @@ export const en = {
       pluginAccess: {
         menu: "Plugin access",
         title: "Plugin access for {{name}}",
-        description: "Import plugins that can read this connector. An allowed plugin runs its own read-only queries here.",
-        empty: "No installed plugin imports from this type of connector.",
+        description: "Plugins that may use this connector. Only a plugin switched on here can use it. An import plugin runs its own read-only queries. Any other plugin reaches only this connector's address and never sees its password.",
+        empty: "No installed plugin can use this connector.",
         allow: "Allow {{plugin}}",
         error: "Plugin access could not be read or saved: {{error}}",
+        useImport: "Imports from it",
+        useConnector: "Uses it as a connector",
       },
       diagnose: {
         menu: "Diagnose",

@@ -6,7 +6,8 @@ import { LoadingState } from '@/components/ui/spinner';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { listConnectorImportPlugins, setConnectorImportPlugin, type Connector, type ConnectorImportPlugin } from '@/api';
 
-/** Which import plugins may read one host connector. A switch saves as soon as it is flipped. */
+/** Which plugins may use one connector: import plugins that read it, and plugins that declare
+ *  host:connectors. A switch saves as soon as it is flipped. */
 export function ConnectorPluginAccessSheet({ connector, onOpenChange }: {
   connector: Connector | null;
   onOpenChange: (open: boolean) => void;
@@ -68,7 +69,9 @@ export function ConnectorPluginAccessSheet({ connector, onOpenChange }: {
                 <li key={p.id} className="flex items-center gap-4 px-6 py-3">
                   <div className="min-w-0 flex-1">
                     <div className="break-words font-medium">{p.id}</div>
-                    <div className="text-muted-foreground">{p.version}</div>
+                    <div className="text-muted-foreground">
+                      {p.version} · {p.use === 'import' ? t('settings.connectors.pluginAccess.useImport') : t('settings.connectors.pluginAccess.useConnector')}
+                    </div>
                   </div>
                   <Switch
                     checked={p.allowed}

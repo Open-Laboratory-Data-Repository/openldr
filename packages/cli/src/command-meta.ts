@@ -199,8 +199,11 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'connectors add': { kind: 'app', capability: 'connectors.manage', paths: [inFile('--file')] }, // :105
   'connectors diagnose': { kind: 'app', capability: 'connectors.manage' }, // :191
   'connectors inspect': { kind: 'app', capability: 'connectors.manage' }, // :85, GET /api/connectors/:id/config
+  'connectors allow': { kind: 'app', capability: 'connectors.manage' },
   'connectors list': { kind: 'app', capability: 'connectors.manage' }, // :83
+  'connectors plugins': { kind: 'app', capability: 'connectors.manage' },
   'connectors remove': { kind: 'app', capability: 'connectors.manage', destructive: true }, // :177
+  'connectors revoke': { kind: 'app', capability: 'connectors.manage', destructive: true },
   'connectors test': { kind: 'app', capability: 'connectors.manage' }, // :255
   'connectors update': { kind: 'app', capability: 'connectors.manage', destructive: true, paths: [inFile('--file')] }, // :147
 

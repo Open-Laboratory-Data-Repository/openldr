@@ -22,7 +22,7 @@ export type PluginBrokerOp =
   | { kind: 'storage.put'; collection: string; key: string; doc: unknown }
   | { kind: 'storage.delete'; collection: string; key: string }
   | { kind: 'storage.list'; collection: string; where?: { field: string; eq: unknown }; limit?: number }
-  | { kind: 'invoke'; entrypoint: string; input: unknown }
+  | { kind: 'invoke'; entrypoint: string; input: unknown; connectorId?: string }
   | { kind: 'reports.list' }
   | { kind: 'reports.columns'; id: string }
   | { kind: 'reports.run'; id: string; params?: Record<string, unknown> }
@@ -231,7 +231,11 @@ export interface OpenLdrPluginApi {
     delete(collection: string, key: string): Promise<void>;
     list(collection: string, opts?: { where?: { field: string; eq: unknown }; limit?: number }): Promise<Array<{ collection: string; key: string; doc: unknown }>>;
   };
-  invoke(entrypoint: string, input: unknown): Promise<unknown>;
+  /** Run one of the plugin's own entrypoints on the server. With `connectorId`, the plugin's code gets
+   *  that connector's settings and may reach only its one host. The connector must be one an admin
+   *  switched on for this plugin (Connectors > Plugin access), and the plugin must declare
+   *  host:connectors and net-egress. The page never sees the settings. */
+  invoke(entrypoint: string, input: unknown, opts?: { connectorId?: string }): Promise<unknown>;
   reports: {
     list(): Promise<unknown>;
     columns(id: string): Promise<unknown>;

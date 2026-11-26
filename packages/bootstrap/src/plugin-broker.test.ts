@@ -7,7 +7,7 @@ import type { Kysely } from 'kysely';
 import { createPluginRequests, createPluginSchemas, type TableShape } from '@openldr/db';
 import { createPluginStore, createWasmSink, parseManifest } from '@openldr/plugins';
 import { PG_MEM_WITHOUT_RLS } from '../../db/src/plugin-schema';
-import { checkForPage, createPluginBroker, buildBrokerOpSchema, type PluginBrokerDeps } from './plugin-broker';
+import { answerHoldsSecret, checkForPage, createPluginBroker, buildBrokerOpSchema, type PluginBrokerDeps } from './plugin-broker';
 import { createPluginHost } from './plugin-host';
 import { facilityIdsInScope, type ScopeRegistryRow } from './data-scope';
 import { CopySetChangedError, copySetHashes, copySpecSchema, createImportCopyService } from './import-copy';
@@ -51,8 +51,11 @@ function broker(opts: {
   copies?: any;
   checks?: any;
   diagnoseConnector?: any;
+  /** The connectors switched on for p1. By default the ones these tests name. */
+  allowedConnectors?: string[];
 }) {
   const data = memData();
+  for (const id of opts.allowedConnectors ?? ['x', 'c1', 'c9']) void data.store.put('p1', '__import-allowed', id, { connectorId: id });
   const manifest: any = opts.caps === undefined ? {} : { capabilities: opts.caps };
   if (opts.requiredRoles || opts.requiredCapabilities) {
     manifest.payload = { ui: { ...(opts.requiredRoles ? { requiredRoles: opts.requiredRoles } : {}), ...(opts.requiredCapabilities ? { requiredCapabilities: opts.requiredCapabilities } : {}) } };
@@ -77,6 +80,7 @@ function broker(opts: {
     jobInterruptions: (opts as any).jobInterruptions,
     checks: opts.checks,
     diagnoseConnector: opts.diagnoseConnector,
+    connectorConfig: (opts as any).connectorConfig,
     maxDocBytes: opts.maxDocBytes,
     logger: { warn: (obj: unknown, msg: string) => { logged.push({ obj, msg }); } },
     policy: () => ({ uiEnabled: opts.uiEnabled ?? true, egressEnabled: opts.egressEnabled ?? true }),
@@ -124,6 +128,106 @@ describe('plugin broker', () => {
     const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list: async () => [{ id: 'x', name: 'X', pluginId: 'dhis2-sink', enabled: true }], get: async () => null } });
     const r = await b.handle('p1', principal, { kind: 'connectors.list' });
     expect(r).toEqual({ ok: true, data: [{ id: 'x', name: 'X', pluginId: 'dhis2-sink', enabled: true }] });
+  });
+
+  // Design 2026-11-26-plugin-connector-approval-and-results: a plugin uses only the connectors an
+  // admin switched on for it.
+  it('connectors.list answers only the connectors switched on for the plugin', async () => {
+    const list = async () => [{ id: 'x', name: 'X' }, { id: 'y', name: 'Y' }];
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list, get: async () => null }, allowedConnectors: ['y'] });
+    expect(await b.handle('p1', principal, { kind: 'connectors.list' })).toEqual({ ok: true, data: [{ id: 'y', name: 'Y' }] });
+  });
+
+  it('refuses connectors.test, metadata, push and validate on a connector not switched on, before any dep runs', async () => {
+    const testConnector = vi.fn(); const connectorMetadata = vi.fn(); const connectorPush = vi.fn(); const connectorValidate = vi.fn();
+    const { b, audited } = broker({ caps: [{ kind: 'host:connectors' }], testConnector, connectorMetadata, connectorPush, connectorValidate, allowedConnectors: ['c1'] });
+    for (const op of [
+      { kind: 'connectors.test', id: 'c2' },
+      { kind: 'connectors.metadata', id: 'c2' },
+      { kind: 'connectors.push', connectorId: 'c2', mapping: {}, period: '2026', dryRun: true },
+      { kind: 'connectors.validate', connectorId: 'c2', mapping: {} },
+    ]) {
+      const r = await b.handle('p1', principal, op);
+      expect(r).toMatchObject({ ok: false });
+      expect((r as { error: string }).error).toContain('connector c2 is not allowed for plugin p1');
+    }
+    for (const dep of [testConnector, connectorMetadata, connectorPush, connectorValidate]) expect(dep).not.toHaveBeenCalled();
+    expect(audited.filter((a) => a.outcome === 'denied')).toHaveLength(4);
+  });
+
+  describe('invoke with a connector', () => {
+    const caps = [{ kind: 'host:connectors' }, { kind: 'net-egress', allowedHosts: [] }];
+    const conn = (over: Record<string, unknown> = {}) => vi.fn(async () => ({ enabled: true, kind: 'sink', allowedHost: 'dhis2.example.org:443', config: { baseUrl: 'https://dhis2.example.org', password: 'pw' }, ...over }));
+    const sinkSpy = () => {
+      const invoke = vi.fn(async () => ({ sent: true }));
+      return { invoke, loadSink: vi.fn(async () => ({ invoke })) };
+    };
+
+    it('gives the plugin code the connector settings and its one host, and names it in the audit', async () => {
+      const s = sinkSpy();
+      const { b, audited } = broker({ caps, loadSink: s.loadSink, allowedConnectors: ['c1'], ...({ connectorConfig: conn() } as any) });
+      const r = await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: { x: 1 }, connectorId: 'c1' });
+      expect(r).toEqual({ ok: true, data: { sent: true } });
+      expect(s.invoke).toHaveBeenCalledWith('send', { x: 1 }, { config: { baseUrl: 'https://dhis2.example.org', password: 'pw' }, allowedHosts: ['dhis2.example.org:443'] });
+      expect(audited).toContainEqual({ pluginId: 'p1', op: 'invoke:send', outcome: 'ok', reason: 'connector c1' });
+    });
+
+    it('a connector with no pinned host gives the code no egress', async () => {
+      const s = sinkSpy();
+      const { b } = broker({ caps, loadSink: s.loadSink, allowedConnectors: ['c1'], ...({ connectorConfig: conn({ allowedHost: null }) } as any) });
+      await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: {}, connectorId: 'c1' });
+      expect(s.invoke).toHaveBeenCalledWith('send', {}, expect.objectContaining({ allowedHosts: [] }));
+    });
+
+    it('refuses, before any settings are read or code runs: not switched on, missing capability, egress off, missing or disabled connector', async () => {
+      const cases: Array<{ name: string; opts: Record<string, unknown>; reason: string }> = [
+        { name: 'not switched on', opts: { caps, allowedConnectors: [] }, reason: 'connector c1 is not allowed for plugin p1' },
+        { name: 'no net-egress', opts: { caps: [{ kind: 'host:connectors' }], allowedConnectors: ['c1'] }, reason: 'needs the host:connectors and net-egress capabilities' },
+        { name: 'no host:connectors', opts: { caps: [{ kind: 'net-egress', allowedHosts: [] }], allowedConnectors: ['c1'] }, reason: 'needs the host:connectors and net-egress capabilities' },
+        { name: 'legacy grant', opts: { caps: undefined, allowedConnectors: ['c1'] }, reason: 'needs the host:connectors and net-egress capabilities' },
+        { name: 'egress off', opts: { caps, allowedConnectors: ['c1'], egressEnabled: false }, reason: 'egress kill-switch' },
+        { name: 'missing', opts: { caps, allowedConnectors: ['c1'], connectorConfig: vi.fn(async () => null) }, reason: 'connector c1 not found or disabled' },
+        { name: 'disabled', opts: { caps, allowedConnectors: ['c1'], connectorConfig: conn({ enabled: false }) }, reason: 'connector c1 not found or disabled' },
+        { name: 'database', opts: { caps, allowedConnectors: ['c1'], connectorConfig: conn({ kind: 'database' }) }, reason: 'is a database connector' },
+      ];
+      for (const c of cases) {
+        const s = sinkSpy();
+        const connectorConfig = (c.opts.connectorConfig as ReturnType<typeof vi.fn>) ?? conn();
+        const { b } = broker({ loadSink: s.loadSink, ...(c.opts as any), connectorConfig });
+        const r = await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: {}, connectorId: 'c1' });
+        expect(r, c.name).toMatchObject({ ok: false });
+        expect((r as { error: string }).error, c.name).toContain(c.reason);
+        expect(s.loadSink, c.name).not.toHaveBeenCalled();
+        if (!['missing', 'disabled', 'database'].includes(c.name)) expect(connectorConfig, c.name).not.toHaveBeenCalled();
+      }
+    });
+
+    it('withholds an answer that carries a connector secret, as JSON would write it too', async () => {
+      for (const answer of [{ leaked: 'pw' + 'xyz1' }, { nested: ['a', { v: 'see pwxyz1 here' }] }]) {
+        const invoke = vi.fn(async () => answer);
+        const { b, audited } = broker({ caps, loadSink: vi.fn(async () => ({ invoke })), allowedConnectors: ['c1'], ...({ connectorConfig: conn({ config: { baseUrl: 'https://dhis2.example.org', password: 'pwxyz1' } }) } as any) });
+        const r = await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: {}, connectorId: 'c1' });
+        expect(r).toMatchObject({ ok: false });
+        expect((r as { error: string }).error).toContain('returned a connector secret; the answer was withheld');
+        expect(JSON.stringify(r)).not.toContain('pwxyz1');
+        expect(audited.some((a) => a.outcome === 'denied')).toBe(true);
+      }
+    });
+
+    it('answerHoldsSecret looks only at secret settings, and not at short values', () => {
+      const config = { baseUrl: 'https://h', username: 'admin', password: 'p"q\\r12', apiToken: 'tok-123', pin: '12' };
+      expect(answerHoldsSecret({ url: 'https://h', user: 'admin' }, config)).toBe(false);
+      expect(answerHoldsSecret({ t: 'tok-123' }, config)).toBe(true);
+      expect(answerHoldsSecret({ p: 'p"q\\r12' }, config)).toBe(true);
+      expect(answerHoldsSecret({ n: 12 }, { pin: '12' })).toBe(false);
+    });
+
+    it('an invoke without a connector is unchanged', async () => {
+      const s = sinkSpy();
+      const { b } = broker({ caps, loadSink: s.loadSink, ...({ connectorConfig: conn() } as any) });
+      await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: { x: 1 } });
+      expect(s.invoke).toHaveBeenCalledWith('send', { x: 1 });
+    });
   });
 
   it('invoke calls the plugin own wasm (no host capability) and returns its output', async () => {

@@ -128,8 +128,18 @@ Reads CE's own records through one op. The request is `{ "op": "<op>", "input": 
 | `facilities.search` | `q`, `limit`, `offset` |
 | `facilities.get` | `id`. Gives one facility in the shape of a `facilities.search` row |
 | `caller.get` | none. Gives `userId`, `displayName` and `facilities` (`*` or the list of facility ids) of the person calling. `displayName` may be null |
+| `results.list` | `limit` (1 to 200), then `since` and `until` (result time), `pluginRef` (the patient), `observation` (code) and `after`. Gives `results` and `next` |
+| `results.get` | `id`. Gives one result in the shape of a `results.list` row |
 
 Each op follows the same rules as the studio page that shows the same records. The patient ops need the caller to hold `patients.view` or `patients.find`. With `patients.find` alone, a search must be an exact identifier, or a name with full birth date. See [Plugin permissions](/docs/plugin-permissions). Identifiers show only to a caller who holds `patients.view_identifiers`. A limited caller finds only patients and facilities inside their limit. `patients.register` also needs `Patient` in the plugin's `emit-fhir` list. `facilities.get` answers a facility outside the caller's limit as `NOT_FOUND`, the same as a missing one.
+
+### Released results
+
+`results.list` and `results.get` answer released results only: status `final`, `amended` or `corrected`. The caller must hold `reports.view_issued`. A limited caller reads only results whose request's requesting facility or testing lab is inside their limit, the same rule dashboards use. A result outside the limit answers `NOT_FOUND`, like a missing one.
+
+Each result gives `id`, `requestId`, `patient` (`{ "pluginRef": ... }` or null), `observation` (`code`, `system`, `display`), `value` (`type`, `number`, `units`, `comparator`, `code`, `text`), `abnormalFlag`, `status`, `resultTime`, `specimenId` and `requester` (`code`, `system`). The patient is this plugin's own lasting reference, never CE's id. Read the patient's details with `patients.get`.
+
+Pages go in the order CE stored the results. Pass the `next` of one page as `after` to read the next, until `next` is null. A page does not move while results are added. `since` and `until` filter by result time, so a result with no result time is left out when you give either.
 
 ### Keeping a link to a patient
 
@@ -162,6 +172,25 @@ Each parameter also has its `resultType`: `numeric`, `coded`, `text`, `boolean`,
 - `date`: `dateLimit`, `past` or `future`. Absent means any date.
 
 A band can name a `country`. The lab's country, set in Settings, Laboratory, decides `fits` for it: `no` for another country, and `unknown` while the lab has no country set.
+
+## Use a connector
+
+A plugin's server code can send to an outside system through a connector. CE keeps the connector's password and gives it to the code only for that call. The code can reach only the connector's own address.
+
+Call the entrypoint from the page with the connector's id:
+
+```js
+await openldr.invoke('send', payload, { connectorId });
+```
+
+CE then runs the entrypoint with the connector's settings as its config, and allows network calls to the connector's address only. It refuses the call unless all of these hold:
+
+- An admin switched the plugin on for that connector, in Connectors > **Plugin access** or with `openldr connectors allow <id> <plugin>`.
+- The plugin declares both `host:connectors` and `net-egress`.
+- Plugin network access is on for this CE (`PLUGIN_EGRESS_ENABLED`).
+- The connector exists, is enabled, and is not a database connector. A database connector is for import plugins only: CE runs their read-only SELECTs itself, so its password never reaches plugin code.
+
+The page never sees the settings. If the code puts a secret setting (a password, token or key) in its answer, CE withholds the whole answer. The audit row for the call names the connector. The same approval also covers the `connectors.*` page calls: a plugin lists and uses only the connectors it was switched on for.
 
 ## fhir_emit
 

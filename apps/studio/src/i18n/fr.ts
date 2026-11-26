@@ -1006,10 +1006,12 @@ export const fr: EnShape = {
       pluginAccess: {
         menu: "Accès des plugins",
         title: "Accès des plugins pour {{name}}",
-        description: "Plugins d’import qui peuvent lire ce connecteur. Un plugin autorisé exécute ici ses propres requêtes en lecture seule.",
-        empty: "Aucun plugin installé n’importe depuis ce type de connecteur.",
+        description: "Plugins qui peuvent utiliser ce connecteur. Seul un plugin activé ici peut l’utiliser. Un plugin d’import exécute ses propres requêtes en lecture seule. Tout autre plugin n’atteint que l’adresse de ce connecteur et ne voit jamais son mot de passe.",
+        empty: "Aucun plugin installé ne peut utiliser ce connecteur.",
         allow: "Autoriser {{plugin}}",
         error: "L’accès des plugins n’a pas pu être lu ou enregistré : {{error}}",
+        useImport: "Importe depuis celui-ci",
+        useConnector: "L’utilise comme connecteur",
       },
       diagnose: {
         menu: "Diagnostiquer",

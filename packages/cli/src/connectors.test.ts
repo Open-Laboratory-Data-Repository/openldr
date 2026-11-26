@@ -5,7 +5,7 @@ import { formatDiagnose, runConnectorRemove } from './connectors';
 it('offers scoped connector inspection and updates from a JSON file', () => {
   const connector = buildProgram().commands.find((command) => command.name() === 'connectors');
   expect(connector).toBeDefined();
-  expect(connector!.commands.map((command) => command.name())).toEqual(['inspect', 'update', 'diagnose', 'list', 'add', 'test', 'remove']);
+  expect(connector!.commands.map((command) => command.name())).toEqual(['inspect', 'update', 'diagnose', 'list', 'plugins', 'allow', 'revoke', 'add', 'test', 'remove']);
   expect(connector!.commands[1].options.some((option) => option.long === '--file' && option.mandatory)).toBe(true);
 });
 

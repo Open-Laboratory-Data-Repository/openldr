@@ -9,7 +9,7 @@ import { CAPABILITIES } from '@openldr/rbac';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
 import { checkReadOp } from './check-read-audit';
-import { HOST_COLLECTION_PREFIX, type ImportActor, type ImportService } from './import-run';
+import { CONNECTOR_ALLOWED, HOST_COLLECTION_PREFIX, type ImportActor, type ImportService } from './import-run';
 import { FINDING_CODE, LABORATORY_CODE, type CheckRun, type ImportCheckService } from './import-check';
 import { CopySetChangedError, type CopyRun, type CopySetProgress, type ImportCopyService } from './import-copy';
 
@@ -78,7 +78,7 @@ export type BrokerOp =
   | { kind: 'storage.put'; collection: string; key: string; doc: unknown }
   | { kind: 'storage.delete'; collection: string; key: string }
   | { kind: 'storage.list'; collection: string; where?: { field: string; eq: unknown }; limit?: number }
-  | { kind: 'invoke'; entrypoint: string; input: unknown }
+  | { kind: 'invoke'; entrypoint: string; input: unknown; connectorId?: string }
   | { kind: 'reports.list' }
   | { kind: 'reports.columns'; id: string }
   | { kind: 'reports.run'; id: string; params?: Record<string, unknown> }
@@ -202,7 +202,7 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
     z.object({ kind: z.literal('storage.put'), collection: STR, key: STR, doc: docBound('doc') }),
     z.object({ kind: z.literal('storage.delete'), collection: STR, key: STR }),
     z.object({ kind: z.literal('storage.list'), collection: STR, where: z.object({ field: STR, eq: z.unknown() }).optional(), limit: z.number().int().min(1).max(1000).optional() }),
-    z.object({ kind: z.literal('invoke'), entrypoint: STR, input: docBound('input') }),
+    z.object({ kind: z.literal('invoke'), entrypoint: STR, input: docBound('input'), connectorId: ID.optional() }),
     z.object({ kind: z.literal('reports.list') }),
     z.object({ kind: z.literal('reports.columns'), id: ID }),
     z.object({ kind: z.literal('reports.run'), id: ID, params: docBound('params').optional() }),
@@ -318,6 +318,29 @@ function egresses(op: BrokerOp): boolean {
   }
 }
 
+/** A connector setting is a secret when its name says so. */
+const SECRET_SETTING = /pass|secret|token|key|credential|auth/i;
+
+/** Does a plugin's answer carry one of the connector's secret settings, anywhere in its JSON? A
+ *  value under 4 characters is not looked for: it would match by chance. */
+export function answerHoldsSecret(answer: unknown, config: Record<string, string>): boolean {
+  const secrets = Object.entries(config).filter(([k, v]) => SECRET_SETTING.test(k) && typeof v === 'string' && v.length >= 4).map(([, v]) => v);
+  if (secrets.length === 0) return false;
+  let text: string;
+  try { text = JSON.stringify(answer) ?? ''; } catch { return true; }
+  // JSON.stringify escapes quotes and backslashes, so look for each secret as JSON writes it too.
+  return secrets.some((v) => text.includes(v) || text.includes(JSON.stringify(v).slice(1, -1)));
+}
+
+/** The connector a connectors.* op names, or undefined for an op that names none. */
+function connectorOf(op: BrokerOp): string | undefined {
+  switch (op.kind) {
+    case 'connectors.test': case 'connectors.metadata': return op.id;
+    case 'connectors.push': case 'connectors.validate': return op.connectorId;
+    default: return undefined;
+  }
+}
+
 /** Required caller-role set for an op (empty = no role requirement). The capability is the
  *  plugin's ceiling; the CALLER's role is a separate axis, matching the native routes. */
 function rolesFor(op: BrokerOp): string[] {
@@ -395,6 +418,10 @@ export interface PluginBrokerDeps {
   /** Test a connector live (resolve→loadSink→health/metadata). Optional here; wired in app
    *  context. When absent, connectors.test returns a structured error. */
   testConnector?: (id: string) => Promise<unknown>;
+  /** A connector's decrypted settings and pinned host, for a plugin's own code to use one an admin
+   *  switched on for it (design 2026-11-26-plugin-connector-approval-and-results). Null when the
+   *  connector does not exist. When absent, an invoke that names a connector is refused. */
+  connectorConfig?: (id: string) => Promise<{ enabled: boolean; kind: string; allowedHost: string | null; config: Record<string, string> } | null>;
   /** Pull live metadata for a connector (resolve→loadSink→pull_metadata). */
   connectorMetadata?: (id: string) => Promise<unknown>;
   /** Run a DHIS2 push for a caller-supplied mapping/orgUnitMap through a connector's sink. */
@@ -551,6 +578,13 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           return deny(op.kind, `operation ${op.kind} requires one of roles: ${need.join(', ')}`);
         }
 
+        // 3a. A connector the op names must be one an admin switched on for this plugin
+        // (design 2026-11-26-plugin-connector-approval-and-results).
+        const named = connectorOf(op);
+        if (named !== undefined && (await deps.pluginData.get(pluginId, CONNECTOR_ALLOWED, named)) === null) {
+          return deny(op.kind, `connector ${named} is not allowed for plugin ${pluginId}`);
+        }
+
         // 3b. Collections starting with `__` belong to the host (import runs, failures and the
         // list of connectors an admin allowed). A plugin page must not read or forge them.
         if ((op.kind === 'storage.get' || op.kind === 'storage.put' || op.kind === 'storage.delete' || op.kind === 'storage.list')
@@ -573,22 +607,53 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           case 'storage.delete': await deps.pluginData.delete(pluginId, op.collection, op.key); return { ok: true, data: null };
           case 'storage.list': return { ok: true, data: await deps.pluginData.list(pluginId, op.collection, { where: op.where, limit: op.limit }) };
           case 'invoke': {
+            const grant = readGrant(row.manifest);
+            // A connector for the plugin's own code: its settings and its one host, never seen by the
+            // page. Only one an admin switched on for this plugin, only with host:connectors and
+            // net-egress, and never with the egress switch off.
+            let connection: { config: Record<string, string>; allowedHosts: string[] } | undefined;
+            if (op.connectorId !== undefined) {
+              const id = op.connectorId;
+              const refused = (reason: string) => deny(`invoke:${op.entrypoint}`, reason);
+              if (grant.legacy || !hasCapability(grant.capabilities, 'host:connectors') || !hasCapability(grant.capabilities, 'net-egress')) {
+                return refused(`invoke with a connector needs the host:connectors and net-egress capabilities, which plugin ${pluginId} was not granted`);
+              }
+              if (!deps.policy().egressEnabled) return refused(`invoke with a connector is disabled by the egress kill-switch`);
+              if ((await deps.pluginData.get(pluginId, CONNECTOR_ALLOWED, id)) === null) return refused(`connector ${id} is not allowed for plugin ${pluginId}`);
+              const c = deps.connectorConfig ? await deps.connectorConfig(id) : null;
+              if (!c || !c.enabled) return refused(`connector ${id} not found or disabled`);
+              // A database connector's password stays in CE: imports run their SELECTs through CE.
+              if (c.kind === 'database') return refused(`connector ${id} is a database connector; plugin code cannot be given its settings`);
+              connection = { config: c.config, allowedHosts: c.allowedHost ? [c.allowedHost] : [] };
+            }
             const sink = await deps.plugins.loadSink(pluginId, row.version);
             if (!sink) return { ok: false, error: `plugin ${pluginId} exposes no invokable wasm` };
             // A plugin with host functions gets the caller, built from CE's session only. Every
             // other plugin is invoked exactly as before.
-            const grant = readGrant(row.manifest);
-            const data = deps.host && !grant.legacy && hasHostFnCapability(grant.capabilities)
-              ? await sink.invoke(op.entrypoint, op.input, { caller: await callerOf(principal), host: deps.host })
+            const withHost = deps.host && !grant.legacy && hasHostFnCapability(grant.capabilities)
+              ? { caller: await callerOf(principal), host: deps.host } : {};
+            const data = connection || Object.keys(withHost).length > 0
+              ? await sink.invoke(op.entrypoint, op.input, { ...withHost, ...(connection ?? {}) })
               : await sink.invoke(op.entrypoint, op.input);
-            await emit(pluginId, principal, `invoke:${op.entrypoint}`, 'ok'); // wasm execution
+            // The connector's secrets are for the call, not the page: an answer that carries one is
+            // refused, and nothing of it is returned.
+            if (connection && answerHoldsSecret(data, connection.config)) {
+              return deny(`invoke:${op.entrypoint}`, `plugin ${pluginId} returned a connector secret; the answer was withheld`);
+            }
+            // wasm execution; with a connector, the audit row names it.
+            await emit(pluginId, principal, `invoke:${op.entrypoint}`, 'ok', op.connectorId !== undefined ? `connector ${op.connectorId}` : undefined);
             return { ok: true, data };
           }
           case 'reports.list': return { ok: true, data: await deps.reporting.list() };
           case 'reports.columns': return { ok: true, data: await deps.reporting.columns(op.id) };
           case 'reports.run': return { ok: true, data: await deps.reporting.run(op.id, op.params ?? {}) };
           case 'reports.eventSources': return { ok: true, data: deps.reporting.eventSources() };
-          case 'connectors.list': return { ok: true, data: await deps.connectors.list() };
+          case 'connectors.list': {
+            // Only the connectors an admin switched on for this plugin.
+            const allowed = new Set((await deps.pluginData.list(pluginId, CONNECTOR_ALLOWED)).map((e) => e.key));
+            const all = await deps.connectors.list();
+            return { ok: true, data: all.filter((c) => allowed.has(String((c as { id?: unknown }).id))) };
+          }
           case 'connectors.test': {
             if (!deps.testConnector) return { ok: false, error: 'connectors.test is unavailable' };
             const data = await deps.testConnector(op.id);

@@ -3790,7 +3790,9 @@ export const loadSampleData = (): Promise<void> =>
   authFetch('/api/settings/sample-data', { method: 'POST' }).then((r) => okJson<unknown>(r, 'load sample data')).then(() => undefined);
 
 // Import plugins that can read a host connector, and whether an admin allowed each one.
-export interface ConnectorImportPlugin { id: string; version: string; allowed: boolean }
+/** A plugin that may be switched on for a connector. `use` is why it is offered: it imports from
+ *  the connector, or it declares host:connectors. */
+export interface ConnectorImportPlugin { id: string; version: string; allowed: boolean; use: 'import' | 'connector' }
 export const listConnectorImportPlugins = (id: string): Promise<ConnectorImportPlugin[]> =>
   authFetch(`/api/connectors/${encodeURIComponent(id)}/import-plugins`).then((r) => okJson<ConnectorImportPlugin[]>(r, 'list import plugins'));
 export const setConnectorImportPlugin = (id: string, pluginId: string, allowed: boolean): Promise<ConnectorImportPlugin[]> =>

@@ -265,6 +265,9 @@ const NOT_A_PATH: Record<string, string[]> = {
   'connectors diagnose': ['id'],
   'connectors test': ['id'],
   'connectors remove': ['id'],
+  'connectors plugins': ['id'],
+  'connectors allow': ['id', 'plugin'],
+  'connectors revoke': ['id', 'plugin'],
   'import allow': ['plugin', 'connector'],
   'import revoke': ['plugin', 'connector'],
   'import allowed': ['plugin'],
@@ -579,7 +582,7 @@ const EXTRA_CARE = [
   // who can do what
   'roles create', 'roles edit', 'roles delete', 'roles grant', 'roles revoke', 'user assign-role', 'user unassign-role',
   'user set-role', 'user create', 'user key create', 'user key list', 'user key revoke', 'user end-sessions',
-  'user activate', 'user deactivate', 'import allow', 'import revoke',
+  'user activate', 'user deactivate', 'import allow', 'import revoke', 'connectors allow', 'connectors revoke',
   // secrets or connection details
   'connectors inspect', 'connectors list', 'connectors diagnose', 'connectors test', 'connectors add', 'connectors update',
   'settings sync show',

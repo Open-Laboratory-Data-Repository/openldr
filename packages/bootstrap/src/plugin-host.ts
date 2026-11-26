@@ -1,3 +1,4 @@
+import { ResultsKeyError, RESULTS_PAGE_MAX, type ResultsQuery, type StoredResult } from './results-read';
 import { z } from 'zod';
 import type { Logger } from '@openldr/core';
 import { AppError } from '@openldr/core';
@@ -54,6 +55,13 @@ export interface PluginHostDeps {
   persist(resources: unknown[], provenance: Provenance, opts?: { ownedBy?: string }): Promise<unknown>;
   audit(actor: AuditActor, details: AuditDetails): Promise<void>;
   logger: Logger;
+  /** Released results from the warehouse (results-read.ts), limited to the caller's facilities:
+   *  '*' for no limit, else the caller's facility ids as plugin calls carry them. Absent, the results
+   *  ops answer that they are unavailable. */
+  results?: {
+    list(q: ResultsQuery, facilities: string[] | '*'): Promise<{ results: StoredResult[]; next: string | null }>;
+    get(id: string, facilities: string[] | '*'): Promise<StoredResult | null>;
+  };
 }
 
 const FHIR_ID = /^[A-Za-z0-9\-.]{1,64}$/;
@@ -92,6 +100,17 @@ const resultParamsInput = z.object({
     .min(1).max(MAX_RESULT_PARAM_TESTS),
   patientRef: z.string().min(1).max(500),
 }).strict();
+const isoTime = z.string().min(1).max(40).refine((v) => !Number.isNaN(Date.parse(v)), 'not a date and time');
+const resultsListInput = z.object({
+  since: isoTime.optional(),
+  until: isoTime.optional(),
+  pluginRef: z.string().min(1).max(500).optional(),
+  observation: z.string().min(1).max(200).optional(),
+  after: z.string().min(1).max(500).nullable().optional(),
+  limit: z.number().int().min(1).max(RESULTS_PAGE_MAX),
+}).strict();
+const resultsGetInput = z.object({ id: z.string().min(1).max(200) }).strict();
+
 const facilitySearchInput = z.object({
   q: z.string().max(200).optional(),
   limit: z.number().int().min(1).max(200).optional(),
@@ -109,6 +128,7 @@ export const MAX_AUDITED_IDS = 200;
 export const CE_READ_OPS = [
   'patients.search', 'patients.get', 'patients.getMany', 'patients.register', 'valueset.expand', 'valueset.lookup',
   'testCatalog.list', 'testCatalog.get', 'testCatalog.resultParams', 'facilities.search', 'facilities.get', 'caller.get',
+  'results.list', 'results.get',
 ] as const;
 type CeReadOp = typeof CE_READ_OPS[number];
 
@@ -274,6 +294,23 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
         if (!canView && !canFind) {
           throw new HostInputError('FORBIDDEN', `${op}: the caller holds neither patients.view nor patients.find`);
         }
+      };
+      /** The results reader, for a caller who may open issued results. */
+      const needResults = (op: string) => {
+        if (!caller.capabilities.includes('reports.view_issued')) {
+          throw new HostInputError('FORBIDDEN', `${op}: the caller does not hold reports.view_issued`);
+        }
+        if (!deps.results) throw new HostInputError('UNAVAILABLE', `${op}: results are not available in this CE`);
+        return deps.results;
+      };
+      const callerFacilities = (): string[] | '*' => (scope === '*' ? '*' : [...scope]);
+      /** A stored result as a plugin sees it: the patient as this plugin's lasting reference. */
+      const resultViews = async (rows: StoredResult[]) => {
+        const refs = rows.some((r) => r.patientId !== null) ? await refsFor() : null;
+        return rows.map(({ patientId, storedAt: _storedAt, ...rest }) => ({
+          ...rest,
+          patient: patientId === null || !refs ? null : { pluginRef: refs.encode(patientId) },
+        }));
       };
       /** The caller's facilities for a patient search, or undefined for no limit. */
       const searchFacilities = (): string[] | undefined => {
@@ -493,6 +530,46 @@ export function createPluginHost(deps: PluginHostDeps): PluginHost {
             displayName: caller.displayName,
             facilities: caller.facilities === '*' ? '*' : [...caller.facilities],
           };
+        },
+
+        // Released results (design 2026-11-26-plugin-connector-approval-and-results): final, amended
+        // or corrected, inside the caller's data limit, for a caller who may open issued results. The
+        // patient is this plugin's own lasting reference, never CE's id (ruling 11).
+        async 'results.list'(raw) {
+          const results = needResults('results.list');
+          const i = parse(resultsListInput, raw, 'results.list');
+          let patientId: string | undefined;
+          if (i.pluginRef !== undefined) {
+            const id = (await refsFor()).decode(i.pluginRef);
+            if (id === null) return { results: [], next: null };
+            patientId = id;
+          }
+          let out;
+          try {
+            out = await results.list({
+              ...(i.since !== undefined ? { since: i.since } : {}),
+              ...(i.until !== undefined ? { until: i.until } : {}),
+              ...(patientId !== undefined ? { patientId } : {}),
+              ...(i.observation !== undefined ? { observation: i.observation } : {}),
+              after: i.after ?? null,
+              limit: i.limit,
+            }, callerFacilities());
+          } catch (err) {
+            if (err instanceof ResultsKeyError) throw new HostInputError('INVALID_REQUEST', `results.list: ${err.message}`);
+            throw err;
+          }
+          await deps.audit(actor, { action: 'results.list', entityType: 'lab_result', entityId: 'list', metadata: { ...auditMeta, count: out.results.length } });
+          return { results: await resultViews(out.results), next: out.next };
+        },
+
+        async 'results.get'(raw) {
+          const results = needResults('results.get');
+          const i = parse(resultsGetInput, raw, 'results.get');
+          const r = await results.get(i.id, callerFacilities());
+          // Outside the caller's limit reads the same as missing.
+          if (!r) throw new HostInputError('NOT_FOUND', 'results.get: no released result with this id');
+          await deps.audit(actor, { action: 'results.get', entityType: 'lab_result', entityId: i.id, metadata: auditMeta });
+          return (await resultViews([r]))[0];
         },
 
         async 'facilities.search'(raw) {

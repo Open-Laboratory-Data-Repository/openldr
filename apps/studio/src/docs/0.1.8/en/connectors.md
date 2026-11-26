@@ -184,6 +184,24 @@ Check the connector name. Choose **Remove** to delete it, or **Cancel** to keep 
 
 **Expected result:** Confirming Remove deletes the connector and stored credentials. Anything that still refers to it fails until reconfigured.
 
+## Let a plugin use a connection
+
+A plugin can use a connector only after you switch it on for that connector. Do this when a plugin's guide asks for a connection, for example to send results to a reporting system.
+
+### 1. Open Plugin access
+
+On the connector row, open the dots and select **Plugin access**.
+
+### 2. Find the plugin
+
+Each plugin row says how it uses the connector: **Imports from it** or **Uses it as a connector**. A database connection lists import plugins only, so its password never reaches plugin code.
+
+### 3. Switch it on
+
+Turn on the switch for the plugin. It saves at once. Turn it off to stop the plugin using this connector.
+
+**Expected result:** Only a plugin switched on here can use this connector. A plugin that uses it as a connector reaches only this connector's address and never sees its password. Each change appears in Audit.
+
 ## Use Connectors on a phone
 
 The Host column is hidden at phone width. Open Edit to read a host connection address.
@@ -223,6 +241,9 @@ pnpm openldr connectors add --file new-connector.json
 pnpm openldr connectors update <id> --file connector-patch.json
 pnpm openldr connectors test <id>
 pnpm openldr connectors remove <id> --force
+pnpm openldr connectors plugins <id>
+pnpm openldr connectors allow <id> <plugin>
+pnpm openldr connectors revoke <id> <plugin>
 ```
 
 ## Optional practice setup
