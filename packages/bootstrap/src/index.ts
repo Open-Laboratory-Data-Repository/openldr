@@ -2176,6 +2176,13 @@ const reporting: ReportingApi = {
     plugins,
     pluginData,
     host: pluginHost,
+    // A connector's settings for a plugin's own code. The broker asks only after the admin's
+    // approval check, and the page never sees them.
+    connectorConfig: async (id) => {
+      const c = await connectorStore.get(id);
+      if (!c) return null;
+      return { enabled: c.enabled, allowedHost: c.allowedHost, config: await connectorStore.getDecryptedConfig(id, cfg.SECRETS_ENCRYPTION_KEY) };
+    },
     // Once per plugin call with host functions (ruling 5).
     resolveFacilities: async (scope) => facilityIdsInScope(await scopeRegistryRows(), scope),
     imports,

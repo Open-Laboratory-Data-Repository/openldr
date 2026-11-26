@@ -78,7 +78,8 @@ function pluginBootstrapV1(): void {
       delete: (c: string, k: string) => call({ kind: 'storage.delete', collection: c, key: k }),
       list: (c: string, o?: unknown) => call({ kind: 'storage.list', collection: c, ...((o as object) ?? {}) }),
     },
-    invoke: (entrypoint: string, input: unknown) => call({ kind: 'invoke', entrypoint, input }),
+    invoke: (entrypoint: string, input: unknown, opts?: { connectorId?: string }) =>
+      call(opts && typeof opts.connectorId === 'string' ? { kind: 'invoke', entrypoint, input, connectorId: opts.connectorId } : { kind: 'invoke', entrypoint, input }),
     reports: {
       list: () => call({ kind: 'reports.list' }),
       columns: (id: string) => call({ kind: 'reports.columns', id }),

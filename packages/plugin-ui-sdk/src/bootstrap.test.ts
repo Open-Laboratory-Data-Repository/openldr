@@ -134,6 +134,27 @@ describe('SDK_BOOTSTRAP_V1', () => {
     await expect(api.files.download({ filename: '../x.csv', mime: 'text/csv', text: '' })).rejects.toThrow('download refused: bad file name');
   });
 
+  it('invoke names a connector only when the page passes one', async () => {
+    let handler: ((ev: unknown) => void) | undefined;
+    const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('window', SDK_BOOTSTRAP_V1)(win);
+    const api = (win as unknown as { openldr: { invoke(e: string, i: unknown, o?: unknown): Promise<unknown> } }).openldr;
+    const sent: Array<{ id: number; op: unknown }> = [];
+    const port = {
+      start: () => {},
+      onmessage: null as null | ((e: { data: unknown }) => void),
+      postMessage(m: { id: number; op: unknown }) { sent.push(m); queueMicrotask(() => port.onmessage?.({ data: { id: m.id, result: { ok: true, data: null } } })); },
+    };
+    handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [port] });
+    await api.invoke('send', { a: 1 });
+    await api.invoke('send', { a: 1 }, { connectorId: 'c1' });
+    expect(sent.map((m) => m.op)).toEqual([
+      { kind: 'invoke', entrypoint: 'send', input: { a: 1 } },
+      { kind: 'invoke', entrypoint: 'send', input: { a: 1 }, connectorId: 'c1' },
+    ]);
+  });
+
   it('print.pages sends the host operation and resolves with nothing once the host answers', async () => {
     let handler: ((ev: unknown) => void) | undefined;
     const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };

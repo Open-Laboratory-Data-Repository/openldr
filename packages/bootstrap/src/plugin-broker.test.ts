@@ -80,6 +80,7 @@ function broker(opts: {
     jobInterruptions: (opts as any).jobInterruptions,
     checks: opts.checks,
     diagnoseConnector: opts.diagnoseConnector,
+    connectorConfig: (opts as any).connectorConfig,
     maxDocBytes: opts.maxDocBytes,
     logger: { warn: (obj: unknown, msg: string) => { logged.push({ obj, msg }); } },
     policy: () => ({ uiEnabled: opts.uiEnabled ?? true, egressEnabled: opts.egressEnabled ?? true }),
@@ -152,6 +153,60 @@ describe('plugin broker', () => {
     }
     for (const dep of [testConnector, connectorMetadata, connectorPush, connectorValidate]) expect(dep).not.toHaveBeenCalled();
     expect(audited.filter((a) => a.outcome === 'denied')).toHaveLength(4);
+  });
+
+  describe('invoke with a connector', () => {
+    const caps = [{ kind: 'host:connectors' }, { kind: 'net-egress', allowedHosts: [] }];
+    const conn = (over: Record<string, unknown> = {}) => vi.fn(async () => ({ enabled: true, allowedHost: 'dhis2.example.org:443', config: { baseUrl: 'https://dhis2.example.org', password: 'pw' }, ...over }));
+    const sinkSpy = () => {
+      const invoke = vi.fn(async () => ({ sent: true }));
+      return { invoke, loadSink: vi.fn(async () => ({ invoke })) };
+    };
+
+    it('gives the plugin code the connector settings and its one host, and names it in the audit', async () => {
+      const s = sinkSpy();
+      const { b, audited } = broker({ caps, loadSink: s.loadSink, allowedConnectors: ['c1'], ...({ connectorConfig: conn() } as any) });
+      const r = await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: { x: 1 }, connectorId: 'c1' });
+      expect(r).toEqual({ ok: true, data: { sent: true } });
+      expect(s.invoke).toHaveBeenCalledWith('send', { x: 1 }, { config: { baseUrl: 'https://dhis2.example.org', password: 'pw' }, allowedHosts: ['dhis2.example.org:443'] });
+      expect(audited).toContainEqual({ pluginId: 'p1', op: 'invoke:send', outcome: 'ok', reason: 'connector c1' });
+    });
+
+    it('a connector with no pinned host gives the code no egress', async () => {
+      const s = sinkSpy();
+      const { b } = broker({ caps, loadSink: s.loadSink, allowedConnectors: ['c1'], ...({ connectorConfig: conn({ allowedHost: null }) } as any) });
+      await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: {}, connectorId: 'c1' });
+      expect(s.invoke).toHaveBeenCalledWith('send', {}, expect.objectContaining({ allowedHosts: [] }));
+    });
+
+    it('refuses, before any settings are read or code runs: not switched on, missing capability, egress off, missing or disabled connector', async () => {
+      const cases: Array<{ name: string; opts: Record<string, unknown>; reason: string }> = [
+        { name: 'not switched on', opts: { caps, allowedConnectors: [] }, reason: 'connector c1 is not allowed for plugin p1' },
+        { name: 'no net-egress', opts: { caps: [{ kind: 'host:connectors' }], allowedConnectors: ['c1'] }, reason: 'needs the host:connectors and net-egress capabilities' },
+        { name: 'no host:connectors', opts: { caps: [{ kind: 'net-egress', allowedHosts: [] }], allowedConnectors: ['c1'] }, reason: 'needs the host:connectors and net-egress capabilities' },
+        { name: 'legacy grant', opts: { caps: undefined, allowedConnectors: ['c1'] }, reason: 'needs the host:connectors and net-egress capabilities' },
+        { name: 'egress off', opts: { caps, allowedConnectors: ['c1'], egressEnabled: false }, reason: 'egress kill-switch' },
+        { name: 'missing', opts: { caps, allowedConnectors: ['c1'], connectorConfig: vi.fn(async () => null) }, reason: 'connector c1 not found or disabled' },
+        { name: 'disabled', opts: { caps, allowedConnectors: ['c1'], connectorConfig: conn({ enabled: false }) }, reason: 'connector c1 not found or disabled' },
+      ];
+      for (const c of cases) {
+        const s = sinkSpy();
+        const connectorConfig = (c.opts.connectorConfig as ReturnType<typeof vi.fn>) ?? conn();
+        const { b } = broker({ loadSink: s.loadSink, ...(c.opts as any), connectorConfig });
+        const r = await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: {}, connectorId: 'c1' });
+        expect(r, c.name).toMatchObject({ ok: false });
+        expect((r as { error: string }).error, c.name).toContain(c.reason);
+        expect(s.loadSink, c.name).not.toHaveBeenCalled();
+        if (c.name !== 'missing' && c.name !== 'disabled') expect(connectorConfig, c.name).not.toHaveBeenCalled();
+      }
+    });
+
+    it('an invoke without a connector is unchanged', async () => {
+      const s = sinkSpy();
+      const { b } = broker({ caps, loadSink: s.loadSink, ...({ connectorConfig: conn() } as any) });
+      await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: { x: 1 } });
+      expect(s.invoke).toHaveBeenCalledWith('send', { x: 1 });
+    });
   });
 
   it('invoke calls the plugin own wasm (no host capability) and returns its output', async () => {
