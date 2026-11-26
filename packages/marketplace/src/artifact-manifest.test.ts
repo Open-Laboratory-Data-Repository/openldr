@@ -549,3 +549,47 @@ describe('plugin permissions and actionPermissions (plan 2026-11-23 rulings 1 an
     expect(JSON.stringify(again)).toBe(JSON.stringify(m));
   });
 });
+
+describe('nav.iconPaths (custom sidebar icon)', () => {
+  const withNav = (nav: Record<string, unknown>) => ({
+    ...base,
+    payload: { kind: 'plugin', wasmSha256: 'b'.repeat(64), ui: { nav: { label: 'Analyzer interface', ...nav }, declarative: { type: 'object' } } },
+  });
+  const ICON = ['M3 15 5.5 5.5h13L21 15v4.5H3Z', 'M3.5 15h17', 'M8 11h2l1.4-3 2 4 1.4-2H17'];
+
+  it('keeps the path strings and the fallback name', () => {
+    const m = parseArtifactManifest(withNav({ icon: 'plug', iconPaths: ICON }));
+    if (m.payload.kind !== 'plugin') throw new Error('expected plugin payload');
+    expect(m.payload.ui?.nav.iconPaths).toEqual(ICON);
+    expect(m.payload.ui?.nav.icon).toBe('plug');
+  });
+
+  it('adds no key to a manifest that does not declare it', () => {
+    const m = parseArtifactManifest(withNav({ icon: 'database' }));
+    if (m.payload.kind !== 'plugin') throw new Error('expected plugin payload');
+    expect('iconPaths' in (m.payload.ui?.nav ?? {})).toBe(false);
+  });
+
+  it('accepts exponents, arcs and signs', () => {
+    expect(() => parseArtifactManifest(withNav({ iconPaths: ['m1e1 2E-1a10 10 0 1 0 4 4z', 'M+1,-2.5L3,4'] }))).not.toThrow();
+  });
+
+  it.each([
+    ['markup', '<path d="M0 0"/>'],
+    ['a URL', 'M0 0 url(https://x.test/a)'],
+    ['a style', 'M0 0 style="fill:red"'],
+    ['a script word', 'M0 0 javascript:alert(1)'],
+    ['no move command first', 'L3 4'],
+    ['an empty string', ''],
+    ['a too-long path', 'M' + ' 1'.repeat(600)],
+  ])('refuses %s', (_label, d) => {
+    expect(() => parseArtifactManifest(withNav({ iconPaths: [d] }))).toThrow();
+  });
+
+  it('refuses an empty list, too many paths, and a non-string', () => {
+    expect(() => parseArtifactManifest(withNav({ iconPaths: [] }))).toThrow();
+    expect(() => parseArtifactManifest(withNav({ iconPaths: Array.from({ length: 9 }, () => 'M0 0h1') }))).toThrow();
+    expect(() => parseArtifactManifest(withNav({ iconPaths: [42] }))).toThrow();
+    expect(() => parseArtifactManifest(withNav({ iconPaths: 'M0 0h1' }))).toThrow();
+  });
+});

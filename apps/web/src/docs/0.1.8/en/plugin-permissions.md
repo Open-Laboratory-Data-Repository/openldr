@@ -73,6 +73,35 @@ The page gets the signed-in user's capabilities in its init context, the plugin'
 
 A profile layout may list a plugin page by its path, for example `"pages": ["/forms", "/x/test-sink-host"]`. When a layout is active, the plugin entry shows only if the layout lists it. A layout only hides. It never opens a page the user's capabilities do not open. `startPage` may be `/x/<id>` too.
 
+### The sidebar icon
+
+`payload.ui.nav.icon` names a built-in icon: `puzzle`, `share-2`, `bar-chart-3`, `database`, `plug`, `settings` or `file-text`. Any other name shows the puzzle.
+
+To draw your own icon, add `payload.ui.nav.iconPaths`. It is a list of SVG path `d` strings on a 24x24 grid. Keep `icon` as well. A CE older than 0.1.14 ignores `iconPaths` and shows `icon`.
+
+```json
+"nav": {
+  "label": "Analyzer interface",
+  "section": "apps",
+  "icon": "plug",
+  "iconPaths": [
+    "M3 15 5.5 5.5h13L21 15v4.5H3Z",
+    "M3.5 15h17",
+    "M8 11h2l1.4-3 2 4 1.4-2H17"
+  ]
+}
+```
+
+The studio draws each string as one `<path>` in its own 16-pixel `<svg>`. It sets the colour (`currentColor`), a 2-unit stroke, round caps and joins, and no fill. Draw line icons for that stroke. The link keeps the plugin label as its name.
+
+The manifest check refuses an icon that breaks these rules:
+
+- 1 to 8 paths, each 1 to 1,000 characters.
+- Each path starts with `M` or `m`.
+- Only path commands (`M L H V C S Q T A Z`, either case), digits, `e`, `.`, `,`, `+`, `-` and spaces. No markup, URL or style.
+
+To change the icon, publish a new signed version with new paths and install it. The sidebar shows the new icon at the next page load. The studio needs no rebuild.
+
 ## Finding a patient with patients.find
 
 `patients.find` is a CE capability for users who must find one patient without browsing the list. Its name in the studio is **Find a patient**. A user limited to some facilities keeps it, and loses `patients.view`. Of the preset roles, only the Administrator has it.

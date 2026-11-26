@@ -29,12 +29,30 @@ export const PLUGIN_SITES: readonly PluginSite[] = ['widget', 'panel'];
  *  Because this object lives inside the signed manifest, the Ed25519 signature already covers the
  *  ui.html hash — no signing-function change. `nav` drives the sidebar entry routed to /x/:id.
  *  `uiSdkVersion` selects the SDK runtime the host injects. */
+/** Most paths and characters per path a custom sidebar icon may carry. A 24x24 line icon needs a
+ *  handful of short paths; the caps keep a manifest from sending a large drawing to every user. */
+export const NAV_ICON_MAX_PATHS = 8;
+export const NAV_ICON_MAX_PATH_LENGTH = 1000;
+/** SVG path geometry only: the path commands, numbers, signs, dots, commas and spaces. No letter
+ *  outside the commands, so no markup, URL, `url(...)`, style or script can pass. Must start with a
+ *  move command, as every valid SVG path does. */
+const SVG_PATH_D = /^\s*[Mm][MmLlHhVvCcSsQqTtAaZz0-9eE.,+\-\s]*$/;
+export const navIconPathsSchema = z.array(
+  z.string().min(1).max(NAV_ICON_MAX_PATH_LENGTH)
+    .regex(SVG_PATH_D, 'nav.iconPaths entries must be SVG path data (d attribute) only'),
+).min(1).max(NAV_ICON_MAX_PATHS);
+
 export const uiContributionSchema = z.object({
   entry: z.string().min(1).optional(),
   sha256: z.string().regex(HEX64).optional(),
   nav: z.object({
     label: z.string().min(1),
     icon: z.string().min(1).default('puzzle'),
+    // A custom sidebar icon: SVG path `d` strings on a 24x24 grid. Studio draws them in its own
+    // <svg> with its own stroke and colour, so a new signed version changes the icon with no Studio
+    // build. `icon` stays the fallback for a Studio that does not read this field. Optional with no
+    // default, so a manifest without it parses to the same object and its signature still verifies.
+    iconPaths: navIconPathsSchema.optional(),
     section: z.string().min(1).default('apps'), // SP-A1b will narrow to an enum once the host sidebar section set is fixed
   }),
   uiSdkVersion: z.literal('1').default('1'), // add literals here when a new SDK ships; old signed bundles stay valid at their declared version

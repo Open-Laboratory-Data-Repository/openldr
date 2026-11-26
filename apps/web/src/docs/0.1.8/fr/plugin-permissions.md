@@ -73,6 +73,35 @@ La page reçoit les capacités de l'utilisateur connecté dans son contexte d'in
 
 Une mise en page de profil peut lister une page de plugin par son chemin, par exemple `"pages": ["/forms", "/x/test-sink-host"]`. Quand une mise en page est active, l'entrée du plugin n'apparaît que si la mise en page la liste. Une mise en page ne fait que cacher. Elle n'ouvre jamais une page que les capacités de l'utilisateur n'ouvrent pas. `startPage` peut aussi valoir `/x/<id>`.
 
+### L'icône du menu latéral
+
+`payload.ui.nav.icon` nomme une icône intégrée : `puzzle`, `share-2`, `bar-chart-3`, `database`, `plug`, `settings` ou `file-text`. Tout autre nom affiche le puzzle.
+
+Pour dessiner votre propre icône, ajoutez `payload.ui.nav.iconPaths`. C'est une liste de chaînes `d` de chemins SVG sur une grille de 24x24. Gardez aussi `icon`. Un CE antérieur à 0.1.14 ignore `iconPaths` et affiche `icon`.
+
+```json
+"nav": {
+  "label": "Analyzer interface",
+  "section": "apps",
+  "icon": "plug",
+  "iconPaths": [
+    "M3 15 5.5 5.5h13L21 15v4.5H3Z",
+    "M3.5 15h17",
+    "M8 11h2l1.4-3 2 4 1.4-2H17"
+  ]
+}
+```
+
+Le studio dessine chaque chaîne comme un `<path>` dans son propre `<svg>` de 16 pixels. Il fixe la couleur (`currentColor`), un trait de 2 unités, des bouts et des jonctions arrondis, et aucun remplissage. Dessinez des icônes au trait pour ce rendu. Le lien garde le libellé du plugin comme nom.
+
+Le contrôle du manifeste refuse une icône qui ne suit pas ces règles :
+
+- 1 à 8 chemins, chacun de 1 à 1 000 caractères.
+- Chaque chemin commence par `M` ou `m`.
+- Seulement des commandes de chemin (`M L H V C S Q T A Z`, majuscules ou minuscules), des chiffres, `e`, `.`, `,`, `+`, `-` et des espaces. Pas de balise, d'URL ni de style.
+
+Pour changer l'icône, publiez une nouvelle version signée avec de nouveaux chemins et installez-la. Le menu latéral montre la nouvelle icône au prochain chargement de la page. Le studio n'a pas besoin d'être reconstruit.
+
 ## Trouver un patient avec patients.find
 
 `patients.find` est une capacité de CE pour les utilisateurs qui doivent trouver un patient sans parcourir la liste. Le studio l'affiche sous le nom **Find a patient**, en anglais dans toutes les langues. Un utilisateur limité à certains établissements la garde, et perd `patients.view`. Parmi les rôles prédéfinis, seul Administrator l'a.

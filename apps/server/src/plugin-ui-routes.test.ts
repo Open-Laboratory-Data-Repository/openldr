@@ -45,6 +45,21 @@ describe('plugin-ui routes', () => {
     expect(body[0].declarative).toBeNull();
   });
 
+  it('GET /api/plugins/ui passes a custom icon through and adds nothing when there is none', async () => {
+    const iconPaths = ['M3 15 5.5 5.5h13L21 15v4.5H3Z', 'M3.5 15h17'];
+    const ctx = fakeCtx({
+      plugins: {
+        list: async () => [
+          { id: 'analyzer', version: '0.2.0', enabled: true, manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'x', nav: { label: 'Analyzer interface', icon: 'plug', section: 'apps', iconPaths }, uiSdkVersion: '1' } } } },
+          { id: 'db', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'y', nav: { label: 'DB', icon: 'database', section: 'apps' }, uiSdkVersion: '1' } } } },
+        ],
+      },
+    });
+    const body = (await build(ctx).inject({ method: 'GET', url: '/api/plugins/ui' })).json();
+    expect(body[0].nav).toEqual({ label: 'Analyzer interface', icon: 'plug', section: 'apps', iconPaths });
+    expect(body[1].nav).toEqual({ label: 'DB', icon: 'database', section: 'apps' });
+  });
+
   it('GET /api/plugins/ui includes declarative-only plugin with tier flags', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/plugins/ui' });
     const body = res.json();

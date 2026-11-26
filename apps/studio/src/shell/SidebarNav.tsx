@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type ComponentType } from 'react';
 import { NavLink, matchPath, useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { MoreHorizontal, type LucideIcon } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -11,7 +11,8 @@ export interface SidebarNavEntry {
   key: string;
   to: string;
   end?: boolean;
-  icon: LucideIcon;
+  /** Any icon drawn at the size it is given: a lucide icon, or a plugin's own paths. */
+  icon: ComponentType<{ className?: string }>;
   label: string;
 }
 
@@ -38,7 +39,7 @@ export function navSlots(count: number, height: number): { shown: number; more: 
 // list → every icon rendered primary/blue). A resolved string className avoids that.
 function SidebarNavItem({
   to, end, icon: Icon, label, collapsed, onNavigate,
-}: { to: string; end?: boolean; icon: LucideIcon; label: string; collapsed: boolean; onNavigate?: () => void }) {
+}: { to: string; end?: boolean; icon: SidebarNavEntry['icon']; label: string; collapsed: boolean; onNavigate?: () => void }) {
   const active = useMatch({ path: to, end: Boolean(end) }) != null;
   // `collapsed` is a desktop-only affordance: on mobile the sidebar is a full-width drawer that
   // always shows labels, so every collapse-driven style is scoped to `md:` and the label is kept

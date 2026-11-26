@@ -73,6 +73,35 @@ A página recebe as capacidades do utilizador com sessão iniciada no seu contex
 
 Um layout de perfil pode listar uma página de plugin pelo seu caminho, por exemplo `"pages": ["/forms", "/x/test-sink-host"]`. Quando há um layout ativo, a entrada do plugin só aparece se o layout a listar. Um layout só esconde. Nunca abre uma página que as capacidades do utilizador não abrem. `startPage` também pode ser `/x/<id>`.
 
+### O ícone do menu lateral
+
+`payload.ui.nav.icon` indica um ícone incluído: `puzzle`, `share-2`, `bar-chart-3`, `database`, `plug`, `settings` ou `file-text`. Qualquer outro nome mostra o puzzle.
+
+Para desenhar o seu próprio ícone, acrescente `payload.ui.nav.iconPaths`. É uma lista de cadeias `d` de caminhos SVG numa grelha de 24x24. Mantenha também `icon`. Um CE anterior a 0.1.14 ignora `iconPaths` e mostra `icon`.
+
+```json
+"nav": {
+  "label": "Analyzer interface",
+  "section": "apps",
+  "icon": "plug",
+  "iconPaths": [
+    "M3 15 5.5 5.5h13L21 15v4.5H3Z",
+    "M3.5 15h17",
+    "M8 11h2l1.4-3 2 4 1.4-2H17"
+  ]
+}
+```
+
+O studio desenha cada cadeia como um `<path>` no seu próprio `<svg>` de 16 píxeis. Define a cor (`currentColor`), um traço de 2 unidades, pontas e junções arredondadas, e nenhum preenchimento. Desenhe ícones de traço para isso. A ligação mantém o nome do plugin como nome.
+
+A verificação do manifesto recusa um ícone que não cumpra estas regras:
+
+- 1 a 8 caminhos, cada um com 1 a 1000 caracteres.
+- Cada caminho começa por `M` ou `m`.
+- Só comandos de caminho (`M L H V C S Q T A Z`, maiúsculas ou minúsculas), algarismos, `e`, `.`, `,`, `+`, `-` e espaços. Sem marcação, URL nem estilo.
+
+Para mudar o ícone, publique uma nova versão assinada com novos caminhos e instale-a. O menu lateral mostra o novo ícone no próximo carregamento da página. O studio não precisa de ser reconstruído.
+
 ## Encontrar um paciente com patients.find
 
 `patients.find` é uma capacidade do CE para utilizadores que precisam de encontrar um paciente sem percorrer a lista. O studio mostra-a como **Find a patient**, em inglês em todas as línguas. Um utilizador limitado a algumas unidades mantém-na, e perde `patients.view`. Entre as funções predefinidas, só Administrator a tem.

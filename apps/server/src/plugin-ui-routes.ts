@@ -17,7 +17,7 @@ interface UiPluginRow {
       ui?: {
         entry?: string;
         sha256?: string;
-        nav: { label: string; icon: string; section: string };
+        nav: { label: string; icon: string; section: string; iconPaths?: string[] };
         uiSdkVersion: string;
         declarative?: unknown;
         requiredRoles?: string[];
@@ -51,7 +51,14 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
       .map((r) => {
         const ui = r.manifest.payload!.ui!;
         return {
-          id: r.id, version: r.version, nav: ui.nav, uiSdkVersion: ui.uiSdkVersion,
+          id: r.id, version: r.version,
+          // Named fields only. `iconPaths` is the plugin's own icon, checked as path data when the
+          // manifest was parsed at install; `icon` is the fallback name.
+          nav: {
+            label: ui.nav.label, icon: ui.nav.icon, section: ui.nav.section,
+            ...(ui.nav.iconPaths !== undefined ? { iconPaths: ui.nav.iconPaths } : {}),
+          },
+          uiSdkVersion: ui.uiSdkVersion,
           hasWebview: ui.entry !== undefined,
           hasDeclarative: ui.declarative !== undefined,
           declarative: ui.declarative ?? null,
