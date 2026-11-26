@@ -126,6 +126,14 @@ describe('PackageDetail', () => {
     expect(screen.queryByTestId('detail-update')).toBeNull();
   });
 
+  it('offers no Roll back from a Browse card whose version is not installed', async () => {
+    const browse: CardEntry = { ...entry, installed: true, active: false, enabled: true, version: '0.6.2', activeVersion: '0.6.6' };
+    render(<PackageDetail entry={browse} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    await openDetailMenu();
+    await screen.findAllByRole('menuitem');
+    expect(screen.queryByRole('menuitem', { name: 'Roll back' })).toBeNull();
+  });
+
   it('lists the version history, newest first, each with its publisher, and marks the active one', async () => {
     const installed: CardEntry = { ...entry, ref: undefined, version: '0.1.4', installed: true, active: true, enabled: true,
       installedVersions: [{ version: '0.1.4', active: true, publisher: 'Acme' }, { version: '0.1.10', active: false, publisher: 'OpenLDR test' }, { version: '0.1.5', active: false, publisher: null }] };

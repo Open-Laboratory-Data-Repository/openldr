@@ -16,6 +16,8 @@ export interface CardEntry {
   invalidReason?: AvailableArtifact['invalidReason']; // Browse only: which check failed when valid === false
   installed?: boolean;   // is this id currently installed?
   active?: boolean;      // installed AND active version
+  /** Browse only: the active version when the plugin is installed but this card's version is not. */
+  activeVersion?: string;
   enabled?: boolean;     // installed AND user-enabled (on/off toggle)
   drifted?: boolean;     // installed form-template modified locally
   targetFormId?: string; // installed form-template's local form id
@@ -28,8 +30,7 @@ export interface CardEntry {
   error?: string | null;
   /** Installed only: a newer Marketplace version than the active one, if any. */
   update?: NewerVersion | null;
-  /** Installed only: every installed version of this id, for the detail view. */
-  /** Every installed version of this id, each with its publisher's name (null when unknown). */
+  /** Installed only: every installed version of this id, each with its publisher's name (null when unknown). */
   installedVersions?: { version: string; active: boolean; publisher: string | null }[];
 }
 
@@ -73,16 +74,22 @@ export function capabilityLine(cap: unknown, t: (key: string, opts?: Record<stri
   return `${t(`settings.marketplace.capability.${key}`, { list, interpolation: { escapeValue: false } })} (${c.kind})`;
 }
 
-export function availableToEntry(b: AvailableArtifact, installed: Map<string, InstalledArtifact>): CardEntry {
+export function availableToEntry(b: AvailableArtifact, installed: Map<string, InstalledArtifact>, rows: readonly InstalledArtifact[] = []): CardEntry {
   // Merge the installed state so a Browse entry that is already installed carries the
   // real enabled/active flags — otherwise the detail menu shows the wrong Enable/Disable
   // label (and rollback visibility) for installed plugins viewed from Browse.
+  // ⛔ Active is this card's OWN version. Two registries can offer the same id (the public build
+  // and a local test build), and matching by id alone marked both cards Active, one for a version
+  // that was not even installed. `installed` stays per id: Enable, Disable and Update act on the plugin.
   const inst = installed.get(b.id);
+  const same = (a: InstalledArtifact) => a.id === b.id && a.type === b.type && a.version === b.version;
+  const own = rows.find(same) ?? (inst && same(inst) ? inst : undefined);
   return {
     ref: b.ref, id: b.id, version: b.version, type: b.type,
     publisher: b.publisher, description: b.description, license: b.license,
     capabilities: b.capabilities ?? [], valid: b.valid, invalidReason: b.invalidReason,
-    installed: Boolean(inst), enabled: inst?.enabled, active: inst?.active,
+    installed: Boolean(inst), enabled: inst?.enabled, active: own ? own.active : false,
+    ...(inst && !own ? { activeVersion: inst.version } : {}),
     status: inst?.status, failedStep: inst?.failedStep, error: inst?.error,
     versions: b.versions ?? [], registryName: b.registryName,
     ...(b.compatible === false && b.compatibility ? { needsCe: b.compatibility.ceVersion } : {}),

@@ -219,7 +219,8 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                       <DropdownMenuItem onSelect={() => onToggleEnabled(entry.id, !entry.enabled)}>
                         {entry.enabled ? t('settings.marketplace.disable') : t('settings.marketplace.enable')}
                       </DropdownMenuItem>
-                      {!entry.active ? (
+                      {/* Only to a version that is installed: a Browse card can be for one that is not. */}
+                      {!entry.active && !entry.activeVersion ? (
                         <DropdownMenuItem onSelect={() => onRollback(entry.id, entry.version)}>
                           {t('settings.marketplace.rollback')}
                         </DropdownMenuItem>

@@ -169,7 +169,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       const typeMatch = typeFilter === 'all' || b.type === typeFilter;
       return textMatch && typeMatch;
     })
-    .map((b) => { const e = availableToEntry(b, installedById); return e.installed ? withUpdate(e, installedById.get(b.id)!.version) : e; }), [props.available, filter, typeFilter, installedById, withUpdate]);
+    .map((b) => { const e = availableToEntry(b, installedById, props.installed); return e.installed ? withUpdate(e, installedById.get(b.id)!.version) : e; }), [props.available, props.installed, filter, typeFilter, installedById, withUpdate]);
 
   const installedEntries = useMemo(() => installedOnePerPackage
     .filter((a) => {
@@ -184,7 +184,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
     if (selected.source === 'browse') {
       const bundle = props.available.find((entry) => entry.id === selected.id && entry.ref === selected.ref && entry.type === selected.type);
       if (!bundle) return null;
-      const e = availableToEntry(bundle, installedById);
+      const e = availableToEntry(bundle, installedById, props.installed);
       return e.installed ? withUpdate(e, installedById.get(bundle.id)!.version) : e;
     }
     const active = selected.followActive ? installedById.get(selected.id) : undefined;
