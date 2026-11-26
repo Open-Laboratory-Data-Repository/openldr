@@ -6,6 +6,7 @@ import { LoadingState } from '@/components/ui/spinner';
 import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
 import { authFetch, pluginUiAssetUrl, pluginBrokerCall } from '@/api';
 import { createDownloadGate, wireHostPort, type DownloadGate, type HostPortLike } from './host-bridge';
+import { createPrintGate, type PrintGate } from './print-frame';
 import { hostThemeTokens, themeStyleTag } from './plugin-theme';
 import { randomId } from '@/lib/random-id';
 import { CAPABILITY_KEYS } from '@openldr/rbac';
@@ -53,8 +54,13 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
   const gateRef = useRef<DownloadGate | null>(null);
   // The live port. A reload gets a new one, and the old one is closed.
   const portRef = useRef<MessagePort | null>(null);
+  // One print at a time per mounted frame, across its reloads. Leaving the page removes an open print frame.
+  const printRef = useRef<PrintGate | null>(null);
 
-  useEffect(() => () => { portRef.current?.close(); portRef.current = null; }, []);
+  useEffect(() => () => {
+    portRef.current?.close(); portRef.current = null;
+    printRef.current?.dispose(); printRef.current = null;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,7 +96,8 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
     const channel = new MessageChannel();
     portRef.current = channel.port1;
     gateRef.current ??= createDownloadGate();
-    wireHostPort(channel.port1 as unknown as HostPortLike, { call: (op) => pluginBrokerCall(pluginId, op), gate: gateRef.current,
+    printRef.current ??= createPrintGate();
+    wireHostPort(channel.port1 as unknown as HostPortLike, { call: (op) => pluginBrokerCall(pluginId, op), gate: gateRef.current, print: printRef.current,
       edition: async (key, open) => {
         if (context.site !== 'page') return false;
         const path = '/reports/issued/' + encodeURIComponent(pluginId) + '/' + encodeURIComponent(key);

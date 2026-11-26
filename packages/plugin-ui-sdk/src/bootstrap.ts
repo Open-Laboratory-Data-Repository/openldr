@@ -145,6 +145,11 @@ function pluginBootstrapV1(): void {
       download: (input: { filename: string; mime: string; text: string }) =>
         call({ kind: 'host.download', filename: input.filename, mime: input.mime, text: input.text }).then(() => undefined),
     },
+    // The studio answers this itself and prints from a frame of its own.
+    print: {
+      pages: (input: { title: string; paper: string; pages: string[] }) =>
+        call({ kind: 'host.print', title: input.title, paper: input.paper, pages: input.pages }).then(() => undefined),
+    },
   };
   (window as unknown as { openldr: unknown }).openldr = api;
 

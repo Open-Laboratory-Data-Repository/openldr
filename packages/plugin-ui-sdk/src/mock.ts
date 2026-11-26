@@ -1,4 +1,5 @@
 import { checkDownload } from './files';
+import { checkPrint, type PluginPrintPaper } from './print';
 import type { OpenLdrPluginApi, PluginCheckRun, PluginDownloadMime, PluginCheckStatus, PluginCopyRun, PluginCopyStatus, PluginSiteName } from './types';
 
 function mockCopy(pluginId: string, connectorId: string, status: PluginCopyStatus): PluginCopyRun {
@@ -33,12 +34,15 @@ export interface MockOptions {
 export interface MockOpenLdrPluginApi extends OpenLdrPluginApi {
   /** Each file the page asked to save and the mock accepted, in order. */
   readonly downloads: Array<{ filename: string; mime: PluginDownloadMime; text: string }>;
+  /** Each print the page asked for and the mock accepted, in order. */
+  readonly prints: Array<{ title: string; paper: PluginPrintPaper; pages: string[] }>;
 }
 
 /** An in-memory implementation of OpenLdrPluginApi for local plugin development + tests. */
 export function createMockOpenldr(opts: MockOptions): MockOpenLdrPluginApi {
   const mem = new Map<string, unknown>();
   const downloads: Array<{ filename: string; mime: PluginDownloadMime; text: string }> = [];
+  const prints: Array<{ title: string; paper: PluginPrintPaper; pages: string[] }> = [];
   const k = (c: string, key: string) => `${c} ${key}`;
   return {
     pluginId: opts.pluginId,
@@ -122,6 +126,15 @@ export function createMockOpenldr(opts: MockOptions): MockOpenLdrPluginApi {
         downloads.push({ filename: input.filename, mime: input.mime, text: input.text });
       },
     },
+    // Refuses what the host refuses. It cannot tell whether another print is still open, so a test can print twice.
+    print: {
+      async pages(input) {
+        const refused = checkPrint(input);
+        if (refused) throw new Error(refused);
+        prints.push({ title: input.title, paper: input.paper, pages: [...input.pages] });
+      },
+    },
     downloads,
+    prints,
   };
 }
