@@ -1,9 +1,21 @@
 {
-  "generatedAt": "2026-11-25",
+  "generatedAt": "2026-11-26",
   "days": [
     {
-      "date": "2026-11-25",
+      "date": "2026-11-26",
       "version": null,
+      "entries": [
+        {
+          "hash": "ab425f58f",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Studio opens the exact issued edition of a plugin report, so an amended report's original stays readable"
+        }
+      ]
+    },
+    {
+      "date": "2026-11-25",
+      "version": "v0.1.13-rc.1",
       "entries": [
         {
           "hash": "1be3eca0d",
@@ -141,7 +153,7 @@
     },
     {
       "date": "2026-11-24",
-      "version": null,
+      "version": "v0.1.13-rc.1",
       "entries": [
         {
           "hash": "7384968db",
@@ -339,7 +351,7 @@
     },
     {
       "date": "2026-11-23",
-      "version": null,
+      "version": "v0.1.13-rc.1",
       "entries": [
         {
           "hash": "db802a8a4",
