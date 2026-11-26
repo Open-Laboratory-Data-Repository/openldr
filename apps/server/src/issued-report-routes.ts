@@ -134,7 +134,9 @@ export function registerIssuedReportRoutes(app: FastifyInstance<any, any, any, a
       .safeParse(request);
     if (request && (!accession.success || accession.data.subject.reference !== r.subject.reference))
       return unavailable();
-    await recordAudit(ctx, req, {
+    // HEAD is the plugin asking whether CE can show this edition. Fastify runs this handler for it,
+    // but nothing is read, so only a GET is recorded.
+    if (req.method !== 'HEAD') await recordAudit(ctx, req, {
       action: 'reports.issued.read',
       entityType: 'DiagnosticReport',
       entityId: saved.report_id,
