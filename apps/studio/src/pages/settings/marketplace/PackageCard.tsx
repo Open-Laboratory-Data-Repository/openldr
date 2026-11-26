@@ -15,7 +15,9 @@ export function PackageCard({ entry, onClick }: { entry: CardEntry; onClick: () 
       : entry.active
         ? <Badge variant="outline" className="border-emerald-500 text-emerald-700">{t('settings.marketplace.active')}</Badge>
         : <Badge variant="outline">{t('settings.marketplace.installed')}</Badge>)
-    : <Badge variant="outline" className="opacity-70">{t('settings.marketplace.install')}</Badge>;
+    : entry.needsCe
+      ? <Badge variant="outline" className="text-muted-foreground" data-testid="card-needs-ce">{t('settings.marketplace.needsCe', { range: entry.needsCe })}</Badge>
+      : <Badge variant="outline" className="opacity-70">{t('settings.marketplace.install')}</Badge>;
 
   return (
     <button

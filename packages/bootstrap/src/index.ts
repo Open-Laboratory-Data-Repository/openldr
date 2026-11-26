@@ -2417,6 +2417,7 @@ export {
 export * from './test-mapping';
 export * from './result-fields';
 export * from './loinc-hints';
+export * from './marketplace-registries';
 export * from './job-continue';
 export * from './form-access';
 export * from './form-entries';

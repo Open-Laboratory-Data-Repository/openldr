@@ -311,6 +311,9 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'layouts set': { kind: 'app', capability: 'settings.edit_general', destructive: true }, // :40, :50
 
   // marketplace-routes.ts:19 (view) and :20 (manage).
+  // market browse reads /available's list (marketplace.view); market add installs as /install does.
+  'market add': { kind: 'app', capability: 'marketplace.manage', destructive: true },
+  'market browse': { kind: 'app', capability: 'marketplace.view' },
   'market disable': { kind: 'app', capability: 'marketplace.manage' }, // :358
   'market enable': { kind: 'app', capability: 'marketplace.manage' }, // :353
   'market install': { kind: 'app', capability: 'marketplace.manage', destructive: true, paths: [inDir('dir')] }, // :193

@@ -59,4 +59,15 @@ describe('PackageCard', () => {
     rerender(<PackageCard entry={{ ...pack, status: 'installed' }} onClick={() => {}} />);
     expect(screen.getByText('Active')).toBeTruthy();
   });
+
+  it('says which CE a bundle needs, not Install, when this CE cannot run it', () => {
+    render(<PackageCard entry={{ ...base, needsCe: '>=0.1.13' }} onClick={() => {}} />);
+    expect(screen.getByText('Needs CE >=0.1.13')).toBeTruthy();
+    expect(screen.queryByText('Install')).toBeNull();
+  });
+
+  it('says a public bundle is not checked yet, not that it is unverified', () => {
+    render(<PackageCard entry={{ ...base, valid: undefined }} onClick={() => {}} />);
+    expect(screen.getByText('Signature not checked yet')).toBeTruthy();
+  });
 });

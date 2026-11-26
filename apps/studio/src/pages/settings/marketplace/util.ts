@@ -21,6 +21,8 @@ export interface CardEntry {
   targetFormId?: string; // installed form-template's local form id
   versions?: { version: string; ref: string }[];
   registryName?: string; // Browse only: source registry label
+  /** Browse only: the CE range this CE does not meet. Set only when the list knows the bundle cannot run here. */
+  needsCe?: string;
   status?: 'installed' | 'failed'; // content-pack only
   failedStep?: number | null;
   error?: string | null;
@@ -39,6 +41,8 @@ export function newerAvailable(id: string, activeVersion: string, available: Ava
   let best: AvailableArtifact | null = null;
   for (const b of available) {
     if (b.id !== id || compareVersions(b.version, activeVersion) <= 0) continue;
+    // A version this CE cannot run is no update. Install would refuse it after the consent sheet.
+    if (b.compatible === false) continue;
     if (!best || compareVersions(b.version, best.version) > 0) best = b;
   }
   if (!best) return null;
@@ -80,6 +84,7 @@ export function availableToEntry(b: AvailableArtifact, installed: Map<string, In
     installed: Boolean(inst), enabled: inst?.enabled, active: inst?.active,
     status: inst?.status, failedStep: inst?.failedStep, error: inst?.error,
     versions: b.versions ?? [], registryName: b.registryName,
+    ...(b.compatible === false && b.compatibility ? { needsCe: b.compatibility.ceVersion } : {}),
   };
 }
 

@@ -9,6 +9,9 @@ const indexEntrySchema = z.object({
   readme: z.string().default(''),
   path: z.string().min(1),
   signatureFingerprint: z.string().optional(),
+  /** The bundle's own `compatibility.ceVersion`, so a list can tell which CE can run it without
+   *  downloading it. Optional: entries written before 0.1.13 have none, and a CE before 0.1.13 drops it. */
+  ceVersion: z.string().optional(),
 });
 
 const indexSchema = z.object({

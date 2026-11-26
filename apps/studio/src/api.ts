@@ -3101,6 +3101,8 @@ export interface AvailableArtifact {
   publisher: { id: string; name: string } | null;
   capabilities?: unknown[];
   compatibility?: { ceVersion: string };
+  /** Browse list: false when this CE cannot run the bundle. Absent when the list does not know. */
+  compatible?: boolean;
   valid?: boolean;
   /** When valid === false, the specific check that failed (so the UI shows the real cause). */
   invalidReason?: 'fingerprint-mismatch' | 'payload-hash-mismatch' | 'ui-hash-mismatch' | 'bad-signature';

@@ -312,6 +312,39 @@ describe('marketplace routes', () => {
     }
   });
 
+  // 2026-11-26 sweep: the Browse list said Install for a bundle this CE cannot run, and a local bundle
+  // made for a later CE vanished from the list. The list now carries the range and whether it fits.
+  it('lists a bundle made for a later CE with its range and compatible: false', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mkt-list-future-'));
+    const kp = generatePublisherKeypair();
+    const payload = new Uint8Array([5, 6, 7]);
+    const sha = createHash('sha256').update(payload).digest('hex');
+    const manifest: Record<string, unknown> = {
+      schemaVersion: 1, type: 'plugin', id: 'future', version: '2.0.0',
+      publisher: { id: 'acme', name: 'Acme', keyFingerprint: keyFingerprint(kp.publicKeyDer) },
+      compatibility: { ceVersion: '>=999.0.0' },
+      capabilities: [{ kind: 'host:not-in-this-ce' }],
+      payload: { kind: 'plugin', wasmSha256: sha },
+    };
+    manifest.signature = signManifest(manifest, sha, kp.privateKeyDer);
+    await mkdir(join(dir, 'future-2'), { recursive: true });
+    await writeFile(join(dir, 'future-2', 'manifest.json'), JSON.stringify(manifest));
+    await writeFile(join(dir, 'future-2', 'plugin.wasm'), payload);
+    await writeFile(join(dir, 'future-2', 'publisher.pub'), Buffer.from(kp.publicKeyDer).toString('hex'));
+    try {
+      const { runtime } = fakePlugins();
+      const { app } = await appWith({}, runtime, { seed: [localReg(), { id: 'reg-future', name: 'Future', kind: 'local', location: dir }] });
+      const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
+      const bundles = res.json().bundles as any[];
+      expect(bundles.find((b) => b.id === 'future')).toMatchObject({
+        version: '2.0.0', compatible: false, compatibility: { ceVersion: '>=999.0.0' }, valid: true,
+      });
+      expect(bundles.find((b) => b.id === 'demo')).toMatchObject({ compatible: true, compatibility: { ceVersion: '*' } });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('detail 400s on a non-composite (bad) ref', async () => {
     const { runtime } = fakePlugins();
     const { app } = await appWith({}, runtime, { seed: [localReg()] });

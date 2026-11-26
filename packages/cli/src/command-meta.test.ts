@@ -214,6 +214,8 @@ const WHEN = 'a date, time, year or sync cursor';
 const PERSON = 'a name written into a record as is; refusing it through the app is a later task';
 const REASON: Record<string, string> = {
   '--seconds': 'a number of seconds',
+  spec: 'a bundle id with an optional @version, looked up in the enabled registries',
+  '--registry': 'the name of a marketplace registry',
   '--test-code': 'a test code', '--expected-tat': 'a number of hours, or none', '--critical-tat': 'a number of hours, or none', '--requires-verification': CHOICE,
   '--group': 'the name of a Query page group',
   newName: 'the name of a Query page group',
@@ -406,6 +408,7 @@ const NOT_A_PATH: Record<string, string[]> = {
   'user unassign-role': ['subject', 'slug'],
   'layouts set': ['name', '--pages', '--start-page', '--roles'],
   'layouts delete': ['name'],
+  'market add': ['spec', '--registry', '--approved-by'],
   'market install': ['--approved-by'],
   'market update': ['--approved-by'],
   'market rollback': ['id', 'version'],

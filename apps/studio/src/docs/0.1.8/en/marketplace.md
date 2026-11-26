@@ -38,7 +38,7 @@ Use **All types** to narrow the list to a plugin, form template, report or conte
 
 ### 5. Check the card
 
-Read the id, version, publisher and registry. Open the correct package card.
+Read the id, version, publisher and registry. Open the correct package card. A card that says **Needs CE** and a version range was made for a newer CE. Update CE before you install it.
 
 ![Read the package id, version, publisher and registry.](marketplace-guide-card.png)
 
@@ -50,7 +50,7 @@ A signature check establishes whether the file matches the publisher key. Decide
 
 ### 1. Check the signature
 
-Read **Verified** or the verification failure. An unopened remote card can be Unverified until details load.
+Read **Verified** or the verification failure. A remote card says **Signature not checked yet** until you open it. Opening it checks the signature.
 
 ![Opening details checks the publisher signature.](marketplace-guide-signature.png)
 
@@ -262,10 +262,15 @@ A package whose details cannot load keeps installation disabled. Check registry 
 
 ## Use a local bundle from the CLI
 
-Follow [Start here](/docs/start-here) for CLI setup. From `openldr_ce`, CLI install sends a bundle directory from your machine to the running server, so sign in first. It does not browse the Studio registry list. Verify and dry-run before applying an approved bundle.
+Follow [Start here](/docs/start-here) for CLI setup. From `openldr_ce`, CLI install sends a bundle directory from your machine to the running server, so sign in first. Verify and dry-run before applying an approved bundle.
+
+To install from the same registries the Studio browses, list them with `market browse`, then install by id with `market add`. Add `--registry <name>` when more than one registry has the bundle. A bundle made for a newer CE is listed with the CE it needs, and `market add` refuses it. A running server loads a plugin installed from the CLI after a restart.
 
 ```shell
 pnpm openldr market list
+pnpm openldr market browse
+pnpm openldr market add <bundle-id> --dry-run
+pnpm openldr market add <bundle-id> --approve
 pnpm openldr market verify <bundle-directory>
 pnpm openldr market install <bundle-directory> --dry-run
 pnpm openldr market install <bundle-directory>

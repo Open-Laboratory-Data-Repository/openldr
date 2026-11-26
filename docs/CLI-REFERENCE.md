@@ -82,7 +82,7 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | `openldr settings flags/numbers/sync/danger ...` | Read/write feature flags, numeric limits, sync config, and danger-zone actions. |
 | `openldr sync ...` | Distributed (lab⇄central) sync status/control, enrollment, amendment, divergence, and offline bundle export/import. |
 | `openldr export` | Export the complete dataset: canonical FHIR (NDJSON + Bundle) + flat-table CSV + manifest. |
-| `openldr market ...` | Verify, install, update, enable/disable, roll back, and remove marketplace bundles. |
+| `openldr market ...` | Browse registries, then verify, install, update, enable/disable, roll back, and remove marketplace bundles. |
 | `openldr artifact ...` | Author, build, sign, pack, test, and publish marketplace artifacts. |
 
 > **DHIS2 has no core CLI.** DHIS2 shipped as a removable plugin; there is no `openldr dhis2 …` command. Its mappings, org units, and pushes are driven from the plugin's own screens or from workflow nodes.
@@ -366,6 +366,20 @@ plugins only.
 When the command runs through the server, `market install` passes the signed-in account's
 capabilities. A pack that carries a role then needs `roles.manage`, and its role cannot grant a
 capability that account does not hold. Run on the machine itself, it is not limited.
+
+## Installing from a registry
+
+Lists and installs bundles from the registries enabled under Settings, Marketplace, Registries.
+The Studio's Browse tab reads the same list.
+
+    openldr market browse [--json]
+    openldr market add <id>[@<version>] [--registry <name>] [--approve] [--dry-run] [--force] [--json]
+
+`market browse` prints each bundle with its version, type and registry. A bundle made for a newer
+CE says `(needs CE <range>)`. `market add` takes the newest version, or the one after `@`. When
+more than one registry has the bundle, it names them and asks for `--registry`. It refuses a bundle
+this CE cannot run, before downloading it. Otherwise it runs the same checks and approval as
+`market install`. A running server loads a plugin installed this way after a restart.
 
 ## Checking a copied source
 
