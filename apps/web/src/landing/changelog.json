@@ -1,10 +1,22 @@
 {
-  "generatedAt": "2026-11-26",
+  "generatedAt": "2026-11-27",
   "days": [
     {
       "date": "2026-11-26",
       "version": "v0.1.13-rc.2",
       "entries": [
+        {
+          "hash": "d3298abab",
+          "type": "fix",
+          "scope": "sync",
+          "title": "A stamping failure keeps the save, and the studio says what happened"
+        },
+        {
+          "hash": "aef112256",
+          "type": "fix",
+          "scope": "sync",
+          "title": "A lab's records from before it was linked are sent to central"
+        },
         {
           "hash": "e6dbe8564",
           "type": "fix",
