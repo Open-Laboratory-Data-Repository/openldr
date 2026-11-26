@@ -1,8 +1,9 @@
-import { NavLink, Navigate, Outlet } from 'react-router-dom';
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '@/shell/AppShell';
 import { useAuth } from '@/auth/AuthProvider';
 import { cn } from '@/lib/cn';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SUB_NAV } from './settingsNav';
 
 /**
@@ -29,14 +30,28 @@ export function SettingsShell() {
   const { t } = useTranslation();
   const { hasCapability } = useAuth();
   const visible = SUB_NAV.filter((item) => !item.caps || item.caps.some((c) => hasCapability(c)));
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const current = visible.find((item) => pathname === item.to || pathname.startsWith(item.to + '/'));
 
   return (
     <AppShell title={t('settings.title')} fullBleed>
-      {/* On mobile the section selector is a horizontal scrolling tab strip above the content;
-          on desktop it's the familiar left-hand column. */}
+      {/* On a phone the section selector is a select above the content: eleven sections in a
+          sideways strip showed four at a time and hid the rest off screen. From `md` up it is the
+          familiar left-hand column. */}
       <div className="flex h-full min-h-0 flex-col md:flex-row">
         <aside className="shrink-0 border-b border-border md:w-52 md:border-b-0 md:border-r">
-          <nav className="flex flex-row gap-1 overflow-x-auto p-2 md:flex-col md:p-3">
+          <div className="p-2 md:hidden">
+            <Select value={current?.to ?? ''} onValueChange={(to) => navigate(to)}>
+              <SelectTrigger data-testid="settings-section-select" className="w-full" aria-label={t('settings.title')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="w-[var(--radix-select-trigger-width)]">
+                {visible.map((item) => <SelectItem key={item.to} value={item.to}>{t(item.labelKey)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <nav className="hidden flex-col gap-1 p-3 md:flex">
             {visible.map((item) => (
               <NavLink
                 key={item.to}
