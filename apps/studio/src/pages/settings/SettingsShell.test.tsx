@@ -55,6 +55,17 @@ function renderAppLikeSettingsTree(path: string) {
 }
 
 describe('SettingsShell', () => {
+  it('on a phone, a select names the open section and lists only the sections this user may open', () => {
+    hasCapability.mockImplementation((c: string) => c === 'connectors.manage' || c === 'marketplace.view');
+    renderAt('/settings/marketplace');
+    const trigger = screen.getByTestId('settings-section-select');
+    expect(trigger.textContent).toBe('Marketplace');
+    // The column stays for wider screens, hidden below md.
+    const column = screen.getByRole('link', { name: 'Marketplace' }).closest('nav')!;
+    expect(column.className).toContain('hidden');
+    expect(column.className).toContain('md:flex');
+  });
+
   it('renders the Connectors sub-nav link and the active child for a user with connectors.manage', () => {
     hasCapability.mockImplementation((c: string) => c === 'connectors.manage');
     renderAt('/settings/connectors');
