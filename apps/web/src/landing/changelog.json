@@ -6,6 +6,12 @@
       "version": "v0.1.13-rc.2",
       "entries": [
         {
+          "hash": "25b7e1d35",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Settings sections are a select on a phone"
+        },
+        {
           "hash": "5340c8f6b",
           "type": "fix",
           "scope": "studio",
