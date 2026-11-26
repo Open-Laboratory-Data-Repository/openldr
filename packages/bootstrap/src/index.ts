@@ -100,6 +100,7 @@ import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { brokerAccessDetails } from './check-read-audit';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 import { createPluginConnectorAccess, type PluginConnectorAccess } from './plugin-connector-access';
+import { createResultsRead, type ResultsQuery } from './results-read';
 import { createPluginRemoval, type PluginRemoval } from './plugin-removal';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
 import { createImportCheckService, deleteCheckRecord, liveCheckStatus, type ImportCheckService } from './import-check';
@@ -2171,6 +2172,22 @@ const reporting: ReportingApi = {
     persist: workflowPersist,
     audit: (actor, details) => recordAuditEvent({ audit, logger }, actor, details),
     logger,
+    results: (() => {
+      const read = createResultsRead(reportingDb, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres');
+      // A plugin caller's facilities are lowercased register ids. The warehouse rule matches the
+      // register's own ids, so map them back before building it, as dashboards do from a data limit.
+      const scopeFor = async (facilities: string[] | '*') => {
+        if (facilities === '*') return undefined;
+        const rows = await scopeRegistryRows();
+        const wanted = new Set(facilities);
+        const ids = rows.filter((r) => wanted.has(r.id.toLowerCase())).map((r) => r.id);
+        return resolveDataScope({ registryRows: async () => rows, usedRegistryCodes: scopeUsedRegistryCodes }, { limited: true, facilities: ids, regions: [], districts: [] });
+      };
+      return {
+        list: async (q: ResultsQuery, facilities: string[] | '*') => read.list(q, await scopeFor(facilities)),
+        get: async (id: string, facilities: string[] | '*') => read.get(id, await scopeFor(facilities)),
+      };
+    })(),
   });
   const pluginBroker = createPluginBroker({
     plugins,

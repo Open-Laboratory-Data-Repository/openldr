@@ -5,6 +5,7 @@ import { FhirOwnershipError, PluginRequestError, type PluginCaller } from '@open
 import type { Capability } from '@openldr/marketplace';
 import type { HostPlugin } from '@openldr/plugins';
 import { createPluginHost, CE_READ_OPS, type PluginHostDeps } from './plugin-host';
+import { ResultsKeyError } from './results-read';
 import { createPatientIndex } from './patient-index';
 import { pluginPatientRefs } from './plugin-patient-ref';
 import { bandFit, matchBand, SEX_OPTIONS, type BandPatient, type ResultBand } from './result-params';
@@ -120,6 +121,7 @@ describe('plugin host: ce_read', () => {
     expect([...CE_READ_OPS]).toEqual([
       'patients.search', 'patients.get', 'patients.getMany', 'patients.register', 'valueset.expand', 'valueset.lookup',
       'testCatalog.list', 'testCatalog.get', 'testCatalog.resultParams', 'facilities.search', 'facilities.get', 'caller.get',
+      'results.list', 'results.get',
     ]);
   });
 
@@ -1059,5 +1061,86 @@ describe('plugin host: fhir_emit with a patient pluginRef', () => {
     const out = await fns.fhir_emit({ resources: [{ resourceType: 'Observation', id: 'o-1', subject: { reference: `Patient/${ruth}` } }] }) as any;
     expect(out.error.code).toBe('FORBIDDEN');
     expect(deps.persist).not.toHaveBeenCalled();
+  });
+});
+
+
+// Layer: the results ops' checks, the patient reference, the data limit handed down and the audit.
+// The warehouse query itself is in results-read.test.ts.
+describe('plugin host: results', () => {
+  const READER: PluginCaller = { userId: 'u-r', displayName: 'Reader', capabilities: ['reports.view_issued'], facilities: '*' };
+  const LIMITED: PluginCaller = { ...READER, facilities: ['fac-1'] };
+  const stored = (over: Record<string, unknown> = {}) => ({
+    id: 'r1', requestId: 'q1', patientId: 'pat-1',
+    observation: { code: 'HGB', system: 'http://loinc.org', display: 'Haemoglobin' },
+    value: { type: 'numeric', number: 13.5, units: 'g/dL', comparator: null, code: null, text: null },
+    abnormalFlag: null, status: 'final', resultTime: '2026-11-26T08:00:00.000Z', specimenId: 's1',
+    requester: { code: 'RC2LAB', system: 'urn:x' }, storedAt: '2026-11-26T09:00:00.000Z', ...over,
+  });
+  const refs = pluginPatientRefs(KEY, 'lab');
+  const ceRead = (caller: PluginCaller, results: PluginHostDeps['results'], deps: Partial<PluginHostDeps> = {}) =>
+    createPluginHost(fakeDeps({ results, ...deps })).forCall(plugin([{ kind: 'host:ce-read' }]), caller).ce_read!;
+
+  it('lists a page with the patient as this plugin\'s own reference, hands down the limit, and audits the count', async () => {
+    const list = vi.fn(async () => ({ results: [stored()], next: 'k2' }));
+    const audit = vi.fn(async () => {});
+    const out = await ceRead(LIMITED, { list, get: vi.fn() }, { audit })({ op: 'results.list', input: { since: '2026-11-01T00:00:00Z', observation: 'HGB', limit: 50 } }) as any;
+    expect(out.ok).toBe(true);
+    expect(list).toHaveBeenCalledWith({ since: '2026-11-01T00:00:00Z', observation: 'HGB', after: null, limit: 50 }, ['fac-1']);
+    const r = out.result.results[0];
+    expect(r.patient).toEqual({ pluginRef: refs.encode('pat-1') });
+    expect(r).not.toHaveProperty('patientId');
+    expect(r).not.toHaveProperty('storedAt');
+    expect(out.result.next).toBe('k2');
+    expect(audit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'results.list', entityType: 'lab_result', metadata: expect.objectContaining({ count: 1 }) }));
+  });
+
+  it('an unlimited caller hands down no limit', async () => {
+    const list = vi.fn(async () => ({ results: [], next: null }));
+    await ceRead(READER, { list, get: vi.fn() })({ op: 'results.list', input: { limit: 10 } });
+    expect(list).toHaveBeenCalledWith({ after: null, limit: 10 }, '*');
+  });
+
+  it('filters by this plugin\'s patient reference, and a reference it cannot read finds nothing', async () => {
+    const list = vi.fn(async () => ({ results: [], next: null }));
+    const read = ceRead(READER, { list, get: vi.fn() });
+    await read({ op: 'results.list', input: { pluginRef: refs.encode('pat-9'), limit: 10 } });
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ patientId: 'pat-9' }), '*');
+    list.mockClear();
+    const other = pluginPatientRefs(KEY, 'another-plugin').encode('pat-9');
+    expect(await read({ op: 'results.list', input: { pluginRef: other, limit: 10 } })).toEqual({ ok: true, result: { results: [], next: null } });
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller without reports.view_issued, before reading', async () => {
+    const list = vi.fn();
+    const out = await ceRead({ ...READER, capabilities: ['patients.view'] }, { list, get: vi.fn() })({ op: 'results.list', input: { limit: 10 } }) as any;
+    expect(out.error.code).toBe('FORBIDDEN');
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('says so when this CE has no results reader', async () => {
+    const out = await ceRead(READER, undefined)({ op: 'results.get', input: { id: 'r1' } }) as any;
+    expect(out.error.code).toBe('UNAVAILABLE');
+  });
+
+  it('refuses a page over 200, a bad time, an unknown field, and a key the list did not give', async () => {
+    const list = vi.fn(async () => { throw new ResultsKeyError(); });
+    const read = ceRead(READER, { list, get: vi.fn() });
+    for (const input of [{ limit: 201 }, { limit: 10, since: 'yesterday' }, { limit: 10, status: 'preliminary' }]) {
+      expect(((await read({ op: 'results.list', input })) as any).error.code).toBe('INVALID_REQUEST');
+    }
+    const bad = await read({ op: 'results.list', input: { limit: 10, after: 'not-a-key' } }) as any;
+    expect(bad.error.code).toBe('INVALID_REQUEST');
+    expect(bad.error.message).toContain('after is not a key a results list gave');
+  });
+
+  it('gets one result, and answers a missing or out-of-limit one as not found', async () => {
+    const get = vi.fn(async (id: string) => (id === 'r1' ? stored() : null));
+    const read = ceRead(LIMITED, { list: vi.fn(), get });
+    const ok = await read({ op: 'results.get', input: { id: 'r1' } }) as any;
+    expect(ok.result).toMatchObject({ id: 'r1', status: 'final', patient: { pluginRef: refs.encode('pat-1') } });
+    expect(get).toHaveBeenCalledWith('r1', ['fac-1']);
+    expect(((await read({ op: 'results.get', input: { id: 'nope' } })) as any).error.code).toBe('NOT_FOUND');
   });
 });

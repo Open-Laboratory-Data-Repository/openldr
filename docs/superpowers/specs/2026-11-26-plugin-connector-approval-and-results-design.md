@@ -51,17 +51,20 @@ Codex's DHIS2 plugin needs two things CE does not give a plugin today:
    is generic: core does not know what the connector talks to.
 4. **"Released" means a result whose status is `final`, `amended` or `corrected`.** Preliminary,
    registered, cancelled and entered-in-error results are not returned.
-5. **The results read.** Two `ce_read` ops, behind a new `host:results` capability:
-   - `results.list`: filters `since` and `until` (result time), `patient`, `observation` (code), and a
-     page of up to 200 with a key to read the next page, ordered by result time then id so pages never
-     shift or repeat.
+5. **The results read.** Two `ce_read` ops, under the existing `host:ce-read` capability like the
+   patient, value set and facility reads, for a caller who holds `reports.view_issued`:
+   - `results.list`: filters `since` and `until` (result time), `pluginRef` (the patient, as this
+     plugin's own reference), `observation` (code), and a page of up to 200 with a key to read the next
+     page. Pages are ordered by when CE stored the result, then id, so they never shift or repeat. Result
+     time cannot order them: the dev warehouse holds released results with no result time.
    - `results.get`: one result by id, or not found.
    - Both apply the signed-in user's data limit with the dashboard rule (requesting facility or
      testing lab), so a plugin can never read past what its user could.
    - Fields per result: id, request id, patient id, observation code, system and name, value (number
      with units and comparator, or code, or text), abnormal flag, status, result time, specimen id,
-     and the requesting facility and testing lab codes. Patient names are not included: the plugin
-     reads them through `patients.get`, which has its own masking and audit.
+     and the requesting facility code. The patient is this plugin's own lasting reference (ruling 11),
+     never CE's id; the plugin reads names through `patients.get`, which has its own masking and audit.
+     The testing lab is not given: a request can have several reports, so it has no one lab.
    - A list is audited as one row with the count, like `patients.search`.
 
 ## Not in this design
