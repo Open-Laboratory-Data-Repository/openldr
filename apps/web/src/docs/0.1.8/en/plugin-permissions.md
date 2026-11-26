@@ -77,7 +77,7 @@ A profile layout may list a plugin page by its path, for example `"pages": ["/fo
 
 `payload.ui.nav.icon` names a built-in icon: `puzzle`, `share-2`, `bar-chart-3`, `database`, `plug`, `settings` or `file-text`. Any other name shows the puzzle.
 
-To draw your own icon, add `payload.ui.nav.iconPaths`. It is a list of SVG path `d` strings on a 24x24 grid. Keep `icon` as well. A CE older than 0.1.14 ignores `iconPaths` and shows `icon`.
+To draw your own icon, add `payload.ui.nav.iconPaths`. It is a list of SVG path `d` strings on a 24x24 grid. Keep `icon` as well. A CE older than 0.1.13 ignores `iconPaths` and shows `icon`.
 
 ```json
 "nav": {

@@ -77,7 +77,7 @@ Une mise en page de profil peut lister une page de plugin par son chemin, par ex
 
 `payload.ui.nav.icon` nomme une icône intégrée : `puzzle`, `share-2`, `bar-chart-3`, `database`, `plug`, `settings` ou `file-text`. Tout autre nom affiche le puzzle.
 
-Pour dessiner votre propre icône, ajoutez `payload.ui.nav.iconPaths`. C'est une liste de chaînes `d` de chemins SVG sur une grille de 24x24. Gardez aussi `icon`. Un CE antérieur à 0.1.14 ignore `iconPaths` et affiche `icon`.
+Pour dessiner votre propre icône, ajoutez `payload.ui.nav.iconPaths`. C'est une liste de chaînes `d` de chemins SVG sur une grille de 24x24. Gardez aussi `icon`. Un CE antérieur à 0.1.13 ignore `iconPaths` et affiche `icon`.
 
 ```json
 "nav": {

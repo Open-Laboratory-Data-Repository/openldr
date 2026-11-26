@@ -77,7 +77,7 @@ Um layout de perfil pode listar uma página de plugin pelo seu caminho, por exem
 
 `payload.ui.nav.icon` indica um ícone incluído: `puzzle`, `share-2`, `bar-chart-3`, `database`, `plug`, `settings` ou `file-text`. Qualquer outro nome mostra o puzzle.
 
-Para desenhar o seu próprio ícone, acrescente `payload.ui.nav.iconPaths`. É uma lista de cadeias `d` de caminhos SVG numa grelha de 24x24. Mantenha também `icon`. Um CE anterior a 0.1.14 ignora `iconPaths` e mostra `icon`.
+Para desenhar o seu próprio ícone, acrescente `payload.ui.nav.iconPaths`. É uma lista de cadeias `d` de caminhos SVG numa grelha de 24x24. Mantenha também `icon`. Um CE anterior a 0.1.13 ignora `iconPaths` e mostra `icon`.
 
 ```json
 "nav": {
