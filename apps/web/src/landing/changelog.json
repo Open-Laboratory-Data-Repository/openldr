@@ -6,6 +6,12 @@
       "version": "v0.1.13-rc.2",
       "entries": [
         {
+          "hash": "5340c8f6b",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A Browse card is Active only for the version that is active"
+        },
+        {
           "hash": "88b4fa0f4",
           "type": "feat",
           "scope": "studio",
