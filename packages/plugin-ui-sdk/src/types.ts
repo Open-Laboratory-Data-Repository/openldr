@@ -66,7 +66,7 @@ export type PluginDownloadMime = 'text/csv' | 'application/json' | 'text/plain';
 
 /** Operations the studio answers itself. They go over the same port as broker operations, and
  *  the studio never forwards them to the server. */
-export type PluginHostOp = { kind: 'host.download'; filename: string; mime: PluginDownloadMime; text: string };
+export type PluginHostOp = { kind: 'host.edition'; edition: string; open: boolean } | { kind: 'host.download'; filename: string; mime: PluginDownloadMime; text: string };
 
 /** Everything a page may send over its port. */
 export type PluginOp = PluginBrokerOp | PluginHostOp;
@@ -305,6 +305,10 @@ export interface OpenLdrPluginApi {
       heldItems(input: PluginHeldItemsInput): Promise<{ items: PluginHeldItem[]; total: number; next?: string | null }>;
     };
   };
+  /** Look up a release from this plugin. Both methods return false when CE cannot show that edition. */
+  issuedReports: { available(edition: string): Promise<boolean>; open(edition: string): Promise<boolean> };
+  /** Edition selected by a Studio return link. */
+  edition?: string;
   /** Files the studio saves for the page. The page's frame cannot download. */
   files: {
     /** The studio saves `text` as a file named `filename` in its own document. Refused when the

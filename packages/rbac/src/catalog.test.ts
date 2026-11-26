@@ -16,9 +16,10 @@ describe('capability catalog', () => {
   // 46 -> 47: query.manage, for changing saved queries (design 2026-11-19-manage-saved-queries).
   // 47 -> 48: forms.void_entries, for marking a form entry as entered in error (plan 2026-11-22-form-entries).
   // 48 -> 49: patients.find, a strong-match lookup a limited user keeps (plan 2026-11-23-plugin-host-2b, ruling 5).
-  it('exposes 49 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(49);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(49);
+  // 49 -> 50: reports.view_issued, for reading individual signed results.
+  it('exposes 50 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(50);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(50);
   });
 
   it('has forms.void_entries in the forms group', () => {

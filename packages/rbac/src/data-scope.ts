@@ -16,7 +16,7 @@ export const EVERYTHING: DataScope = { limited: false };
  *  bodies, audit), or would let the user write SQL (dashboards.create and edit). The Users sheet
  *  shows this list. Forms, dashboards.view and admin settings stay. */
 export const LIMITED_SCOPE_DROPS: readonly string[] = [
-  'reports.view', 'reports.run', 'reports.export', 'reports.edit_templates',
+  'reports.view', 'reports.view_issued', 'reports.run', 'reports.export', 'reports.edit_templates',
   'patients.view', 'patients.manage', 'patients.view_identifiers',
   'query.run', 'query.manage', 'data.export',
   'dashboards.create', 'dashboards.edit',

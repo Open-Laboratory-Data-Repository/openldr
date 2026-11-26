@@ -1,3 +1,4 @@
+import { registerIssuedReportRoutes } from './issued-report-routes';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -173,6 +174,7 @@ export async function buildApp(ctx: AppContext) {
   registerConfigRoute(app, ctx);
   registerLocalAuthRoutes(app, ctx);
   registerReportRoutes(app, ctx);
+  registerIssuedReportRoutes(app, ctx);
   // Before the terminology and ontology routes, so each of their GETs gets the read gate.
   gateTerminologyReads(app);
   registerTerminologyRoutes(app, ctx);

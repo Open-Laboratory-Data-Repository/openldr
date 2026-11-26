@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
+import { IssuedEdition } from './reports/IssuedEdition';
 import { Reports } from './pages/Reports';
 import { Terminology } from './pages/Terminology';
 import { Docs } from './pages/Docs';
@@ -48,6 +49,7 @@ export function App() {
       <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/access-denied" element={<RequireCapability><AccessDeniedPage /></RequireCapability>} />
       <Route path="/" element={<StartPageGate><RequireCapability cap="dashboards.view"><DashboardPage /></RequireCapability></StartPageGate>} />
+      <Route path="/reports/issued/:plugin/:edition" element={<RequireCapability cap="reports.view"><IssuedEdition /></RequireCapability>} />
       <Route path="/reports" element={<RequireCapability cap="reports.view"><Reports /></RequireCapability>} />
       <Route path="/workflows" element={<RequireCapability cap="workflows.view"><WorkflowList /></RequireCapability>} />
       <Route path="/workflows/new" element={<RequireCapability cap="workflows.view"><Workflows /></RequireCapability>} />
