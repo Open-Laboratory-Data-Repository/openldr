@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "a634ece6a",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "A bundle made for a later CE says which CE it needs, not \"bundle not found\""
+        },
+        {
           "hash": "ab425f58f",
           "type": "feat",
           "scope": "reports",
