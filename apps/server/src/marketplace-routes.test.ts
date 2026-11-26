@@ -270,6 +270,48 @@ describe('marketplace routes', () => {
     expect(body.capabilities).toEqual([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]);
   });
 
+  // The operator hit this on 2026-11-26: a CE 0.1.12 standalone opened lab-bench 0.6.2, which needs
+  // CE 0.1.13 and declares a capability 0.1.12 does not know. The manifest parse failed and Browse
+  // said "bundle not found". A bundle whose own CE range rules this CE out must say so instead.
+  it('detail says a bundle needs a newer CE when this CE cannot read its manifest', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mkt-future-'));
+    const kp = generatePublisherKeypair();
+    const payload = new Uint8Array([9, 8, 7]);
+    const sha = createHash('sha256').update(payload).digest('hex');
+    const make = async (ref: string, ceVersion: string) => {
+      const manifest: Record<string, unknown> = {
+        schemaVersion: 1, type: 'plugin', id: 'future', version: '2.0.0', description: 'From a later CE.',
+        publisher: { id: 'acme', name: 'Acme', keyFingerprint: keyFingerprint(kp.publicKeyDer) },
+        compatibility: { ceVersion },
+        capabilities: [{ kind: 'host:not-in-this-ce' }],
+        payload: { kind: 'plugin', wasmSha256: sha },
+      };
+      manifest.signature = signManifest(manifest, sha, kp.privateKeyDer);
+      await mkdir(join(dir, ref), { recursive: true });
+      await writeFile(join(dir, ref, 'manifest.json'), JSON.stringify(manifest));
+      await writeFile(join(dir, ref, 'plugin.wasm'), payload);
+      await writeFile(join(dir, ref, 'publisher.pub'), Buffer.from(kp.publicKeyDer).toString('hex'));
+    };
+    await make('future-2', '>=999.0.0');
+    await make('broken-2', '*');
+    try {
+      const { runtime } = fakePlugins();
+      const { app } = await appWith({}, runtime, { seed: [{ id: 'reg-future', name: 'Future', kind: 'local', location: dir }] });
+      const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/reg-future::future-2' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        id: 'future', version: '2.0.0', type: 'plugin', description: 'From a later CE.',
+        compatibility: { ceVersion: '>=999.0.0' }, compatible: false, ceVersion: CE_VERSION, valid: true,
+        publisher: { name: 'Acme' }, registryId: 'reg-future',
+      });
+      // A bundle this CE should read but cannot is still broken, not "needs a newer CE".
+      const broken = await app.inject({ method: 'GET', url: '/api/marketplace/available/reg-future::broken-2' });
+      expect(broken.statusCode).toBe(404);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('detail 400s on a non-composite (bad) ref', async () => {
     const { runtime } = fakePlugins();
     const { app } = await appWith({}, runtime, { seed: [localReg()] });

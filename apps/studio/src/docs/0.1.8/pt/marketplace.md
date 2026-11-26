@@ -64,6 +64,8 @@ Leia o que o pacote faz e a configuração necessária. Este pacote de treino n�
 
 Verifique o editor, a versão selecionada, as permissões e a compatibilidade. Loading permissions ou Permissions unavailable não significa que não pede permissões. Espere pelos detalhes confirmados.
 
+Um pacote feito para uma versão mais recente do CE indica a versão do CE de que precisa, e Install fica desativado. Atualize primeiro o CE e depois instale-o.
+
 ![Leia a versão selecionada, as permissões e a compatibilidade.](marketplace-guide-permissions.png)
 
 **Resultado esperado:** Install fica disponível apenas quando a versão selecionada passa as verificações exigidas. Selecionar outra versão reinicia as verificações.

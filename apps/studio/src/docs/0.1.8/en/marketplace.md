@@ -64,6 +64,8 @@ Read what the package does and any required setup. This training package has no 
 
 Check publisher, selected version, permissions and compatibility. Loading permissions or Permissions unavailable does not mean no permissions are requested. Wait for confirmed details.
 
+A package made for a newer CE says which CE version it needs, and Install stays off. Update CE first, then install it.
+
 ![Read the selected version, permissions and compatibility.](marketplace-guide-permissions.png)
 
 **Expected result:** Install becomes available only when the selected version passes the required checks. Selecting another version starts its checks again.

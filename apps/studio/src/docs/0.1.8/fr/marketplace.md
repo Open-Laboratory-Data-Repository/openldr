@@ -64,6 +64,8 @@ Lisez ce que fait le paquet et les réglages nécessaires. Ce paquet d'entraîne
 
 Vérifiez l'éditeur, la version sélectionnée, les droits et la compatibilité. Loading permissions ou Permissions unavailable ne signifie pas qu'aucun droit n'est demandé. Attendez des détails confirmés.
 
+Un paquet fait pour une version plus récente de CE indique la version de CE qu'il demande, et Install reste désactivé. Mettez d'abord CE à jour, puis installez-le.
+
 ![Lisez la version sélectionnée, les droits et la compatibilité.](marketplace-guide-permissions.png)
 
 **Résultat attendu :** Install devient disponible seulement lorsque la version choisie réussit les contrôles requis. Choisir une autre version relance ses contrôles.

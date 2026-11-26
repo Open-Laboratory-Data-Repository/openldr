@@ -1,7 +1,7 @@
-import { createAppContext, createIngestContext, PackRemovalError, type AppContext, type InstallerCapabilities } from '@openldr/bootstrap';
+import { CE_VERSION, createAppContext, createIngestContext, PackRemovalError, type AppContext, type InstallerCapabilities } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { createInternalDb, createMarketplaceInstallStore } from '@openldr/db';
-import { readBundle, verifyBundle, type Bundle } from '@openldr/marketplace';
+import { readBundle, verifyBundle, requiredNewerCe, UnreadableManifestError, type Bundle } from '@openldr/marketplace';
 import { isNewerVersion } from '@openldr/core';
 import { redactError } from './redact-error';
 import { callerName, cliActor, servedCaller } from './cli-actor';
@@ -19,6 +19,22 @@ function emit(json: boolean, payload: unknown, human: string): void {
 /** Who did it, for the plugin and marketplace stores: the signed-in account with its id in served
  *  mode, the name 'cli' otherwise. */
 const actor = (): { id?: string; name: string } => servedCaller() ?? { name: 'cli' };
+
+/** Why a bundle could not be read. A bundle this CE cannot parse names the CE range it asks for.
+ *  With `ceVersion` (an install) it says so only when that range rules this CE out, the same check
+ *  as the studio's Browse detail. Without it (verify, which reads a bundle with no CE) it states the
+ *  range the bundle asks for. */
+function unreadableReason(err: unknown, ceVersion?: string): string {
+  if (!(err instanceof UnreadableManifestError)) return redactError(err);
+  const { id, version, compatibility } = err.parts.raw as { id?: unknown; version?: unknown; compatibility?: { ceVersion?: unknown } };
+  const name = `${String(id)} ${String(version)}`;
+  if (ceVersion !== undefined) {
+    const need = requiredNewerCe(err, ceVersion);
+    return need ? `${name} needs CE ${need}; this CE is ${ceVersion}` : redactError(err);
+  }
+  const range = compatibility?.ceVersion;
+  return typeof range === 'string' ? `${name} cannot be read by this CLI; it asks for CE ${range}` : redactError(err);
+}
 
 // ---------------------------------------------------------------------------
 // verify
@@ -45,7 +61,7 @@ export async function runMarketVerify(dir: string, opts: JsonOpt): Promise<numbe
     );
     return result.valid ? 0 : 1;
   } catch (err) {
-    process.stderr.write(`market verify failed: ${redactError(err)}\n`);
+    process.stderr.write(`market verify failed: ${unreadableReason(err)}\n`);
     return 1;
   }
 }
@@ -71,7 +87,7 @@ async function installOrUpdate(dir: string, opts: InstallOpts, mode: Mode): Prom
   try {
     bundle = await readBundle(dir);
   } catch (err) {
-    process.stderr.write(`market ${mode} failed: ${redactError(err)}\n`);
+    process.stderr.write(`market ${mode} failed: ${unreadableReason(err, CE_VERSION)}\n`);
     return 1;
   }
   const approval =

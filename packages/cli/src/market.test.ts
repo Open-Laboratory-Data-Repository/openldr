@@ -50,6 +50,7 @@ const PackRemovalError = vi.hoisted(() => class PackRemovalError extends Error {
 });
 
 vi.mock('@openldr/bootstrap', () => ({
+  CE_VERSION: '0.1.12',
   createIngestContext: vi.fn(async () => mockCtx),
   createAppContext: vi.fn(async () => mockCtx),
   PackRemovalError,
@@ -80,10 +81,15 @@ const mockBundle = vi.hoisted(() => ({
   payloadSha256: 'abc123',
 }));
 
-vi.mock('@openldr/marketplace', () => ({
-  readBundle: vi.fn(async () => mockBundle),
-  verifyBundle: vi.fn(() => ({ valid: true, fingerprint: 'f'.repeat(64) })),
-}));
+vi.mock('@openldr/marketplace', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@openldr/marketplace')>();
+  return {
+    readBundle: vi.fn(async () => mockBundle),
+    verifyBundle: vi.fn(() => ({ valid: true, fingerprint: 'f'.repeat(64) })),
+    requiredNewerCe: real.requiredNewerCe,
+    UnreadableManifestError: real.UnreadableManifestError,
+  };
+});
 
 import {
   runMarketVerify,
@@ -134,6 +140,27 @@ describe('market commands', () => {
     (verifyBundle as ReturnType<typeof vi.fn>).mockReturnValueOnce({ valid: false, fingerprint: '0'.repeat(64) });
     const code = await runMarketVerify('/some/dir', { json: false });
     expect(code).toBe(1);
+  });
+
+  // A CE 0.1.12 cannot read lab-bench 0.6.2, which needs 0.1.13 (2026-11-26). Say which CE it needs.
+  it('verify and install: a bundle made for a later CE names the CE version it needs', async () => {
+    const { readBundle, UnreadableManifestError } = await import('@openldr/marketplace');
+    const err = () => new UnreadableManifestError(
+      { raw: { id: 'lab-bench', version: '0.6.2', compatibility: { ceVersion: '>=0.1.13' } }, wasm: new Uint8Array(), publicKeyDer: new Uint8Array(), payloadSha256: '' },
+      new Error('unknown capability'),
+    );
+    (readBundle as ReturnType<typeof vi.fn>).mockRejectedValueOnce(err()).mockRejectedValueOnce(err());
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      expect(await runMarketVerify('/some/dir', { json: false })).toBe(1);
+      expect(await runMarketInstall('/some/dir', { json: false })).toBe(1);
+      expect(errSpy.mock.calls.map((c) => String(c[0]))).toEqual([
+        'market verify failed: lab-bench 0.6.2 cannot be read by this CLI; it asks for CE >=0.1.13\n',
+        'market install failed: lab-bench 0.6.2 needs CE >=0.1.13; this CE is 0.1.12\n',
+      ]);
+    } finally {
+      errSpy.mockRestore();
+    }
   });
 
   // ------------------------------------------------------------------
