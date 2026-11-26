@@ -6,6 +6,12 @@
       "version": "v0.1.13-rc.2",
       "entries": [
         {
+          "hash": "99e30aac4",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "A plugin page can print PNG pages with openldr.print.pages"
+        },
+        {
           "hash": "6cf40ed01",
           "type": "feat",
           "scope": "plugins",
