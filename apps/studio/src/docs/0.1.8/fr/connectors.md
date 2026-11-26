@@ -184,6 +184,24 @@ Vérifiez le nom. Choisissez **Remove** pour supprimer ou **Cancel** pour conser
 
 **Résultat attendu :** confirmer Remove supprime le connecteur et ses identifiants. Toute référence restante échoue jusqu'à sa reconfiguration.
 
+## Laisser un plugin utiliser une connexion
+
+Un plugin ne peut utiliser un connecteur qu'après que vous l'avez activé pour ce connecteur. Faites-le quand le guide d'un plugin demande une connexion, par exemple pour envoyer des résultats à un système de rapports.
+
+### 1. Ouvrir Accès des plugins
+
+Sur la ligne du connecteur, ouvrez les points et sélectionnez **Accès des plugins**.
+
+### 2. Trouver le plugin
+
+Chaque ligne de plugin dit comment il utilise le connecteur : **Importe depuis celui-ci** ou **L’utilise comme connecteur**.
+
+### 3. L'activer
+
+Activez l'interrupteur du plugin. Il s'enregistre aussitôt. Désactivez-le pour que le plugin cesse d'utiliser ce connecteur.
+
+**Résultat attendu :** Seul un plugin activé ici peut utiliser ce connecteur. Un plugin qui l'utilise comme connecteur n'atteint que l'adresse de ce connecteur et ne voit jamais son mot de passe. Chaque changement apparaît dans Audit.
+
 ## Utiliser Connectors sur téléphone
 
 La colonne Host est masquée sur téléphone. Ouvrez Edit pour lire l'adresse de connexion.
@@ -223,6 +241,9 @@ pnpm openldr connectors add --file new-connector.json
 pnpm openldr connectors update <id> --file connector-patch.json
 pnpm openldr connectors test <id>
 pnpm openldr connectors remove <id> --force
+pnpm openldr connectors plugins <id>
+pnpm openldr connectors allow <id> <plugin>
+pnpm openldr connectors revoke <id> <plugin>
 ```
 
 ## Pratique facultative

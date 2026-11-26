@@ -128,8 +128,18 @@ Lê os registos do próprio CE através de uma operação. O pedido é `{ "op": 
 | `facilities.search` | `q`, `limit`, `offset` |
 | `facilities.get` | `id`. Dá uma unidade na forma de uma linha de `facilities.search` |
 | `caller.get` | nenhuma. Dá `userId`, `displayName` e `facilities` (`*` ou a lista de identificadores de unidade) de quem chama. `displayName` pode ser null |
+| `results.list` | `limit` (1 a 200), depois `since` e `until` (hora do resultado), `pluginRef` (o paciente), `observation` (código) e `after`. Dá `results` e `next` |
+| `results.get` | `id`. Dá um resultado na forma de uma linha de `results.list` |
 
 Cada operação segue as mesmas regras da página do studio que mostra os mesmos registos. As operações de pacientes precisam que quem chama tenha `patients.view` ou `patients.find`. Só com `patients.find`, uma pesquisa tem de dar um identificador exato, ou um nome com a data de nascimento completa. Veja [Permissões dos plugins](/docs/plugin-permissions). Os identificadores só aparecem a quem tem `patients.view_identifiers`. Quem tem um limite só encontra pacientes e unidades dentro do seu limite. `patients.register` também precisa de `Patient` na lista `emit-fhir` do plugin. `facilities.get` responde `NOT_FOUND` para uma unidade fora do limite de quem chama, tal como para uma que não existe.
+
+### Resultados validados
+
+`results.list` e `results.get` só dão resultados validados: estado `final`, `amended` ou `corrected`. Quem chama tem de ter `reports.view_issued`. Quem chama com limite só lê resultados cuja unidade requisitante ou laboratório que testou está dentro do seu limite, a mesma regra dos painéis. Um resultado fora do limite responde `NOT_FOUND`, como um que não existe.
+
+Cada resultado dá `id`, `requestId`, `patient` (`{ "pluginRef": ... }` ou null), `observation` (`code`, `system`, `display`), `value` (`type`, `number`, `units`, `comparator`, `code`, `text`), `abnormalFlag`, `status`, `resultTime`, `specimenId` e `requester` (`code`, `system`). O paciente é a referência duradoura própria deste plugin, nunca o identificador do CE. Leia os dados do paciente com `patients.get`.
+
+As páginas seguem a ordem em que o CE guardou os resultados. Passe o `next` de uma página como `after` para ler a seguinte, até `next` ser null. Uma página não se move quando se acrescentam resultados. `since` e `until` filtram pela hora do resultado, por isso um resultado sem hora fica de fora quando dá um deles.
 
 ### Guardar uma ligação a um paciente
 
@@ -162,6 +172,25 @@ Cada parâmetro tem também o seu `resultType`: `numeric`, `coded`, `text`, `boo
 - `date`: `dateLimit`, `past` ou `future`. Ausente quer dizer qualquer data.
 
 Um intervalo pode nomear um `country`. O país do laboratório, definido em Definições, Laboratório, decide `fits` para ele: `no` para outro país, e `unknown` enquanto o laboratório não tiver país.
+
+## Usar um conector
+
+O código de servidor de um plugin pode enviar para um sistema externo através de um conector. O CE guarda a palavra-passe do conector e só a dá ao código nessa chamada. O código só chega ao endereço do conector.
+
+Chame o ponto de entrada a partir da página com o identificador do conector:
+
+```js
+await openldr.invoke('send', payload, { connectorId });
+```
+
+O CE corre então o ponto de entrada com as definições do conector como config, e só permite chamadas de rede para o endereço do conector. Recusa a chamada a não ser que tudo isto se verifique:
+
+- Um admin ativou o plugin para esse conector, em Connectors > **Acesso de plugins** ou com `openldr connectors allow <id> <plugin>`.
+- O plugin declara `host:connectors` e `net-egress`.
+- O acesso à rede dos plugins está ligado neste CE (`PLUGIN_EGRESS_ENABLED`).
+- O conector existe e está ativo.
+
+A página nunca vê as definições. A linha de auditoria da chamada nomeia o conector. A mesma autorização cobre também as chamadas `connectors.*` da página: um plugin só lista e usa os conectores para que foi ativado.
 
 ## fhir_emit
 

@@ -184,6 +184,24 @@ Confirme o nome. Escolha **Remove** para eliminar ou **Cancel** para manter. A c
 
 **Resultado esperado:** confirmar Remove elimina o conector e as credenciais. As referências restantes falham até serem reconfiguradas.
 
+## Deixar um plugin usar uma ligação
+
+Um plugin só pode usar um conector depois de o ativar para esse conector. Faça-o quando o guia de um plugin pede uma ligação, por exemplo para enviar resultados a um sistema de relatórios.
+
+### 1. Abrir Acesso de plugins
+
+Na linha do conector, abra os pontos e selecione **Acesso de plugins**.
+
+### 2. Encontrar o plugin
+
+Cada linha de plugin diz como usa o conector: **Importa a partir dele** ou **Usa-o como conector**.
+
+### 3. Ativá-lo
+
+Ligue o interruptor do plugin. Guarda de imediato. Desligue-o para que o plugin deixe de usar este conector.
+
+**Resultado esperado:** Só um plugin ativado aqui pode usar este conector. Um plugin que o usa como conector só chega ao endereço deste conector e nunca vê a sua palavra-passe. Cada alteração aparece em Audit.
+
 ## Usar Connectors num telemóvel
 
 A coluna Host fica oculta no telemóvel. Abra Edit para ler o endereço da ligação.
@@ -223,6 +241,9 @@ pnpm openldr connectors add --file new-connector.json
 pnpm openldr connectors update <id> --file connector-patch.json
 pnpm openldr connectors test <id>
 pnpm openldr connectors remove <id> --force
+pnpm openldr connectors plugins <id>
+pnpm openldr connectors allow <id> <plugin>
+pnpm openldr connectors revoke <id> <plugin>
 ```
 
 ## Prática opcional

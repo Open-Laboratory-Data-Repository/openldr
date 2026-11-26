@@ -128,8 +128,18 @@ Lit les enregistrements de CE par une opération. La requête est `{ "op": "<op>
 | `facilities.search` | `q`, `limit`, `offset` |
 | `facilities.get` | `id`. Donne un établissement sous la forme d'une ligne de `facilities.search` |
 | `caller.get` | aucune. Donne `userId`, `displayName` et `facilities` (`*` ou la liste des identifiants d'établissement) de la personne qui appelle. `displayName` peut être null |
+| `results.list` | `limit` (1 à 200), puis `since` et `until` (heure du résultat), `pluginRef` (le patient), `observation` (code) et `after`. Donne `results` et `next` |
+| `results.get` | `id`. Donne un résultat sous la forme d'une ligne de `results.list` |
 
 Chaque opération suit les mêmes règles que la page du studio qui montre les mêmes enregistrements. Les opérations patient demandent que l'appelant ait `patients.view` ou `patients.find`. Avec `patients.find` seul, une recherche doit donner un identifiant exact, ou un nom avec la date de naissance complète. Voir [Permissions des plugins](/docs/plugin-permissions). Les identifiants ne s'affichent que pour un appelant qui a `patients.view_identifiers`. Un appelant limité ne trouve que les patients et les établissements de sa limite. `patients.register` demande aussi `Patient` dans la liste `emit-fhir` du plugin. `facilities.get` répond `NOT_FOUND` pour un établissement hors de la limite de l'appelant, comme pour un établissement absent.
+
+### Résultats validés
+
+`results.list` et `results.get` ne donnent que les résultats validés : statut `final`, `amended` ou `corrected`. L'appelant doit avoir `reports.view_issued`. Un appelant limité ne lit que les résultats dont l'établissement demandeur ou le laboratoire qui a testé est dans sa limite, la même règle que les tableaux de bord. Un résultat hors limite répond `NOT_FOUND`, comme un résultat absent.
+
+Chaque résultat donne `id`, `requestId`, `patient` (`{ "pluginRef": ... }` ou null), `observation` (`code`, `system`, `display`), `value` (`type`, `number`, `units`, `comparator`, `code`, `text`), `abnormalFlag`, `status`, `resultTime`, `specimenId` et `requester` (`code`, `system`). Le patient est la référence durable propre à ce plugin, jamais l'identifiant de CE. Lisez les détails du patient avec `patients.get`.
+
+Les pages suivent l'ordre dans lequel CE a enregistré les résultats. Passez le `next` d'une page comme `after` pour lire la suivante, jusqu'à ce que `next` soit null. Une page ne bouge pas quand des résultats sont ajoutés. `since` et `until` filtrent par heure du résultat, donc un résultat sans heure est exclu quand vous donnez l'un des deux.
 
 ### Garder un lien vers un patient
 
@@ -162,6 +172,25 @@ Chaque paramètre a aussi son `resultType` : `numeric`, `coded`, `text`, `boolea
 - `date` : `dateLimit`, `past` ou `future`. Absent veut dire toute date.
 
 Un intervalle peut nommer un `country`. Le pays du laboratoire, fixé dans Paramètres, Laboratoire, décide `fits` pour lui : `no` pour un autre pays, et `unknown` tant que le laboratoire n'a pas de pays.
+
+## Utiliser un connecteur
+
+Le code serveur d'un plugin peut envoyer vers un système externe par un connecteur. CE garde le mot de passe du connecteur et ne le donne au code que pour cet appel. Le code ne peut atteindre que l'adresse du connecteur.
+
+Appelez le point d'entrée depuis la page avec l'identifiant du connecteur :
+
+```js
+await openldr.invoke('send', payload, { connectorId });
+```
+
+CE exécute alors le point d'entrée avec les réglages du connecteur comme config, et n'autorise les appels réseau que vers l'adresse du connecteur. Il refuse l'appel sauf si tout ceci est vrai :
+
+- Un admin a activé le plugin pour ce connecteur, dans Connectors > **Accès des plugins** ou avec `openldr connectors allow <id> <plugin>`.
+- Le plugin déclare `host:connectors` et `net-egress`.
+- L'accès réseau des plugins est activé pour ce CE (`PLUGIN_EGRESS_ENABLED`).
+- Le connecteur existe et est activé.
+
+La page ne voit jamais les réglages. La ligne d'audit de l'appel nomme le connecteur. La même autorisation couvre aussi les appels `connectors.*` de la page : un plugin ne liste et n'utilise que les connecteurs pour lesquels il a été activé.
 
 ## fhir_emit
 
