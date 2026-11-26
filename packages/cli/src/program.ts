@@ -1,3 +1,4 @@
+import { runConnectorAllow, runConnectorPlugins, runConnectorRevoke } from './connector-access';
 import { runPluginCall } from './plugin-call';
 import { Command, Option, type ParseOptions } from 'commander';
 import { loadConfig } from '@openldr/config';
@@ -162,6 +163,22 @@ export function buildProgram(): Command {
     .action(async (opts: { json: boolean }) => {
       try { process.exitCode = await runConnectorList(opts); }
       catch { process.stderr.write('Connector list unavailable.\n'); process.exitCode = 1; }
+    });
+  connectors.command('plugins <id>').description('List the plugins that may use a connector, each on or off')
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runConnectorPlugins(id, opts); }
+      catch (err) { process.stderr.write(`connectors plugins failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  connectors.command('allow <id> <plugin>').description('Let a plugin use a connector. CE keeps its password; the plugin reaches only its address')
+    .action(async (id: string, plugin: string) => {
+      try { process.exitCode = await runConnectorAllow(id, plugin); }
+      catch (err) { process.stderr.write(`connectors allow failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  connectors.command('revoke <id> <plugin>').description('Stop a plugin using a connector')
+    .action(async (id: string, plugin: string) => {
+      try { process.exitCode = await runConnectorRevoke(id, plugin); }
+      catch (err) { process.stderr.write(`connectors revoke failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
   connectors.command('add').description('Add a database connector from a JSON file: {"name", "type", "config"}. Prints the new id')
     .requiredOption('--file <path>', 'JSON file with name, type (postgres, mysql, microsoft-sql, ...) and config')

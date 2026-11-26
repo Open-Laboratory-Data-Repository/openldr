@@ -212,25 +212,15 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     return { ok: result.ok, steps };
   });
 
-  // Which import plugins may read this connector. Only plugins whose import source names this
-  // connector's type are listed, including one that can only be copied from. Allowing is what
-  // lets a plugin run SELECTs here, so it sits behind connectors.manage. The import service writes
-  // the audit rows (import.allow / revoke).
-  async function importPluginsFor(connectorId: string, type: string | null | undefined): Promise<Array<{ id: string; version: string; allowed: boolean }>> {
-    if (!type) return [];
-    const out: Array<{ id: string; version: string; allowed: boolean }> = [];
-    for (const p of await ctx.imports.readers()) {
-      if (!p.connectorTypes.includes(type)) continue;
-      out.push({ id: p.id, version: p.version, allowed: (await ctx.imports.allowed(p.id)).includes(connectorId) });
-    }
-    return out;
-  }
-
+  // Which plugins may use this connector (design 2026-11-26-plugin-connector-approval-and-results):
+  // import plugins whose import source names this connector's type, and any plugin that declares
+  // host:connectors. Switching one on is what lets a plugin use the connector at all, so it sits
+  // behind connectors.manage. The service writes the audit rows. The paths keep their first name.
   app.get('/api/connectors/:id/import-plugins', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const connector = await connectors.get(id);
     if (!connector) { reply.code(404); return { error: 'connector not found' }; }
-    return importPluginsFor(id, connector.type);
+    return ctx.connectorAccess.candidates(id);
   });
 
   app.put('/api/connectors/:id/import-plugins/:pluginId', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
@@ -239,17 +229,16 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     if (!parsed.success) { reply.code(400); return { error: 'invalid input' }; }
     const connector = await connectors.get(id);
     if (!connector) { reply.code(404); return { error: 'connector not found' }; }
-    const candidates = await importPluginsFor(id, connector.type);
-    if (!candidates.some((p) => p.id === pluginId)) { reply.code(400); return { error: 'this plugin cannot import from this connector' }; }
+    if (!(await ctx.connectorAccess.candidates(id)).some((p) => p.id === pluginId)) { reply.code(400); return { error: 'this plugin cannot use this connector' }; }
     const actor = { type: 'user' as const, id: req.user?.id ?? null, name: req.user?.username ?? 'unknown' };
     try {
-      if (parsed.data.allowed) await ctx.imports.allow(pluginId, id, actor);
-      else await ctx.imports.revoke(pluginId, id, actor);
+      if (parsed.data.allowed) await ctx.connectorAccess.allow(pluginId, id, actor);
+      else await ctx.connectorAccess.revoke(pluginId, id, actor);
     } catch {
       reply.code(400);
       return { error: 'plugin access update failed' };
     }
-    return importPluginsFor(id, connector.type);
+    return ctx.connectorAccess.candidates(id);
   });
 
   // Live connection test: resolve → loadSink → health_check + pull_metadata (restricted to allowedHost).

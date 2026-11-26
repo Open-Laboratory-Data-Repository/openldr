@@ -9,7 +9,7 @@ import { CAPABILITIES } from '@openldr/rbac';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
 import { checkReadOp } from './check-read-audit';
-import { HOST_COLLECTION_PREFIX, type ImportActor, type ImportService } from './import-run';
+import { CONNECTOR_ALLOWED, HOST_COLLECTION_PREFIX, type ImportActor, type ImportService } from './import-run';
 import { FINDING_CODE, LABORATORY_CODE, type CheckRun, type ImportCheckService } from './import-check';
 import { CopySetChangedError, type CopyRun, type CopySetProgress, type ImportCopyService } from './import-copy';
 
@@ -318,6 +318,15 @@ function egresses(op: BrokerOp): boolean {
   }
 }
 
+/** The connector a connectors.* op names, or undefined for an op that names none. */
+function connectorOf(op: BrokerOp): string | undefined {
+  switch (op.kind) {
+    case 'connectors.test': case 'connectors.metadata': return op.id;
+    case 'connectors.push': case 'connectors.validate': return op.connectorId;
+    default: return undefined;
+  }
+}
+
 /** Required caller-role set for an op (empty = no role requirement). The capability is the
  *  plugin's ceiling; the CALLER's role is a separate axis, matching the native routes. */
 function rolesFor(op: BrokerOp): string[] {
@@ -551,6 +560,13 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           return deny(op.kind, `operation ${op.kind} requires one of roles: ${need.join(', ')}`);
         }
 
+        // 3a. A connector the op names must be one an admin switched on for this plugin
+        // (design 2026-11-26-plugin-connector-approval-and-results).
+        const named = connectorOf(op);
+        if (named !== undefined && (await deps.pluginData.get(pluginId, CONNECTOR_ALLOWED, named)) === null) {
+          return deny(op.kind, `connector ${named} is not allowed for plugin ${pluginId}`);
+        }
+
         // 3b. Collections starting with `__` belong to the host (import runs, failures and the
         // list of connectors an admin allowed). A plugin page must not read or forge them.
         if ((op.kind === 'storage.get' || op.kind === 'storage.put' || op.kind === 'storage.delete' || op.kind === 'storage.list')
@@ -588,7 +604,12 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           case 'reports.columns': return { ok: true, data: await deps.reporting.columns(op.id) };
           case 'reports.run': return { ok: true, data: await deps.reporting.run(op.id, op.params ?? {}) };
           case 'reports.eventSources': return { ok: true, data: deps.reporting.eventSources() };
-          case 'connectors.list': return { ok: true, data: await deps.connectors.list() };
+          case 'connectors.list': {
+            // Only the connectors an admin switched on for this plugin.
+            const allowed = new Set((await deps.pluginData.list(pluginId, CONNECTOR_ALLOWED)).map((e) => e.key));
+            const all = await deps.connectors.list();
+            return { ok: true, data: all.filter((c) => allowed.has(String((c as { id?: unknown }).id))) };
+          }
           case 'connectors.test': {
             if (!deps.testConnector) return { ok: false, error: 'connectors.test is unavailable' };
             const data = await deps.testConnector(op.id);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createPluginConnectorAccess } from '@openldr/bootstrap';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import type { ConnectorRecord, ConnectorStore, NewConnector, ConnectorPatch } from '@openldr/db';
@@ -405,26 +406,40 @@ describe('connector plugin access routes', () => {
     ];
     // A plugin that can only be copied from is a reader and not an importer.
     const readers = over.copyOnly ? [...importers, { id: 'rows-copy', version: '0.3.0', connectorTypes: ['microsoft-sql'] }] : importers;
+    // The real approval service over an in-memory plugin data store; the import service is faked.
+    const data = new Map<string, unknown>();
+    const key = (p: string, c: string, k: string) => `${p} ${c} ${k}`;
+    const pluginData = {
+      async get(p: string, c: string, k: string) { return data.has(key(p, c, k)) ? data.get(key(p, c, k)) : null; },
+      async put(p: string, c: string, k: string, doc: unknown) { data.set(key(p, c, k), doc); },
+      async delete(p: string, c: string, k: string) { data.delete(key(p, c, k)); },
+      async list(p: string, c: string) { return [...data.entries()].filter(([kk]) => kk.startsWith(`${p} ${c} `)).map(([kk, doc]) => ({ collection: c, key: kk.split(' ')[2]!, doc, updatedAt: new Date(0) })); },
+    };
+    for (const [p, ids] of Object.entries(allowed)) for (const id of ids) data.set(key(p, '__import-allowed', id), { connectorId: id });
+    const imports = {
+      importers: async () => importers,
+      readers: async () => readers,
+      allowed: async (pluginId: string) => (await pluginData.list(pluginId, '__import-allowed')).map((e) => e.key),
+      allow: async (pluginId: string, connectorId: string, actor: unknown) => {
+        calls.push({ op: 'allow', pluginId, connectorId, actor });
+        await pluginData.put(pluginId, '__import-allowed', connectorId, { connectorId });
+      },
+      revoke: async (pluginId: string, connectorId: string, actor: unknown) => {
+        calls.push({ op: 'revoke', pluginId, connectorId, actor });
+        await pluginData.delete(pluginId, '__import-allowed', connectorId);
+      },
+    };
+    const plugins = [{ id: 'dhis2-lab-results', version: '0.2.0', enabled: true, active: true, manifest: { capabilities: [{ kind: 'host:connectors' }] } }];
+    const audited: unknown[] = [];
     const ctx = {
       ...fakeCtx(),
-      imports: {
-        importers: async () => importers,
-        readers: async () => readers,
-        allowed: async (pluginId: string) => allowed[pluginId] ?? [],
-        allow: async (pluginId: string, connectorId: string, actor: unknown) => {
-          calls.push({ op: 'allow', pluginId, connectorId, actor });
-          allowed[pluginId] = [...(allowed[pluginId] ?? []), connectorId];
-        },
-        revoke: async (pluginId: string, connectorId: string, actor: unknown) => {
-          calls.push({ op: 'revoke', pluginId, connectorId, actor });
-          allowed[pluginId] = (allowed[pluginId] ?? []).filter((c) => c !== connectorId);
-        },
-      },
+      imports,
+      connectorAccess: createPluginConnectorAccess({ plugins: { list: async () => plugins }, connectors: store, pluginData, imports, audit: async (e) => { audited.push(e); } }),
     } as unknown as AppContext;
     const app = Fastify();
     app.addHook('onRequest', async (req) => { req.user = { id: 'u1', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: over.capabilities ?? ['connectors.manage'] } as never; });
     registerConnectorsRoutes(app, ctx, { connectors: store });
-    return { app, store, calls };
+    return { app, store, calls, audited };
   }
   async function seed(store: ConnectorStore) {
     await store.create({ id: 'ms', name: 'V1', type: 'microsoft-sql', kind: 'database', config: { host: 'db' } }, 'key');
@@ -436,9 +451,15 @@ describe('connector plugin access routes', () => {
     await seed(store);
     const res = await app.inject({ method: 'GET', url: '/api/connectors/ms/import-plugins' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual([{ id: 'v1-import', version: '0.1.0', allowed: true }]);
-    // A sink connector has no type, so no plugin can import from it.
-    expect((await app.inject({ method: 'GET', url: '/api/connectors/sink/import-plugins' })).json()).toEqual([]);
+    expect(res.json()).toEqual([
+      { id: 'dhis2-lab-results', version: '0.2.0', use: 'connector', allowed: false },
+      { id: 'v1-import', version: '0.1.0', use: 'import', allowed: true },
+    ]);
+    // A sink connector has no type, so no plugin imports from it; a plugin that declares
+    // host:connectors is offered for it.
+    expect((await app.inject({ method: 'GET', url: '/api/connectors/sink/import-plugins' })).json()).toEqual([
+      { id: 'dhis2-lab-results', version: '0.2.0', use: 'connector', allowed: false },
+    ]);
     expect((await app.inject({ method: 'GET', url: '/api/connectors/missing/import-plugins' })).statusCode).toBe(404);
   });
 
@@ -448,12 +469,13 @@ describe('connector plugin access routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/connectors/ms/import-plugins' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([
-      { id: 'v1-import', version: '0.1.0', allowed: true },
-      { id: 'rows-copy', version: '0.3.0', allowed: false },
+      { id: 'dhis2-lab-results', version: '0.2.0', use: 'connector', allowed: false },
+      { id: 'rows-copy', version: '0.3.0', use: 'import', allowed: false },
+      { id: 'v1-import', version: '0.1.0', use: 'import', allowed: true },
     ]);
     const on = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/rows-copy', payload: { allowed: true } });
     expect(on.statusCode).toBe(200);
-    expect(on.json()).toContainEqual({ id: 'rows-copy', version: '0.3.0', allowed: true });
+    expect(on.json()).toContainEqual({ id: 'rows-copy', version: '0.3.0', use: 'import', allowed: true });
     expect(calls).toEqual([{ op: 'allow', pluginId: 'rows-copy', connectorId: 'ms', actor: { type: 'user', id: 'u1', name: 'admin' } }]);
   });
 
@@ -462,13 +484,26 @@ describe('connector plugin access routes', () => {
     await seed(store);
     const on = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/v1-import', payload: { allowed: true } });
     expect(on.statusCode).toBe(200);
-    expect(on.json()).toEqual([{ id: 'v1-import', version: '0.1.0', allowed: true }]);
+    expect(on.json()).toContainEqual({ id: 'v1-import', version: '0.1.0', use: 'import', allowed: true });
     const off = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/v1-import', payload: { allowed: false } });
-    expect(off.json()).toEqual([{ id: 'v1-import', version: '0.1.0', allowed: false }]);
+    expect(off.json()).toContainEqual({ id: 'v1-import', version: '0.1.0', use: 'import', allowed: false });
     expect(calls).toEqual([
       { op: 'allow', pluginId: 'v1-import', connectorId: 'ms', actor: { type: 'user', id: 'u1', name: 'admin' } },
       { op: 'revoke', pluginId: 'v1-import', connectorId: 'ms', actor: { type: 'user', id: 'u1', name: 'admin' } },
     ]);
+  });
+
+  it('switches a connector plugin on for a sink connector, with its own audit row, and off again', async () => {
+    const { app, store, calls, audited } = accessApp();
+    await seed(store);
+    const on = await app.inject({ method: 'PUT', url: '/api/connectors/sink/import-plugins/dhis2-lab-results', payload: { allowed: true } });
+    expect(on.statusCode).toBe(200);
+    expect(on.json()).toEqual([{ id: 'dhis2-lab-results', version: '0.2.0', use: 'connector', allowed: true }]);
+    const off = await app.inject({ method: 'PUT', url: '/api/connectors/sink/import-plugins/dhis2-lab-results', payload: { allowed: false } });
+    expect(off.json()).toEqual([{ id: 'dhis2-lab-results', version: '0.2.0', use: 'connector', allowed: false }]);
+    // The import service is not involved for a connector plugin.
+    expect(calls).toEqual([]);
+    expect(audited).toMatchObject([{ action: 'connector.allow', pluginId: 'dhis2-lab-results', connectorId: 'sink' }, { action: 'connector.revoke' }]);
   });
 
   it('refuses a plugin that does not read this connector type, a bad body, and a caller without the capability', async () => {

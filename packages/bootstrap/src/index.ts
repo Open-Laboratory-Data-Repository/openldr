@@ -99,6 +99,7 @@ import { createPatientDuplicates, type PatientDuplicates } from './patient-dupli
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { brokerAccessDetails } from './check-read-audit';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
+import { createPluginConnectorAccess, type PluginConnectorAccess } from './plugin-connector-access';
 import { createPluginRemoval, type PluginRemoval } from './plugin-removal';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
 import { createImportCheckService, deleteCheckRecord, liveCheckStatus, type ImportCheckService } from './import-check';
@@ -598,6 +599,9 @@ export interface AppContext {
   pluginHost: PluginHost;
   /** Plugin-driven imports from a host database connector (import-run.ts). */
   imports: ImportService;
+  /** Which plugins may use which connector (plugin-connector-access.ts). The route and the CLI
+   *  both switch a plugin on or off through it. */
+  connectorAccess: PluginConnectorAccess;
   /** Copies of a source database's rows to CE's own disk (import-copy.ts). Only a context built
    *  with `runImportDriver` drives them. Any context may start, stop or delete one. */
   importCopies: ImportCopyService;
@@ -2089,6 +2093,7 @@ const reporting: ReportingApi = {
     origin: importOrigin,
     logger,
   });
+  const connectorAccess = createPluginConnectorAccess({ plugins, connectors: connectorStore, pluginData, imports, audit: importAudit });
   // Copies of a source's rows (import-copy.ts). Every context can start, stop and delete one. Only
   // the driver below drives them, and the id here is what each drive writes on the copy it holds.
   const importCopyStore = createImportCopyStore(internal.db);
@@ -2308,6 +2313,7 @@ const reporting: ReportingApi = {
     pluginBroker,
     pluginHost,
     imports,
+    connectorAccess,
     importCopies,
     importChecks,
     pluginRemoval,
@@ -2367,6 +2373,7 @@ const reporting: ReportingApi = {
 }
 
 export { createFeatureFlags } from './feature-flags';
+export { createPluginConnectorAccess, declaresConnectors, type PluginConnectorAccess, type ConnectorPluginCandidate } from './plugin-connector-access';
 export { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog, type CatalogGroup, type PluginCapabilityMeta } from './capability-catalog';
 export { createConnectorDialectLookup, dialectFor } from './connector-sql-service';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';

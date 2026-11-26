@@ -20,17 +20,19 @@ beforeEach(() => {
 });
 
 describe('ConnectorPluginAccessSheet', () => {
-  it('lists the import plugins for the connector with their current state', async () => {
+  it('lists the plugins for the connector with their current state and how each uses it', async () => {
     (api.listConnectorImportPlugins as any).mockResolvedValue([
-      { id: 'openldr-v1-import', version: '0.1.0', allowed: true },
-      { id: 'other-import', version: '2.0.0', allowed: false },
+      { id: 'openldr-v1-import', version: '0.1.0', allowed: true, use: 'import' },
+      { id: 'dhis2-lab-results', version: '2.0.0', allowed: false, use: 'connector' },
     ]);
     render(<ConnectorPluginAccessSheet connector={ms as any} onOpenChange={() => {}} />);
     const on = await screen.findByTestId('plugin-access-openldr-v1-import');
     expect(api.listConnectorImportPlugins).toHaveBeenCalledWith('ms');
     expect(on.getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByTestId('plugin-access-other-import').getAttribute('aria-checked')).toBe('false');
-    expect(screen.getByText('0.1.0')).toBeTruthy();
+    expect(screen.getByTestId('plugin-access-dhis2-lab-results').getAttribute('aria-checked')).toBe('false');
+    // Each row says how the plugin uses the connector.
+    expect(screen.getByText('0.1.0 · Imports from it')).toBeTruthy();
+    expect(screen.getByText('2.0.0 · Uses it as a connector')).toBeTruthy();
   });
 
   it('saves a change and shows what the server answered', async () => {

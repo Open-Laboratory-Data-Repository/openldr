@@ -31,7 +31,10 @@ import { resolveByPerson } from './job-continue';
 export const HOST_COLLECTION_PREFIX = '__';
 const RUNS = '__import-runs';
 const FAILURES = '__import-failures';
-const ALLOWED = '__import-allowed';
+/** The connectors an admin switched on for a plugin, for imports and for any other connector use
+ *  (plugin-connector-access.ts). Keyed by connector id. The name predates the wider use. */
+export const CONNECTOR_ALLOWED = '__import-allowed';
+const ALLOWED = CONNECTOR_ALLOWED;
 
 const DEFAULT_PAGE_SIZE = 500;
 const MAX_STORED_FAILURES = 1000;
@@ -78,7 +81,7 @@ export interface ImportRun {
 export interface ImportActor { type: 'user' | 'cli' | 'system'; id: string | null; name: string }
 
 export interface ImportAuditEvent {
-  action: 'import.allow' | 'import.revoke' | 'import.start' | 'import.stop' | 'import.resume' | 'import.finish'
+  action: 'import.allow' | 'import.revoke' | 'connector.allow' | 'connector.revoke' | 'import.start' | 'import.stop' | 'import.resume' | 'import.finish'
     | 'import.copy.start' | 'import.copy.stop' | 'import.copy.takeover' | 'import.copy.finish' | 'import.copy.delete'
     | 'import.check.start' | 'import.check.stop' | 'import.check.takeover' | 'import.check.finish'
     | 'import.check.correct' | 'import.check.recheck' | 'import.plugin.remove';

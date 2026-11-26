@@ -51,8 +51,11 @@ function broker(opts: {
   copies?: any;
   checks?: any;
   diagnoseConnector?: any;
+  /** The connectors switched on for p1. By default the ones these tests name. */
+  allowedConnectors?: string[];
 }) {
   const data = memData();
+  for (const id of opts.allowedConnectors ?? ['x', 'c1', 'c9']) void data.store.put('p1', '__import-allowed', id, { connectorId: id });
   const manifest: any = opts.caps === undefined ? {} : { capabilities: opts.caps };
   if (opts.requiredRoles || opts.requiredCapabilities) {
     manifest.payload = { ui: { ...(opts.requiredRoles ? { requiredRoles: opts.requiredRoles } : {}), ...(opts.requiredCapabilities ? { requiredCapabilities: opts.requiredCapabilities } : {}) } };
@@ -124,6 +127,31 @@ describe('plugin broker', () => {
     const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list: async () => [{ id: 'x', name: 'X', pluginId: 'dhis2-sink', enabled: true }], get: async () => null } });
     const r = await b.handle('p1', principal, { kind: 'connectors.list' });
     expect(r).toEqual({ ok: true, data: [{ id: 'x', name: 'X', pluginId: 'dhis2-sink', enabled: true }] });
+  });
+
+  // Design 2026-11-26-plugin-connector-approval-and-results: a plugin uses only the connectors an
+  // admin switched on for it.
+  it('connectors.list answers only the connectors switched on for the plugin', async () => {
+    const list = async () => [{ id: 'x', name: 'X' }, { id: 'y', name: 'Y' }];
+    const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list, get: async () => null }, allowedConnectors: ['y'] });
+    expect(await b.handle('p1', principal, { kind: 'connectors.list' })).toEqual({ ok: true, data: [{ id: 'y', name: 'Y' }] });
+  });
+
+  it('refuses connectors.test, metadata, push and validate on a connector not switched on, before any dep runs', async () => {
+    const testConnector = vi.fn(); const connectorMetadata = vi.fn(); const connectorPush = vi.fn(); const connectorValidate = vi.fn();
+    const { b, audited } = broker({ caps: [{ kind: 'host:connectors' }], testConnector, connectorMetadata, connectorPush, connectorValidate, allowedConnectors: ['c1'] });
+    for (const op of [
+      { kind: 'connectors.test', id: 'c2' },
+      { kind: 'connectors.metadata', id: 'c2' },
+      { kind: 'connectors.push', connectorId: 'c2', mapping: {}, period: '2026', dryRun: true },
+      { kind: 'connectors.validate', connectorId: 'c2', mapping: {} },
+    ]) {
+      const r = await b.handle('p1', principal, op);
+      expect(r).toMatchObject({ ok: false });
+      expect((r as { error: string }).error).toContain('connector c2 is not allowed for plugin p1');
+    }
+    for (const dep of [testConnector, connectorMetadata, connectorPush, connectorValidate]) expect(dep).not.toHaveBeenCalled();
+    expect(audited.filter((a) => a.outcome === 'denied')).toHaveLength(4);
   });
 
   it('invoke calls the plugin own wasm (no host capability) and returns its output', async () => {

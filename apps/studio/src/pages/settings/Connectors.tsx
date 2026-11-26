@@ -442,12 +442,11 @@ export function Connectors() {
                             {t('settings.connectors.diagnose.menu')}
                           </DropdownMenuItem>
                         ) : null}
-                        {/* Import plugins read host (database) connectors only. */}
-                        {c.type ? (
-                          <DropdownMenuItem data-testid={`plugin-access-${c.id}`} onSelect={() => setPluginAccess(c)}>
-                            {t('settings.connectors.pluginAccess.menu')}
-                          </DropdownMenuItem>
-                        ) : null}
+                        {/* Every connector: import plugins read database ones, and any plugin that
+                            declares host:connectors may be switched on for any connector. */}
+                        <DropdownMenuItem data-testid={`plugin-access-${c.id}`} onSelect={() => setPluginAccess(c)}>
+                          {t('settings.connectors.pluginAccess.menu')}
+                        </DropdownMenuItem>
                         <DropdownMenuItem data-testid={`edit-${c.id}`} onSelect={() => openEdit(c)}>
                           {t('settings.connectors.edit')}
                         </DropdownMenuItem>
