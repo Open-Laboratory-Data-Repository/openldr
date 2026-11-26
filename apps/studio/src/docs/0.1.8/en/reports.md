@@ -470,3 +470,9 @@ The real review downloads are [the interactive PDF](https://openldr.online/docs-
 ## Related guides
 
 [Report Designer](/docs/report-designer) defines page layout and creates library entries. [Query](/docs/query) defines data. [Scheduled reports with workflows](/docs/report-pipeline) covers custom workbook and email workflows.
+
+## Open an issued laboratory edition
+
+1. In Laboratory, open Reports. Find the accession and select the edition you want to read.
+2. Choose **Open edition … in CE Reports**. Check the edition number, issue time and reported values. **Earlier version** means CE holds a later version of the report.
+3. Choose **Back to lab report** to return to that edition. If CE says the edition is unavailable, you can still read the laboratory’s issued copy in the sheet.

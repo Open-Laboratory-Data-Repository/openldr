@@ -58,3 +58,7 @@ Por omissão, quem introduziu um resultado não o pode validar. Quem tem `lab.se
 Um resultado validado fica bloqueado. O plugin ainda não o pode corrigir.
 
 O separador **Guia** da página **Lab** mostra cada tarefa passo a passo.
+
+## Uma edição está indisponível nos relatórios do CE
+
+O módulo Laboratory pode abrir uma edição quando o CE regista as versões dos recursos no momento da emissão. Uma instalação anterior pode conter um DiagnosticReport com o mesmo identificador sem registo da edição. O painel do laboratório conserva a cópia emitida. A falta de um resultado histórico ou de permissões também torna a edição indisponível. A consulta no CE exige acesso aos dados sem restrições e permissões para ver relatórios, relatórios clínicos emitidos, pacientes e identificadores de pacientes.

@@ -14,6 +14,7 @@ export interface HostBridgeDeps {
   /** The frame's download limit. PluginFrame keeps one per mounted frame, so it holds across
    *  the frame's reloads. Absent, this wiring gets its own. */
   gate?: DownloadGate;
+  edition?(key: string, open: boolean): Promise<boolean>;
 }
 
 /** The shortest time between two downloads from one frame. */
@@ -99,18 +100,23 @@ export function createDownloadGate(opts: { save?: typeof saveTextFile; now?: () 
 export function wireHostPort(port: HostPortLike, deps: HostBridgeDeps): void {
   const gate = deps.gate ?? createDownloadGate();
 
-  function hostOp(op: PluginOp): PluginRpcResult {
-    if (op.kind !== 'host.download') return { ok: false, error: 'unknown host operation' };
-    return gate.download(op);
-  }
-
   port.onmessage = (ev) => {
     const msg = ev.data as { id?: number; op?: PluginOp };
     if (typeof msg?.id !== 'number' || !msg.op) return;
     const id = msg.id;
     const kind = (msg.op as { kind?: unknown }).kind;
+    const op = msg.op;
     if (typeof kind === 'string' && kind.startsWith('host.')) {
-      port.postMessage({ id, result: hostOp(msg.op) });
+      if (op.kind === 'host.edition' && deps.edition &&
+          typeof op.edition === 'string' && /^[A-Za-z0-9][A-Za-z0-9.-]{0,63}$/.test(op.edition) &&
+          typeof op.open === 'boolean') {
+        void deps.edition(op.edition, op.open)
+          .then(data => port.postMessage({ id, result: { ok: true, data } }))
+          .catch(() => port.postMessage({ id, result: { ok: false, error: 'Report lookup failed' } }));
+      } else {
+        const result = op.kind === 'host.download' ? gate.download(op) : { ok: false, error: 'unknown host operation' };
+        port.postMessage({ id, result });
+      }
       return;
     }
     deps

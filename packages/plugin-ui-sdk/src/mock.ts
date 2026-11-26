@@ -26,6 +26,7 @@ export interface MockOptions {
   locale?: string;
   site?: PluginSiteName;
   reports?: unknown[];
+  issuedEditions?: string[];
 }
 
 /** The mock, plus what a page's test can read back. */
@@ -58,6 +59,10 @@ export function createMockOpenldr(opts: MockOptions): MockOpenLdrPluginApi {
       },
     },
     async invoke(_e, input) { return { echoed: input }; },
+    issuedReports: {
+      async available(key) { return opts.issuedEditions?.includes(key) ?? false; },
+      async open(key) { return opts.issuedEditions?.includes(key) ?? false; },
+    },
     reports: {
       async list() { return opts.reports ?? []; },
       async columns() { return []; },

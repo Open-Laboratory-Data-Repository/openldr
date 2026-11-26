@@ -1,6 +1,24 @@
 import type { EnShape } from './en';
 
 export const pt: EnShape = {
+  issued: {
+    back: "Voltar ao relatório do laboratório",
+    accession: "Requisição",
+    edition: "Edição",
+    issued: "Emitido em",
+    reviewer: "Revisto por",
+    results: "Resultados",
+    range: "Intervalo de referência",
+    version: "Versão",
+    missing: "Esta edição está indisponível.",
+    failed: "Não foi possível carregar esta edição.",
+    retry: "Tentar novamente",
+    earlier: "Versão anterior",
+    final: "Final",
+    amended: "Alterado",
+    corrected: "Corrigido",
+    appended: "Complementado",
+  },
   accessDenied: {
     title: 'Acesso negado',
     heading: 'Não tem acesso a esta página',
@@ -465,6 +483,7 @@ export const pt: EnShape = {
         view: { label: 'Ver relatórios', description: 'Abrir a área de Relatórios e ver as definições de relatórios.' },
         run: { label: 'Executar relatórios', description: 'Executar e pré-visualizar relatórios.' },
         export: { label: 'Exportar relatórios', description: 'Transferir o resultado de um relatório (PDF ou dados).' },
+        view_issued: { label: 'Ver relatórios clínicos emitidos', description: 'Abrir os resultados assinados de um relatório clínico individual emitido.' },
         edit_templates: { label: 'Editar modelos de relatório', description: 'Criar e editar definições, categorias e designs de relatórios.' },
       },
       forms: {

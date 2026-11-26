@@ -1,4 +1,22 @@
 export const en = {
+  issued: {
+    back: "Back to lab report",
+    accession: "Accession",
+    edition: "Edition",
+    issued: "Issued",
+    reviewer: "Reviewed by",
+    results: "Reported results",
+    range: "Reference interval",
+    version: "Version",
+    missing: "This issued edition is unavailable.",
+    failed: "The edition could not be loaded.",
+    retry: "Retry",
+    earlier: "Earlier version",
+    final: "Final",
+    amended: "Amended",
+    corrected: "Corrected",
+    appended: "Appended",
+  },
   accessDenied: {
     title: 'Access denied',
     heading: "You don't have access to this page",
@@ -469,6 +487,7 @@ export const en = {
         view: { label: 'View reports', description: 'Open the Reports workspace and see report definitions.' },
         run: { label: 'Run reports', description: 'Execute and preview reports.' },
         export: { label: 'Export reports', description: 'Download report output (PDF/data).' },
+        view_issued: { label: 'View issued clinical reports', description: 'Open the signed results of an individual issued report.' },
         edit_templates: { label: 'Edit report templates', description: 'Create and edit report definitions, categories, and designs.' },
       },
       forms: {

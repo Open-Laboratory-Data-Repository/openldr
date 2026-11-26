@@ -64,6 +64,23 @@ describe.skipIf(!url)('saveMany on disposable PostgreSQL', () => {
     };
   }
 
+  it('retains both issued versions and replays the original without changing the amended report', async () => {
+    const store = createFhirStore(db);
+    const id = randomUUID();
+    const write = (edition: string, value: string) => store.saveMany([
+      { resourceType: 'DiagnosticReport', id, status: 'final', code: { text: 'Training' },
+        identifier: [{ system: 'urn:openldr:issued-edition', value: edition }], result: [{ reference: 'Observation/' + id }] },
+      { resourceType: 'Observation', id, status: 'final', code: { text: 'Training' }, valueString: value },
+    ], { pluginId: 'lab' }, { ownedBy: 'lab' });
+    const first = randomUUID(), second = randomUUID();
+    const [original, simultaneousRetry] = await Promise.all([write(first, 'A'), write(first, 'A')]);
+    expect(simultaneousRetry).toEqual(original);
+    expect((await write(second, 'B')).map(r => r.version)).toEqual([2, 2]);
+    expect(await write(first, 'A')).toEqual(original);
+    await expect(write(first, 'C')).rejects.toThrow('different content');
+    expect(await counts([id])).toEqual({ resources: 2, history: 4, changeLog: 4 });
+  });
+
   it('a failure after the canonical and history rows are written leaves none of the list saved', async () => {
     // The row path: the injected failure hooks a query-builder insert, which only that path sends.
     // The set-based path is one statement, so it is all or nothing by itself (fhir-store-save-set.live.test.ts).

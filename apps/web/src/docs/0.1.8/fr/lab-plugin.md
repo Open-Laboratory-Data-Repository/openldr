@@ -58,3 +58,7 @@ Par défaut, la personne qui a saisi un résultat ne peut pas le valider. Un dé
 Un résultat validé est verrouillé. Le plugin ne peut pas encore le corriger.
 
 L'onglet **Guide** de la page **Lab** montre chaque tâche pas à pas.
+
+## Une édition est indisponible dans les rapports CE
+
+Le module Laboratory peut ouvrir une édition si CE a enregistré les versions de ses ressources lors de l’émission. Une installation antérieure peut contenir un DiagnosticReport portant le même identifiant sans trace de l’édition. Le volet du laboratoire conserve la copie émise. Un résultat historique manquant ou des droits insuffisants rendent également l’édition indisponible. La consultation dans CE exige un accès aux données sans restriction et les droits de lecture des rapports, des comptes rendus cliniques émis, des patients et de leurs identifiants.

@@ -470,3 +470,9 @@ As descargas reais são [o PDF interativo](https://openldr.online/docs-samples/u
 ## Guias relacionados
 
 [Editor de relatórios](/docs/report-designer) define a apresentação e cria entradas na biblioteca. [Consultas](/docs/query) define os dados. [Relatórios agendados com workflows](/docs/report-pipeline) cobre workflows de livros personalizados e email.
+
+## Abrir uma edição do relatório de laboratório
+
+1. No Laboratório, abra Relatórios. Procure o número da requisição e selecione a edição que pretende consultar.
+2. Selecione **Open edition … in CE Reports**. Confira o número da edição, a data de emissão e os resultados. **Versão anterior** indica que existe uma versão mais recente no CE.
+3. Selecione **Voltar ao relatório do laboratório** para regressar à mesma edição. Se a edição estiver indisponível no CE, a cópia emitida continua disponível no painel do laboratório.

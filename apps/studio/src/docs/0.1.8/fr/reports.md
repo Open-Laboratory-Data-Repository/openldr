@@ -470,3 +470,9 @@ Les téléchargements réels sont [le PDF interactif](https://openldr.online/doc
 ## Guides associés
 
 [Créateur de rapports](/docs/report-designer) définit la mise en page et crée les entrées. [Requêtes](/docs/query) définit les données. [Rapports planifiés avec des workflows](/docs/report-pipeline) couvre les workflows de classeurs personnalisés et de courriel.
+
+## Ouvrir une édition du compte rendu de laboratoire
+
+1. Dans Laboratoire, ouvrez Rapports. Recherchez le numéro de demande et sélectionnez l’édition à consulter.
+2. Choisissez **Open edition … in CE Reports**. Vérifiez le numéro d’édition, la date d’émission et les résultats. **Version antérieure** indique que CE possède une version plus récente.
+3. Choisissez **Retour au compte rendu du laboratoire** pour retrouver cette édition. Si elle est indisponible dans CE, la copie émise reste consultable dans le volet du laboratoire.

@@ -90,9 +90,22 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
     const channel = new MessageChannel();
     portRef.current = channel.port1;
     gateRef.current ??= createDownloadGate();
-    wireHostPort(channel.port1 as unknown as HostPortLike, { call: (op) => pluginBrokerCall(pluginId, op), gate: gateRef.current });
+    wireHostPort(channel.port1 as unknown as HostPortLike, { call: (op) => pluginBrokerCall(pluginId, op), gate: gateRef.current,
+      edition: async (key, open) => {
+        if (context.site !== 'page') return false;
+        const path = '/reports/issued/' + encodeURIComponent(pluginId) + '/' + encodeURIComponent(key);
+        const response = await authFetch('/api' + path, {method:'HEAD'});
+        if ([401,403,404].includes(response.status)) return false;
+        if (!response.ok) throw Error('Report lookup failed');
+        if (open) {
+          history.replaceState(history.state, '', '/studio/x/' + encodeURIComponent(pluginId) + '?edition=' + encodeURIComponent(key));
+          window.location.assign('/studio' + path);
+        }
+        return true;
+      },
+    });
     channel.port1.start();
-    win.postMessage({ type: 'openldr:init', context: { ...context, theme: hostTheme(), themeTokens: hostThemeTokens() } }, '*', [channel.port2]);
+    win.postMessage({ type: 'openldr:init', context: { ...context, edition: context.site === 'page' ? new URLSearchParams(window.location.search).get('edition') ?? undefined : undefined, theme: hostTheme(), themeTokens: hostThemeTokens() } }, '*', [channel.port2]);
   }
 
   if (error) return <LoadFailed className="min-h-0 h-full" message={t('plugins.loadFailed')} />;

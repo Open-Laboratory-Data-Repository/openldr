@@ -58,3 +58,7 @@ By default the person who entered a result cannot authorise it. A holder of `lab
 An authorised result is locked. The plugin cannot amend it yet.
 
 The **Guide** tab on the **Lab** page shows each task step by step.
+
+## An issued edition is unavailable in CE Reports
+
+The Laboratory plugin can open an edition when CE recorded its resource versions at issue. Earlier installations can have a DiagnosticReport with the same ID and no edition record. The laboratory sheet keeps its issued copy. A missing historical result or insufficient access also makes the edition unavailable. To read it in CE, the account needs unrestricted data access and permissions to view reports, issued clinical reports, patients and patient identifiers.

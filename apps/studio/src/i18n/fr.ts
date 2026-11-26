@@ -1,6 +1,24 @@
 import type { EnShape } from './en';
 
 export const fr: EnShape = {
+  issued: {
+    back: "Retour au compte rendu du laboratoire",
+    accession: "Numéro de demande",
+    edition: "Édition",
+    issued: "Émis le",
+    reviewer: "Validé par",
+    results: "Résultats",
+    range: "Intervalle de référence",
+    version: "Version",
+    missing: "Cette édition est indisponible.",
+    failed: "Impossible de charger cette édition.",
+    retry: "Réessayer",
+    earlier: "Version antérieure",
+    final: "Définitif",
+    amended: "Modifié",
+    corrected: "Corrigé",
+    appended: "Complété",
+  },
   accessDenied: {
     title: 'Accès refusé',
     heading: "Vous n'avez pas accès à cette page",
@@ -465,6 +483,7 @@ export const fr: EnShape = {
         view: { label: 'Voir les rapports', description: 'Ouvrir l’espace Rapports et voir les définitions de rapports.' },
         run: { label: 'Exécuter des rapports', description: 'Exécuter et prévisualiser des rapports.' },
         export: { label: 'Exporter des rapports', description: 'Télécharger le résultat d’un rapport (PDF ou données).' },
+        view_issued: { label: 'Consulter les comptes rendus cliniques émis', description: 'Ouvrir les résultats signés d’un compte rendu individuel émis.' },
         edit_templates: { label: 'Modifier les modèles de rapport', description: 'Créer et modifier les définitions, les catégories et les mises en page des rapports.' },
       },
       forms: {

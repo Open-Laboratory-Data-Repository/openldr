@@ -1185,6 +1185,13 @@ export interface InternalSchema {
   'fhir.projection_retries': ProjectionRetriesTable;
   'fhir.fhir_resources': FhirResourcesTable;
   'fhir.fhir_current': FhirCurrentTable;
+  issued_report_editions: {
+    plugin_id: string;
+    edition_id: string;
+    content_hash: string;
+    report_id: string;
+    versions: JSONColumnType<Array<{ resourceType: string; id: string; version: number }>>;
+  };
   'fhir.resource_history': ResourceHistoryTable;
   'fhir.change_log': ChangeLogTable;
   'fhir.change_cursors': ChangeCursorsTable;

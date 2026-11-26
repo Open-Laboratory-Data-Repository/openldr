@@ -144,6 +144,7 @@ import * as m142 from './142_plugin_permission_groups';
 import * as m143 from './143_specimen_types_snomed';
 import * as m144 from './144_specimen_type_snomed_fix';
 import * as m145 from './145_plugin_data_role';
+import * as m146 from './146_issued_editions';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -292,4 +293,5 @@ export const internalMigrations: Record<string, Migration> = {
   '143_specimen_types_snomed': { up: m143.up, down: m143.down },
   '144_specimen_type_snomed_fix': { up: m144.up, down: m144.down },
   '145_plugin_data_role': { up: m145.up, down: m145.down },
+  '146_issued_editions': { up: m146.up, down: m146.down },
 };

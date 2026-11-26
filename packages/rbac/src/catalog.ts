@@ -20,6 +20,7 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   { key: 'dashboards.edit', group: 'dashboards', label: 'Edit dashboards', description: 'Modify dashboard layout and widgets.' },
   { key: 'dashboards.delete', group: 'dashboards', label: 'Delete dashboards', description: 'Remove dashboards.' },
   // Reports
+  { key: 'reports.view_issued', group: 'reports', label: 'View issued clinical reports', description: 'Open the signed results of an individual issued report.' },
   { key: 'reports.view', group: 'reports', label: 'View reports', description: 'Open the Reports workspace and see report definitions.' },
   { key: 'reports.run', group: 'reports', label: 'Run reports', description: 'Execute and preview reports.' },
   { key: 'reports.export', group: 'reports', label: 'Export reports', description: 'Download report output (PDF/data).' },

@@ -4,6 +4,7 @@ import { validateResource, type FhirResource } from '@openldr/fhir';
 import type { InternalSchema } from './schema/internal';
 import type { Provenance } from './provenance';
 import { provenanceFromRow } from './provenance';
+import { canonicalHash } from '@openldr/core';
 import { divergenceHash } from './divergence-hash';
 import { recordDivergence } from './sync-divergence-store';
 
@@ -580,9 +581,47 @@ export function createFhirStore(db: Kysely<InternalSchema>, storeOpts: FhirStore
     const site = await resolveSiteId();
     const write = (await useSetBased()) ? writeManySet : writeMany;
     const collate = opts.ownedBy !== undefined && (await useCollateC());
+    // A publishing plugin opts in by putting its stable edition key on the report.
+    // Registration, the history writes and their version references commit together.
+    const reports = opts.ownedBy ? resources.filter(r => r.resourceType === 'DiagnosticReport') : [];
+    const editions = reports.flatMap(report => {
+      const identifiers = Array.isArray(report.identifier) ? report.identifier : [];
+      return identifiers.filter(i => i?.system === 'urn:openldr:issued-edition')
+        .map(i => ({ key: i.value, report: report.id }));
+    });
+    const edition = editions[0];
+    if (edition && (editions.length !== 1 || reports.length !== 1 ||
+        typeof edition.report !== 'string' || typeof edition.key !== 'string' ||
+        !/^[A-Za-z0-9][A-Za-z0-9.-]{0,63}$/.test(edition.key))) {
+      throw new Error('An issued edition requires one report and one valid edition key.');
+    }
+    if (edition && new Set(resources.map(r => r.resourceType + '/' + r.id)).size !== resources.length) {
+      throw new Error('An issued edition contains a repeated resource.');
+    }
     const { refs, written } = await db.transaction().execute(async (trx) => {
+      if (edition && opts.ownedBy) {
+        const digest = canonicalHash({ resources });
+        const inserted = await trx.insertInto('issued_report_editions')
+          .values({
+            plugin_id: opts.ownedBy, edition_id: edition.key, report_id: String(edition.report),
+            content_hash: digest, versions: '[]',
+          })
+          .onConflict(c => c.columns(['plugin_id', 'edition_id']).doNothing())
+          .returning('edition_id').executeTakeFirst();
+        if (!inserted) {
+          const saved = await trx.selectFrom('issued_report_editions').select(['content_hash', 'versions'])
+            .where('plugin_id', '=', opts.ownedBy).where('edition_id', '=', edition.key).executeTakeFirstOrThrow();
+          if (saved.content_hash !== digest) throw new Error('This issued edition already has different content.');
+          return { refs: saved.versions, written: 0 };
+        }
+      }
       if (opts.ownedBy !== undefined) await checkOwner(trx, resources, opts.ownedBy, collate);
-      return write(trx, resources, provenance, site, opts.skipUnchanged === true);
+      const result = await write(trx, resources, provenance, site, opts.skipUnchanged === true);
+      if (edition && opts.ownedBy) {
+        await trx.updateTable('issued_report_editions').set({ versions: JSON.stringify(result.refs) })
+          .where('plugin_id', '=', opts.ownedBy).where('edition_id', '=', edition.key).executeTakeFirstOrThrow();
+      }
+      return result;
     });
     // A call that skipped every record changed nothing, so there is nothing to wake anyone for.
     if (written === 0) return refs;

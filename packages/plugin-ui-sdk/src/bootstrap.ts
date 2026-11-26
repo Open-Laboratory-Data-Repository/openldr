@@ -61,6 +61,11 @@ function pluginBootstrapV1(): void {
   // getOpenldr()) before the first 'openldr:init' message is processed.
   const api = {
     pluginId: '',
+    edition: undefined as string | undefined,
+    issuedReports: {
+      available: (edition: string) => call({kind:'host.edition', edition, open:false}),
+      open: (edition: string) => call({kind:'host.edition', edition, open:true}),
+    },
     capabilities: [] as string[],
     theme: 'light',
     themeTokens: Object.freeze({}) as Readonly<Record<string, string>>,
@@ -192,7 +197,8 @@ function pluginBootstrapV1(): void {
       else w.reject(new Error(m.result?.error ?? 'plugin host call failed'));
     };
     port.start();
-    const ctx = (data.context ?? {}) as { pluginId?: string; capabilities?: string[]; theme?: string; themeTokens?: unknown; locale?: string; site?: string };
+    const ctx = (data.context ?? {}) as { pluginId?: string; edition?: string; capabilities?: string[]; theme?: string; themeTokens?: unknown; locale?: string; site?: string };
+    api.edition = ctx.edition;
     api.pluginId = ctx.pluginId ?? '';
     api.capabilities = ctx.capabilities ?? [];
     applyTheme(ctx.theme ?? 'light', ctx.themeTokens);
