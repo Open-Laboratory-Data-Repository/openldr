@@ -40,13 +40,15 @@ Codex's DHIS2 plugin needs two things CE does not give a plugin today:
    No lab has a plugin installed yet, so nothing in the field breaks. The CLI's `import allow`,
    `revoke` and `allowed` keep their names and cover the same list, through shared code in
    `@openldr/bootstrap`.
-2. **DHIS2 sending goes through `connectors.push` first.** It already does aggregate and tracker
-   events with server-held credentials. The plugin builds the payload; CE's DHIS2 sink sends it.
-3. **A connector for a plugin's own code, only if Codex shows `connectors.push` cannot do the job.**
-   If needed: `invoke` takes an optional `connectorId`. The broker checks the approval, then passes the
-   connector's decrypted config and its one host as `allowedHosts`, as workflow nodes get them. The
-   plugin must also declare `net-egress`, and the egress switch (`PLUGIN_EGRESS_ENABLED`) still applies.
-   The page never sees the config. Every such call is audited with the connector id.
+2. **Core stays product-neutral.** Core holds no DHIS2 (or any other product's) logic: no endpoints,
+   payloads, mapping or periods. Those live in the plugin. The operator set this rule on 2026-11-26:
+   otherwise core would need code for every product a lab connects to.
+3. **A plugin's own code may use an approved connector.** `invoke` takes an optional `connectorId`.
+   The broker checks the approval from decision 1, then passes the connector's decrypted settings and
+   its one host as `allowedHosts`, as workflow nodes already get them (`plugin-node-service.ts:105`).
+   The plugin must also declare `net-egress`, and the egress switch (`PLUGIN_EGRESS_ENABLED`) still
+   applies. The page never sees the settings. Every such call is audited with the connector id. This
+   is generic: core does not know what the connector talks to.
 4. **"Released" means a result whose status is `final`, `amended` or `corrected`.** Preliminary,
    registered, cancelled and entered-in-error results are not returned.
 5. **The results read.** Two `ce_read` ops, behind a new `host:results` capability:
@@ -64,11 +66,15 @@ Codex's DHIS2 plugin needs two things CE does not give a plugin today:
 
 ## Not in this design
 
-- No new DHIS2 endpoints in CE's sink until Codex names one `connectors.push` lacks.
 - No change to how admins create connectors.
+- **Existing DHIS2 code in core is a separate, later task.** Core already holds DHIS2-specific code:
+  `packages/dhis2`, `packages/bootstrap/src/dhis2-orchestration.ts` (behind `connectors.push`), DHIS2
+  tables (internal migrations `008`, `009`, `022`) and the sink in `wasm/dhis2-sink`. Moving it out into
+  the DHIS2 plugin is its own design. This work adds nothing to it, and new DHIS2 work goes in the
+  plugin, not in `wasm/dhis2-sink`.
 
 ## Open for Codex
 
-- Does `connectors.push` with a tracker mapping cover what the DHIS2 plugin sends? If not, which DHIS2
-  endpoint and payload does it need?
+- Does the DHIS2 plugin's wasm have what it needs from `invoke` with a connector: the settings it
+  reads (base URL, user, password or token) and one pinned host?
 - Are the result fields above enough?
