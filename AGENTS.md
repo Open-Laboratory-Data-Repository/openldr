@@ -255,6 +255,13 @@ birth. The operator decided this on 2026-09-30. `lab_requests.age_days_estimated
 marks `age_days` as an estimate from months or years, so an analyst can tell it from a sent day
 count. The operator decided this on 2026-11-17.
 
+**Core holds no product-specific code.** An integration with one outside product (DHIS2, a LIMS, an
+EMR) lives in its plugin: its endpoints, payloads, mapping and periods. Core offers only generic
+machinery: connectors with server-held credentials, approval per plugin, one pinned host, and audit.
+Otherwise core needs new code for every product a lab connects to. The DHIS2 code already in core
+(`packages/dhis2`, `packages/bootstrap/src/dhis2-orchestration.ts`, `wasm/dhis2-sink`) is debt to move
+out. Add nothing to it. The operator decided this on 2026-11-26.
+
 ---
 
 ## 9. Git
