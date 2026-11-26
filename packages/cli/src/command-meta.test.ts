@@ -800,11 +800,12 @@ const SAFE_NAMES = new Set([
   '@openldr/core:CATALOG', '@openldr/core:DOMAINS', '@openldr/core:redact', '@openldr/core:errorMessage',
   // packages/forms/src/extract/extract.ts and to-transaction-bundle.ts: pure transforms of two FHIR resources.
   '@openldr/forms:ObservationExtractor', '@openldr/forms:ServiceRequestExtractor', '@openldr/forms:toTransactionBundle',
-  // packages/marketplace/src/signing.ts, scaffold.ts, pack.ts, bundle-fs.ts, artifact-manifest.ts, grant.ts:
-  // node:crypto, node:fs, node:path and zod only.
+  // packages/marketplace/src/signing.ts, scaffold.ts, pack.ts, bundle-fs.ts, artifact-manifest.ts, grant.ts,
+  // compatibility.ts: node:crypto, node:fs, node:path and zod only.
   '@openldr/marketplace:generatePublisherKeypair', '@openldr/marketplace:scaffold', '@openldr/marketplace:packBundle',
   '@openldr/marketplace:readBundle', '@openldr/marketplace:verifyBundle', '@openldr/marketplace:parseArtifactManifest',
   '@openldr/marketplace:readGrant', '@openldr/marketplace:allowedHosts',
+  '@openldr/marketplace:UnreadableManifestError', '@openldr/marketplace:requiredNewerCe',
   // packages/plugins/src/wasm-converter.ts (core, fhir, marketplace) and extism-runner.ts (@extism/extism):
   // run a plugin's wasm in this process.
   '@openldr/plugins:createWasmConverter', '@openldr/plugins:createExtismRunner',

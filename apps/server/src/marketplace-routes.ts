@@ -6,7 +6,7 @@ import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
 import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError, PluginStillStopping, ActiveVersionRemoval, PackRemovalError, REMOVE_NEEDS_ROLES_MANAGE, REMOVE_KEEPS, type RemoveKeep } from '@openldr/bootstrap';
 import {
-  verifyBundle, readGrant, isCompatible, readBundle,
+  verifyBundle, readGrant, isCompatible, readBundle, UnreadableManifestError, requiredNewerCe,
   LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
   openBundlePr, fetchRepoIndexJson, repoPathExists, mergeIndexEntry, parseIndex,
   payloadFileName, type RepoCoords, PublishError, parseContentPack, type Bundle, type ContentPackStep,
@@ -187,11 +187,32 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
         ...(steps ? { roles: packRoles(steps), layouts: packLayouts(steps) } : {}),
         registryId: reg.id, registryName: reg.name,
       };
-    } catch {
+    } catch (err) {
+      const older = err instanceof UnreadableManifestError ? needsNewerCe(err) : null;
+      if (older) return { ...older, ref: packRef(reg.id, ref), registryId: reg.id, registryName: reg.name };
       reply.code(404);
       return { error: 'bundle not found' };
     }
   });
+
+  /** A bundle this CE cannot parse, whose own CE range rules this CE out, was made for a later CE.
+   *  Answer with what the raw manifest says and `compatible: false`, so Browse shows the version it
+   *  needs and keeps Install off. A bundle whose range includes this CE is broken, not newer: null. */
+  function needsNewerCe(err: UnreadableManifestError) {
+    const range = requiredNewerCe(err, CE_VERSION);
+    if (!range) return null;
+    const raw = err.parts.raw;
+    const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
+    const pub = raw.publisher as { id?: unknown; name?: unknown; keyFingerprint?: unknown } | null | undefined;
+    const v = verifyBundle(err.parts);
+    return {
+      id: text(raw.id), version: text(raw.version), type: text(raw.type),
+      description: text(raw.description), license: text(raw.license),
+      publisher: pub ? { id: text(pub.id), name: text(pub.name) ?? '', keyFingerprint: text(pub.keyFingerprint) } : null,
+      compatibility: { ceVersion: range }, compatible: false, ceVersion: CE_VERSION,
+      payload: null, valid: v.valid, ...(v.reason ? { invalidReason: v.reason } : {}),
+    };
+  }
 
   // On-demand rich detail for an INSTALLED plugin, read from its stored manifest. Mirrors
   // the available/:ref detail (readme, payload, compatibility) so the Installed detail view

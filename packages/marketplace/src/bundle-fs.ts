@@ -3,6 +3,7 @@ import { join, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import { parseArtifactManifest, type ArtifactManifest } from './artifact-manifest';
 import { verifyArtifact, keyFingerprint } from './signing';
+import { isCompatible } from './compatibility';
 
 export interface Bundle {
   manifest: ArtifactManifest;
@@ -32,10 +33,38 @@ export function payloadFileName(kind: string): string {
  * Shared by readBundle (local dir) and HttpRegistrySource (remote fetch).
  */
 export function assembleBundle(raw: Record<string, unknown>, payload: Uint8Array, pubHex: string, ui?: Uint8Array): Bundle {
-  const manifest = parseArtifactManifest(raw);
   const publicKeyDer = Uint8Array.from(Buffer.from(pubHex.trim(), 'hex'));
   const payloadSha256 = createHash('sha256').update(payload).digest('hex');
-  return { manifest, raw, wasm: payload, publicKeyDer, payloadSha256, ...(ui ? { ui } : {}) };
+  const parts: BundleParts = { raw, wasm: payload, publicKeyDer, payloadSha256, ...(ui ? { ui } : {}) };
+  let manifest: ArtifactManifest;
+  try {
+    manifest = parseArtifactManifest(raw);
+  } catch (err) {
+    throw new UnreadableManifestError(parts, err);
+  }
+  return { manifest, ...parts };
+}
+
+/** A bundle's files without the parsed manifest. */
+export type BundleParts = Omit<Bundle, 'manifest'>;
+
+/** This CE could not parse a bundle's manifest. A bundle made for a later CE does this when it
+ *  declares something this CE does not know. The files are kept so the caller can still read the
+ *  bundle's own CE range from `parts.raw` and check its signature. */
+export class UnreadableManifestError extends Error {
+  constructor(readonly parts: BundleParts, cause: unknown) {
+    super(`manifest not readable by this CE: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
+    this.name = 'UnreadableManifestError';
+  }
+}
+
+/** When `err` says this CE could not read a bundle's manifest and the bundle's own CE range rules
+ *  `ceVersion` out, the range it needs (for example `>=0.1.13`). Null otherwise: a bundle whose range
+ *  includes this CE, or that has no range, is broken rather than made for a later CE. */
+export function requiredNewerCe(err: unknown, ceVersion: string): string | null {
+  if (!(err instanceof UnreadableManifestError)) return null;
+  const range = (err.parts.raw.compatibility as { ceVersion?: unknown } | null | undefined)?.ceVersion;
+  return typeof range === 'string' && !isCompatible(range, ceVersion) ? range : null;
 }
 
 /** Map from payload.kind to the sha256 field name in the payload object. */
@@ -79,9 +108,11 @@ export type BundleInvalidReason = 'fingerprint-mismatch' | 'payload-hash-mismatc
  * Returns `{ valid: true, fingerprint }` on success; on failure `{ valid: false, fingerprint, reason }`
  * where `reason` names the specific failing check (fingerprint → payload hash → ui hash → signature).
  */
-export function verifyBundle(b: Bundle): { valid: boolean; fingerprint: string; reason?: BundleInvalidReason } {
+export function verifyBundle(b: BundleParts): { valid: boolean; fingerprint: string; reason?: BundleInvalidReason } {
   const fingerprint = keyFingerprint(b.publicKeyDer);
-  const okFp = b.manifest.publisher ? b.manifest.publisher.keyFingerprint === fingerprint : false;
+  // Read from the signed raw manifest, so a bundle this CE cannot parse can still be checked.
+  const publisher = b.raw.publisher as { keyFingerprint?: unknown } | null | undefined;
+  const okFp = publisher?.keyFingerprint === fingerprint;
   const kind = String((b.raw.payload as { kind?: string } | null)?.kind ?? 'plugin');
   const shaField = SHA_FIELD[kind] ?? 'wasmSha256';
   const okSha =
