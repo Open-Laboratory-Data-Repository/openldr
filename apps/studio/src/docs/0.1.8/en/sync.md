@@ -102,6 +102,8 @@ Select **Save**. Changes start, stop or reconfigure workers immediately, without
 
 **Expected result:** A valid link can authenticate and transfer data. A save notification proves the settings were accepted, not that central was reached.
 
+If the lab was used before it was linked, the save gives those earlier records the site id, and the notification says how many will be sent. Terminology stays central's and is never sent.
+
 ## Read live sync activity
 
 Use Activity to establish whether the saved link actually works.

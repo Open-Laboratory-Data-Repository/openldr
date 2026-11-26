@@ -151,7 +151,8 @@ export async function runSettingsSyncSet(field: string, value: string, opts: Jso
       : f === 'signingPrivateKey'
         ? (saved.signingKeySet ? '<set>' : '<unset>')
         : String((saved as unknown as Record<string, unknown>)[f]);
-    const stamped = (saved as { stampedEarlierRecords?: number }).stampedEarlierRecords;
+    const { stampedEarlierRecords: stamped, stampFailed } = saved as { stampedEarlierRecords?: number; stampFailed?: true };
+    if (stampFailed) process.stderr.write('Saved, but the earlier records could not be given this site id, so they will not be sent yet. Save the setting again to retry.\n');
     emit(opts.json, saved, `set ${f} = ${shown}${stamped ? `\n${stamped} earlier records now carry this site id and will be sent` : ''}`);
     return 0;
   } finally {

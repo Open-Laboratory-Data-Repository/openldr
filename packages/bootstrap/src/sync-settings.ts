@@ -60,7 +60,7 @@ export async function setSyncConfig(
      *  Without it, records written before the lab was linked are never pushed. */
     stampEarlierRecords?: (siteId: string) => Promise<number>;
   } = {},
-): Promise<SyncConfigView & { stampedEarlierRecords?: number }> {
+): Promise<SyncConfigView & { stampedEarlierRecords?: number; stampFailed?: true }> {
   const c = SyncConfigInputSchema.parse(input);
   await store.set(K.enabled, String(c.enabled), actor);
   await store.set(K.mode, c.mode, actor);
@@ -85,9 +85,16 @@ export async function setSyncConfig(
   if (typeof c.signingPrivateKey === 'string' && c.signingPrivateKey.length > 0) {
     await store.set(K.signingPrivateKey, encrypt(c.signingPrivateKey), actor);
   }
-  // After the site id is stored, so a record written meanwhile is stamped by fhir-store itself.
-  const stamped = c.siteId && opts.stampEarlierRecords ? await opts.stampEarlierRecords(c.siteId) : 0;
+  // After the site id is stored, so a record written meanwhile is stamped by fhir-store itself. A
+  // failure here does not undo or misreport the save: the settings are stored, the caller is told
+  // the stamping failed, and the next save tries again (only rows without a site id change).
+  let stamped = 0;
+  let stampFailed = false;
+  if (c.siteId && opts.stampEarlierRecords) {
+    try { stamped = await opts.stampEarlierRecords(c.siteId); } catch { stampFailed = true; }
+  }
   const view = await getSyncConfig(store);
+  if (stampFailed) return { ...view, stampFailed: true };
   return stamped > 0 ? { ...view, stampedEarlierRecords: stamped } : view;
 }
 

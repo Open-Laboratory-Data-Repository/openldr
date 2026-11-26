@@ -207,6 +207,14 @@ describe('sync settings (discrete keys)', () => {
     expect(view.stampedEarlierRecords).toBe(227);
   });
 
+  it('a stamping failure keeps the save and says it failed', async () => {
+    const store = fakeStore();
+    const view = await setSyncConfig(store, fullInput, 'tester', encrypt, { stampEarlierRecords: async () => { throw new Error('db down'); } });
+    expect(view.stampFailed).toBe(true);
+    expect(view).toMatchObject({ siteId: 'lab-01' });
+    expect(store.data.get('sync.site_id')).toBe('lab-01');
+  });
+
   it('says nothing when no earlier record needed a site id', async () => {
     const zero = await setSyncConfig(fakeStore(), fullInput, 'tester', encrypt, { stampEarlierRecords: async () => 0 });
     expect(zero).not.toHaveProperty('stampedEarlierRecords');

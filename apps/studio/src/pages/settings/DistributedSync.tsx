@@ -166,9 +166,13 @@ export function DistributedSync() {
         // wipes it. (The server also preserves it when the field is absent, as defense in depth.)
         ...(sync.centralPublicKey ? { centralPublicKey: sync.centralPublicKey } : {}),
       };
-      setSync(await saveSyncConfig(input));
+      const saved = await saveSyncConfig(input);
+      setSync(saved);
       setSecretInput('');
-      toast.success(t('settings.general.sync.saved'));
+      // A lab's records from before it was linked get its site id on save, so they are sent.
+      if (saved.stampFailed) toast.warning(t('settings.general.sync.stampFailed'));
+      else if (saved.stampedEarlierRecords) toast.success(t('settings.general.sync.savedWithEarlier', { count: saved.stampedEarlierRecords }));
+      else toast.success(t('settings.general.sync.saved'));
       await refreshStatus();
     } catch (e) {
       toast.error(t('settings.general.sync.saveFailed', { error: e instanceof Error ? e.message : String(e) }));

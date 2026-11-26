@@ -886,6 +886,8 @@ export const pt: EnShape = {
       sync: {
         title: 'Sincronização distribuída',
         saved: 'Definições de sincronização guardadas',
+        savedWithEarlier: "Definições de sincronização guardadas. {{count}} registos anteriores serão enviados.",
+        stampFailed: "Definições guardadas, mas os registos anteriores não puderam ser marcados para envio. Guarde de novo para tentar outra vez.",
         saveFailed: 'Não foi possível guardar: {{error}}',
         save: 'Guardar',
         enabled: {
