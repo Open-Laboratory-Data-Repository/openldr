@@ -26,6 +26,8 @@ describe('PluginFrame', () => {
     const sandbox = iframe.getAttribute('sandbox') ?? '';
     expect(sandbox).toContain('allow-scripts');
     expect(sandbox).not.toContain('allow-same-origin');
+    // The plugin frame never opens a dialog of its own; the studio prints for it.
+    expect(sandbox).not.toContain('allow-modals');
     const srcdoc = iframe.getAttribute('srcdoc') ?? '';
     expect(srcdoc).toContain('<div id="panel">hi</div>');
     expect(srcdoc).toContain('openldr:init');

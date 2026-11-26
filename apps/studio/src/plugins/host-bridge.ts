@@ -1,4 +1,5 @@
 import { checkDownload, utf8ByteLength, type PluginBrokerOp, type PluginOp, type PluginRpcResult } from '@openldr/plugin-ui-sdk';
+import { createPrintGate, type PrintGate } from './print-frame';
 
 export interface HostPortLike {
   postMessage(message: unknown): void;
@@ -15,6 +16,8 @@ export interface HostBridgeDeps {
    *  the frame's reloads. Absent, this wiring gets its own. */
   gate?: DownloadGate;
   edition?(key: string, open: boolean): Promise<boolean>;
+  /** The frame's print limit, kept across its reloads like `gate`. Absent, this wiring gets its own. */
+  print?: PrintGate;
 }
 
 /** The shortest time between two downloads from one frame. */
@@ -96,9 +99,10 @@ export function createDownloadGate(opts: { save?: typeof saveTextFile; now?: () 
 /** Wire the host end of the plugin MessagePort: plugin posts { id, op }; we call the broker
  *  and post back { id, result }. A thrown call becomes ok:false so the plugin RPC never hangs.
  *  An op whose kind starts with `host.` is answered here and never reaches the server: a
- *  download's text can hold patient values. */
+ *  download's text and a print's pages can hold patient values. */
 export function wireHostPort(port: HostPortLike, deps: HostBridgeDeps): void {
   const gate = deps.gate ?? createDownloadGate();
+  const printGate = deps.print ?? createPrintGate();
 
   port.onmessage = (ev) => {
     const msg = ev.data as { id?: number; op?: PluginOp };
@@ -113,6 +117,9 @@ export function wireHostPort(port: HostPortLike, deps: HostBridgeDeps): void {
         void deps.edition(op.edition, op.open)
           .then(data => port.postMessage({ id, result: { ok: true, data } }))
           .catch(() => port.postMessage({ id, result: { ok: false, error: 'Report lookup failed' } }));
+      } else if (op.kind === 'host.print') {
+        // Answered when the print dialog closes. The gate never throws.
+        void printGate.print(op).then((result) => port.postMessage({ id, result }));
       } else {
         const result = op.kind === 'host.download' ? gate.download(op) : { ok: false, error: 'unknown host operation' };
         port.postMessage({ id, result });

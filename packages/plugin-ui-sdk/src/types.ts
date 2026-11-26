@@ -1,3 +1,5 @@
+import type { PluginPrintPaper } from './print';
+
 /** The init context the host mints and transfers to the plugin iframe. */
 export interface PluginInitContext {
   pluginId: string;
@@ -66,7 +68,10 @@ export type PluginDownloadMime = 'text/csv' | 'application/json' | 'text/plain';
 
 /** Operations the studio answers itself. They go over the same port as broker operations, and
  *  the studio never forwards them to the server. */
-export type PluginHostOp = { kind: 'host.edition'; edition: string; open: boolean } | { kind: 'host.download'; filename: string; mime: PluginDownloadMime; text: string };
+export type PluginHostOp =
+  | { kind: 'host.edition'; edition: string; open: boolean }
+  | { kind: 'host.download'; filename: string; mime: PluginDownloadMime; text: string }
+  | { kind: 'host.print'; title: string; paper: PluginPrintPaper; pages: string[] };
 
 /** Everything a page may send over its port. */
 export type PluginOp = PluginBrokerOp | PluginHostOp;
@@ -316,6 +321,16 @@ export interface OpenLdrPluginApi {
      *  over 64 MB in UTF-8, or when the page saved another file less than a second ago. The text
      *  never goes to the server. */
     download(input: { filename: string; mime: PluginDownloadMime; text: string }): Promise<void>;
+  };
+  /** Printing the studio does for the page. The page's frame cannot open a print dialog. */
+  print: {
+    /** The studio prints `pages` in order, one PNG per A4 sheet, from a print frame of its own that
+     *  holds only those images. Each is fitted to the sheet with its shape kept. Resolves when the
+     *  print dialog closes, whether the person printed or cancelled. Refused when the title is blank
+     *  or over 120 characters, the paper is not A4, there are no pages or over 100, a page is not a
+     *  `data:image/png;base64,` URL or is over 10,000 pixels a side, the pages are over 64 MB
+     *  together, or another print from this page is still open. The pages never go to the server. */
+    pages(input: { title: string; paper: PluginPrintPaper; pages: string[] }): Promise<void>;
   };
 }
 

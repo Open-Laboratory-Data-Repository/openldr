@@ -54,6 +54,15 @@ describe('createMockOpenldr', () => {
     await expect(api.files.download({ filename: 'held.csv', mime: 'application/json', text: '' })).rejects.toThrow('download refused: the name does not fit the type');
     expect(api.downloads).toEqual([]);
   });
+  it('print.pages records each print and refuses what the host refuses', async () => {
+    const api = createMockOpenldr({ pluginId: 'p1' });
+    // A 1 by 1 header: the mock reads the header only, as the host check does.
+    const page = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAAAA';
+    await expect(api.print.pages({ title: 'Manifest', paper: 'A4', pages: [page] })).resolves.toBeUndefined();
+    await expect(api.print.pages({ title: 'Manifest', paper: 'A4', pages: [] })).rejects.toThrow('print refused: no pages');
+    await expect(api.print.pages({ title: 'Manifest', paper: 'A4', pages: ['data:image/jpeg;base64,AAAA'] })).rejects.toThrow('print refused: a page is not a PNG');
+    expect(api.prints).toEqual([{ title: 'Manifest', paper: 'A4', pages: [page] }]);
+  });
   it('themeTokens is empty by default and carries what the test passes', () => {
     expect(createMockOpenldr({ pluginId: 'p1' }).themeTokens).toEqual({});
     const api = createMockOpenldr({ pluginId: 'p1', themeTokens: { '--openldr-bg': '#000' } });
