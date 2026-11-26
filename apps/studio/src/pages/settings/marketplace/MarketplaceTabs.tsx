@@ -15,6 +15,7 @@ import { PackageCard } from './PackageCard';
 import { PackageDetail } from './PackageDetail';
 import { RegistriesTab } from './RegistriesTab';
 import { availableToEntry, installedToEntry, newerAvailable, withBrowseRef, type CardEntry } from './util';
+import { compareVersions } from '@/docs/version';
 
 interface MarketplaceTabsProps {
   configured: boolean;
@@ -135,9 +136,23 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
     return m;
   }, [props.installed]);
   const versionsById = useMemo(() => {
-    const m = new Map<string, { version: string; active: boolean }[]>();
-    for (const a of props.installed) m.set(a.id, [...(m.get(a.id) ?? []), { version: a.version, active: a.active }]);
+    const m = new Map<string, { version: string; active: boolean; publisher: string | null }[]>();
+    for (const a of props.installed) {
+      const name = a.publisher && typeof a.publisher === 'object' ? (a.publisher as { name?: unknown }).name : null;
+      m.set(a.id, [...(m.get(a.id) ?? []), { version: a.version, active: a.active, publisher: typeof name === 'string' && name ? name : null }]);
+    }
     return m;
+  }, [props.installed]);
+  /** One row per installed package: the active version, or the highest when none is active. Older
+   *  versions stay installed and are listed in the detail's version history, not as cards of their own. */
+  const installedOnePerPackage = useMemo(() => {
+    const m = new Map<string, InstalledArtifact>();
+    for (const a of props.installed) {
+      const key = `${a.type}:${a.id}`;
+      const held = m.get(key);
+      if (!held || (a.active && !held.active) || (a.active === held.active && compareVersions(a.version, held.version) > 0)) m.set(key, a);
+    }
+    return [...m.values()];
   }, [props.installed]);
   /** Marks an installed plugin's entry with the newer Marketplace version, if any. Only the active
    *  version's entry carries it: an inactive row on the Installed tab is not what an update replaces. */
@@ -156,13 +171,13 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
     })
     .map((b) => { const e = availableToEntry(b, installedById); return e.installed ? withUpdate(e, installedById.get(b.id)!.version) : e; }), [props.available, filter, typeFilter, installedById, withUpdate]);
 
-  const installedEntries = useMemo(() => props.installed
+  const installedEntries = useMemo(() => installedOnePerPackage
     .filter((a) => {
       const textMatch = !filter || a.id.toLowerCase().includes(filter.toLowerCase());
       const typeMatch = typeFilter === 'all' || a.type === typeFilter;
       return textMatch && typeMatch;
     })
-    .map((a) => withUpdate(withBrowseRef(installedToEntry(a), props.available), a.version)), [props.installed, props.available, filter, typeFilter, withUpdate]);
+    .map((a) => withUpdate(withBrowseRef(installedToEntry(a), props.available), a.version)), [installedOnePerPackage, props.available, filter, typeFilter, withUpdate]);
 
   const selectedEntry = useMemo(() => {
     if (!selected) return null;
@@ -212,7 +227,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       <div className="flex items-center gap-2 border-b border-border px-4">
         <TabsList className="-mb-px min-w-0 overflow-x-auto border-b-0">
           <TabsTrigger value="browse">{t('settings.marketplace.browse')}</TabsTrigger>
-          <TabsTrigger value="installed">{t('settings.marketplace.installedTab')} ({props.installed.length})</TabsTrigger>
+          <TabsTrigger value="installed">{t('settings.marketplace.installedTab')} ({installedOnePerPackage.length})</TabsTrigger>
           <TabsTrigger value="registries">{t('settings.marketplace.registriesTab')}</TabsTrigger>
         </TabsList>
         <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -281,7 +296,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
             <div className="px-1 py-6 text-center text-sm text-muted-foreground">{t('settings.marketplace.emptyInstalled')}</div>
           ) : (
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-              {installedEntries.map((e) => <PackageCard key={`${e.id}@${e.version}`} entry={e} onClick={() => setSelected({ source: 'installed', id: e.id, version: e.version, type: e.type, followActive: e.active === true })} />)}
+              {installedEntries.map((e) => <PackageCard key={`${e.type}:${e.id}`} entry={e} onClick={() => setSelected({ source: 'installed', id: e.id, version: e.version, type: e.type, followActive: e.active === true })} />)}
             </div>
           )}
         </div>

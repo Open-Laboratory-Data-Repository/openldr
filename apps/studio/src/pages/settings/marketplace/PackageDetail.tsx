@@ -294,11 +294,35 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
               </dl>
               {entry.installedVersions && entry.installedVersions.length > 0 ? (
                 <div className="mt-3">
-                  <p className="mb-1 text-xs text-muted-foreground">{t('settings.marketplace.installedVersions')}</p>
-                  <ul className="m-0 list-none space-y-0.5 p-0 text-[13px]" data-testid="installed-versions">
+                  <p className="mb-1 text-xs text-muted-foreground">{t('settings.marketplace.versionHistory')}</p>
+                  {/* Every installed version, newest first. The Installed tab shows one card per plugin, so an
+                      older version's Roll back and Remove live here, in its row's ⋯. */}
+                  <ul className="m-0 list-none space-y-1 p-0 text-[13px]" data-testid="installed-versions">
                     {[...entry.installedVersions].sort((a, b) => compareVersions(b.version, a.version)).map((v) => (
-                      <li key={v.version} className={v.active ? 'text-foreground' : 'text-muted-foreground'}>
-                        {v.active ? t('settings.marketplace.activeVersion', { version: v.version }) : v.version}
+                      <li key={v.version} data-testid={`installed-version-${v.version}`} className="flex min-h-7 items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <span className={v.active ? 'text-foreground' : 'text-muted-foreground'}>{v.version}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{v.publisher ?? '—'}</span>
+                        </div>
+                        {v.active ? (
+                          <Badge variant="outline" className="shrink-0 border-emerald-500 text-emerald-700">{t('settings.marketplace.active')}</Badge>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('settings.marketplace.versionActions', { version: v.version })}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem data-testid={`rollback-${v.version}`} onSelect={() => onRollback(entry.id, v.version)}>
+                                {t('settings.marketplace.rollback')}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem data-testid={`remove-version-${v.version}`} className="text-destructive" onSelect={() => onRemove({ ...entry, version: v.version, active: false })}>
+                                {t('settings.marketplace.removeThisVersion')}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </li>
                     ))}
                   </ul>

@@ -1090,6 +1090,9 @@ export const pt: EnShape = {
       updateTo: 'Atualizar para {{version}}',
       newerAvailable: '{{version}} disponível',
       installedVersions: 'Versões instaladas',
+      versionHistory: 'Histórico de versões',
+      versionActions: 'Ações para {{version}}',
+      removeThisVersion: 'Remover esta versão',
       activeVersion: '{{version}} (ativa)',
       removeSheet: {
         title: 'Remover {{id}}',

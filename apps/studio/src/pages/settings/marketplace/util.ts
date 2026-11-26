@@ -29,7 +29,8 @@ export interface CardEntry {
   /** Installed only: a newer Marketplace version than the active one, if any. */
   update?: NewerVersion | null;
   /** Installed only: every installed version of this id, for the detail view. */
-  installedVersions?: { version: string; active: boolean }[];
+  /** Every installed version of this id, each with its publisher's name (null when unknown). */
+  installedVersions?: { version: string; active: boolean; publisher: string | null }[];
 }
 
 export interface NewerVersion { version: string; ref: string; rolledBack: boolean }

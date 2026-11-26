@@ -126,12 +126,35 @@ describe('PackageDetail', () => {
     expect(screen.queryByTestId('detail-update')).toBeNull();
   });
 
-  it('lists the installed versions, newest first, with the active one marked', async () => {
+  it('lists the version history, newest first, each with its publisher, and marks the active one', async () => {
     const installed: CardEntry = { ...entry, ref: undefined, version: '0.1.4', installed: true, active: true, enabled: true,
-      installedVersions: [{ version: '0.1.4', active: true }, { version: '0.1.10', active: false }, { version: '0.1.5', active: false }] };
+      installedVersions: [{ version: '0.1.4', active: true, publisher: 'Acme' }, { version: '0.1.10', active: false, publisher: 'OpenLDR test' }, { version: '0.1.5', active: false, publisher: null }] };
     render(<PackageDetail entry={installed} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
     const list = await screen.findByTestId('installed-versions');
-    expect([...list.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['0.1.10', '0.1.5', '0.1.4 (active)']);
+    expect(screen.getByText('Version history')).toBeTruthy();
+    expect([...list.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['0.1.10OpenLDR test', '0.1.5—', '0.1.4AcmeActive']);
+    // The active row has no menu; each older row has its own.
+    expect(screen.queryByRole('button', { name: 'Actions for 0.1.4' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Actions for 0.1.10' })).toBeTruthy();
+  });
+
+  it('an older version\'s row rolls back to it or removes that version only', async () => {
+    const onRollback = vi.fn();
+    const onRemove = vi.fn();
+    const installed: CardEntry = { ...entry, ref: undefined, version: '0.4.1', installed: true, active: true, enabled: true,
+      installedVersions: [{ version: '0.4.1', active: true, publisher: 'OpenLDR test' }, { version: '0.4.0', active: false, publisher: 'OpenLDR test' }] };
+    render(<PackageDetail entry={installed} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={onRollback} onRemove={onRemove} />);
+    const openRow = async () => {
+      const trigger = await screen.findByRole('button', { name: 'Actions for 0.4.0' });
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (screen.queryAllByRole('menuitem').length === 0) fireEvent.keyDown(trigger, { key: 'Enter' });
+    };
+    await openRow();
+    fireEvent.click(await screen.findByTestId('rollback-0.4.0'));
+    expect(onRollback).toHaveBeenCalledWith(installed.id, '0.4.0');
+    await openRow();
+    fireEvent.click(await screen.findByTestId('remove-version-0.4.0'));
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: installed.id, version: '0.4.0', active: false }));
   });
 
   it('Install calls onInstall with the fetched capabilities', async () => {

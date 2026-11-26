@@ -141,14 +141,45 @@ describe('Marketplace', () => {
     (api.getRemovalPlan as any).mockResolvedValue({ running: [], copies: 0, copiedBytes: 0 });
     mockDetail();
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
-    await openInstalledCard('0.9.0');
-    await openDetailMenu();
-    fireEvent.click(await screen.findByText('Remove'));
+    // One card for the plugin, the active 1.0.0. The older version is removed from its history row.
+    await openInstalledCard('1.0.0');
+    const trigger = await screen.findByRole('button', { name: 'Actions for 0.9.0' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (screen.queryAllByRole('menuitem').length === 0) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('remove-version-0.9.0'));
     expect(await screen.findByText(/Remove whonet-sqlite 0\.9\.0\?/)).toBeTruthy();
     expect(screen.queryByTestId('remove-plugin-sheet')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(api.removeArtifact).toHaveBeenCalledWith('whonet-sqlite', '0.9.0'));
     expect(api.removePlugin).not.toHaveBeenCalled();
+  }, 20000);
+
+  it('shows one card per plugin, counts plugins in the badge, and rolls back from the version history', async () => {
+    const row = (version: string, active: boolean, publisher: unknown) => ({ id: 'analyzer-interface', version, active, enabled: true, approvedBy: 'admin', type: 'plugin', publisher, capabilities: [], legacy: false });
+    const before = [row('0.4.1', true, { name: 'OpenLDR test' }), row('0.4.0', false, { name: 'OpenLDR test' }), row('0.3.9', false, { name: 'Other Publisher' })];
+    const after = [row('0.4.1', false, { name: 'OpenLDR test' }), row('0.4.0', true, { name: 'OpenLDR test' }), row('0.3.9', false, { name: 'Other Publisher' })];
+    (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
+    (api.listInstalledArtifacts as any).mockResolvedValue(before);
+    (api.rollbackArtifact as any).mockResolvedValue(undefined);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    const tab = await screen.findByRole('tab', { name: /Installed/ });
+    await waitFor(() => expect(tab.textContent).toContain('(1)'));
+    fireEvent.mouseDown(tab, { button: 0 });
+    const cards = await screen.findAllByTestId(/^card-/);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].textContent).toContain('v0.4.1');
+    fireEvent.click(cards[0]);
+    const history = await screen.findByTestId('installed-versions');
+    expect(history.textContent).toContain('Other Publisher');
+    (api.listInstalledArtifacts as any).mockResolvedValue(after);
+    const trigger = await screen.findByRole('button', { name: 'Actions for 0.4.0' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (screen.queryAllByRole('menuitem').length === 0) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('rollback-0.4.0'));
+    await waitFor(() => expect(api.rollbackArtifact).toHaveBeenCalledWith('analyzer-interface', '0.4.0'));
+    // The same detail now follows the active version, 0.4.0, and 0.4.1 stays in the history with its menu.
+    await waitFor(() => expect(screen.getByTestId('installed-version-0.4.0').textContent).toContain('Active'));
+    expect(screen.getByRole('button', { name: 'Actions for 0.4.1' })).toBeTruthy();
   }, 20000);
 
   it('the active version\'s detail shows the new version once the update installs', async () => {
@@ -288,16 +319,19 @@ describe('Marketplace', () => {
     ]);
     vi.mocked(api.setArtifactEnabled).mockImplementation(async (_id, value) => { enabled = value; });
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
-    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Installed \(2\)/ }), { button: 0 });
-    fireEvent.click((await screen.findAllByTestId('card-versioned-plugin'))[1]);
-    expect(await screen.findByText(/v1\.0\.0/)).toBeInTheDocument();
+    // One card for the plugin: two installed versions count once.
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Installed \(1\)/ }), { button: 0 });
+    const cards = await screen.findAllByTestId('card-versioned-plugin');
+    expect(cards).toHaveLength(1);
+    fireEvent.click(cards[0]);
+    expect(await screen.findByText(/v2\.0\.0/)).toBeInTheDocument();
     await openDetailMenu();
-    expect(await screen.findByRole('menuitem', { name: 'Roll back' })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Disable' }));
     await waitFor(() => expect(api.listInstalledArtifacts).toHaveBeenCalledTimes(2));
     await openDetailMenu();
     expect(await screen.findByRole('menuitem', { name: 'Enable' })).toBeInTheDocument();
-    expect(screen.getByText(/v1\.0\.0/)).toBeInTheDocument();
+    expect(screen.getByText(/v2\.0\.0/)).toBeInTheDocument();
+    expect(screen.getByTestId('installed-version-1.0.0')).toBeInTheDocument();
   });
 
   it.each(['Browse', 'Installed'] as const)('updates detail actions after toggling from %s without reopening', async (tab) => {
