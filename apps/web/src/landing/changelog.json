@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "0ae982993",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Market browse and market add install from the registries the Studio browses"
+        },
+        {
+          "hash": "cd09f7d60",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "The Browse list says which CE a bundle needs, offers no update this CE cannot run, and stops calling unchecked bundles unverified"
+        },
+        {
           "hash": "bb4bb8e89",
           "type": "fix",
           "scope": "reports",
