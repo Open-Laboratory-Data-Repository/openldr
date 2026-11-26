@@ -194,7 +194,7 @@ On the connector row, open the dots and select **Plugin access**.
 
 ### 2. Find the plugin
 
-Each plugin row says how it uses the connector: **Imports from it** or **Uses it as a connector**.
+Each plugin row says how it uses the connector: **Imports from it** or **Uses it as a connector**. A database connection lists import plugins only, so its password never reaches plugin code.
 
 ### 3. Switch it on
 

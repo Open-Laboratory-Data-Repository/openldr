@@ -188,9 +188,9 @@ CE exécute alors le point d'entrée avec les réglages du connecteur comme conf
 - Un admin a activé le plugin pour ce connecteur, dans Connectors > **Accès des plugins** ou avec `openldr connectors allow <id> <plugin>`.
 - Le plugin déclare `host:connectors` et `net-egress`.
 - L'accès réseau des plugins est activé pour ce CE (`PLUGIN_EGRESS_ENABLED`).
-- Le connecteur existe et est activé.
+- Le connecteur existe, est activé et n'est pas un connecteur de base de données. Un connecteur de base de données est réservé aux plugins d'import : CE exécute lui-même leurs SELECT en lecture seule, donc son mot de passe n'atteint jamais le code d'un plugin.
 
-La page ne voit jamais les réglages. La ligne d'audit de l'appel nomme le connecteur. La même autorisation couvre aussi les appels `connectors.*` de la page : un plugin ne liste et n'utilise que les connecteurs pour lesquels il a été activé.
+La page ne voit jamais les réglages. Si le code met un réglage secret (mot de passe, jeton ou clé) dans sa réponse, CE retient toute la réponse. La ligne d'audit de l'appel nomme le connecteur. La même autorisation couvre aussi les appels `connectors.*` de la page : un plugin ne liste et n'utilise que les connecteurs pour lesquels il a été activé.
 
 ## fhir_emit
 

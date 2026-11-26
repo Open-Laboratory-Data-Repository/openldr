@@ -47,7 +47,11 @@ Codex's DHIS2 plugin needs two things CE does not give a plugin today:
    The broker checks the approval from decision 1, then passes the connector's decrypted settings and
    its one host as `allowedHosts`, as workflow nodes already get them (`plugin-node-service.ts:105`).
    The plugin must also declare `net-egress`, and the egress switch (`PLUGIN_EGRESS_ENABLED`) still
-   applies. The page never sees the settings. Every such call is audited with the connector id. This
+   applies. A database connector is refused, and is offered to import plugins only in the approval
+   list: CE runs their read-only SELECTs itself, so a database password never reaches plugin code. If
+   the code puts a secret setting (a password, token or key) in its answer, the broker withholds the
+   answer. The operator asked on 2026-11-26 whether a plugin could delete CE's database through a
+   connector; it cannot, and this closes the one leak the check found. The page never sees the settings. Every such call is audited with the connector id. This
    is generic: core does not know what the connector talks to.
 4. **"Released" means a result whose status is `final`, `amended` or `corrected`.** Preliminary,
    registered, cancelled and entered-in-error results are not returned.

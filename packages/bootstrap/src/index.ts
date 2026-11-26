@@ -2198,7 +2198,9 @@ const reporting: ReportingApi = {
     connectorConfig: async (id) => {
       const c = await connectorStore.get(id);
       if (!c) return null;
-      return { enabled: c.enabled, allowedHost: c.allowedHost, config: await connectorStore.getDecryptedConfig(id, cfg.SECRETS_ENCRYPTION_KEY) };
+      // A database connector is refused by the broker; its password is never decrypted for it.
+      const config = c.kind === 'database' ? {} : await connectorStore.getDecryptedConfig(id, cfg.SECRETS_ENCRYPTION_KEY);
+      return { enabled: c.enabled, kind: c.kind, allowedHost: c.allowedHost, config };
     },
     // Once per plugin call with host functions (ruling 5).
     resolveFacilities: async (scope) => facilityIdsInScope(await scopeRegistryRows(), scope),

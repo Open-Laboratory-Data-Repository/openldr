@@ -451,10 +451,8 @@ describe('connector plugin access routes', () => {
     await seed(store);
     const res = await app.inject({ method: 'GET', url: '/api/connectors/ms/import-plugins' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual([
-      { id: 'dhis2-lab-results', version: '0.2.0', use: 'connector', allowed: false },
-      { id: 'v1-import', version: '0.1.0', use: 'import', allowed: true },
-    ]);
+    // A database connector is offered to import plugins only; its password never reaches plugin code.
+    expect(res.json()).toEqual([{ id: 'v1-import', version: '0.1.0', use: 'import', allowed: true }]);
     // A sink connector has no type, so no plugin imports from it; a plugin that declares
     // host:connectors is offered for it.
     expect((await app.inject({ method: 'GET', url: '/api/connectors/sink/import-plugins' })).json()).toEqual([
@@ -469,7 +467,6 @@ describe('connector plugin access routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/connectors/ms/import-plugins' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([
-      { id: 'dhis2-lab-results', version: '0.2.0', use: 'connector', allowed: false },
       { id: 'rows-copy', version: '0.3.0', use: 'import', allowed: false },
       { id: 'v1-import', version: '0.1.0', use: 'import', allowed: true },
     ]);

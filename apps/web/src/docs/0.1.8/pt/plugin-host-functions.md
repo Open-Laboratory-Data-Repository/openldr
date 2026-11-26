@@ -188,9 +188,9 @@ O CE corre então o ponto de entrada com as definições do conector como config
 - Um admin ativou o plugin para esse conector, em Connectors > **Acesso de plugins** ou com `openldr connectors allow <id> <plugin>`.
 - O plugin declara `host:connectors` e `net-egress`.
 - O acesso à rede dos plugins está ligado neste CE (`PLUGIN_EGRESS_ENABLED`).
-- O conector existe e está ativo.
+- O conector existe, está ativo e não é um conector de base de dados. Um conector de base de dados é só para plugins de importação: o CE corre ele próprio os seus SELECT só de leitura, por isso a sua palavra-passe nunca chega ao código de um plugin.
 
-A página nunca vê as definições. A linha de auditoria da chamada nomeia o conector. A mesma autorização cobre também as chamadas `connectors.*` da página: um plugin só lista e usa os conectores para que foi ativado.
+A página nunca vê as definições. Se o código puser uma definição secreta (palavra-passe, token ou chave) na sua resposta, o CE retém a resposta toda. A linha de auditoria da chamada nomeia o conector. A mesma autorização cobre também as chamadas `connectors.*` da página: um plugin só lista e usa os conectores para que foi ativado.
 
 ## fhir_emit
 

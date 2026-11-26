@@ -7,7 +7,7 @@ import type { Kysely } from 'kysely';
 import { createPluginRequests, createPluginSchemas, type TableShape } from '@openldr/db';
 import { createPluginStore, createWasmSink, parseManifest } from '@openldr/plugins';
 import { PG_MEM_WITHOUT_RLS } from '../../db/src/plugin-schema';
-import { checkForPage, createPluginBroker, buildBrokerOpSchema, type PluginBrokerDeps } from './plugin-broker';
+import { answerHoldsSecret, checkForPage, createPluginBroker, buildBrokerOpSchema, type PluginBrokerDeps } from './plugin-broker';
 import { createPluginHost } from './plugin-host';
 import { facilityIdsInScope, type ScopeRegistryRow } from './data-scope';
 import { CopySetChangedError, copySetHashes, copySpecSchema, createImportCopyService } from './import-copy';
@@ -157,7 +157,7 @@ describe('plugin broker', () => {
 
   describe('invoke with a connector', () => {
     const caps = [{ kind: 'host:connectors' }, { kind: 'net-egress', allowedHosts: [] }];
-    const conn = (over: Record<string, unknown> = {}) => vi.fn(async () => ({ enabled: true, allowedHost: 'dhis2.example.org:443', config: { baseUrl: 'https://dhis2.example.org', password: 'pw' }, ...over }));
+    const conn = (over: Record<string, unknown> = {}) => vi.fn(async () => ({ enabled: true, kind: 'sink', allowedHost: 'dhis2.example.org:443', config: { baseUrl: 'https://dhis2.example.org', password: 'pw' }, ...over }));
     const sinkSpy = () => {
       const invoke = vi.fn(async () => ({ sent: true }));
       return { invoke, loadSink: vi.fn(async () => ({ invoke })) };
@@ -188,6 +188,7 @@ describe('plugin broker', () => {
         { name: 'egress off', opts: { caps, allowedConnectors: ['c1'], egressEnabled: false }, reason: 'egress kill-switch' },
         { name: 'missing', opts: { caps, allowedConnectors: ['c1'], connectorConfig: vi.fn(async () => null) }, reason: 'connector c1 not found or disabled' },
         { name: 'disabled', opts: { caps, allowedConnectors: ['c1'], connectorConfig: conn({ enabled: false }) }, reason: 'connector c1 not found or disabled' },
+        { name: 'database', opts: { caps, allowedConnectors: ['c1'], connectorConfig: conn({ kind: 'database' }) }, reason: 'is a database connector' },
       ];
       for (const c of cases) {
         const s = sinkSpy();
@@ -197,8 +198,28 @@ describe('plugin broker', () => {
         expect(r, c.name).toMatchObject({ ok: false });
         expect((r as { error: string }).error, c.name).toContain(c.reason);
         expect(s.loadSink, c.name).not.toHaveBeenCalled();
-        if (c.name !== 'missing' && c.name !== 'disabled') expect(connectorConfig, c.name).not.toHaveBeenCalled();
+        if (!['missing', 'disabled', 'database'].includes(c.name)) expect(connectorConfig, c.name).not.toHaveBeenCalled();
       }
+    });
+
+    it('withholds an answer that carries a connector secret, as JSON would write it too', async () => {
+      for (const answer of [{ leaked: 'pw' + 'xyz1' }, { nested: ['a', { v: 'see pwxyz1 here' }] }]) {
+        const invoke = vi.fn(async () => answer);
+        const { b, audited } = broker({ caps, loadSink: vi.fn(async () => ({ invoke })), allowedConnectors: ['c1'], ...({ connectorConfig: conn({ config: { baseUrl: 'https://dhis2.example.org', password: 'pwxyz1' } }) } as any) });
+        const r = await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: {}, connectorId: 'c1' });
+        expect(r).toMatchObject({ ok: false });
+        expect((r as { error: string }).error).toContain('returned a connector secret; the answer was withheld');
+        expect(JSON.stringify(r)).not.toContain('pwxyz1');
+        expect(audited.some((a) => a.outcome === 'denied')).toBe(true);
+      }
+    });
+
+    it('answerHoldsSecret looks only at secret settings, and not at short values', () => {
+      const config = { baseUrl: 'https://h', username: 'admin', password: 'p"q\\r12', apiToken: 'tok-123', pin: '12' };
+      expect(answerHoldsSecret({ url: 'https://h', user: 'admin' }, config)).toBe(false);
+      expect(answerHoldsSecret({ t: 'tok-123' }, config)).toBe(true);
+      expect(answerHoldsSecret({ p: 'p"q\\r12' }, config)).toBe(true);
+      expect(answerHoldsSecret({ n: 12 }, { pin: '12' })).toBe(false);
     });
 
     it('an invoke without a connector is unchanged', async () => {

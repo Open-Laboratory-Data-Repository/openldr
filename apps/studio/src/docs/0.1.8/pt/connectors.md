@@ -194,7 +194,7 @@ Na linha do conector, abra os pontos e selecione **Acesso de plugins**.
 
 ### 2. Encontrar o plugin
 
-Cada linha de plugin diz como usa o conector: **Importa a partir dele** ou **Usa-o como conector**.
+Cada linha de plugin diz como usa o conector: **Importa a partir dele** ou **Usa-o como conector**. Uma ligação de base de dados só lista plugins de importação, por isso a sua palavra-passe nunca chega ao código de um plugin.
 
 ### 3. Ativá-lo
 

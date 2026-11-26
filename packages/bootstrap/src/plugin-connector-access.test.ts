@@ -19,7 +19,7 @@ function memData() {
 const plugin = (id: string, caps: unknown[] | undefined, over: Record<string, unknown> = {}) =>
   ({ id, version: '1.0.0', enabled: true, active: true, manifest: caps === undefined ? {} : { capabilities: caps }, ...over });
 
-function setup(opts: { type?: string | null; exists?: boolean } = {}) {
+function setup(opts: { type?: string | null; kind?: string; exists?: boolean } = {}) {
   const data = memData();
   const audit = vi.fn(async () => {});
   const imports = {
@@ -36,7 +36,7 @@ function setup(opts: { type?: string | null; exists?: boolean } = {}) {
   ];
   const access = createPluginConnectorAccess({
     plugins: { list: async () => plugins },
-    connectors: { get: async () => (opts.exists === false ? null : { type: opts.type ?? null }) },
+    connectors: { get: async () => (opts.exists === false ? null : { type: opts.type ?? null, kind: opts.kind ?? (opts.type ? 'database' : 'sink') }) },
     pluginData: data,
     imports,
     audit,
@@ -53,9 +53,10 @@ describe('plugin connector access', () => {
     expect(await access.candidates('c1')).toEqual([{ id: 'dhis2-lab-results', version: '1.0.0', use: 'connector', allowed: false }]);
   });
 
-  it('also offers an import plugin for a database connector of a type it reads, as before', async () => {
+  it('offers a database connector to import plugins only: its password never reaches plugin code', async () => {
     const { access } = setup({ type: 'microsoft-sql' });
-    expect((await access.candidates('c1')).map((c) => [c.id, c.use])).toEqual([['cdr-source', 'import'], ['dhis2-lab-results', 'connector']]);
+    expect((await access.candidates('c1')).map((c) => [c.id, c.use])).toEqual([['cdr-source', 'import']]);
+    await expect(access.allow('dhis2-lab-results', 'c1', { type: 'user', id: 'u1', name: 'dev-admin' })).rejects.toThrow('cannot use connector c1');
   });
 
   it('offers nothing for a connector that does not exist', async () => {
@@ -81,7 +82,7 @@ describe('plugin connector access', () => {
   });
 
   it('passes an import plugin to the import service, which keeps its own checks', async () => {
-    const { access, imports } = setup({ type: 'microsoft-sql' });
+    const { access, imports } = setup({ type: 'microsoft-sql', kind: 'database' });
     await access.allow('cdr-source', 'c1', actor);
     expect(imports.allow).toHaveBeenCalledWith('cdr-source', 'c1', actor);
     await access.revoke('cdr-source', 'c1', actor);

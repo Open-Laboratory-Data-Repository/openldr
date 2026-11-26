@@ -194,7 +194,7 @@ Sur la ligne du connecteur, ouvrez les points et sélectionnez **Accès des plug
 
 ### 2. Trouver le plugin
 
-Chaque ligne de plugin dit comment il utilise le connecteur : **Importe depuis celui-ci** ou **L’utilise comme connecteur**.
+Chaque ligne de plugin dit comment il utilise le connecteur : **Importe depuis celui-ci** ou **L’utilise comme connecteur**. Une connexion de base de données ne liste que les plugins d'import, donc son mot de passe n'atteint jamais le code d'un plugin.
 
 ### 3. L'activer
 

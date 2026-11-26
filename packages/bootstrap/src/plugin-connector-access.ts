@@ -6,7 +6,8 @@ import { CONNECTOR_ALLOWED, auditOrRefuse, auditQuietly, type ImportActor, type 
 // One list per plugin, the one imports already keep: an admin switches a plugin on for a connector,
 // and only then may the plugin use it. An import plugin is offered for a database connector of a
 // type its import source reads, as before. Any plugin that declares host:connectors is offered for
-// every connector: core does not know what the connector talks to.
+// connector that is not a database. A database connector stays import-only: there CE opens the
+// connection and runs only read-only SELECTs, so its password never reaches plugin code.
 
 export interface ConnectorPluginCandidate {
   id: string;
@@ -29,7 +30,7 @@ export interface PluginConnectorAccess {
 
 export interface PluginConnectorAccessDeps {
   plugins: { list(): Promise<Array<{ id: string; version: string; enabled: boolean; active: boolean; manifest: Record<string, unknown> }>> };
-  connectors: { get(id: string): Promise<{ type?: string | null } | null> };
+  connectors: { get(id: string): Promise<{ type?: string | null; kind?: string | null } | null> };
   pluginData: Pick<PluginDataStore, 'put' | 'delete' | 'list' | 'get'>;
   imports: Pick<ImportService, 'readers' | 'allow' | 'revoke'>;
   audit: ImportServiceDeps['audit'];
@@ -55,7 +56,9 @@ export function createPluginConnectorAccess(deps: PluginConnectorAccessDeps): Pl
         if (p.connectorTypes.includes(type)) out.set(p.id, { id: p.id, version: p.version, use: 'import' });
       }
     }
-    for (const row of await deps.plugins.list()) {
+    // A database connector is offered to import plugins only.
+    const forConnectorPlugins = connector.kind !== 'database';
+    for (const row of forConnectorPlugins ? await deps.plugins.list() : []) {
       if (!row.active || !row.enabled || out.has(row.id)) continue;
       if (declaresConnectors(row.manifest)) out.set(row.id, { id: row.id, version: row.version, use: 'connector' });
     }

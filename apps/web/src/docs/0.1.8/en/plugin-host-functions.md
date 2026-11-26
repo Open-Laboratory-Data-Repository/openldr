@@ -188,9 +188,9 @@ CE then runs the entrypoint with the connector's settings as its config, and all
 - An admin switched the plugin on for that connector, in Connectors > **Plugin access** or with `openldr connectors allow <id> <plugin>`.
 - The plugin declares both `host:connectors` and `net-egress`.
 - Plugin network access is on for this CE (`PLUGIN_EGRESS_ENABLED`).
-- The connector exists and is enabled.
+- The connector exists, is enabled, and is not a database connector. A database connector is for import plugins only: CE runs their read-only SELECTs itself, so its password never reaches plugin code.
 
-The page never sees the settings. The audit row for the call names the connector. The same approval also covers the `connectors.*` page calls: a plugin lists and uses only the connectors it was switched on for.
+The page never sees the settings. If the code puts a secret setting (a password, token or key) in its answer, CE withholds the whole answer. The audit row for the call names the connector. The same approval also covers the `connectors.*` page calls: a plugin lists and uses only the connectors it was switched on for.
 
 ## fhir_emit
 

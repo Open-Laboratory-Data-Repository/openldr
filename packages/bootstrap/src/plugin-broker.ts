@@ -318,6 +318,20 @@ function egresses(op: BrokerOp): boolean {
   }
 }
 
+/** A connector setting is a secret when its name says so. */
+const SECRET_SETTING = /pass|secret|token|key|credential|auth/i;
+
+/** Does a plugin's answer carry one of the connector's secret settings, anywhere in its JSON? A
+ *  value under 4 characters is not looked for: it would match by chance. */
+export function answerHoldsSecret(answer: unknown, config: Record<string, string>): boolean {
+  const secrets = Object.entries(config).filter(([k, v]) => SECRET_SETTING.test(k) && typeof v === 'string' && v.length >= 4).map(([, v]) => v);
+  if (secrets.length === 0) return false;
+  let text: string;
+  try { text = JSON.stringify(answer) ?? ''; } catch { return true; }
+  // JSON.stringify escapes quotes and backslashes, so look for each secret as JSON writes it too.
+  return secrets.some((v) => text.includes(v) || text.includes(JSON.stringify(v).slice(1, -1)));
+}
+
 /** The connector a connectors.* op names, or undefined for an op that names none. */
 function connectorOf(op: BrokerOp): string | undefined {
   switch (op.kind) {
@@ -407,7 +421,7 @@ export interface PluginBrokerDeps {
   /** A connector's decrypted settings and pinned host, for a plugin's own code to use one an admin
    *  switched on for it (design 2026-11-26-plugin-connector-approval-and-results). Null when the
    *  connector does not exist. When absent, an invoke that names a connector is refused. */
-  connectorConfig?: (id: string) => Promise<{ enabled: boolean; allowedHost: string | null; config: Record<string, string> } | null>;
+  connectorConfig?: (id: string) => Promise<{ enabled: boolean; kind: string; allowedHost: string | null; config: Record<string, string> } | null>;
   /** Pull live metadata for a connector (resolve→loadSink→pull_metadata). */
   connectorMetadata?: (id: string) => Promise<unknown>;
   /** Run a DHIS2 push for a caller-supplied mapping/orgUnitMap through a connector's sink. */
@@ -608,6 +622,8 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
               if ((await deps.pluginData.get(pluginId, CONNECTOR_ALLOWED, id)) === null) return refused(`connector ${id} is not allowed for plugin ${pluginId}`);
               const c = deps.connectorConfig ? await deps.connectorConfig(id) : null;
               if (!c || !c.enabled) return refused(`connector ${id} not found or disabled`);
+              // A database connector's password stays in CE: imports run their SELECTs through CE.
+              if (c.kind === 'database') return refused(`connector ${id} is a database connector; plugin code cannot be given its settings`);
               connection = { config: c.config, allowedHosts: c.allowedHost ? [c.allowedHost] : [] };
             }
             const sink = await deps.plugins.loadSink(pluginId, row.version);
@@ -619,6 +635,11 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
             const data = connection || Object.keys(withHost).length > 0
               ? await sink.invoke(op.entrypoint, op.input, { ...withHost, ...(connection ?? {}) })
               : await sink.invoke(op.entrypoint, op.input);
+            // The connector's secrets are for the call, not the page: an answer that carries one is
+            // refused, and nothing of it is returned.
+            if (connection && answerHoldsSecret(data, connection.config)) {
+              return deny(`invoke:${op.entrypoint}`, `plugin ${pluginId} returned a connector secret; the answer was withheld`);
+            }
             // wasm execution; with a connector, the audit row names it.
             await emit(pluginId, principal, `invoke:${op.entrypoint}`, 'ok', op.connectorId !== undefined ? `connector ${op.connectorId}` : undefined);
             return { ok: true, data };
