@@ -55,7 +55,12 @@ export async function setSyncConfig(
   input: unknown,
   actor: string | null,
   encrypt: (plain: string) => string,
-): Promise<SyncConfigView> {
+  opts: {
+    /** Give the site id to this lab's earlier records that have none (@openldr/db stampEarlierRecords).
+     *  Without it, records written before the lab was linked are never pushed. */
+    stampEarlierRecords?: (siteId: string) => Promise<number>;
+  } = {},
+): Promise<SyncConfigView & { stampedEarlierRecords?: number }> {
   const c = SyncConfigInputSchema.parse(input);
   await store.set(K.enabled, String(c.enabled), actor);
   await store.set(K.mode, c.mode, actor);
@@ -80,7 +85,10 @@ export async function setSyncConfig(
   if (typeof c.signingPrivateKey === 'string' && c.signingPrivateKey.length > 0) {
     await store.set(K.signingPrivateKey, encrypt(c.signingPrivateKey), actor);
   }
-  return getSyncConfig(store);
+  // After the site id is stored, so a record written meanwhile is stamped by fhir-store itself.
+  const stamped = c.siteId && opts.stampEarlierRecords ? await opts.stampEarlierRecords(c.siteId) : 0;
+  const view = await getSyncConfig(store);
+  return stamped > 0 ? { ...view, stampedEarlierRecords: stamped } : view;
 }
 
 /**

@@ -168,3 +168,4 @@ export {
   columnShapeSchema, tableShapeSchema, tableShapesSchema,
   type ColumnType, type ColumnShape, type TableShape,
 } from './plugin-table-shape';
+export * from './change-log-site';

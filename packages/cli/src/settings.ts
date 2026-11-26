@@ -1,3 +1,4 @@
+import { stampEarlierRecords } from '@openldr/db';
 import { createAppContext, dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, recordAuditEvent } from '@openldr/bootstrap';
 import { loadConfig, LAB_COUNTRY_VALUE_SET, LAB_LOGO_MIME, type SyncConfigView, type SyncConfigInput } from '@openldr/config';
 import { callerName, cliActor } from './cli-actor';
@@ -137,7 +138,9 @@ export async function runSettingsSyncSet(field: string, value: string, opts: Jso
     const input: SyncConfigInput = { ...viewToInput(current), [f]: coerceSyncField(f, value) };
     let saved: SyncConfigView;
     try {
-      saved = await setSyncConfig(ctx.appSettings, input, callerName(), ctx.encryptSecret);
+      saved = await setSyncConfig(ctx.appSettings, input, callerName(), ctx.encryptSecret, {
+        stampEarlierRecords: (siteId) => stampEarlierRecords(ctx.internalDb, siteId),
+      });
     } catch (e) {
       process.stderr.write(`invalid value: ${e instanceof Error ? e.message : String(e)}\n`);
       return 1;
@@ -148,7 +151,8 @@ export async function runSettingsSyncSet(field: string, value: string, opts: Jso
       : f === 'signingPrivateKey'
         ? (saved.signingKeySet ? '<set>' : '<unset>')
         : String((saved as unknown as Record<string, unknown>)[f]);
-    emit(opts.json, saved, `set ${f} = ${shown}`);
+    const stamped = (saved as { stampedEarlierRecords?: number }).stampedEarlierRecords;
+    emit(opts.json, saved, `set ${f} = ${shown}${stamped ? `\n${stamped} earlier records now carry this site id and will be sent` : ''}`);
     return 0;
   } finally {
     await ctx.close();

@@ -196,4 +196,19 @@ describe('sync settings (discrete keys)', () => {
       siteId: null,
     });
   });
+
+  // Design 2026-11-26: a lab's records from before it was linked get its site id when it is saved.
+  it('stamps the lab\'s earlier records with the saved site id, and says how many', async () => {
+    const calls: string[] = [];
+    const view = await setSyncConfig(fakeStore(), fullInput, 'tester', encrypt, {
+      stampEarlierRecords: async (siteId) => { calls.push(siteId); return 227; },
+    });
+    expect(calls).toEqual(['lab-01']);
+    expect(view.stampedEarlierRecords).toBe(227);
+  });
+
+  it('says nothing when no earlier record needed a site id', async () => {
+    const zero = await setSyncConfig(fakeStore(), fullInput, 'tester', encrypt, { stampEarlierRecords: async () => 0 });
+    expect(zero).not.toHaveProperty('stampedEarlierRecords');
+  });
 });
