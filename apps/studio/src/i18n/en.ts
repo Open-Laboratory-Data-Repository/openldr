@@ -1094,6 +1094,9 @@ export const en = {
       updateTo: 'Update to {{version}}',
       newerAvailable: '{{version}} available',
       installedVersions: 'Installed versions',
+      versionHistory: 'Version history',
+      versionActions: 'Actions for {{version}}',
+      removeThisVersion: 'Remove this version',
       activeVersion: '{{version}} (active)',
       removeSheet: {
         title: 'Remove {{id}}',
