@@ -6,6 +6,12 @@
       "version": "v0.1.13-rc.2",
       "entries": [
         {
+          "hash": "88b4fa0f4",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Marketplace Installed shows one card per plugin, with a version history"
+        },
+        {
           "hash": "99e30aac4",
           "type": "feat",
           "scope": "plugins",
