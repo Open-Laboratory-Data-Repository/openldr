@@ -3843,7 +3843,9 @@ export const fetchWarehouseStatus = (): Promise<WarehouseStatus> =>
 export interface PluginUiEntry {
   id: string;
   version: string;
-  nav: { label: string; icon: string; section: string };
+  /** `iconPaths`: the plugin's own sidebar icon, SVG path `d` strings on a 24x24 grid. Absent when
+   *  the plugin has none, and from older servers; `icon` is then the icon. */
+  nav: { label: string; icon: string; section: string; iconPaths?: string[] };
   uiSdkVersion: string;
   hasWebview: boolean;
   hasDeclarative: boolean;

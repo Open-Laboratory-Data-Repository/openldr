@@ -22,7 +22,7 @@ import {
 import { cn } from '@/lib/cn';
 import { listPluginUis, type LayoutPreset, type PluginUiEntry } from '@/api';
 import { layoutInForce, useLayouts } from './layouts';
-import { pluginIcon } from '@/plugins/icons';
+import { pluginNavIcon } from '@/plugins/icons';
 import { pluginPagePath, visiblePluginEntries } from '@/plugins/pluginAccess';
 import { closePluginPanel, openPluginPanel, syncPluginPanel, usePluginPanel } from '@/plugins/pluginPanel';
 import { onPluginsChanged } from '@/plugins/pluginEvents';
@@ -199,7 +199,7 @@ export function AppShell({
         <SidebarNav
           items={[
             ...nav.map(({ to, labelKey, end, icon }) => ({ key: to, to, end, icon, label: t(labelKey) })),
-            ...pluginNav.map((p) => ({ key: p.id, to: pluginPagePath(p.id), icon: pluginIcon(p.nav.icon), label: p.nav.label })),
+            ...pluginNav.map((p) => ({ key: p.id, to: pluginPagePath(p.id), icon: pluginNavIcon(p.nav), label: p.nav.label })),
           ]}
           collapsed={collapsed}
           onNavigate={() => setMobileOpen(false)}
