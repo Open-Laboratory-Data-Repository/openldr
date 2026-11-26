@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "bb4bb8e89",
+          "type": "fix",
+          "scope": "reports",
+          "title": "The issued-edition check no longer writes a read to the audit log, and results stack on a phone"
+        },
+        {
           "hash": "a634ece6a",
           "type": "fix",
           "scope": "marketplace",
