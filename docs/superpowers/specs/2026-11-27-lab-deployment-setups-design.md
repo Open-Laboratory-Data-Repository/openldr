@@ -33,10 +33,13 @@ Each line was read in the code on 2026-11-27 (CE main `2e3701b5e`).
    Roles are read from the install's own database (`apps/server/src/auth-plugin.ts:225`,
    `:232`). Sign-in needs the identity server to be reachable.
 6. **Core has no analyser code.** The `analyzer-interface` plugin has a 12 KB Node program,
-   the companion. It listens for HL7 over TCP (MLLP) and posts each result to OpenLDR with a
-   bearer token. It refuses plain HTTP unless OpenLDR is on the same PC
+   the companion. It speaks HL7 over plain TCP (MLLP). It can listen for the analyser or dial
+   out to it (`receiver.mjs:221`, `:236`). It posts each result to OpenLDR with a bearer
+   token. It refuses plain HTTP unless OpenLDR is on the same PC
    (`openldr-ce-plugin-analyzer-interface/companion/receiver.mjs:72`). If the post fails it
-   answers the analyser with an error code (`receiver.mjs:186`).
+   answers the analyser with an error code (`receiver.mjs:186`). It keeps one small SQLite
+   receipt file per instrument (`receiver.mjs:93`). It accepts a result only when its own
+   account started that worksheet (`receiver.mjs:119`).
 7. **Sync is a star.** Each install sends its own records straight to national
    (`docs/superpowers/specs/2026-07-02-distributed-sync-architecture-design.md:23`). National
    rejects a record from any other site (`apps/server/src/sync-routes.ts:158`). Only a
@@ -46,6 +49,11 @@ Each line was read in the code on 2026-11-27 (CE main `2e3701b5e`).
    (`openldr-ce-plugin-lab-bench/docs/en.md:48`, `src/referrals.rs:18`) or by a script that
    talks to both installs (`README.md:40`). The script needs HTTPS, a link between the two
    labs, and a hand-written mapping for each specimen.
+9. **A plugin's own code can use a connector an administrator approved for it.** CE checks
+   the approval, passes the settings and the one allowed host, and withholds any answer that
+   carries a secret (`packages/bootstrap/src/plugin-broker.ts:622`, commit `70506c96d`).
+10. **An access key cannot be limited.** It carries every permission and the data limit of
+    the account that owns it (`apps/server/src/access-key-auth.ts:48`, `:59`).
 
 ## Goals
 
@@ -55,7 +63,7 @@ Each line was read in the code on 2026-11-27 (CE main `2e3701b5e`).
 - A spoke can refer a sample to the hub and get the result back.
 - A client PC does not depend on how ICT set up its browser.
 - A client PC can be locked to OpenLDR.
-- An analyser PC needs no database.
+- An analyser PC needs no OpenLDR server and no Postgres.
 
 ## Not goals
 
@@ -66,7 +74,9 @@ Each line was read in the code on 2026-11-27 (CE main `2e3701b5e`).
 ## Must not happen
 
 - A spoke that cannot sign in or enter results because the internet is down.
-- Passwords or patient data crossing a lab network in plain HTTP.
+- Passwords or patient data crossing a lab network in plain HTTP. One link is outside this
+  rule: analyser to companion is plain TCP, because that is what the analyser speaks. Keep
+  that link on one PC or one cable.
 - Product code in core. Referral logic stays in lab-bench. Analyser logic stays in
   `analyzer-interface` (AGENTS.md §8).
 
@@ -116,7 +126,10 @@ More PCs and a bigger reception. Spokes send it referrals.
 
 ### Analyser PC
 
-- No OpenLDR server and no database.
+- No OpenLDR server and no Postgres. The companion keeps one small receipt file per
+  instrument. Keep that file across restarts.
+- The companion signs in as one lab account. Results are accepted only for worksheets that
+  account started (finding 6). The guide must say which account that is.
 - Today's path: the companion program, pointed at the site's install with `OPENLDR_URL` and
   an access key. It works against a hub. Against a shared desktop app it is refused today
   (finding 6). The sharing switch fixes that.
@@ -188,7 +201,12 @@ The desktop app in data-holding mode gets one switch. When it is on:
 - The settings screen shows the address to type on the other PCs, and the certificate's
   fingerprint to compare.
 - The certificate can be downloaded, so the analyser companion can trust it. The server
-  already has a route that serves its certificate (`apps/server/src/settings-routes.ts:340`).
+  has a route that serves its certificate, but only when `TLS_CERT_PATH` is set
+  (`apps/server/src/settings-routes.ts:346`). The launcher must set it to the certificate it
+  made.
+- The companion runs on Node, which does not use the PC's certificate store by default. The
+  guide must show how to make Node trust the downloaded certificate, and the address in the
+  certificate must be the one the companion uses.
 
 The same choice must work headless: `openldr-standalone start` gets a matching flag
 (AGENTS.md §6, CLI parity).
@@ -209,13 +227,18 @@ The operator decided the order on 2026-11-27:
 The direct link is lab-bench work. Core gives only the generic parts:
 
 - The spoke holds a connector to the hub. The secret stays on the server.
-- The connector is approved for lab-bench and pinned to the hub's host. This is the design in
-  `docs/superpowers/specs/2026-11-26-plugin-connector-approval-and-results-design.md`.
-- The hub gives each spoke an access key with only the lab-bench permissions a referral needs.
+- The connector is approved for lab-bench and pinned to the hub's host. Core already does
+  this (finding 9). No new core work is needed.
+- The hub makes one account per spoke, with a role that holds only the lab-bench permissions
+  a referral needs. The spoke's access key belongs to that account. A key cannot be limited
+  on its own (finding 10).
+- Before go-live, check that one spoke cannot read another spoke's referrals at the hub.
 
 lab-bench then does what its script does today, without the hand-written mapping: send the
 referral, record receipt, wait for the released report, and bring it back for review at the
-spoke. If a send fails, it offers the file export.
+spoke. If a send fails, it offers the file export. The direct link and the file must match
+receipts the same way, so a referral sent both ways lands once
+(`openldr-ce-plugin-lab-bench/src/referrals.rs:99`, `:110`).
 
 Left to the builder (lab-bench): how the hub matches the spoke's patient and test to its
 own, and how often the spoke asks for a finished result.
@@ -247,27 +270,34 @@ The server edition for a two-PC lab was not chosen: nobody there looks after Doc
 | G8 | The companion keeps no queue. If OpenLDR is unreachable it answers the analyser with an error. | `companion/receiver.mjs:186` | `analyzer-interface` |
 | G9 | The companion speaks HL7 over TCP only. No ASTM, no serial port. | `openldr-ce-plugin-analyzer-interface/README.md` | `analyzer-interface` |
 | G10 | Referral over a link needs a script and a mapping per specimen. | `openldr-ce-plugin-lab-bench/README.md:40` | lab-bench |
-| G11 | A plugin cannot yet use an approved connector from its own code. | `docs/superpowers/specs/2026-11-26-plugin-connector-approval-and-results-design.md` | core (already designed) |
+| G11 | Withdrawn. Core already lets a plugin use an approved connector. | `packages/bootstrap/src/plugin-broker.ts:622` | none |
 | G12 | National passes nothing from one site to another. | `apps/server/src/sync-routes.ts:158` | later |
 | G13 | No guide says which setup a lab should pick. `lab-setup.md` covers lab features only. | `apps/web/src/docs/0.1.8/en/lab-setup.md:1` | docs, en, fr, pt |
+| G14 | The certificate route answers 404 on a standalone. `TLS_CERT_PATH` is never set there. | `apps/server/src/settings-routes.ts:346` | core, with G2 |
+| G15 | A referral key at the hub cannot be limited to referrals. | `apps/server/src/access-key-auth.ts:48` | a restricted account per spoke, no code |
 
 **HONEST NON-PROOF.** G3 comes from the docs. Nobody reproduced it in this session. The
 first build step is to open a lab-bench page from a second PC over plain HTTP and see what
-breaks. G2 is needed either way, because of G4 and the plain-text passwords.
+breaks. G2 is needed either way, because of G4 and the plain-text passwords. The plugin
+frame already copes with one plain HTTP limit (`apps/studio/src/plugins/PluginFrame.tsx:34`),
+so G3 may be out of date. Assign no plugin work for it until a named screen fails.
 
 G8 was read from one line. Whether the analyser sends the result again after an error
 depends on the analyser. Check it on a real one before building a queue.
 
 Nobody checked that Studio and plugin pages work unchanged inside the app when loaded from
-another address. Connect mode's first step is to try it against a server edition.
+another address. Connect mode's first step is to try it against a server edition. Try a
+sign-in and a plugin file export in that test. A standard hub keeps Keycloak on its own
+address (`install/install.sh:986`), so sign-in should stay in the window. A hub with an
+outside identity server would be sent to the browser (`apps/desktop/src/main.ts:145`).
 
 ## Build order
 
 1. Reproduce G3 on two PCs.
-2. Sharing switch with HTTPS (G1, G2).
+2. Sharing switch with HTTPS (G1, G2, G14).
 3. Connect mode and the lock setting (G5, G6). Steps 2 and 3 give the two-PC lab and the hub.
 4. The setup guide (G13).
-5. Plugin use of an approved connector (G11), then the direct referral in lab-bench (G10).
+5. The direct referral in lab-bench (G10), with a restricted account per spoke (G15).
 6. Serial ports for plugin pages (G7), after its own design.
 7. Companion queue and other analyser protocols (G8, G9), when a real analyser asks for them.
 
@@ -286,6 +316,8 @@ another address. Connect mode's first step is to try it against a server edition
 - Serial ports come after connect mode, with their own design.
 - The analyser PC keeps the companion until serial ports land.
 
-## Follow-ups seen, not part of this design
+## Review
 
-- The local folder `openldr-ce-plugin-analyzer-interface` is not a git repository.
+Codex reviewed this doc on 2026-11-27 over the agent relay. Thirteen points: nine confirmed
+and applied here, one refuted, three deferred. The `analyzer-interface` folder became a git
+repository the same day (`668b1c0`).
