@@ -168,8 +168,25 @@ describe('plugin broker', () => {
       const { b, audited } = broker({ caps, loadSink: s.loadSink, allowedConnectors: ['c1'], ...({ connectorConfig: conn() } as any) });
       const r = await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: { x: 1 }, connectorId: 'c1' });
       expect(r).toEqual({ ok: true, data: { sent: true } });
-      expect(s.invoke).toHaveBeenCalledWith('send', { x: 1 }, { config: { baseUrl: 'https://dhis2.example.org', password: 'pw' }, allowedHosts: ['dhis2.example.org:443'] });
+      // The settings, plus which connector they came from, said by CE itself.
+      expect(s.invoke).toHaveBeenCalledWith('send', { x: 1 }, { config: { baseUrl: 'https://dhis2.example.org', password: 'pw', 'openldr.connectorId': 'c1' }, allowedHosts: ['dhis2.example.org:443'] });
       expect(audited).toContainEqual({ pluginId: 'p1', op: 'invoke:send', outcome: 'ok', reason: 'connector c1' });
+    });
+
+    it('names the connector itself: a stored setting with the reserved name cannot say another', async () => {
+      const s = sinkSpy();
+      const forged = conn({ config: { baseUrl: 'https://dhis2.example.org', 'openldr.connectorId': 'c9' } });
+      const { b } = broker({ caps, loadSink: s.loadSink, allowedConnectors: ['c1'], ...({ connectorConfig: forged } as any) });
+      await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: {}, connectorId: 'c1' });
+      expect(s.invoke).toHaveBeenCalledWith('send', {}, expect.objectContaining({ config: { baseUrl: 'https://dhis2.example.org', 'openldr.connectorId': 'c1' } }));
+    });
+
+    it('does not take the connector id for a secret', async () => {
+      const s = sinkSpy();
+      s.invoke.mockResolvedValue({ sent: true, via: 'c1-long-enough' } as never);
+      const { b } = broker({ caps, loadSink: s.loadSink, allowedConnectors: ['c1-long-enough'], ...({ connectorConfig: conn() } as any) });
+      const r = await b.handle('p1', principal, { kind: 'invoke', entrypoint: 'send', input: {}, connectorId: 'c1-long-enough' });
+      expect(r).toEqual({ ok: true, data: { sent: true, via: 'c1-long-enough' } });
     });
 
     it('a connector with no pinned host gives the code no egress', async () => {

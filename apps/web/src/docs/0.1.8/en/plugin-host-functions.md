@@ -192,6 +192,10 @@ CE then runs the entrypoint with the connector's settings as its config, and all
 
 The page never sees the settings. If the code puts a secret setting (a password, token or key) in its answer, CE withholds the whole answer. The audit row for the call names the connector. The same approval also covers the `connectors.*` page calls: a plugin lists and uses only the connectors it was switched on for.
 
+CE adds one setting of its own to that config: `openldr.connectorId`, the id of the connector the settings came from. CE sets it after the stored settings, so a stored setting of that name cannot change it. If your plugin keeps a rule such as "this route uses connector X", compare the two before sending, and refuse when they differ.
+
+CE never follows a redirect for a plugin's network call. If the connector's address answers with a redirect, your code gets that answer itself, with its 3xx status, and nothing is sent on. Treat it as a failure, and tell the administrator to put the final address in the connector. An address that sends `http` on to `https`, or adds a path, is the usual cause.
+
 ## fhir_emit
 
 Sends finished FHIR records into CE. The request is `{ "resources": [ ... ] }`.

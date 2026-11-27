@@ -319,6 +319,9 @@ function egresses(op: BrokerOp): boolean {
 }
 
 /** A connector setting is a secret when its name says so. */
+/** The setting CE adds to a connector's settings for plugin code: the connector's own id. Not a secret. */
+export const CONNECTOR_ID_SETTING = 'openldr.connectorId';
+
 const SECRET_SETTING = /pass|secret|token|key|credential|auth/i;
 
 /** Does a plugin's answer carry one of the connector's secret settings, anywhere in its JSON? A
@@ -624,7 +627,11 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
               if (!c || !c.enabled) return refused(`connector ${id} not found or disabled`);
               // A database connector's password stays in CE: imports run their SELECTs through CE.
               if (c.kind === 'database') return refused(`connector ${id} is a database connector; plugin code cannot be given its settings`);
-              connection = { config: c.config, allowedHosts: c.allowedHost ? [c.allowedHost] : [] };
+              // The code is told which connector these settings came from, by CE and after the
+              // stored settings, so a setting of that name cannot say another. A plugin that
+              // keeps "this route uses connector X" can then check it, also when two approved
+              // connectors point at one address.
+              connection = { config: { ...c.config, [CONNECTOR_ID_SETTING]: id }, allowedHosts: c.allowedHost ? [c.allowedHost] : [] };
             }
             const sink = await deps.plugins.loadSink(pluginId, row.version);
             if (!sink) return { ok: false, error: `plugin ${pluginId} exposes no invokable wasm` };

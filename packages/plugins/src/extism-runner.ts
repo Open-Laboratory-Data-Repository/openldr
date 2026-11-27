@@ -56,6 +56,20 @@ export function canRunOffThread(execArgv: readonly string[] = process.execArgv):
   return !execArgv.some((arg) => LOADER_FLAGS.some((flag) => arg === flag || arg.startsWith(`${flag}=`)));
 }
 
+/**
+ * A fetch that never follows a redirect. The plugin gets the redirect answer itself (its 3xx
+ * status) and decides what to do.
+ *
+ * The SDK checks the host of the address a plugin asks for, then calls fetch. Plain fetch follows
+ * a redirect by itself, to any host, and hands the last answer back as if the allowed host had
+ * given it. So an allowed host, or anything answering in its place, could send a plugin's call on
+ * to a host nobody approved, and the plugin could not tell. Whatever the caller asks for, the
+ * redirect mode here is 'manual'.
+ */
+export function withoutRedirects(base: typeof fetch): typeof fetch {
+  return ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => base(input, { ...init, redirect: 'manual' })) as typeof fetch;
+}
+
 /** Whether this call takes the worker path: always for pinned hosts, as before; for `offThread`
  *  only where `canRunOffThread` allows it. */
 export function usesWorker(opts: Pick<RunOptions, 'allowedHosts' | 'offThread'>, execArgv: readonly string[] = process.execArgv): boolean {
@@ -164,6 +178,8 @@ export function createExtismRunner(runnerOpts: { execArgv?: readonly string[] } 
           runInWorker: useWorker,
           config: opts.config ?? {},
           allowedHosts: opts.allowedHosts ?? [],
+          // Every HTTP call a plugin makes goes through this. See withoutRedirects.
+          fetch: withoutRedirects(fetch),
           functions: {
             'extism:host/env': {
               // On the worker path the SDK's HttpContext overrides http_request +
