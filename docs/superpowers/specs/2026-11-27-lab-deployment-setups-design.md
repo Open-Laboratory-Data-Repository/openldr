@@ -299,7 +299,7 @@ The server edition for a two-PC lab was not chosen: nobody there looks after Doc
 | G4 | The companion refuses a desktop app on another PC. | `companion/receiver.mjs:72` | closed by G2 |
 | G5 | The desktop app has no connect mode. No setting holds a server address. | `apps/desktop/src/settings.ts:7`, `main.ts:149` | core |
 | G6 | The desktop app cannot be locked. | no kiosk or full-screen code in `apps/desktop/src/main.ts` | core |
-| G7 | The desktop app gives pages no serial port. | `apps/desktop/src/locality.ts:82` | core, own design |
+| G7 | The desktop app gives pages no serial port. | `apps/desktop/src/locality.ts:82` | core. Designed in `2026-11-27-plugin-serial-ports-design.md` |
 | G8 | The companion keeps no queue. If OpenLDR is unreachable it answers the analyser with an error. | `companion/receiver.mjs:186` | `analyzer-interface` |
 | G9 | The companion speaks HL7 over TCP only. No ASTM, no serial port. | `openldr-ce-plugin-analyzer-interface/README.md` | `analyzer-interface` |
 | G10 | Referral over a link needs a script and a mapping per specimen. | `openldr-ce-plugin-lab-bench/README.md:40` | lab-bench |
