@@ -67,7 +67,7 @@ The refusal names the action and the permissions that open it, for example `the 
 
 `payload.ui.requiredRoles` and `payload.ui.requiredCapabilities` decide who sees the plugin. A user sees the sidebar entry, and opens `/x/<id>`, only when they hold one of the roles or one of the capabilities. Typing the address does not get around it. A plugin with neither list is open to everyone.
 
-`requiredCapabilities` may name the plugin's own keys. A user let in by a capability may run the plugin's actions when the plugin has `actionPermissions`. The action gate then decides each call. Plugin storage (`storage.*`) stays closed to such a user. It needs one of the plugin's roles. The admin page calls (`connectors.*`, `schedule.*`, `import.*`) are open to such a user who is also an administrator. A page that lists connectors for an administrator therefore works without naming a role.
+`requiredCapabilities` may name the plugin's own keys. A user let in by a capability may run the plugin's actions when the plugin has `actionPermissions`. The action gate then decides each call. Plugin storage (`storage.*`) stays closed to such a user. It needs one of the plugin's roles. One page call is open to such a user who is also an administrator: `connectors.list`. A settings page can therefore offer an administrator the connectors approved for the plugin without naming a role. The other admin page calls stay closed.
 
 The page gets the signed-in user's capabilities in its init context, the plugin's own keys included. Use them only to show or hide tabs. They are a copy for display. The broker on the server checks every call.
 

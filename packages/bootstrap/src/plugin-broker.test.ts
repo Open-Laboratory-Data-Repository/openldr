@@ -331,6 +331,17 @@ describe('plugin broker', () => {
       expect((await opened().handle('p1', admin, { kind: 'connectors.list' })).ok).toBe(false);
     });
 
+    it('only the list: a call that changes something stays closed to that admin', async () => {
+      const admin = { id: 'u1', roles: ['lab_admin'], capabilities: ['bench.configure'], dataScope: ALL_DATA };
+      const b = broker({ caps: [{ kind: 'host:connectors' }, { kind: 'host:schedule' }], connectors, requiredCapabilities: ['bench.configure'] }).b;
+      expect(await b.handle('p1', admin, { kind: 'schedule.remove', id: 's1' })).toEqual({
+        ok: false, error: "operation schedule.remove is not open to a caller without the plugin's role",
+      });
+      expect(await b.handle('p1', admin, { kind: 'connectors.test', id: 'x' })).toEqual({
+        ok: false, error: "operation connectors.test is not open to a caller without the plugin's role",
+      });
+    });
+
     it('a call with no role rule of its own stays closed to that admin, as before', async () => {
       const admin = { id: 'u1', roles: ['lab_admin'], capabilities: ['bench.configure'], dataScope: ALL_DATA };
       expect(await opened().handle('p1', admin, { kind: 'storage.get', collection: 'c', key: 'k' })).toEqual({
