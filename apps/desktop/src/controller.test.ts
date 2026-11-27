@@ -1028,4 +1028,55 @@ describe('sharing on the lab network', () => {
     expect(h.stops()).toBe(2);
     expect(h.exits).toEqual([0]);
   });
+
+  it('picks up a share that an attached launcher publishes after it already answers', async () => {
+    // The server answers before the launcher has published its share. Nothing fails, so only a
+    // status read on a slow timer can see it.
+    const later = { ...share, fingerprint: 'EF:01' };
+    const h = harness({
+      statuses: [runningStatus('127.0.0.1'), { ...runningStatus('127.0.0.1'), share } as Status, { ...runningStatus('127.0.0.1'), share: later } as Status],
+      pollMs: 1000,
+    });
+    const changes: Array<unknown> = [];
+    h.deps.shareChanged = () => changes.push(h.controller.share());
+    void h.controller.start();
+    await settle();
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    expect(h.controller.share()).toBeUndefined();
+    for (let i = 0; i < 5; i++) await h.tick();
+    expect(h.controller.share()).toBeUndefined();
+    expect(h.statusReads()).toBe(1);
+    await h.tick();
+    expect(h.statusReads()).toBe(2);
+    expect(h.controller.share()).toEqual(share);
+    expect(changes).toEqual([share]);
+    // A launcher that replaced it on the same address, with another certificate.
+    for (let i = 0; i < 6; i++) await h.tick();
+    expect(h.controller.share()).toEqual(later);
+    expect(changes).toEqual([share, later]);
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+  });
+
+  it('says so when the share of its own launcher comes and goes', async () => {
+    const h = harness({ settings: { startAtSignIn: false, shareOnNetwork: true } });
+    const changes: Array<unknown> = [];
+    h.deps.shareChanged = () => changes.push(h.controller.share());
+    const l = await started(h);
+    l.on.event({ event: 'ready', address: OWN, share });
+    await settle();
+    l.exit(null);
+    await settle();
+    expect(changes).toEqual([share, undefined]);
+  });
+
+  it('does not say so when a status read gives the same share again', async () => {
+    const withShare = { ...runningStatus('127.0.0.1'), share } as Status;
+    const h = harness({ statuses: [withShare], pollMs: 1000 });
+    const changes: Array<unknown> = [];
+    h.deps.shareChanged = () => changes.push(h.controller.share());
+    void h.controller.start();
+    await settle();
+    for (let i = 0; i < 12; i++) await h.tick();
+    expect(changes).toEqual([share]);
+  });
 });

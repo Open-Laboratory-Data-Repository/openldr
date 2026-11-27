@@ -381,6 +381,8 @@ function main(): void {
       show,
       exit,
       log,
+      // An attached launcher's share can come or change with no change of screen.
+      shareChanged: () => rebuildTray(),
       desktopLog: logFile,
       strings: s,
     });

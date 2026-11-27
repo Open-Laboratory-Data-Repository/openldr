@@ -70,6 +70,8 @@ export interface ControllerDeps {
   show(screen: Screen): void;
   exit(code: number): void;
   log(line: string): void;
+  /** Called when `share()` has changed. */
+  shareChanged?(): void;
   /** The app's own log file, named on the error screen. */
   desktopLog: string;
   strings: AppStrings;
@@ -92,6 +94,9 @@ interface Child {
   /** A stop of this launcher that is in flight. A quit and a restart share it. */
   stopping?: Promise<number>;
 }
+
+/** An attached launcher's status is read on every this-many polls, to see its share. With the default poll, every 30 seconds. */
+const STATUS_REFRESH_POLLS = 6;
 
 /** How long to wait between asks while waiting for an attached launcher to answer, and between `stop` asks. */
 const STEP_MS = 1000;
@@ -144,6 +149,13 @@ export class DesktopController {
     return this.shared;
   }
 
+  /** Keeps the share and tells the app when it really changed, so the tray can be drawn again. */
+  private setShared(next: ShareInfo | undefined): void {
+    if (JSON.stringify(next) === JSON.stringify(this.shared)) return;
+    this.shared = next;
+    this.deps.shareChanged?.();
+  }
+
   /**
    * Stops the app's own launcher and starts it again with the settings as they are now. For a
    * setting the launcher only reads at start, such as sharing. Gives false, and does nothing,
@@ -159,7 +171,7 @@ export class DesktopController {
       // stale, so a stop the app asked for is never shown as "OpenLDR is no longer running".
       this.run += 1;
       this.addr = undefined;
-      this.shared = undefined;
+      this.setShared(undefined);
       this.show({ screen: 'stopping' });
       const code = await this.stopOwn(child);
       if (this.quitting) return true;
@@ -200,7 +212,7 @@ export class DesktopController {
     this.phase = 'checking';
     this.child = undefined;
     this.addr = undefined;
-    this.shared = undefined;
+    this.setShared(undefined);
     this.show({ screen: 'starting', note: 'checking' });
     try {
       const status = await this.boundedStatus();
@@ -280,7 +292,7 @@ export class DesktopController {
   private fail(message: string, withLogs = true): void {
     this.phase = 'error';
     this.addr = undefined;
-    this.shared = undefined;
+    this.setShared(undefined);
     const dataLogs =
       withLogs && this.dir !== undefined
         ? { serverLog: join(this.dir, 'logs', 'server.log'), postgresLog: join(this.dir, 'logs', 'postgres.log') }
@@ -294,7 +306,7 @@ export class DesktopController {
     const address = windowAddress(status.address, status.host);
     this.phase = 'attached';
     this.addr = address;
-    this.shared = status.share;
+    this.setShared(status.share);
     this.dir = status.dataDir;
     this.deps.log(`Attached to a launcher that was already running at ${address}.`);
     this.show({ screen: 'starting', note: 'server' });
@@ -320,15 +332,21 @@ export class DesktopController {
     if (waitedForIt) {
       const fresh = await this.boundedStatus();
       if (this.stale(run)) return;
-      if (fresh?.running) this.shared = fresh.share;
+      if (fresh?.running) this.setShared(fresh.share);
     }
     this.show({ screen: 'studio', address });
 
     // An address that answers needs no `status` child. Only when it stops answering is the status read.
+    let polls = 0;
     for (;;) {
       await this.deps.sleep(this.pollMs);
       if (this.stale(run)) return;
-      if (await this.deps.answers(address)) continue;
+      polls += 1;
+      // An address that answers says nothing about the share. The launcher publishes it a moment
+      // after its server answers, and another launcher may take the same address later. So the
+      // status is also read on a slow timer, which is the only place the share can be seen.
+      const refresh = polls % STATUS_REFRESH_POLLS === 0;
+      if (!refresh && (await this.deps.answers(address))) continue;
       if (this.stale(run)) return;
       if (!(await this.stillRunning(run))) return;
     }
@@ -340,7 +358,7 @@ export class DesktopController {
     if (this.stale(run)) return false;
     if (s?.running) {
       // Its share may have started, stopped or changed since the last read.
-      this.shared = s.share;
+      this.setShared(s.share);
       return true;
     }
     if (s === undefined) {
@@ -417,7 +435,7 @@ export class DesktopController {
         child.ready = true;
         const address = windowAddress(logged.address, OWN_HOST);
         this.addr = address;
-        this.shared = logged.share;
+        this.setShared(logged.share);
         this.show({ screen: 'studio', address });
         return;
       }
