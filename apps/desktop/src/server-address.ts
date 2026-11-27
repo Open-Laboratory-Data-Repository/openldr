@@ -16,9 +16,18 @@ export function parseServerAddress(input: string): ParsedAddress {
   if (text === '') return { ok: false, reason: 'empty' };
   // The URL parser would turn a space into %20 and carry on.
   if (/\s/.test(text)) return { ok: false, reason: 'unreadable' };
+  // A scheme counts only at the start. `labpc:3443` also starts with letters and a colon, but
+  // what follows is a port: digits, then the end, a path, a query or a hash. Any other text with
+  // letters and a colon in front names a scheme, and one written without `//` (`https:/labpc`,
+  // `file:/tmp/x`) is not an address this app reads.
+  const lead = /^[a-z][a-z0-9+.-]*:/i.exec(text)?.[0];
+  const rest = lead === undefined ? '' : text.slice(lead.length);
+  const hasScheme = lead !== undefined && rest.startsWith('//');
+  const isHostAndPort = lead !== undefined && /^\d+([/?#]|$)/.test(rest);
+  if (lead !== undefined && !hasScheme && !isHostAndPort) return { ok: false, reason: 'unreadable' };
   let url: URL;
   try {
-    url = new URL(text.includes('://') ? text : `https://${text}`);
+    url = new URL(hasScheme ? text : `https://${text}`);
   } catch {
     return { ok: false, reason: 'unreadable' };
   }

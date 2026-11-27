@@ -14,6 +14,12 @@ describe('parseServerAddress', () => {
     ['http://127.0.0.1:3000', 'http://127.0.0.1:3000/studio/'],
     ['[fd00::20]:3443', 'https://[fd00::20]:3443/studio/'],
     ['https://labpc:3443/studio/', 'https://labpc:3443/studio/'],
+    // A scheme is looked for at the start only. One inside the query is dropped with the query.
+    ['labpc/studio/?next=https://hub.example', 'https://labpc/studio/'],
+    ['labpc:3443/studio/?next=https://hub.example', 'https://labpc:3443/studio/'],
+    ['labpc:3443?x=1', 'https://labpc:3443/studio/'],
+    ['labpc:3443#top', 'https://labpc:3443/studio/'],
+    ['https://labpc/?next=ftp://x', 'https://labpc/studio/'],
   ])('reads %j as %s', (input, address) => {
     expect(parseServerAddress(input)).toMatchObject({ ok: true, address });
   });
@@ -45,6 +51,9 @@ describe('parseServerAddress', () => {
     ['ftp://labpc', 'unreadable'], ['file:///etc/passwd', 'unreadable'], ['javascript:alert(1)', 'unreadable'],
     ['https://user:pw@labpc', 'unreadable'], ['https://user@labpc', 'unreadable'], ['https://', 'unreadable'], ['lab pc', 'unreadable'],
     ['labpc:99999', 'unreadable'], ['https://labpc:0', 'unreadable'],
+    // A scheme that is written out must be whole and one of the two. None of these is a host name.
+    ['file:/tmp/example', 'unreadable'], ['https:/labpc', 'unreadable'], ['https:labpc', 'unreadable'], ['http:/127.0.0.1', 'unreadable'],
+    ['mailto:someone@example.org', 'unreadable'], ['data:text/html,x', 'unreadable'], ['labpc:abc', 'unreadable'], ['labpc:', 'unreadable'],
   ])('refuses %j as %s', (input, reason) => {
     expect(parseServerAddress(input)).toEqual({ ok: false, reason });
   });
