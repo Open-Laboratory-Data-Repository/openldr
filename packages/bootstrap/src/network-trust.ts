@@ -6,13 +6,14 @@
 // Design: docs/superpowers/specs/2026-11-27-trusted-certificates-and-workflow-hosts-design.md
 
 import { randomBytes, X509Certificate } from 'node:crypto';
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import tls from 'node:tls';
 import type { AuditActor } from './record-audit';
 
-export type TrustError = 'not-a-certificate' | 'private-key' | 'duplicate' | 'not-found' | 'read-only' | 'damaged' | 'no-answer';
+export type TrustError = 'not-a-certificate' | 'private-key' | 'duplicate' | 'not-found' | 'read-only' | 'damaged' | 'no-answer' | 'busy';
 
 const SAID: Record<TrustError, string> = {
   'not-a-certificate': 'That is not a certificate.',
@@ -22,6 +23,7 @@ const SAID: Record<TrustError, string> = {
   'read-only': 'Trusted certificates cannot be changed here.',
   damaged: 'The trust file holds text that is not a certificate. Fix the file first.',
   'no-answer': 'Nothing answered at that address.',
+  busy: 'The trust file is busy. Try again.',
 };
 
 /** A refusal with a code a screen or a command can act on. The message never holds the input. */
@@ -33,7 +35,8 @@ export class TrustRefused extends Error {
 }
 
 export const BAD_ADDRESS = 'Type a host name, or a host name and a port.';
-export const TRUST_BUSY = 'The trust file is busy. Try again.';
+/** The message of TrustRefused('busy'). */
+export const TRUST_BUSY = SAID.busy;
 
 /**
  * The file is changed, and the audit row for the change could not be written. The change stands:
@@ -42,7 +45,7 @@ export const TRUST_BUSY = 'The trust file is busy. Try again.';
  */
 export class TrustAuditFailed extends Error {
   constructor(
-    readonly action: 'network.trust.add' | 'network.trust.remove',
+    readonly action: TrustAuditAction,
     readonly fingerprint: string,
     readonly subject: string,
     readonly actor: TrustActor,
@@ -90,7 +93,15 @@ export interface TrustStatus {
    * editable: both name the same file, and it is sound.
    */
   mode: 'editable' | 'not-configured' | 'set-outside' | 'damaged';
+  /**
+   * Present while a lock file sits beside the managed file. A change holds it for a moment. One
+   * that is `stuck` (older than 30 seconds) was most likely left by a change that a power cut or
+   * a crash stopped. No change goes through until a person removes it with `unlock`.
+   */
+  lock?: { since: string; stuck: boolean };
 }
+
+export type TrustAuditAction = 'network.trust.add' | 'network.trust.remove' | 'network.trust.unlock';
 
 export type TrustActor = AuditActor;
 
@@ -104,6 +115,11 @@ export interface TrustService {
   read(text: string): CertPreview[];
   add(pem: string, actor: TrustActor): Promise<TrustedCert>;
   remove(fingerprint: string, actor: TrustActor): Promise<void>;
+  /**
+   * Removes a stuck lock. True when it removed one, false when there was none. Throws 'busy' for
+   * a lock that is not stuck yet, and 'read-only' when the file is not managed.
+   */
+  unlock(actor: TrustActor): Promise<boolean>;
 }
 
 export interface TrustDeps {
@@ -115,13 +131,10 @@ export interface TrustDeps {
   loaded(): Promise<LoadedTrust>;
   /** The certificate a host presents, as PEM, or undefined when nothing answers. */
   readPeer(host: string, port: number): Promise<string | undefined>;
-  /**
-   * Runs one change while no other process changes the file: the server and a CLI command are two
-   * of them. It throws Error(TRUST_BUSY) when it cannot start within 10 seconds. The app context
-   * gives a database lock (`runExclusive`), so a stopped process leaves nothing to clean up.
-   */
-  exclusive<T>(work: () => Promise<T>): Promise<T>;
-  audit(action: 'network.trust.add' | 'network.trust.remove', actor: TrustActor, fingerprint: string, subject: string): Promise<void>;
+  /** How long a change waits for the lock. 10 seconds when not given. */
+  lockWaitMs?: number;
+  /** For `network.trust.unlock`, `fingerprint` is 'lock' and `subject` is the time the lock was made. */
+  audit(action: TrustAuditAction, actor: TrustActor, fingerprint: string, subject: string): Promise<void>;
   now(): Date;
 }
 
@@ -222,7 +235,72 @@ export function readPeerCertificate(host: string, port: number, timeoutMs = 10_0
   });
 }
 
+const LOCK_WAIT_MS = 10_000;
+const LOCK_STEP_MS = 50;
+const LOCK_STUCK_MS = 30_000;
+
 export function createTrustService(deps: TrustDeps): TrustService {
+  const lockFile = `${deps.file ?? ''}.lock`;
+
+  /** The lock file as it is now, or undefined when there is none. */
+  async function lockNow(): Promise<{ since: string; stuck: boolean } | undefined> {
+    if (deps.file === undefined) return undefined;
+    try {
+      const made = (await stat(lockFile)).mtimeMs;
+      return { since: new Date(made).toISOString(), stuck: Date.now() - made > LOCK_STUCK_MS };
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Runs `work` while this process holds the lock file. The server and a CLI command are two
+   * processes, and the file is made so that only one can make it. It is never taken because it is
+   * old: age does not prove the holder stopped, and taking a live holder's lock loses a change. A
+   * lock that a power cut left behind stays until a person removes it with `unlock`.
+   *
+   * `mine` tells the work whether the lock is still this process's. It is not when a person
+   * unlocked in the meantime.
+   */
+  async function withLock<T>(work: (mine: () => Promise<boolean>) => Promise<T>): Promise<T> {
+    await mkdir(dirname(lockFile), { recursive: true });
+    const token = randomBytes(16).toString('hex');
+    const deadline = Date.now() + (deps.lockWaitMs ?? LOCK_WAIT_MS);
+    for (;;) {
+      let handle;
+      try {
+        handle = await open(lockFile, 'wx', 0o644);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+        if (Date.now() >= deadline) refuse('busy');
+        await sleep(LOCK_STEP_MS);
+        continue;
+      }
+      try {
+        await handle.writeFile(JSON.stringify({ token, pid: process.pid }));
+        await handle.close();
+      } catch (err) {
+        // This process made the file, so it may remove it. Otherwise it would be left behind.
+        await handle.close().catch(() => {});
+        await rm(lockFile, { force: true });
+        throw err;
+      }
+      break;
+    }
+    const mine = async (): Promise<boolean> => {
+      try {
+        return (JSON.parse(await readFile(lockFile, 'utf8')) as { token?: unknown }).token === token;
+      } catch {
+        return false;
+      }
+    };
+    try {
+      return await work(mine);
+    } finally {
+      if (await mine()) await rm(lockFile, { force: true });
+    }
+  }
+
   const managed = deps.file !== undefined && deps.nodeExtraCaFile !== undefined && resolve(deps.file) === resolve(deps.nodeExtraCaFile);
   const configured = deps.file !== undefined || deps.nodeExtraCaFile !== undefined;
 
@@ -262,10 +340,11 @@ export function createTrustService(deps: TrustDeps): TrustService {
 
   /**
    * Writes the file whole: a temp name in the same folder, then a rename. `was` is the text this
-   * change read. If the file holds anything else just before the rename, another process wrote
-   * while this one held the lock, which a lost lock would allow. Then nothing is written.
+   * change read. Just before the rename, the lock must still be this process's and the file must
+   * still hold that text. If not, a person unlocked while this change was paused and another
+   * change got in. Then nothing is written.
    */
-  async function write(certs: CertPreview[], was: string): Promise<void> {
+  async function write(certs: CertPreview[], was: string, mine: () => Promise<boolean>): Promise<void> {
     const file = deps.file as string;
     await mkdir(dirname(file), { recursive: true });
     // A new name each time, opened so that a file already there is never reused or followed.
@@ -279,7 +358,7 @@ export function createTrustService(deps: TrustDeps): TrustService {
       } finally {
         await handle.close();
       }
-      if ((await fileText()) !== was) throw new Error(TRUST_BUSY);
+      if (!(await mine()) || (await fileText()) !== was) refuse('busy');
       await rename(temp, file);
       made = false;
     } finally {
@@ -298,21 +377,13 @@ export function createTrustService(deps: TrustDeps): TrustService {
 
   /**
    * One change to the file, under the lock. `decide` gets the certificates in the file and gives
-   * the new list, or refuses. The lock is a database transaction, and it can fail to end after the
-   * file is already in place. The change then stands, so that failure is not passed on: the
-   * caller goes on to the audit row.
+   * the new list, or refuses.
    */
   async function change(decide: (now: CertPreview[]) => CertPreview[]): Promise<void> {
-    let written = false;
-    try {
-      await deps.exclusive(async () => {
-        const { text, certs } = await editable();
-        await write(decide(certs), text);
-        written = true;
-      });
-    } catch (err) {
-      if (!written) throw err;
-    }
+    await withLock(async (mine) => {
+      const { text, certs } = await editable();
+      await write(decide(certs), text, mine);
+    });
   }
 
   function dedupe(certs: CertPreview[]): CertPreview[] {
@@ -329,7 +400,7 @@ export function createTrustService(deps: TrustDeps): TrustService {
   const stateInFile = (loaded: LoadedTrust, ran: Set<string>, fingerprint: string): TrustedCert['state'] =>
     !loaded.known ? 'unknown' : ran.has(fingerprint) ? 'in-use' : 'added';
 
-  async function audited(action: 'network.trust.add' | 'network.trust.remove', actor: TrustActor, cert: CertPreview): Promise<void> {
+  async function audited(action: TrustAuditAction, actor: TrustActor, cert: CertPreview): Promise<void> {
     try {
       await deps.audit(action, actor, cert.fingerprint, cert.subject);
     } catch (err) {
@@ -339,7 +410,22 @@ export function createTrustService(deps: TrustDeps): TrustService {
 
   return {
     async status() {
-      return { mode: await mode() };
+      const lock = managed ? await lockNow() : undefined;
+      return { mode: await mode(), ...(lock ? { lock } : {}) };
+    },
+
+    async unlock(actor) {
+      if (!managed) refuse('read-only');
+      const lock = await lockNow();
+      if (lock === undefined) return false;
+      if (!lock.stuck) refuse('busy');
+      await rm(lockFile, { force: true });
+      try {
+        await deps.audit('network.trust.unlock', actor, 'lock', lock.since);
+      } catch (err) {
+        throw new TrustAuditFailed('network.trust.unlock', 'lock', lock.since, actor, err);
+      }
+      return true;
     },
 
     read,

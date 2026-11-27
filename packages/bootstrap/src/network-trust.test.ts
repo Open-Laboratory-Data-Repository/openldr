@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
 import { once } from 'node:events';
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import https from 'node:https';
 import type { AddressInfo } from 'node:net';
@@ -35,19 +35,7 @@ interface Made {
   audits: Array<{ action: string; actor: TrustActor; fingerprint: string; subject: string }>;
 }
 
-type Exclusive = <T>(work: () => Promise<T>) => Promise<T>;
-
-/** One thing at a time, in this process. It stands for the database lock, which the db package proves on real PostgreSQL. */
-function mutex(): Exclusive {
-  let tail: Promise<unknown> = Promise.resolve();
-  return (work) => {
-    const run = tail.then(work, work);
-    tail = run.catch(() => {});
-    return run;
-  };
-}
-
-function make(o: { content?: string | null; file?: string | null; extra?: string | null; loaded?: LoadedTrust | (() => Promise<LoadedTrust>); peer?: string | undefined; auditFails?: boolean; exclusive?: Exclusive; now?: () => Date } = {}): Made {
+function make(o: { content?: string | null; file?: string | null; extra?: string | null; loaded?: LoadedTrust | (() => Promise<LoadedTrust>); peer?: string | undefined; auditFails?: boolean; lockWaitMs?: number; now?: () => Date } = {}): Made {
   const dir = mkdtempSync(join(tmpdir(), 'trust-'));
   const file = join(dir, 'ca.pem');
   if (o.content !== null) writeFileSync(file, o.content ?? '');
@@ -57,7 +45,7 @@ function make(o: { content?: string | null; file?: string | null; extra?: string
     nodeExtraCaFile: o.extra === null ? undefined : (o.extra ?? file),
     loaded: typeof o.loaded === 'function' ? o.loaded : async () => (o.loaded as LoadedTrust | undefined) ?? { known: true, pems: [], since: '2026-11-30T00:00:00.000Z' },
     readPeer: async () => o.peer,
-    exclusive: o.exclusive ?? mutex(),
+    lockWaitMs: o.lockWaitMs,
     audit: async (action, actor, fingerprint, subject) => {
       if (o.auditFails) throw new Error('audit down');
       audits.push({ action, actor, fingerprint, subject });
@@ -154,7 +142,6 @@ describe('status', () => {
       nodeExtraCaFile: relative(process.cwd(), m.file),
       loaded: async () => ({ known: false }),
       readPeer: async () => undefined,
-      exclusive: mutex(),
       audit: async () => {},
       now: () => NOW,
     });
@@ -327,15 +314,13 @@ describe('add and remove', () => {
   });
 
   it('keeps both certificates when two services add at once', async () => {
-    // The CLI and the server are two processes on one file. They share the database lock.
-    const shared = mutex();
-    const m = make({ exclusive: shared });
+    // The CLI and the server are two processes on one file.
+    const m = make();
     const other = createTrustService({
       file: m.file,
       nodeExtraCaFile: m.file,
       loaded: async () => ({ known: false }),
       readPeer: async () => undefined,
-      exclusive: shared,
       audit: async () => {},
       now: () => NOW,
     });
@@ -343,29 +328,77 @@ describe('add and remove', () => {
     expect(m.svc.read(readFileSync(m.file, 'utf8')).map((c) => c.fingerprint).sort()).toEqual([FP_A, FP_B].sort());
   });
 
-  it('reads the file only once it holds the lock, so a change made just before is kept', async () => {
-    // Another process finishes its change while this one waits for the lock.
-    let file = '';
-    const m = make({
-      exclusive: async (work) => {
-        writeFileSync(file, CERT_B);
-        return work();
-      },
-    });
-    file = m.file;
-    await m.svc.add(CERT_A, ACTOR);
+  it('waits for a lock another process holds, then reads the file as that process left it', async () => {
+    const m = make();
+    const lock = `${m.file}.lock`;
+    writeFileSync(lock, JSON.stringify({ token: 'other' }));
+    const adding = m.svc.add(CERT_A, ACTOR);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(readFileSync(m.file, 'utf8')).toBe('');
+    // The other process finishes its change and lets go.
+    writeFileSync(m.file, CERT_B);
+    rmSync(lock);
+    await adding;
     expect(m.svc.read(readFileSync(m.file, 'utf8')).map((c) => c.fingerprint).sort()).toEqual([FP_A, FP_B].sort());
-    // The same for a removal: B is not in the file until the other process has written it.
-    writeFileSync(file, '');
-    expect(await code(m.svc.remove(FP_B, ACTOR))).toBe('no error');
+    expect(readdirSync(m.dir)).toEqual(['ca.pem']);
+  });
+
+  it('refuses as busy when the lock is not let go in time, and touches nothing', async () => {
+    const m = make({ content: CERT_A, lockWaitMs: 150 });
+    const lock = `${m.file}.lock`;
+    writeFileSync(lock, 'held');
+    expect(await code(m.svc.add(CERT_B, ACTOR))).toBe('busy');
+    expect(await code(m.svc.remove(FP_A, ACTOR))).toBe('busy');
+    await expect(m.svc.add(CERT_B, ACTOR)).rejects.toThrow(TRUST_BUSY);
+    expect(readFileSync(m.file, 'utf8')).toBe(CERT_A);
+    expect(readFileSync(lock, 'utf8')).toBe('held');
+    expect(m.audits).toEqual([]);
+  });
+
+  it('never takes a lock because it is old', async () => {
+    // Age is no proof that the holder stopped. Only a person may say so, with unlock.
+    const m = make({ lockWaitMs: 150 });
+    const lock = `${m.file}.lock`;
+    writeFileSync(lock, 'held');
+    const past = new Date(Date.now() - 3_600_000);
+    utimesSync(lock, past, past);
+    expect(await code(m.svc.add(CERT_A, ACTOR))).toBe('busy');
+    expect(readFileSync(lock, 'utf8')).toBe('held');
     expect(readFileSync(m.file, 'utf8')).toBe('');
   });
 
-  it('changes nothing and audits nothing when the lock is busy', async () => {
-    const m = make({ content: CERT_A, exclusive: async () => { throw new Error(TRUST_BUSY); } });
-    await expect(m.svc.add(CERT_B, ACTOR)).rejects.toThrow(TRUST_BUSY);
-    await expect(m.svc.remove(FP_A, ACTOR)).rejects.toThrow(TRUST_BUSY);
-    expect(readFileSync(m.file, 'utf8')).toBe(CERT_A);
+  it('writes nothing, and leaves the lock alone, when its lock was taken away during the change', async () => {
+    // A person unlocked while this change was paused, and another change now holds the lock.
+    let lock = '';
+    let asked = 0;
+    const m = make({
+      // The service asks the time twice in an add: when it reads the pasted certificate, and when
+      // it reads the file under the lock. The second is after the read and before the write.
+      now: () => {
+        if (lock !== '' && ++asked === 2) writeFileSync(lock, JSON.stringify({ token: 'someone else' }));
+        return NOW;
+      },
+    });
+    lock = `${m.file}.lock`;
+    expect(await code(m.svc.add(CERT_A, ACTOR))).toBe('busy');
+    expect(readFileSync(m.file, 'utf8')).toBe('');
+    expect(JSON.parse(readFileSync(lock, 'utf8'))).toEqual({ token: 'someone else' });
+    expect(m.audits).toEqual([]);
+    expect(readdirSync(m.dir).sort()).toEqual(['ca.pem', 'ca.pem.lock']);
+  });
+
+  it('writes nothing when the file changed between its read and its write', async () => {
+    let file = '';
+    let asked = 0;
+    const m = make({
+      now: () => {
+        if (file !== '' && ++asked === 2) writeFileSync(file, CERT_B);
+        return NOW;
+      },
+    });
+    file = m.file;
+    expect(await code(m.svc.add(CERT_A, ACTOR))).toBe('busy');
+    expect(readFileSync(m.file, 'utf8')).toBe(CERT_B);
     expect(m.audits).toEqual([]);
     expect(readdirSync(m.dir)).toEqual(['ca.pem']);
   });
@@ -440,61 +473,6 @@ describe('add and remove', () => {
     expect(m.audits).toEqual([]);
   });
 
-  it('still audits and answers when the lock fails after the file is in place', async () => {
-    // The database transaction that holds the lock can fail to end after the work is done.
-    const failing: Exclusive = async (work) => {
-      await work();
-      throw new Error('commit failed');
-    };
-    const m = make({ exclusive: failing });
-    expect(await m.svc.add(CERT_A, ACTOR)).toMatchObject({ fingerprint: FP_A });
-    await m.svc.remove(FP_A, ACTOR);
-    expect(m.audits.map((a) => a.action)).toEqual(['network.trust.add', 'network.trust.remove']);
-    expect(readFileSync(m.file, 'utf8')).toBe('');
-  });
-
-  it('passes on a lock failure when the file was not changed', async () => {
-    const failing: Exclusive = async (work) => {
-      await work().catch(() => {});
-      throw new Error('commit failed');
-    };
-    const m = make({ content: CERT_A, exclusive: failing });
-    await expect(m.svc.add(CERT_A, ACTOR)).rejects.toThrow('commit failed');
-    await expect(m.svc.remove(FP_B, ACTOR)).rejects.toThrow('commit failed');
-    expect(m.audits).toEqual([]);
-  });
-
-  it('refuses as busy, and writes nothing, when the file changed between its read and its write', async () => {
-    // What a lost lock would look like: another process writes while this one is in its change.
-    let file = '';
-    let inside = false;
-    let hit = false;
-    const m = make({
-      exclusive: async (work) => {
-        inside = true;
-        try {
-          return await work();
-        } finally {
-          inside = false;
-        }
-      },
-      // The service asks the time when it reads the file. That is after the read, before the write.
-      now: () => {
-        if (inside && !hit) {
-          hit = true;
-          writeFileSync(file, CERT_B);
-        }
-        return NOW;
-      },
-    });
-    file = m.file;
-    await expect(m.svc.add(CERT_A, ACTOR)).rejects.toThrow(TRUST_BUSY);
-    expect(hit).toBe(true);
-    expect(readFileSync(m.file, 'utf8')).toBe(CERT_B);
-    expect(m.audits).toEqual([]);
-    expect(readdirSync(m.dir)).toEqual(['ca.pem']);
-  });
-
   it('a refusal is never reported as an audit failure', async () => {
     const m = make({ content: CERT_A, auditFails: true });
     expect(await code(m.svc.add(CERT_A, ACTOR))).toBe('duplicate');
@@ -518,7 +496,6 @@ describe('preview', () => {
         asked.push([host, port]);
         return CERT_A;
       },
-      exclusive: mutex(),
       audit: async () => {},
       now: () => NOW,
     });
@@ -696,5 +673,66 @@ describe('the 10 second limit of readPeerCertificate', () => {
     } finally {
       process.off('uncaughtException', onFail);
     }
+  });
+});
+
+describe('a lock left behind', () => {
+  const old = (lock: string, ms: number): void => {
+    const past = new Date(Date.now() - ms);
+    utimesSync(lock, past, past);
+  };
+
+  it('status shows no lock when there is none', async () => {
+    expect(await make().svc.status()).toEqual({ mode: 'editable' });
+  });
+
+  it('status shows a lock, and calls it stuck once it is older than 30 seconds', async () => {
+    const m = make();
+    const lock = `${m.file}.lock`;
+    writeFileSync(lock, 'held');
+    const fresh = await m.svc.status();
+    expect(fresh).toMatchObject({ mode: 'editable', lock: { stuck: false } });
+    old(lock, 31_000);
+    const stuck = await m.svc.status();
+    expect(stuck.lock).toMatchObject({ stuck: true });
+    expect(Date.now() - new Date(stuck.lock!.since).getTime()).toBeGreaterThanOrEqual(31_000);
+  });
+
+  it('unlock removes a stuck lock, audits it, and the next change goes through', async () => {
+    const m = make({ lockWaitMs: 150 });
+    const lock = `${m.file}.lock`;
+    writeFileSync(lock, 'held');
+    old(lock, 60_000);
+    expect(await m.svc.unlock(ACTOR)).toBe(true);
+    expect(existsSync(lock)).toBe(false);
+    expect(m.audits).toMatchObject([{ action: 'network.trust.unlock', actor: ACTOR, fingerprint: 'lock' }]);
+    await m.svc.add(CERT_A, ACTOR);
+    expect(await m.svc.status()).toEqual({ mode: 'editable' });
+  });
+
+  it('unlock refuses a lock that is not stuck, and leaves it', async () => {
+    const m = make();
+    const lock = `${m.file}.lock`;
+    writeFileSync(lock, 'held');
+    expect(await code(m.svc.unlock(ACTOR))).toBe('busy');
+    expect(existsSync(lock)).toBe(true);
+    expect(m.audits).toEqual([]);
+  });
+
+  it('unlock does nothing and audits nothing when there is no lock', async () => {
+    const m = make();
+    expect(await m.svc.unlock(ACTOR)).toBe(false);
+    expect(m.audits).toEqual([]);
+  });
+
+  it('unlock is refused when the file is not managed', async () => {
+    expect(await code(make({ file: null }).svc.unlock(ACTOR))).toBe('read-only');
+  });
+
+  it('shows a stuck lock on a damaged file too', async () => {
+    const m = make({ content: 'garbage' });
+    writeFileSync(`${m.file}.lock`, 'held');
+    old(`${m.file}.lock`, 60_000);
+    expect(await m.svc.status()).toMatchObject({ mode: 'damaged', lock: { stuck: true } });
   });
 });
