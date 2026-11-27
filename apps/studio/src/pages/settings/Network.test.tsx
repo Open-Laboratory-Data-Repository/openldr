@@ -377,4 +377,158 @@ describe('the Network settings page', () => {
     mount();
     expect(await screen.findByTestId('network-error')).toHaveTextContent('500');
   });
+
+  /** A promise the test settles when it chooses. */
+  function later<T>() {
+    let resolve: (v: T) => void = () => {};
+    let reject: (e: unknown) => void = () => {};
+    const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  }
+  const closeSheet = async () => { await act(async () => { fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' }); }); };
+
+  it('ignores a certificate that arrives after the address was changed', async () => {
+    const slow = later<{ certificates: api.CertificatePreview[] }>();
+    vi.mocked(api.previewTrustCertificate).mockReturnValue(slow.promise);
+    mount();
+    await screen.findByTestId(`trust-row-${FP}`);
+    await pick('network-menu', 'trust-add');
+    fireEvent.change(screen.getByTestId('trust-address'), { target: { value: 'a.district' } });
+    await pick('trust-sheet-menu', 'trust-read');
+    fireEvent.change(screen.getByTestId('trust-address'), { target: { value: 'b.district' } });
+    await act(async () => { slow.resolve({ certificates: [preview] }); });
+    // The field says b.district. A's certificate must not be shown, and Save stays off.
+    expect(screen.queryByTestId('trust-preview')).toBeNull();
+    openMenu('trust-sheet-menu');
+    expect(await screen.findByTestId('trust-save')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('ignores a certificate that arrives after the sheet was closed and opened again', async () => {
+    const slow = later<{ certificates: api.CertificatePreview[] }>();
+    vi.mocked(api.previewTrustCertificate).mockReturnValue(slow.promise);
+    mount();
+    await screen.findByTestId(`trust-row-${FP}`);
+    await pick('network-menu', 'trust-add');
+    fireEvent.change(screen.getByTestId('trust-address'), { target: { value: 'a.district' } });
+    await pick('trust-sheet-menu', 'trust-read');
+    await closeSheet();
+    await waitFor(() => expect(screen.queryByTestId('trust-address')).toBeNull());
+    await pick('network-menu', 'trust-add');
+    await act(async () => { slow.resolve({ certificates: [preview] }); });
+    expect(screen.getByTestId('trust-address')).toHaveValue('');
+    expect(screen.queryByTestId('trust-preview')).toBeNull();
+  });
+
+  it('a save that finishes late does not close a sheet that was opened again', async () => {
+    const slow = later<api.TrustedCertificate>();
+    vi.mocked(api.previewTrustCertificate).mockResolvedValue({ certificates: [preview] });
+    vi.mocked(api.addTrustCertificate).mockReturnValue(slow.promise);
+    mount();
+    await screen.findByTestId(`trust-row-${FP}`);
+    await pick('network-menu', 'trust-add');
+    fireEvent.change(screen.getByTestId('trust-address'), { target: { value: 'a.district' } });
+    await pick('trust-sheet-menu', 'trust-read');
+    await screen.findByTestId('trust-preview');
+    await pick('trust-sheet-menu', 'trust-save');
+    await closeSheet();
+    await waitFor(() => expect(screen.queryByTestId('trust-address')).toBeNull());
+    await pick('network-menu', 'trust-add');
+    fireEvent.change(screen.getByTestId('trust-address'), { target: { value: 'second.district' } });
+    await act(async () => { slow.resolve(cert({ state: 'added' })); });
+    // The first save is reported and the list reloads. The sheet the person now has open stays.
+    expect(toast.success).toHaveBeenCalledWith('Saved. Restart OpenLDR to use it.');
+    expect(screen.getByTestId('trust-address')).toHaveValue('second.district');
+  });
+
+  it('a host save that finishes late does not close a sheet that was opened again', async () => {
+    const slow = later<void>();
+    vi.mocked(api.addWorkflowHost).mockReturnValue(slow.promise);
+    mount();
+    await showHosts();
+    await pick('network-menu', 'host-add');
+    fireEvent.change(screen.getByTestId('host-name'), { target: { value: 'a.example.org' } });
+    await pick('host-sheet-menu', 'host-save');
+    await closeSheet();
+    await waitFor(() => expect(screen.queryByTestId('host-name')).toBeNull());
+    await pick('network-menu', 'host-add');
+    fireEvent.change(screen.getByTestId('host-name'), { target: { value: 'second.example.org' } });
+    await act(async () => { slow.resolve(); });
+    expect(screen.getByTestId('host-name')).toHaveValue('second.example.org');
+  });
+
+  it('says so when a refresh fails, keeps what it had, and refreshes again from the menu', async () => {
+    mount();
+    await screen.findByTestId(`trust-row-${FP}`);
+    vi.mocked(api.getNetworkTrust).mockRejectedValueOnce(new Error('list trusted certificates failed: 500'));
+    await pick('network-menu', 'network-refresh');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('list trusted certificates failed: 500'));
+    expect(screen.getByTestId(`trust-row-${FP}`)).toBeInTheDocument();
+    expect(screen.getByTestId('network-refresh-failed')).toHaveTextContent('The page could not be refreshed. What you see may be out of date.');
+    vi.mocked(api.getNetworkTrust).mockResolvedValue({ mode: 'editable', certificates: [cert({ fingerprint: 'NEW', subject: 'new.district' })] });
+    await pick('network-menu', 'network-refresh');
+    expect(await screen.findByTestId('trust-row-NEW')).toBeInTheDocument();
+    expect(screen.queryByTestId('network-refresh-failed')).toBeNull();
+  });
+
+  it('keeps the newest answer when an older refresh finishes after it', async () => {
+    mount();
+    await screen.findByTestId(`trust-row-${FP}`);
+    const old = later<api.NetworkTrust>();
+    vi.mocked(api.getNetworkTrust).mockReturnValueOnce(old.promise);
+    await pick('network-menu', 'network-refresh');
+    vi.mocked(api.getNetworkTrust).mockResolvedValueOnce({ mode: 'editable', certificates: [cert({ fingerprint: 'NEWEST', subject: 'newest' })] });
+    await pick('network-menu', 'network-refresh');
+    await screen.findByTestId('trust-row-NEWEST');
+    await act(async () => { old.resolve({ mode: 'editable', certificates: [cert({ fingerprint: 'STALE', subject: 'stale' })] }); });
+    expect(screen.getByTestId('trust-row-NEWEST')).toBeInTheDocument();
+    expect(screen.queryByTestId('trust-row-STALE')).toBeNull();
+  });
+
+  it('looks again when a lock in progress becomes old enough to unlock', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      const since = new Date(Date.now() - 5_000).toISOString();
+      vi.mocked(api.getNetworkTrust).mockResolvedValue({ mode: 'editable', lock: { since, stuck: false }, certificates: [cert()] });
+      mount();
+      await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+      expect(screen.getByTestId('trust-lock-note')).toHaveTextContent('A change to the list is in progress.');
+      expect(api.getNetworkTrust).toHaveBeenCalledTimes(1);
+      vi.mocked(api.getNetworkTrust).mockResolvedValue({ mode: 'editable', lock: { since, stuck: true }, certificates: [cert()] });
+      // 30 seconds after the lock was made, plus a little.
+      await act(async () => { await vi.advanceTimersByTimeAsync(27_000); });
+      expect(api.getNetworkTrust).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId('trust-lock-note')).toHaveTextContent('A change to the list was interrupted and left a lock.');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('goes back to the last page that has rows when the list gets shorter', async () => {
+    const many = (n: number) => Array.from({ length: n }, (_, i) => cert({ fingerprint: `F${String(i).padStart(2, '0')}`, subject: `host-${String(i).padStart(2, '0')}` }));
+    vi.mocked(api.getNetworkTrust).mockResolvedValue({ mode: 'editable', certificates: many(26) });
+    vi.mocked(api.removeTrustCertificate).mockResolvedValue(undefined);
+    mount();
+    await screen.findByTestId('trust-row-F00');
+    const panel = screen.getByTestId('trust-row-F00').closest('[role="tabpanel"]') as HTMLElement;
+    await act(async () => { fireEvent.click(within(panel).getByRole('button', { name: 'Next page' })); });
+    expect(await screen.findByTestId('trust-row-F25')).toBeInTheDocument();
+    vi.mocked(api.getNetworkTrust).mockResolvedValue({ mode: 'editable', certificates: many(25) });
+    await pick('trust-actions-F25', 'trust-remove-F25');
+    const dialog = await screen.findByRole('alertdialog');
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' })); });
+    // 25 certificates are left, all on the first page. The page must not show "none".
+    expect(await screen.findByTestId('trust-row-F00')).toBeInTheDocument();
+    expect(screen.queryByTestId('trust-empty')).toBeNull();
+  });
+
+  it('says how to copy by hand when the browser will not copy', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => { throw new Error('not allowed'); }) } });
+    mount();
+    await screen.findByTestId(`trust-row-${FP}`);
+    await pick(`trust-actions-${FP}`, `trust-copy-${FP}`);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('This browser did not copy it. Select the fingerprint in the list and copy it yourself.'));
+    Object.assign(navigator, { clipboard: undefined });
+    await pick(`trust-actions-${FP}`, `trust-copy-${FP}`);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(2));
+  });
 });

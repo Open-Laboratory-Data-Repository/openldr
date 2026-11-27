@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
@@ -62,18 +62,57 @@ export function Network() {
   const [unlocking, setUnlocking] = useState(false);
   const [selfBusy, setSelfBusy] = useState(false);
 
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  // The number of the newest read. An older one that ends later is dropped, or it would put old
+  // rows back over newer ones.
+  const reads = useRef(0);
+  const loaded = useRef(false);
+
   const load = useCallback(async () => {
+    const mine = ++reads.current;
     try {
       const [nextTrust, nextHosts] = await Promise.all([getNetworkTrust(), getWorkflowHosts()]);
+      if (reads.current !== mine) return;
       setTrust(nextTrust);
       setHosts(nextHosts);
       setError(null);
+      setRefreshFailed(false);
+      loaded.current = true;
     } catch (err) {
-      setError(networkErrorLine(err, t));
+      if (reads.current !== mine) return;
+      const line = networkErrorLine(err, t);
+      setError(line);
+      // With rows on the screen, the failure is said in a toast and a note, and the rows stay.
+      if (loaded.current) {
+        setRefreshFailed(true);
+        toast.error(line);
+      }
     }
   }, [t]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // A lock that is not old enough to unlock yet: look again once it is, so Unlock appears
+  // without a reload of the browser page.
+  const lockSince = trust?.lock && !trust.lock.stuck ? trust.lock.since : null;
+  useEffect(() => {
+    if (lockSince === null) return undefined;
+    const wait = Math.max(2_000, new Date(lockSince).getTime() + 31_000 - Date.now());
+    const timer = setTimeout(() => void load(), wait);
+    return () => clearTimeout(timer);
+  }, [lockSince, load, trust]);
+
+  // A list that got shorter can leave the page number past its end. Go back to the last page with rows.
+  const certCount = trust?.certificates.length ?? 0;
+  const hostCount = hosts?.hosts.length ?? 0;
+  useEffect(() => {
+    const last = Math.max(0, Math.ceil(certCount / trustSize) - 1);
+    if (trustPage > last) setTrustPage(last);
+  }, [certCount, trustSize, trustPage]);
+  useEffect(() => {
+    const last = Math.max(0, Math.ceil(hostCount / hostSize) - 1);
+    if (hostPage > last) setHostPage(last);
+  }, [hostCount, hostSize, hostPage]);
 
   /** Runs a change, says how it went in a toast, and reloads when the lists may have changed. */
   async function change(work: () => Promise<string>): Promise<void> {
@@ -101,10 +140,11 @@ export function Network() {
 
   async function copy(text: string): Promise<void> {
     try {
+      // A page opened over plain HTTP has no clipboard, and a browser may refuse.
       await navigator.clipboard.writeText(text);
       toast.success(t('settings.network.copied'));
     } catch {
-      // No clipboard here. The fingerprint is on the screen to read.
+      toast.error(t('settings.network.copyFailed'));
     }
   }
 
@@ -153,9 +193,16 @@ export function Network() {
                     {t('settings.network.addHost')}
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem data-testid="network-refresh" onSelect={() => void load()}>
+                  {t('settings.network.refresh')}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+
+          {refreshFailed ? (
+            <div data-testid="network-refresh-failed" className="border-b border-border px-4 py-2 text-sm text-destructive">{t('settings.network.refreshFailed')}</div>
+          ) : null}
 
           {/* `data-[state=inactive]:hidden` is needed: a flex class out-ranks the rule that hides an inactive panel. */}
           <TabsContent value="trust" className="mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">

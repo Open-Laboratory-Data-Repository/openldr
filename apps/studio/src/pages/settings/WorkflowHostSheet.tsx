@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
@@ -15,8 +15,11 @@ export function WorkflowHostSheet({ open, onOpenChange, onChanged }: { open: boo
   const { t } = useTranslation();
   const [host, setHost] = useState('');
   const [busy, setBusy] = useState(false);
+  // Moves on every opening, so a save that ends late does not close a sheet opened since.
+  const session = useRef(0);
 
   useEffect(() => {
+    session.current++;
     if (open) {
       setHost('');
       setBusy(false);
@@ -24,20 +27,22 @@ export function WorkflowHostSheet({ open, onOpenChange, onChanged }: { open: boo
   }, [open]);
 
   async function save(): Promise<void> {
+    const mine = session.current;
+    const sameSheet = (): boolean => session.current === mine;
     setBusy(true);
     try {
       await addWorkflowHost(host.trim());
       toast.success(t('settings.network.saved'));
       onChanged();
-      onOpenChange(false);
+      if (sameSheet()) onOpenChange(false);
     } catch (err) {
       toast.error(networkErrorLine(err, t));
       if (changeWasMade(err)) {
         onChanged();
-        onOpenChange(false);
+        if (sameSheet()) onOpenChange(false);
       }
     } finally {
-      setBusy(false);
+      if (sameSheet()) setBusy(false);
     }
   }
 

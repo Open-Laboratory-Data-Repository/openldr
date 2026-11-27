@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
@@ -28,8 +28,15 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
   const [text, setText] = useState('');
   const [shown, setShown] = useState<CertificatePreview | null>(null);
   const [busy, setBusy] = useState(false);
+  // What a slow answer is checked against. `source` moves on every edit and every opening, so a
+  // certificate read for an address that is no longer in the field is dropped. `session` moves on
+  // every opening, so a save that ends late does not close a sheet opened since.
+  const source = useRef(0);
+  const session = useRef(0);
 
   useEffect(() => {
+    source.current++;
+    session.current++;
     if (open) {
       setAddress('');
       setText('');
@@ -38,39 +45,52 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
     }
   }, [open]);
 
+  /** The person changed where the certificate comes from. Anything read before no longer counts. */
+  function edited(): void {
+    source.current++;
+    setShown(null);
+    setBusy(false);
+  }
+
   const canRead = !busy && (address.trim() !== '' || text.trim() !== '');
 
   async function read(): Promise<void> {
+    const mine = ++source.current;
     setBusy(true);
     setShown(null);
     try {
       // Pasted text wins when both are filled: it is what the person put in front of them.
       const { certificates } = await previewTrustCertificate(text.trim() !== '' ? { text } : { address: address.trim() });
+      if (source.current !== mine) return;
       if (certificates.length !== 1) toast.error(t('settings.network.severalCertificates', { count: certificates.length }));
       else setShown(certificates[0] ?? null);
     } catch (err) {
+      if (source.current !== mine) return;
       toast.error(networkErrorLine(err, t));
     } finally {
-      setBusy(false);
+      if (source.current === mine) setBusy(false);
     }
   }
 
   async function save(): Promise<void> {
     if (!shown) return;
+    const mine = session.current;
+    // Only the sheet this save started from. One opened since is the person's new work.
+    const sameSheet = (): boolean => session.current === mine;
     setBusy(true);
     try {
       const saved = await addTrustCertificate(shown.pem);
       toast.success(t(SAVED[saved.state] ?? 'settings.network.saved'));
       onChanged();
-      onOpenChange(false);
+      if (sameSheet()) onOpenChange(false);
     } catch (err) {
       toast.error(networkErrorLine(err, t));
       if (changeWasMade(err)) {
         onChanged();
-        onOpenChange(false);
+        if (sameSheet()) onOpenChange(false);
       }
     } finally {
-      setBusy(false);
+      if (sameSheet()) setBusy(false);
     }
   }
 
@@ -109,7 +129,7 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
               spellCheck={false}
               value={address}
               placeholder={t('settings.network.addressPlaceholder')}
-              onChange={(e) => { setAddress(e.target.value); setShown(null); }}
+              onChange={(e) => { setAddress(e.target.value); edited(); }}
             />
             <Label htmlFor="trust-text" className="self-start whitespace-nowrap pt-2">{t('settings.network.fieldPaste')}</Label>
             <Textarea
@@ -120,7 +140,7 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
               className="font-mono text-xs"
               value={text}
               placeholder="-----BEGIN CERTIFICATE-----"
-              onChange={(e) => { setText(e.target.value); setShown(null); }}
+              onChange={(e) => { setText(e.target.value); edited(); }}
             />
           </div>
           {shown ? (
