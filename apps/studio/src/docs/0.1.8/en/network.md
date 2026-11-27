@@ -2,7 +2,7 @@
 
 Network holds two lists that an administrator keeps. The first is the certificates this OpenLDR trusts when it calls another server over HTTPS, such as a hub with its own certificate. The second is the hosts a workflow may call. You need the **Manage network trust** permission.
 
-This guide has no clip yet. Each task is a few steps on one page.
+![Opening Network, reading a server's certificate to see its fingerprint, and opening the workflow hosts.](network-intro.mp4)
 
 ## Trust another OpenLDR's certificate
 
@@ -102,6 +102,17 @@ A power cut or a crash during a change can leave the list of certificates locked
 **Unlock** appears once the lock is 30 seconds old. That age does not prove the change has stopped. That is why step 1 comes first.
 
 From the command line: `openldr trust unlock --force`.
+
+## Example 1: A district lab trusts its hub
+
+The hub at `hub.example.org` made its own certificate, and the lab's sync fails with a certificate error.
+
+1. The hub's administrator reads the certificate fingerprint aloud over the phone.
+2. At the lab, the administrator opens **Settings**, then **Network**, and reads the certificate from `hub.example.org`.
+3. The fingerprint on the screen is the same, so the administrator saves it. The row shows **After restart**.
+4. The administrator restarts OpenLDR. The row shows **In use**.
+
+**Expected result:** the next sync reaches the hub.
 
 ## Limits
 

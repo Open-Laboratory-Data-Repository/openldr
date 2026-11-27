@@ -2,7 +2,7 @@
 
 Rede contém duas listas mantidas por um administrador. A primeira reúne os certificados em que este OpenLDR confia quando contacta outro servidor por HTTPS, por exemplo um servidor central com o seu próprio certificado. A segunda reúne os anfitriões que um fluxo de trabalho pode contactar. Precisa da permissão **Gerir a confiança de rede**.
 
-Este guia ainda não tem clipe. Cada tarefa são poucos passos numa só página.
+![Abrir Rede, ler o certificado de um servidor para ver a impressão digital, e abrir os anfitriões dos fluxos de trabalho.](network-intro.mp4)
 
 ## Confiar no certificado de outro OpenLDR
 
@@ -102,6 +102,17 @@ Um corte de energia ou uma falha durante uma alteração pode deixar a lista de 
 **Desbloquear** aparece quando o bloqueio tem 30 segundos. Essa idade não prova que a alteração parou. É por isso que o passo 1 vem primeiro.
 
 Na linha de comandos: `openldr trust unlock --force`.
+
+## Exemplo 1: um laboratório distrital confia no seu servidor central
+
+O servidor central `hub.example.org` criou o seu próprio certificado, e a sincronização do laboratório falha com um erro de certificado.
+
+1. O administrador do servidor central lê a impressão digital do certificado em voz alta ao telefone.
+2. No laboratório, o administrador abre **Definições** e depois **Rede**, e lê o certificado a partir de `hub.example.org`.
+3. A impressão digital no ecrã é a mesma, por isso o administrador guarda-o. A linha mostra **Após reinício**.
+4. O administrador reinicia o OpenLDR. A linha mostra **Em uso**.
+
+**Resultado esperado:** a sincronização seguinte alcança o servidor central.
 
 ## Limites
 

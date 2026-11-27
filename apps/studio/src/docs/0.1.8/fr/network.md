@@ -2,7 +2,7 @@
 
 Réseau contient deux listes que tient un administrateur. La première regroupe les certificats auxquels cet OpenLDR fait confiance quand il appelle un autre serveur en HTTPS, par exemple un serveur central qui a son propre certificat. La seconde regroupe les hôtes qu'un workflow peut appeler. Il vous faut l'autorisation **Gérer la confiance réseau**.
 
-Ce guide n'a pas encore de clip. Chaque tâche tient en quelques étapes sur une seule page.
+![Ouverture de Réseau, lecture du certificat d'un serveur pour voir son empreinte, puis ouverture des hôtes des workflows.](network-intro.mp4)
 
 ## Faire confiance au certificat d'un autre OpenLDR
 
@@ -102,6 +102,17 @@ Une coupure de courant ou un plantage pendant une modification peut laisser la l
 **Déverrouiller** apparaît dès que le verrou a 30 secondes. Cet âge ne prouve pas que la modification s'est arrêtée. C'est pourquoi l'étape 1 vient en premier.
 
 En ligne de commande : `openldr trust unlock --force`.
+
+## Exemple 1 : un laboratoire de district fait confiance à son serveur central
+
+Le serveur central `hub.example.org` a créé son propre certificat, et la synchronisation du laboratoire échoue sur une erreur de certificat.
+
+1. L'administrateur du serveur central lit l'empreinte du certificat à voix haute au téléphone.
+2. Au laboratoire, l'administrateur ouvre **Paramètres**, puis **Réseau**, et lit le certificat depuis `hub.example.org`.
+3. L'empreinte affichée est la même, donc l'administrateur l'enregistre. La ligne affiche **Après redémarrage**.
+4. L'administrateur redémarre OpenLDR. La ligne affiche **Utilisé**.
+
+**Résultat attendu :** la synchronisation suivante atteint le serveur central.
 
 ## Limites
 

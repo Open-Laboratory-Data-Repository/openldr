@@ -1593,6 +1593,7 @@ export const DOC_GUIDES: DocGuide[] = [
     difficulty: 'intermediate',
     relatedSlugs: ['connectors', 'sync', 'workflows'],
     screenshotNames: [],
+    capturedNames: ['network-intro.mp4', 'network-intro.png'],
     status: 'published',
   },
   {
