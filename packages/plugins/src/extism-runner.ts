@@ -77,12 +77,15 @@ export type TransportReason = 'timeout' | 'certificate' | 'unreachable';
 
 /**
  * How long the next network call of one plugin call may take: 10 seconds, or what is left of the
- * whole call less 2 seconds, when that is lower. Zero when nothing is left. All the network calls
- * of one plugin call share this, so however many it makes, the plugin has its last answer 2
- * seconds before CE would stop it, and can still record what happened.
+ * whole call less a reserve, when that is lower. Zero when nothing is left. The reserve is 2
+ * seconds, or a fifth of the call when the call is shorter than 10 seconds, so a short call still
+ * has time for a request. All the network calls of one plugin call share this, so however many it
+ * makes, the plugin has its last answer before CE would stop it, and can still record what
+ * happened.
  */
 export function egressBudget(callLimitMs: number, now: () => number = Date.now): () => number {
-  const end = now() + callLimitMs - 2_000;
+  const reserve = Math.min(2_000, Math.floor(callLimitMs / 5));
+  const end = now() + callLimitMs - reserve;
   return () => Math.max(0, Math.min(10_000, end - now()));
 }
 
