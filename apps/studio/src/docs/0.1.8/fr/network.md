@@ -2,7 +2,7 @@
 
 Réseau contient deux listes que tient un administrateur. La première regroupe les certificats auxquels cet OpenLDR fait confiance quand il appelle un autre serveur en HTTPS, par exemple un serveur central qui a son propre certificat. La seconde regroupe les hôtes qu'un workflow peut appeler. Il vous faut l'autorisation **Gérer la confiance réseau**.
 
-Ce guide n'a pas de clip. Chaque tâche tient en quelques étapes sur une seule page.
+Ce guide n'a pas encore de clip. Chaque tâche tient en quelques étapes sur une seule page.
 
 ## Faire confiance au certificat d'un autre OpenLDR
 
@@ -36,14 +36,14 @@ openldr trust add --address hub.example.org:8443 --fingerprint <SHA-256>
 openldr trust add data/hub.pem --fingerprint <SHA-256>
 ```
 
-Sans `--fingerprint`, la commande affiche l'empreinte du certificat et n'enregistre rien. Comparez-la, puis relancez la commande avec elle.
+Avec un fichier et sans `--fingerprint`, la commande affiche l'empreinte du certificat et n'enregistre rien. Comparez-la, puis relancez la commande avec elle. Avec `--address`, `--fingerprint` est toujours nécessaire. Sans cela, la commande s'arrête avant de contacter le serveur.
 
 ## Redémarrer OpenLDR
 
 OpenLDR ne lit ses certificats de confiance qu'au démarrage. Un certificat ajouté ou retiré prend effet après un redémarrage.
 
 - **Application de bureau :** ouvrez l'icône OpenLDR dans la zone de notification, sélectionnez **Quitter**, puis rouvrez OpenLDR.
-- **Lanceur autonome :** exécutez `openldr-standalone stop`, puis `openldr-standalone start`.
+- **Lanceur autonome :** exécutez `openldr-standalone stop`, puis `openldr-standalone start`. Donnez aux deux les options du premier démarrage, comme `--data-dir`, `--share` et les ports. Sans elles, `stop` peut regarder dans un autre dossier, et `start` peut démarrer sans le partage.
 - **Installation Docker :** dans le dossier d'installation, exécutez `docker compose restart api`.
 
 **Résultat attendu :** la colonne **État** passe de **Après redémarrage** à **Utilisé**.
@@ -55,13 +55,15 @@ OpenLDR ne lit ses certificats de confiance qu'au démarrage. Un certificat ajou
 3. Lisez la question, puis sélectionnez **Retirer**.
 4. Redémarrez OpenLDR.
 
-**Résultat attendu :** avant le redémarrage, la ligne affiche **Retiré après redémarrage**. Après, la ligne a disparu, et OpenLDR ne fait plus confiance à un serveur qui présente ce certificat.
+**Résultat attendu :** un certificat que le serveur a chargé affiche **Retiré après redémarrage** jusqu'au redémarrage, puis la ligne disparaît. Un certificat qui attendait encore un redémarrage disparaît tout de suite.
+
+Le retrait ne supprime que cette entrée. Un serveur reconnu autrement, par exemple par une autorité de certification publique, reste de confiance.
 
 En ligne de commande : `openldr trust remove <empreinte> --force`.
 
 ## Laisser un workflow appeler un autre hôte
 
-L'étape HTTP d'un workflow ne peut appeler que les hôtes de cette liste.
+L'étape HTTP d'un workflow ne peut appeler que les hôtes de cette liste, et cet OpenLDR lui-même quand son interrupteur est activé. Voir **Laisser un workflow appeler cet OpenLDR** ci-dessous.
 
 1. Ouvrez **Paramètres**, puis **Réseau**.
 2. Sélectionnez l'onglet **Hôtes des workflows**.

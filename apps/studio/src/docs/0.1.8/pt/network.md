@@ -2,7 +2,7 @@
 
 Rede contém duas listas mantidas por um administrador. A primeira reúne os certificados em que este OpenLDR confia quando contacta outro servidor por HTTPS, por exemplo um servidor central com o seu próprio certificado. A segunda reúne os anfitriões que um fluxo de trabalho pode contactar. Precisa da permissão **Gerir a confiança de rede**.
 
-Este guia não tem clipe. Cada tarefa são poucos passos numa só página.
+Este guia ainda não tem clipe. Cada tarefa são poucos passos numa só página.
 
 ## Confiar no certificado de outro OpenLDR
 
@@ -36,14 +36,14 @@ openldr trust add --address hub.example.org:8443 --fingerprint <SHA-256>
 openldr trust add data/hub.pem --fingerprint <SHA-256>
 ```
 
-Sem `--fingerprint`, o comando mostra a impressão digital do certificado e não guarda nada. Compare-a e volte a executar o comando com ela.
+Com um ficheiro e sem `--fingerprint`, o comando mostra a impressão digital do certificado e não guarda nada. Compare-a e volte a executar o comando com ela. Com `--address`, `--fingerprint` é sempre necessário. Sem ele, o comando para antes de contactar o servidor.
 
 ## Reiniciar o OpenLDR
 
 O OpenLDR só lê os certificados de confiança quando arranca. Um certificado adicionado ou removido tem efeito depois de um reinício.
 
 - **Aplicação de ambiente de trabalho:** abra o ícone do OpenLDR na área de notificação, selecione **Sair** e volte a abrir o OpenLDR.
-- **Lançador autónomo:** execute `openldr-standalone stop` e depois `openldr-standalone start`.
+- **Lançador autónomo:** execute `openldr-standalone stop` e depois `openldr-standalone start`. Dê a ambos as opções do primeiro arranque, como `--data-dir`, `--share` e as portas. Sem elas, `stop` pode procurar noutra pasta, e `start` pode arrancar sem a partilha.
 - **Instalação Docker:** na pasta de instalação, execute `docker compose restart api`.
 
 **Resultado esperado:** a coluna **Estado** passa de **Após reinício** para **Em uso**.
@@ -55,13 +55,15 @@ O OpenLDR só lê os certificados de confiança quando arranca. Um certificado a
 3. Leia a pergunta e selecione **Remover**.
 4. Reinicie o OpenLDR.
 
-**Resultado esperado:** antes do reinício, a linha mostra **Removido após reinício**. Depois, a linha desaparece, e o OpenLDR deixa de confiar num servidor que apresente esse certificado.
+**Resultado esperado:** um certificado que o servidor carregou mostra **Removido após reinício** até ao reinício, e depois a linha desaparece. Um que ainda aguardava um reinício desaparece de imediato.
+
+A remoção elimina apenas esta entrada. Um servidor reconhecido de outra forma, por exemplo por uma autoridade de certificação pública, continua a ser de confiança.
 
 Na linha de comandos: `openldr trust remove <impressão digital> --force`.
 
 ## Permitir que um fluxo de trabalho contacte outro anfitrião
 
-O passo HTTP de um fluxo de trabalho só pode contactar os anfitriões desta lista.
+O passo HTTP de um fluxo de trabalho só pode contactar os anfitriões desta lista, e este próprio OpenLDR quando o interruptor dele está ligado. Veja **Permitir que um fluxo de trabalho contacte este OpenLDR** abaixo.
 
 1. Abra **Definições** e depois **Rede**.
 2. Selecione o separador **Anfitriões dos fluxos de trabalho**.

@@ -2,7 +2,7 @@
 
 Network holds two lists that an administrator keeps. The first is the certificates this OpenLDR trusts when it calls another server over HTTPS, such as a hub with its own certificate. The second is the hosts a workflow may call. You need the **Manage network trust** permission.
 
-This guide has no clip. Each task is a few steps on one page.
+This guide has no clip yet. Each task is a few steps on one page.
 
 ## Trust another OpenLDR's certificate
 
@@ -36,14 +36,14 @@ openldr trust add --address hub.example.org:8443 --fingerprint <SHA-256>
 openldr trust add data/hub.pem --fingerprint <SHA-256>
 ```
 
-Without `--fingerprint`, the command prints the certificate's fingerprint and saves nothing. Compare it, then run the command again with it.
+With a file and no `--fingerprint`, the command prints the certificate's fingerprint and saves nothing. Compare it, then run the command again with it. With `--address`, `--fingerprint` is always needed. Without it the command stops before it contacts the server.
 
 ## Restart OpenLDR
 
 OpenLDR reads its trusted certificates only when it starts. A certificate you add or remove takes effect after a restart.
 
 - **Desktop app:** open the OpenLDR icon in the system tray, select **Quit**, then open OpenLDR again.
-- **Standalone launcher:** run `openldr-standalone stop`, then `openldr-standalone start`.
+- **Standalone launcher:** run `openldr-standalone stop`, then `openldr-standalone start`. Give both the options you first started it with, such as `--data-dir`, `--share` and the ports. Without them, `stop` can look in another folder, and `start` can come up without sharing.
 - **Docker install:** in the install folder, run `docker compose restart api`.
 
 **Expected result:** the **State** column changes from **After restart** to **In use**.
@@ -55,13 +55,15 @@ OpenLDR reads its trusted certificates only when it starts. A certificate you ad
 3. Read the question, then select **Remove**.
 4. Restart OpenLDR.
 
-**Expected result:** before the restart the row shows **Removed after restart**. After it, the row is gone, and OpenLDR no longer trusts a server that shows that certificate.
+**Expected result:** a certificate the server has loaded shows **Removed after restart** until the restart, and then the row is gone. One that was still waiting for a restart goes at once.
+
+Removing drops this entry only. A server that is trusted in another way, such as through a public certificate authority, stays trusted.
 
 From the command line: `openldr trust remove <fingerprint> --force`.
 
 ## Let a workflow call another host
 
-A workflow's HTTP step can call only the hosts on this list.
+A workflow's HTTP step can call only the hosts on this list, and this OpenLDR itself when its switch is on. See **Let a workflow call this OpenLDR** below.
 
 1. Open **Settings**, then **Network**.
 2. Select the **Workflow hosts** tab.

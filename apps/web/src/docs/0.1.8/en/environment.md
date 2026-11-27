@@ -173,7 +173,7 @@ A new install sets `TRUSTED_CA_FILE` and `NODE_EXTRA_CA_CERTS` to `/etc/openldr/
 
 Run the installer again in the install folder. It keeps your `.env`, copies the old central certificate into `config/trust/ca.pem` once, and moves the path only when `.env` still holds the old default. A path you chose yourself is left as it is. Then start the stack again with `docker compose up -d`.
 
-On a Docker install the `openldr` command has no terminal, so `openldr trust add` cannot ask its question. Give it `--fingerprint`. Without it, the command prints the certificate's fingerprint and saves nothing.
+On a Docker install the `openldr` command has no terminal, so `openldr trust add` cannot ask its question. Give it `--fingerprint`. With a file and no `--fingerprint`, the command prints the certificate's fingerprint and saves nothing. With `--address` and no `--fingerprint`, it stops before it contacts the server.
 
 ## Development-only settings
 
@@ -257,7 +257,7 @@ deployed stack the [installer](/docs/install) provisions this from its `--mysql-
 | `WORKFLOW_CODE_ENABLED` | `false` | Allow Code nodes to run. When off, Code nodes refuse to run. |
 | `WORKFLOW_CODE_TIMEOUT_MS` | `5000` | Time limit for one Code node run, in milliseconds. |
 | `WORKFLOW_CODE_MEMORY_MB` | `128` | Memory limit for one Code node run, in MB. |
-| `WORKFLOW_HTTP_ALLOWLIST` | empty | Comma-separated hostnames the HTTP Request node may call. An administrator adds more in Settings > Network, and the two lists are used together. With both empty, every host is refused. A host named here cannot be removed in the app. |
+| `WORKFLOW_HTTP_ALLOWLIST` | empty | Comma-separated hostnames the HTTP Request node may call. An administrator adds more in Settings > Network, and the two lists are used together. With both empty, every host is refused, except this OpenLDR itself when its switch in Settings > Network is on. A host named here cannot be removed in the app. |
 | `WORKFLOW_FILE_MAX_BYTES` | `52428800` (50 MB) | Largest file accepted by a workflow run upload or webhook body. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | `100000` | Most items a single loop node may collect. |
 | `WORKFLOW_FILE_ACCESS_ENABLED` | `false` | Allow the Read/Write File node to touch files on the server. |
