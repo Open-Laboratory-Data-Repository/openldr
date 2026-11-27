@@ -865,19 +865,23 @@ mkdir -p "$DIR/config/nginx/certs" "$DIR/config/nginx/certs/central" "$DIR/confi
 # again next time.
 TRUST_DIR="$DIR/config/trust"
 OLD_CENTRAL="$DIR/config/nginx/certs/central/fullchain.pem"
+# 1 once the folder holds the list and the marker. Only then may .env be moved to it, below.
+TRUST_READY=0
 if mkdir -p "$TRUST_DIR" 2>/dev/null && [ -w "$TRUST_DIR" ]; then
   if [ ! -f "$TRUST_DIR/.migrated" ]; then
     if [ -s "$OLD_CENTRAL" ]; then
-      cp "$OLD_CENTRAL" "$TRUST_DIR/ca.pem.tmp" && mv "$TRUST_DIR/ca.pem.tmp" "$TRUST_DIR/ca.pem" \
+      cp "$OLD_CENTRAL" "$TRUST_DIR/ca.pem.tmp" && chmod 644 "$TRUST_DIR/ca.pem.tmp" && mv "$TRUST_DIR/ca.pem.tmp" "$TRUST_DIR/ca.pem" \
         || err "could not copy the central certificate into $TRUST_DIR"
       echo "→ Copied the central certificate into config/trust/ca.pem. It is now managed in Settings > Network."
     fi
-    [ -f "$TRUST_DIR/ca.pem" ] || : > "$TRUST_DIR/ca.pem"
-    : > "$TRUST_DIR/.migrated"
+    # Readable by the api's user whatever this shell's umask is. Certificates are public.
+    [ -f "$TRUST_DIR/ca.pem" ] || { : > "$TRUST_DIR/ca.pem" && chmod 644 "$TRUST_DIR/ca.pem"; } || err "could not make $TRUST_DIR/ca.pem"
+    : > "$TRUST_DIR/.migrated" || err "could not write $TRUST_DIR/.migrated"
   fi
-  [ -f "$TRUST_DIR/ca.pem" ] || : > "$TRUST_DIR/ca.pem"
+  [ -f "$TRUST_DIR/ca.pem" ] || { : > "$TRUST_DIR/ca.pem" && chmod 644 "$TRUST_DIR/ca.pem"; } || err "could not make $TRUST_DIR/ca.pem"
+  TRUST_READY=1
 else
-  echo "⚠ Cannot write to $TRUST_DIR as this user. Left it as it is." >&2
+  echo "⚠ Cannot write to $TRUST_DIR as this user. Left it, and the trusted certificate settings in .env, as they are."
 fi
 fetch() { curl -fsSL "$REPO_RAW/$1" -o "$2" || err "failed to download $1"; }
 fetch "deploy/install/docker-compose.yml" "$DIR/docker-compose.yml"
@@ -1080,13 +1084,24 @@ else
   fi
   # An install made before the trust folder names the old single file. Move exactly that default
   # to the new path, so Settings > Network can manage the list. Any other value is the person's
-  # own choice and stays: the page then shows the list as set outside OpenLDR.
-  if grep -qxE 'NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem\r?' "$DIR/.env"; then
-    ( umask 077; sed 's|^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem\(\r\{0,1\}\)$|NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem\1|' "$DIR/.env" > "$DIR/.env.tmp" )
-    mv "$DIR/.env.tmp" "$DIR/.env"
-    [ -z "$(tail -c1 "$DIR/.env")" ] || printf '\n' >> "$DIR/.env"
-    grep -qE '^TRUSTED_CA_FILE=' "$DIR/.env" || printf 'TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem\n' >> "$DIR/.env"
-    grep -qE '^OPENLDR_TRUST_GID=' "$DIR/.env" || printf 'OPENLDR_TRUST_GID=%s\n' "$(id -g)" >> "$DIR/.env"
+  # own choice and stays: the page then shows the list as set outside OpenLDR. Only when the
+  # folder above is ready: with the path moved and no copy, the api would start on an empty list
+  # and stop trusting the central. The whole new file is built first and put in place in one
+  # step, so a run that stops half way leaves the old file. Line ends are kept as they are.
+  if [ "$TRUST_READY" -eq 1 ] && tr -d '\r' < "$DIR/.env" | grep -qx 'NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem'; then
+    ( umask 077; awk -v gid="$(id -g)" '
+        { cr = ""; line = $0; if (sub(/\r$/, "", line)) cr = "\r" }
+        line == "NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem" { line = "NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem"; eol = cr }
+        line ~ /^TRUSTED_CA_FILE=/ { has_file = 1 }
+        line ~ /^OPENLDR_TRUST_GID=/ { has_gid = 1 }
+        { print line cr }
+        END {
+          # New lines end as the moved line ends.
+          if (!has_file) print "TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem" eol
+          if (!has_gid) print "OPENLDR_TRUST_GID=" gid eol
+        }
+      ' "$DIR/.env" > "$DIR/.env.tmp" ) || err "could not prepare the new .env"
+    mv "$DIR/.env.tmp" "$DIR/.env" || err "could not replace .env"
     echo "→ Moved NODE_EXTRA_CA_CERTS in .env to config/trust/ca.pem, so Settings > Network manages the trusted certificates"
   fi
 fi

@@ -447,6 +447,8 @@ if (-not (Test-Path $trustMarker)) {
   New-Item -ItemType File -Path $trustMarker | Out-Null
 }
 if (-not (Test-Path $trustCa)) { New-Item -ItemType File -Path $trustCa | Out-Null }
+# Only then may .env be moved to the folder, below. A failed step above stops the script.
+$trustReady = (Test-Path $trustCa -PathType Leaf) -and (Test-Path $trustMarker)
 function Fetch($rel, $out) { Invoke-WebRequest -UseBasicParsing "$RepoRaw/$rel" -OutFile $out }
 Fetch "deploy/install/docker-compose.yml" "$Dir/docker-compose.yml"
 # The realm is imported by Keycloak only, so a local install does not download it.
@@ -674,14 +676,18 @@ MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-
   }
   # An install made before the trust folder names the old single file. Move exactly that default
   # to the new path, so Settings > Network can manage the list. Any other value is the person's
-  # own choice and stays: the page then shows the list as set outside OpenLDR.
-  $envText = Get-Content $envPath -Raw
-  if ($envText -match '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem\r?$') {
+  # own choice and stays: the page then shows the list as set outside OpenLDR. Only when the
+  # folder above is ready: with the path moved and no copy, the api would start on an empty list
+  # and stop trusting the central. The whole new text is built first and written in one step.
+  # Read and written as UTF-8 with no byte order mark, so a value someone typed with letters
+  # outside ASCII stays as it is. Writing into the existing file keeps its owner-only ACL.
+  $envText = [System.IO.File]::ReadAllText($envPath)
+  if ($trustReady -and ($envText -match '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem\r?$')) {
+    $eol = if ($envText.Contains("`r`n")) { "`r`n" } else { "`n" }
     $envText = $envText -replace '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem(\r?)$', 'NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem$1'
-    if ($envText -and -not $envText.EndsWith("`n")) { $envText += "`r`n" }
-    if ($envText -notmatch '(?m)^TRUSTED_CA_FILE=') { $envText += "TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem`r`n" }
-    # Set-Content writes into the existing file, so the owner-only ACL set at install stays.
-    Set-Content -Path $envPath -Value $envText -NoNewline -Encoding ascii
+    if ($envText -and -not $envText.EndsWith("`n")) { $envText += $eol }
+    if ($envText -notmatch '(?m)^TRUSTED_CA_FILE=') { $envText += "TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem$eol" }
+    [System.IO.File]::WriteAllText($envPath, $envText, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "-> Moved NODE_EXTRA_CA_CERTS in .env to config/trust/ca.pem, so Settings > Network manages the trusted certificates"
   }
 }

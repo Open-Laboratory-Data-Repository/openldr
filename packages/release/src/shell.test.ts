@@ -523,6 +523,60 @@ describe('install.sh trusted certificates', () => {
     expect(readFileSync(join(dir, '.env'), 'utf8')).toBe(env);
   }, 120_000);
 
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('keeps the old path in .env when the trust folder cannot be written', () => {
+    // Moving the path without the copy would start the api on an empty list and drop the central.
+    const dir = oldInstall(OLD_DEFAULT, 'OLD CENTRAL CERTIFICATE\n');
+    mkdirSync(join(dir, 'config', 'trust'), { recursive: true });
+    chmodSync(join(dir, 'config', 'trust'), 0o555);
+    try {
+      const r = installSh(['--no-start'], undefined, {}, dir);
+      expect(r.code).toBe(0);
+      expect(r.out).toContain('Cannot write to');
+      const env = readFileSync(join(dir, '.env'), 'utf8');
+      expect(envValue(env, 'NODE_EXTRA_CA_CERTS')).toBe('/etc/ssl/central-ca.pem');
+      expect(env).not.toContain('TRUSTED_CA_FILE');
+      expect(env).not.toContain('OPENLDR_TRUST_GID');
+      expect(readdirSync(join(dir, 'config', 'trust'))).toEqual([]);
+    } finally {
+      chmodSync(join(dir, 'config', 'trust'), 0o755);
+    }
+  }, 60_000);
+
+  it('moves the path in an .env with Windows line ends, and keeps them', () => {
+    const dir = oldInstall(OLD_DEFAULT, '');
+    const crlf = readFileSync(join(dir, '.env'), 'utf8').replace(/\n/g, '\r\n');
+    writeFileSync(join(dir, '.env'), crlf);
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    const env = readFileSync(join(dir, '.env'), 'utf8');
+    expect(env).toContain('NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem\r\n');
+    expect(env).toContain('TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem\r\n');
+    expect(env).toMatch(/OPENLDR_TRUST_GID=\d+\r\n/);
+    expect(env).not.toContain('central-ca.pem');
+    // Every line that was there keeps its line end.
+    for (const line of ENV_BEFORE_LOCAL_SIGN_IN.split('\n').filter(Boolean)) expect(env).toContain(`${line}\r\n`);
+  }, 60_000);
+
+  it('writes the moved .env in one step, with every new key, and leaves no temporary file', () => {
+    const dir = oldInstall(OLD_DEFAULT, '');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    expect(readdirSync(dir).filter((f) => f.startsWith('.env'))).toEqual(['.env']);
+    // One replacement of the file: the script builds the whole new text, then renames once.
+    const script = readFileSync(join(REPO, 'install/install.sh'), 'utf8');
+    const block = script.slice(script.indexOf('# An install made before the trust folder'), script.indexOf('if [ ! -f "$DIR/config/nginx/certs/fullchain.pem" ]'));
+    expect(block.match(/mv "\$DIR\/\.env\.tmp" "\$DIR\/\.env"/g)).toHaveLength(1);
+    expect(block).not.toMatch(/>> "\$DIR\/\.env"/);
+  }, 60_000);
+
+  it.skipIf(process.platform === 'win32')('makes a copied certificate readable by the api user, whatever the old file allowed', () => {
+    const dir = oldInstall(OLD_DEFAULT, 'OLD CENTRAL CERTIFICATE\n');
+    chmodSync(central(dir), 0o600);
+    expect(installSh(['--no-start'], undefined, { }, dir).code).toBe(0);
+    expect(statSync(trust(dir, 'ca.pem')).mode & 0o777).toBe(0o644);
+    // And a fresh, empty one.
+    const fresh = installSh(['--no-start']);
+    expect(statSync(trust(fresh.dir, 'ca.pem')).mode & 0o777).toBe(0o644);
+  }, 120_000);
+
   it('leaves a custom NODE_EXTRA_CA_CERTS in an existing .env alone and adds no TRUSTED_CA_FILE', () => {
     const dir = oldInstall('NODE_EXTRA_CA_CERTS=/etc/ssl/our-own-ca.pem', '');
     expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
@@ -553,11 +607,71 @@ describe('install.sh trusted certificates', () => {
       const init = service('trust-init');
       expect(init).toContain('./config/trust:/trust');
       expect(init).toMatch(/user: "0:0"/);
-      expect(init).toContain('chown 10001:${OPENLDR_TRUST_GID:-10001} /trust');
+      expect(init).toContain('chown 10001:${OPENLDR_TRUST_GID:-10001} /trust /trust/ca.pem');
       expect(init).toContain('chmod 2775 /trust');
+      expect(init).toContain('chmod 0664 /trust/ca.pem');
       expect(init).toMatch(/restart: "no"/);
       expect(init).toMatch(/network_mode: none/);
       expect(service('api')).toMatch(/trust-init: \{ condition: service_completed_successfully \}/);
+    });
+
+    /** Runs the service's own command on a temp folder, with a chown that only records what it was asked. */
+    function runInit(prepare: (folder: string) => void): { code: number; out: string; folder: string; chowned: string } {
+      const m = /^      - "(.*)"$/m.exec(service('trust-init'));
+      if (!m) throw new Error('no command line in trust-init');
+      const folder = tempDir('openldr-trust-init-');
+      const bin = tempDir('openldr-fakebin-');
+      const log = join(bin, 'chown.log');
+      writeFileSync(join(bin, 'chown'), `#!/bin/sh\necho "$@" >> '${toPosix(log)}'\n`);
+      chmodSync(join(bin, 'chown'), 0o755);
+      prepare(folder);
+      const command = m[1]!.replace(/\\"/g, '"').replace(/\$\{OPENLDR_TRUST_GID:-10001\}/g, '4321').replaceAll('/trust', toPosix(folder));
+      try {
+        const out = execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8', env: { ...process.env, PATH: `${toPosix(bin)}:${process.env.PATH ?? ''}` }, stdio: ['ignore', 'pipe', 'pipe'] });
+        return { code: 0, out, folder, chowned: existsSync(log) ? readFileSync(log, 'utf8') : '' };
+      } catch (err) {
+        const e = err as { status?: number; stdout?: string; stderr?: string };
+        return { code: e.status ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}`, folder, chowned: existsSync(log) ? readFileSync(log, 'utf8') : '' };
+      }
+    }
+
+    it.skipIf(process.platform === 'win32')('the init command makes the file, and gives the folder and the file to both users', () => {
+      const r = runInit(() => {});
+      expect(r.code).toBe(0);
+      expect(readFileSync(join(r.folder, 'ca.pem'), 'utf8')).toBe('');
+      expect(r.chowned.trim()).toBe(`10001:4321 ${toPosix(r.folder)} ${toPosix(r.folder)}/ca.pem`);
+      expect(statSync(join(r.folder, 'ca.pem')).mode & 0o777).toBe(0o664);
+      expect(statSync(r.folder).mode & 0o7777).toBe(0o2775);
+    });
+
+    it.skipIf(process.platform === 'win32')('the init command opens up a certificate file that only its owner could read, and keeps its text', () => {
+      const r = runInit((folder) => {
+        writeFileSync(join(folder, 'ca.pem'), 'KEPT\n');
+        chmodSync(join(folder, 'ca.pem'), 0o600);
+      });
+      expect(r.code).toBe(0);
+      expect(readFileSync(join(r.folder, 'ca.pem'), 'utf8')).toBe('KEPT\n');
+      expect(statSync(join(r.folder, 'ca.pem')).mode & 0o777).toBe(0o664);
+    });
+
+    it.skipIf(process.platform === 'win32')('the init command fails, and changes no owner, when ca.pem is a folder or a link', () => {
+      const asFolder = runInit((folder) => mkdirSync(join(folder, 'ca.pem')));
+      expect(asFolder.code).not.toBe(0);
+      expect(asFolder.out).toContain('is not a plain file');
+      expect(asFolder.chowned).toBe('');
+      const asLink = runInit((folder) => {
+        writeFileSync(join(folder, 'elsewhere'), 'x');
+        symlinkSync(join(folder, 'elsewhere'), join(folder, 'ca.pem'));
+      });
+      expect(asLink.code).not.toBe(0);
+      expect(asLink.chowned).toBe('');
+    });
+
+    it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('the init command fails when the file cannot be made', () => {
+      const r = runInit((folder) => chmodSync(folder, 0o555));
+      chmodSync(r.folder, 0o755);
+      expect(r.code).not.toBe(0);
+      expect(r.chowned).toBe('');
     });
 
     it('names uid 10001, the user the api image runs as', () => {
@@ -586,6 +700,29 @@ describe('install.sh trusted certificates', () => {
     expect(marker).toBeGreaterThan(move);
     // An empty old file is not copied.
     expect(ps1).toContain('(Get-Item $centralCa).Length -gt 0');
+    // The path in .env moves only once the folder is ready, in one write, as UTF-8 without a
+    // byte order mark, so a value with letters outside ASCII is not damaged.
+    const block = ps1.slice(ps1.indexOf('# An install made before the trust folder'), ps1.indexOf('$certDir = "$Dir/config/nginx/certs"'));
+    expect(block).toContain('if ($trustReady -and (');
+    expect(block).toContain('[System.IO.File]::ReadAllText($envPath)');
+    expect(block.match(/WriteAllText\(\$envPath, \$envText, \(New-Object System\.Text\.UTF8Encoding\(\$false\)\)\)/g)).toHaveLength(1);
+    expect(block).not.toContain('-Encoding ascii');
+    expect(block).not.toContain('Add-Content');
+    expect(ps1).toContain('$trustReady = (Test-Path $trustCa -PathType Leaf) -and (Test-Path $trustMarker)');
+  });
+});
+
+describe('the openldr wrapper and openldr trust add', () => {
+  // The wrapper runs the CLI with `docker compose exec -T`: no terminal. So `openldr trust add
+  // <file>` cannot ask "Trust this certificate?". It prints the fingerprint and says to give
+  // --fingerprint (packages/cli/src/network.test.ts, 'refuses to add without a prompt when it
+  // cannot ask'). The guides give that as the way on the server edition. If the wrapper ever gets
+  // a terminal, this test fails and the guides must change with it.
+  it('runs the CLI without a terminal, in both wrappers', () => {
+    const sh = readFileSync(join(REPO, 'install/install.sh'), 'utf8');
+    const execs = sh.split('\n').filter((l) => /docker compose exec .* api node \/app\/cli\/dist\/index\.js/.test(l));
+    expect(execs.length).toBeGreaterThanOrEqual(3);
+    for (const line of execs) expect(line).toMatch(/docker compose exec -T /);
   });
 });
 

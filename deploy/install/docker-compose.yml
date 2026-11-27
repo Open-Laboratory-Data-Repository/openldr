@@ -44,14 +44,16 @@ services:
   # Runs once before the api, as root, and ends. It gives the trust folder to the api's user
   # (uid 10001, apps/server/Dockerfile), which must write there, and to the group of the person
   # who installed, because on Linux the `openldr` wrapper runs the CLI as that person. The setgid
-  # bit keeps that group on files made later. It reaches no network.
+  # bit keeps that group on files made later. The certificate file is opened to both too: one
+  # copied from an older install may be readable by its owner only. It fails, and the api does
+  # not start, when ca.pem is a folder or a link, or cannot be made. It reaches no network.
   trust-init:
     image: ghcr.io/open-laboratory-data-repository/openldr-api:${OPENLDR_VERSION:-latest}
     user: "0:0"
     network_mode: none
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - "[ -f /trust/ca.pem ] || : > /trust/ca.pem; chown 10001:${OPENLDR_TRUST_GID:-10001} /trust && chmod 2775 /trust"
+      - "set -eu; if [ -L /trust/ca.pem ] || { [ -e /trust/ca.pem ] && [ ! -f /trust/ca.pem ]; }; then echo '/trust/ca.pem is not a plain file. Remove it, then start again.' >&2; exit 1; fi; [ -f /trust/ca.pem ] || : > /trust/ca.pem; chown 10001:${OPENLDR_TRUST_GID:-10001} /trust /trust/ca.pem; chmod 2775 /trust; chmod 0664 /trust/ca.pem"
     volumes:
       - ./config/trust:/trust
     restart: "no"
