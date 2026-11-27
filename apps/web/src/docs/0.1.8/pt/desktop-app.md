@@ -82,18 +82,37 @@ O mais simples é selecionar **Sair** no menu da área de notificação e abrir 
 
 Fechar a janela deixa o OpenLDR a funcionar. Para parar o OpenLDR, use **Sair**.
 
-A aplicação tem um ícone na área de notificação, a parte da barra de tarefas ou da barra superior com os pequenos ícones dos programas em execução. O menu dele tem quatro itens:
+A aplicação tem um ícone na área de notificação, a parte da barra de tarefas ou da barra superior com os pequenos ícones dos programas em execução. O menu dele tem cinco itens, e mais enquanto o OpenLDR está partilhado:
 
 | Item | O que faz |
 | --- | --- |
 | **Abrir o OpenLDR** | Mostra de novo a janela. |
 | **Iniciar ao entrar na sessão** | Uma caixa, desmarcada de início. Marcada, a aplicação arranca quando entra na sessão do computador, sem abrir a janela. |
+| **Partilhar na rede do laboratório** | Um visto, desligado no início. Veja **Partilhar na rede do laboratório** mais abaixo. |
 | **Abrir a pasta de registos** | Abre `logs` na pasta de dados. |
 | **Sair** | Mostra **A parar o OpenLDR**, para o servidor e a base de dados, e fecha a aplicação. |
 
 **Sair** para o OpenLDR mesmo quando a aplicação mostrava um OpenLDR que não foi ela a iniciar.
 
 Abrir a aplicação de novo enquanto está a funcionar traz a janela de volta. As ligações que saem do OpenLDR abrem no seu navegador. As páginas da própria aplicação seguem a língua do sistema: inglês, francês ou português.
+
+### Partilhar na rede do laboratório
+
+Marque **Partilhar na rede do laboratório** para que outros PC do laboratório abram este OpenLDR. A aplicação pergunta primeiro. O OpenLDR reinicia depois, e quem o estiver a usar espera um momento.
+
+Enquanto está partilhado, o menu mostra também o endereço que os outros PC usam, e mais três itens:
+
+| Item | O que faz |
+| --- | --- |
+| **Copiar o endereço de rede** | Copia o endereço `https` para dar aos outros PC. |
+| **Copiar a impressão digital do certificado** | Copia a impressão digital para comparar no outro PC. |
+| **Guardar o certificado...** | Guarda o certificado num ficheiro, para um programa que precise dele. |
+
+Noutro PC, abra o endereço num navegador. O navegador avisa sobre o certificado na primeira vez. Compare a impressão digital SHA-256 com a da área de notificação, e aceite-o só se forem iguais.
+
+Os outros PC usam a porta 3443. Se outro programa usar essa porta, a aplicação mostra `Port 3443 is already in use. Choose another with --share-port.` Para outra porta, saia da aplicação, acrescente `"sharePort": 8443` a `settings.json` na pasta da aplicação, e volte a abri-la.
+
+Se o OpenLDR foi iniciado fora da aplicação, o visto fica guardado e aplica-se da próxima vez que a aplicação o iniciar. [Executar sem Docker](/docs/standalone) diz mais sobre o certificado.
 
 ### Quando não aparece nenhum ícone
 
@@ -208,7 +227,7 @@ Ainda sem relato:
 
 ## Limites
 
-- Só este computador. A aplicação inicia o OpenLDR em `127.0.0.1`, por isso um telemóvel ou outro computador não lhe chega. [Executar sem Docker](/docs/standalone) mostra como abrir o OpenLDR a outros dispositivos.
+- Só este computador, exceto se **Partilhar na rede do laboratório** estiver marcado. A aplicação inicia o OpenLDR em `127.0.0.1`. A partilha abre uma segunda porta, cifrada, para os outros PC da rede do laboratório.
 - A aplicação não se atualiza sozinha. Execute de novo a linha de instalação.
 - A aplicação não tem a assinatura de nenhum editor em macOS nem em Windows.
 - No macOS, a janela pode abrir quando a aplicação arranca ao entrar na sessão. Não está provado.

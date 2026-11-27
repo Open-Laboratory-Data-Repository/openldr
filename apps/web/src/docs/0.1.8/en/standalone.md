@@ -87,6 +87,8 @@ The setup code goes to the terminal only. The launcher never writes it to a log 
 | `--data-dir <folder>` | See the next section | The folder that holds all of this install's data. |
 | `--port <port>` | `3000` | The web port. If another program uses it, `start` stops with `Port 3000 is already in use. Choose another with --port.` It never picks another port by itself. |
 | `--host <address>` | `127.0.0.1` | The address OpenLDR listens on. The default lets only this computer in. See **Open it to a phone or another computer** below. |
+| `--share` | Off | Opens OpenLDR to the lab network over HTTPS, on a second port. See **Share it on the lab network** below. It cannot be combined with `--host`. |
+| `--share-port <port>` | `3443` | The port other PCs use with `--share`. |
 | `--events-fd <n>` | None | Write one JSON line per event to descriptor n (3 or higher). No setup code is made or printed. It is for a program that runs the launcher, such as the desktop app. |
 | `--json`, with `status` | Off | `status` prints one JSON line instead. See **Check whether it runs** below. |
 
@@ -263,6 +265,35 @@ A setting given this way applies only to that one command. If a CLI command need
 
 The launcher removes settings for parts a standalone install does not have. It ignores `OIDC_*`, `KEYCLOAK_*`, `S3_*`, `MSSQL_*`, `MYSQL_*`, `IDENTITY_ADMIN_ADAPTER`, `AUTH_DEV_USERNAME` and `AUTH_DEV_ROLES`.
 
+## Share it on the lab network
+
+To let other PCs in the lab open this OpenLDR, start with `--share`:
+
+```sh
+pnpm openldr-standalone start --share
+```
+
+```text
+OpenLDR is running at http://localhost:3000/studio/
+Shared on the lab network at https://labpc:3443/studio/
+Also at https://192.168.1.20:3443/studio/
+Certificate fingerprint (SHA-256): 3F:A1:9C:...:7E
+Certificate file: /home/you/.local/share/openldr/share/cert.pem
+Another PC warns about the certificate the first time. Compare the fingerprint before you accept it.
+Server log: /home/you/.local/share/openldr/logs/server.log
+```
+
+OpenLDR itself still listens on this computer only. A second, encrypted door opens on port 3443 for the network. `--share-port` picks another port.
+
+On another PC, open one of the `https` addresses. The browser warns that it does not know the certificate. That is expected: OpenLDR made the certificate itself. Open the certificate's details in the browser and compare its SHA-256 fingerprint with the one the launcher printed. Accept it only when they match. Then sign in as usual.
+
+- The certificate lasts 825 days. The launcher makes a new one 30 days before the end, and whenever this computer's name or network address changes. A new certificate has a new fingerprint, and other PCs must accept it again. Give this computer a fixed address to avoid that.
+- With no network address, the launcher prints `No network address was found. Join a network, then start OpenLDR again.`
+- Your firewall may need to allow port 3443.
+- A program that is not a browser needs the certificate file. For a Node program, set `NODE_EXTRA_CA_CERTS` to a copy of `cert.pem`. After a new certificate, copy the file again and start that program again.
+- `status` prints `Shared at` with the first address. `status --json` has a `share` field.
+- Never open this port to the internet.
+
 ## Open it to a phone or another computer
 
 By default only this computer can open OpenLDR. To let a phone on the same network or on Tailscale in, start with the address of this computer on that network:
@@ -279,7 +310,7 @@ Listening on 100.64.0.10. Sign-in travels over plain HTTP on this network.
 
 Replace `100.64.0.10` with your computer's private or Tailscale address. Open the printed address on the phone. `--host 0.0.0.0` listens on every address this computer has. The launcher then prints `http://localhost:3000/studio/`, which works on this computer only. On the phone, use the computer's own address instead.
 
-Over plain HTTP, the browser turns off a feature Studio uses, so some screens can fail. Plugin pages and dashboard editing are among them. This happens on the phone, and also on this computer when you open the `--host` address. These screens work when you open Studio at `http://localhost:3000/studio/` on the computer that runs OpenLDR. That address answers when you start without `--host`, or with `--host localhost`, `0.0.0.0`, `::1` or `::`.
+This way sends everything unencrypted. To let other PCs in, prefer `--share` above.
 
 The last line is a warning. A standalone install has no TLS. Usernames, passwords and patient data cross the network unencrypted. Anyone who can watch that network can read them. Use it only on a network you trust. Tailscale encrypts traffic between your own devices. Never open the port to the internet. Your firewall may need to allow the port.
 
@@ -300,13 +331,12 @@ To restore, stop OpenLDR, put the copied folder back where it was, and start aga
 
 ## Limits
 
-- No TLS. OpenLDR serves plain HTTP.
+- No TLS unless you start with `--share`. Without it, OpenLDR serves plain HTTP.
 - This page runs it from a built source checkout. The [desktop app](/docs/desktop-app) installs it with one line.
 - Postgres only. The bundled Postgres holds both databases. SQL Server and MySQL cannot be the analytics database.
 - One launcher per data folder.
 - Only Linux has been tested. Windows and macOS are untested.
 - Sync to a central server that uses a self-signed certificate is not supported.
-- Over plain HTTP, some Studio screens need an address the browser treats as local: `localhost` or `127.0.0.1`. Plugin pages and dashboard editing are among them. At any other address they can fail. `http://localhost:3000/studio/` answers when you start without `--host`, or with `--host localhost`, `0.0.0.0`, `::1` or `::`.
 - The bundled Postgres cannot be upgraded to a new major version. The data folder works with Postgres 16 only.
 - Backup means stop, then copy the folder. There is no backup tool.
 - The server log and the Postgres log are not rotated. They grow until you delete them while OpenLDR is stopped.
