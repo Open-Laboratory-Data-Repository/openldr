@@ -3914,6 +3914,9 @@ export interface PluginUiEntry {
   requiredCapabilities?: string[];
   /** The permission keys this plugin declares. Older servers omit it. */
   permissionKeys?: string[];
+  /** Devices on this PC the plugin's active version was granted. Older servers omit it, which
+   *  means none. */
+  devices?: { serial: boolean };
 }
 
 /** Places outside its own page where a plugin draws its ui.html. Mirrors UiSites in @openldr/marketplace. */
@@ -3934,7 +3937,10 @@ export const setPluginSite = (id: string, site: PluginSiteKey, on: boolean): Pro
 export const listPluginUis = (): Promise<PluginUiEntry[]> =>
   apiGet<PluginUiEntry[]>('/api/plugins/ui', 'list plugin UIs');
 
-export const pluginUiAssetUrl = (id: string): string => `/api/plugins/${encodeURIComponent(id)}/ui/asset`;
+/** The plugin's page. With `version`, the server serves it only while that version is the active
+ *  one: the version the studio's list named, and whose grants the studio goes by. */
+export const pluginUiAssetUrl = (id: string, version?: string): string =>
+  `/api/plugins/${encodeURIComponent(id)}/ui/asset${version !== undefined && version !== '' ? `?version=${encodeURIComponent(version)}` : ''}`;
 
 export const pluginBrokerCall = (id: string, op: PluginBrokerOp): Promise<PluginRpcResult> =>
   authFetch(`/api/plugins/${encodeURIComponent(id)}/broker`, jbody({ op }, 'POST'))

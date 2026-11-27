@@ -10,7 +10,7 @@ import { autostartEnabled, setAutostart, startedHidden, type AutostartDeps } fro
 import { bridgeHandlers } from './bridge';
 import { readServerCertificate, verifyDecision, type PinnedServer } from './cert-trust';
 import { ACTION_CHANNEL, CONNECT_MODE_CHANNEL, RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
-import { DesktopController, pageState, type PageAction, type Screen } from './controller';
+import { actionWindow, DesktopController, pageState, type PageAction, type Screen } from './controller';
 import * as launcher from './launcher';
 import { createLockFlow, ensureStartAtSignIn, quitNeedsPin, type LockFlow } from './lock-flow';
 import { frameTarget, linkTarget, mayGrantPermission, renderAfterLoad, sameOrigin, urlForLog } from './locality';
@@ -19,6 +19,7 @@ import { createModeSwitch } from './mode-switch';
 import { choosePort } from './ports';
 import { RemoteController } from './remote-controller';
 import { Selfcheck, selfcheckConfig } from './selfcheck';
+import { createPortSelection, maySelectPort, portChoices, type PortChoice, type PortSelection } from './serial';
 import { parseServerAddress } from './server-address';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import { pickLang, STRINGS } from './strings';
@@ -81,6 +82,12 @@ function main(): void {
   let win: BrowserWindow | undefined;
   /** The small window that asks for the lock's PIN, on top of the main one. Studio stays behind it. */
   let pinWin: BrowserWindow | undefined;
+  /** The small window that lists the serial ports, on top of the main one. */
+  let portWin: BrowserWindow | undefined;
+  /** The one choice of a serial port in flight. Set once the app is ready. */
+  let portSelection: PortSelection | undefined;
+  /** A row of the port window was pressed. Set once the app is ready. */
+  let usePort = (_id: string): void => {};
   let tray: Tray | undefined;
   /** Builds the tray menu again from the settings and the launcher's share. Set once the tray exists. */
   let rebuildTray = (): void => {};
@@ -256,6 +263,7 @@ function main(): void {
 
   const ACTIONS: ReadonlySet<string> = new Set<PageAction>([
     'choose-local', 'choose-connect', 'connect', 'back', 'trust', 'no-trust', 'retry', 'change-server', 'pin-submit', 'pin-cancel',
+    'serial-use', 'serial-cancel',
   ]);
   ipcMain.on(ACTION_CHANNEL, (event, payload: unknown) => {
     // Only from one of the app's own pages, as for the retry channel.
@@ -264,14 +272,20 @@ function main(): void {
     const p = payload as { id?: unknown; value?: unknown } | null;
     if (typeof p?.id !== 'string' || !ACTIONS.has(p.id)) return;
     const value = typeof p.value === 'string' ? p.value.slice(0, 2000) : '';
-    // The PIN window sends the two PIN actions and nothing else. The main window sends the rest.
-    const fromPin = pinWin !== undefined && !pinWin.isDestroyed() && event.sender === pinWin.webContents;
-    if (p.id === 'pin-submit' || p.id === 'pin-cancel') {
-      if (!fromPin) return;
+    // Each action is taken from one window only: the PIN window, the port window, or the main one.
+    // Being one of the app's own pages is not enough.
+    const from3 = (target: BrowserWindow | undefined): boolean => target !== undefined && !target.isDestroyed() && event.sender === target.webContents;
+    const source = actionWindow(p.id as PageAction);
+    if (source === 'pin') {
+      if (!from3(pinWin)) return;
       // The PIN goes to the lock and nowhere else. It is never logged.
       return p.id === 'pin-submit' ? void lockFlow?.submit(value) : lockFlow?.cancel();
     }
-    if (win === undefined || event.sender !== win.webContents) return;
+    if (source === 'port') {
+      if (!from3(portWin)) return;
+      return p.id === 'serial-use' ? usePort(value) : portSelection?.cancel();
+    }
+    if (!from3(win)) return;
     switch (p.id as PageAction) {
       case 'choose-local':
         if (running !== undefined) return;
@@ -308,11 +322,14 @@ function main(): void {
     const s = strings();
     const settings = loadSettings(settingsFile);
 
-    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) =>
-      callback(mayGrantPermission(permission, details.requestingUrl, running?.controller.address(), connectMode())),
+    // Electron says which window and which frame asks. A serial port goes only to the main
+    // frame of the main window.
+    const isMain = (wc: Electron.WebContents | null): boolean => wc !== null && win !== undefined && !win.isDestroyed() && wc === win.webContents;
+    session.defaultSession.setPermissionRequestHandler((wc, permission, callback, details) =>
+      callback(mayGrantPermission(permission, details.requestingUrl, running?.controller.address(), connectMode(), { isMainWindow: isMain(wc), isMainFrame: details.isMainFrame })),
     );
-    session.defaultSession.setPermissionCheckHandler((_wc, permission, requestingOrigin) =>
-      mayGrantPermission(permission, requestingOrigin, running?.controller.address(), connectMode()),
+    session.defaultSession.setPermissionCheckHandler((wc, permission, requestingOrigin, details) =>
+      mayGrantPermission(permission, details.securityOrigin ?? requestingOrigin, running?.controller.address(), connectMode(), { isMainWindow: isMain(wc), isMainFrame: details.isMainFrame }),
     );
     // The window's own certificate check. Chromium's verdict stands, plus the one pinned
     // certificate in connect mode. Electron asks this once per certificate and keeps the answer
@@ -471,19 +488,15 @@ function main(): void {
       if (pinWin === undefined || pinWin.isDestroyed() || pinScreen === undefined) return;
       pinWin.webContents.send(SCREEN_CHANNEL, pageState(pinScreen, strings()));
     };
-    const openPin = (screen: Extract<Screen, { screen: 'pin' }>): void => {
-      pinScreen = screen;
-      if (pinWin !== undefined && !pinWin.isDestroyed()) {
-        if (!pinWin.webContents.isLoading()) sendPin();
-        return;
-      }
+    /** A small window on top of the main one, showing the app's own page. Studio stays behind it. */
+    const smallWindow = (height: number, draw: () => void, onEscape: () => void, onClosed: () => void): BrowserWindow => {
       // A window on top of a hidden one may never show.
       showWindow();
       const made = new BrowserWindow({
         parent: w,
         modal: true,
         width: 460,
-        height: 420,
+        height,
         resizable: false,
         minimizable: false,
         maximizable: false,
@@ -493,24 +506,114 @@ function main(): void {
         title: s.windowTitle,
         webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(here, 'preload.cjs') },
       });
-      pinWin = made;
       made.setMenuBarVisibility(false);
       made.webContents.on('did-finish-load', () => {
-        sendPin();
+        draw();
         if (!made.isDestroyed()) made.show();
       });
       made.webContents.on('before-input-event', (event, input) => {
         if (input.type !== 'keyDown' || input.key !== 'Escape') return;
         event.preventDefault();
-        lockFlow?.cancel();
+        onEscape();
       });
-      made.on('closed', () => {
+      made.on('closed', onClosed);
+      void made.loadFile(pagePath).catch((err: unknown) => {
+        // With no page there is no button to answer with. Closing it runs onClosed, which cancels.
+        log(`A small window did not load: ${String(err)}`);
+        if (!made.isDestroyed()) made.destroy();
+      });
+      return made;
+    };
+    const openPin = (screen: Extract<Screen, { screen: 'pin' }>): void => {
+      pinScreen = screen;
+      if (pinWin !== undefined && !pinWin.isDestroyed()) {
+        if (!pinWin.webContents.isLoading()) sendPin();
+        return;
+      }
+      const made = smallWindow(420, sendPin, () => lockFlow?.cancel(), () => {
         if (pinWin === made) pinWin = undefined;
         // Closed by its own corner: the same as Cancel.
         lockFlow?.cancel();
       });
-      void made.loadFile(pagePath).catch((err: unknown) => log(`The PIN window did not load: ${String(err)}`));
+      pinWin = made;
     };
+
+    // The serial ports. A page of the main window asks the browser for a port; the browser asks
+    // here; the app shows its own list and answers with the row a person pressed. Never with a
+    // port nobody pressed, not even when the list has one row.
+    let portRows: PortChoice[] | undefined;
+    /** The ports as the browser last gave them, to turn a pressed row back into a port name. */
+    let knownPorts: Electron.SerialPort[] = [];
+    const sendPorts = (): void => {
+      if (portWin === undefined || portWin.isDestroyed() || portRows === undefined) return;
+      portWin.webContents.send(SCREEN_CHANNEL, pageState({ screen: 'serial', ports: portRows }, strings()));
+    };
+    const selection = createPortSelection((rows) => {
+      portRows = rows;
+      if (rows === undefined) {
+        if (portWin !== undefined && !portWin.isDestroyed()) portWin.close();
+        return;
+      }
+      if (portWin !== undefined && !portWin.isDestroyed()) {
+        if (!portWin.webContents.isLoading()) sendPorts();
+        return;
+      }
+      const made = smallWindow(520, sendPorts, () => selection.cancel(), () => {
+        if (portWin === made) portWin = undefined;
+        // Closed by its own corner: the same as Cancel.
+        selection.cancel();
+      });
+      portWin = made;
+    });
+    portSelection = selection;
+    const rowsNow = (): PortChoice[] => portChoices(knownPorts, loadSettings(settingsFile).lastSerialPort?.portName);
+    usePort = (id) => {
+      const port = knownPorts.find((p) => p.portId === id);
+      selection.choose(id);
+      // Remembered only to mark the row next time. A port is still chosen by a person every time.
+      if (port !== undefined && selection.wasChosen(id) && port.portName) save({ ...loadSettings(settingsFile), lastSerialPort: { portName: port.portName.slice(0, 200) } });
+    };
+    session.defaultSession.on('select-serial-port', (event, portList, webContents, callback) => {
+      event.preventDefault();
+      // One list at a time. An overlapping request is refused before anything of it is kept, so
+      // the ports of the list on screen stay the ones it was opened with.
+      if (selection.active()) return callback('');
+      // This event names the window, not the frame, so the frame cannot be checked here: the
+      // address is the window's own. The frame is checked where Electron does report it, in the
+      // permission handlers above, which refuse serial to anything but the main frame.
+      const allowed = maySelectPort({
+        isMainWindow: !w.isDestroyed() && webContents === w.webContents,
+        isMainFrame: true,
+        frameUrl: webContents.getURL(),
+        shownAddress: running?.controller.address(),
+        connectMode: connectMode(),
+      });
+      if (!allowed) {
+        log('A page that may not use a serial port asked for the list. It was refused.');
+        return callback('');
+      }
+      knownPorts = portList;
+      selection.begin(rowsNow(), callback);
+    });
+    // A cable plugged in or pulled out while the list is open.
+    session.defaultSession.on('serial-port-added', (_event, port, webContents) => {
+      if (!selection.active() || w.isDestroyed() || webContents !== w.webContents) return;
+      if (!knownPorts.some((p) => p.portId === port.portId)) knownPorts = [...knownPorts, port];
+      selection.update(rowsNow());
+    });
+    session.defaultSession.on('serial-port-removed', (_event, port, webContents) => {
+      if (!selection.active() || w.isDestroyed() || webContents !== w.webContents) return;
+      knownPorts = knownPorts.filter((p) => p.portId !== port.portId);
+      selection.update(rowsNow());
+    });
+    // The page that asked is going away: its request is answered with no port.
+    w.webContents.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) selection.cancel();
+    });
+    w.on('closed', () => selection.cancel());
+    // No device permission handler is set. One that says yes to serial devices hands a page
+    // every port with no choice made (seen in Electron 45 on 2026-11-27). The port a person
+    // pressed is given to the page by the answer above.
     /** The menu of an unlocked app, as Electron made it. */
     const usualMenu = Menu.getApplicationMenu();
     /** A locked PC's menu: Quit asks for the PIN, and nothing opens developer tools or leaves full screen. */

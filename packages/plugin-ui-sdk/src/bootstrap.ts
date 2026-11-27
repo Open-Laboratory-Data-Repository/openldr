@@ -151,6 +151,25 @@ function pluginBootstrapV1(): void {
       pages: (input: { title: string; paper: string; pages: string[] }) =>
         call({ kind: 'host.print', title: input.title, paper: input.paper, pages: input.pages }).then(() => undefined),
     },
+    // The studio answers these itself. It holds the port and does every check; this only passes
+    // each call on. Serial bytes never reach the server.
+    serial: {
+      ports: () => call({ kind: 'host.serial.ports' }),
+      // The one refusal that is not a failure: the person cancelled. Every other one rejects.
+      choose: () =>
+        call({ kind: 'host.serial.choose' }).catch((err: unknown) => {
+          if (err instanceof Error && err.message === 'serial-cancelled') return null;
+          throw err;
+        }),
+      open: (port: string, settings: unknown) => call({ kind: 'host.serial.open', port, settings }).then(() => undefined),
+      read: (port: string, waitMs?: number) => call({ kind: 'host.serial.read', port, waitMs: typeof waitMs === 'number' ? waitMs : 0 }),
+      // A copy of just these bytes. A view can be a small window on a large buffer, and the port
+      // would copy the whole buffer. Told by its tag, so a byte array made in another frame is
+      // copied too.
+      write: (port: string, bytes: Uint8Array) =>
+        call({ kind: 'host.serial.write', port, bytes: Object.prototype.toString.call(bytes) === '[object Uint8Array]' ? new Uint8Array(bytes) : bytes }).then(() => undefined),
+      close: (port: string) => call({ kind: 'host.serial.close', port }).then(() => undefined),
+    },
   };
   (window as unknown as { openldr: unknown }).openldr = api;
 

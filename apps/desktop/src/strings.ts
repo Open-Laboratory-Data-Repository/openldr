@@ -108,6 +108,12 @@ export interface AppStrings {
   trayUnlock: string;
   /** The PC is locked, but the system could not be told to start the app at sign-in. */
   lockNoAutostart: string;
+  /** The app's own list of serial ports. */
+  serialTitle: string;
+  serialNone: string;
+  serialLastNote: string;
+  serialUse: string;
+  serialCancel: string;
 }
 
 const en: AppStrings = {
@@ -193,6 +199,11 @@ const en: AppStrings = {
   trayLock: "Lock this PC to OpenLDR...",
   trayUnlock: "Unlock this PC...",
   lockNoAutostart: "This PC is locked, but OpenLDR could not be set to start when you sign in. After a restart the PC will show its desktop until someone starts OpenLDR. See the app log.",
+  serialTitle: "Choose a serial port",
+  serialNone: "No serial port was found. Plug the cable in and try again.",
+  serialLastNote: "used last time",
+  serialUse: "Use this port",
+  serialCancel: "Cancel",
 };
 
 const fr: AppStrings = {
@@ -278,6 +289,11 @@ const fr: AppStrings = {
   trayLock: "Verrouiller ce PC sur OpenLDR...",
   trayUnlock: "Déverrouiller ce PC...",
   lockNoAutostart: "Ce PC est verrouillé, mais OpenLDR n'a pas pu être réglé pour démarrer à la connexion. Après un redémarrage, le PC affichera son bureau jusqu'à ce que quelqu'un démarre OpenLDR. Consultez le journal de l'application.",
+  serialTitle: "Choisissez un port série",
+  serialNone: "Aucun port série n'a été trouvé. Branchez le câble et réessayez.",
+  serialLastNote: "utilisé la dernière fois",
+  serialUse: "Utiliser ce port",
+  serialCancel: "Annuler",
 };
 
 const pt: AppStrings = {
@@ -363,6 +379,11 @@ const pt: AppStrings = {
   trayLock: "Bloquear este PC no OpenLDR...",
   trayUnlock: "Desbloquear este PC...",
   lockNoAutostart: "Este PC está bloqueado, mas não foi possível definir o OpenLDR para iniciar ao entrar na sessão. Depois de reiniciar, o PC mostra o ambiente de trabalho até alguém iniciar o OpenLDR. Consulte o registo da aplicação.",
+  serialTitle: "Escolha uma porta série",
+  serialNone: "Não foi encontrada nenhuma porta série. Ligue o cabo e tente de novo.",
+  serialLastNote: "usada da última vez",
+  serialUse: "Usar esta porta",
+  serialCancel: "Cancelar",
 };
 
 export const STRINGS: Record<Lang, AppStrings> = { en, fr, pt };

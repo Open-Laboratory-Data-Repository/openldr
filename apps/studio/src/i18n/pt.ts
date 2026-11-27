@@ -1164,6 +1164,7 @@ export const pt: EnShape = {
         hostImport: 'Ler os conectores de base de dados que um administrador autoriza, e guardar o que importa',
         hostDb: 'Guardar as suas próprias tabelas na base de dados do CE, separadas das tabelas do CE',
         hostCeRead: 'Ler os registos do CE, como doentes, pedidos e resultados',
+        hostSerial: 'Usar uma porta série do PC, quando uma pessoa escolhe uma',
         none: 'nenhum',
       },
       heading: 'Marketplace',
@@ -2838,6 +2839,12 @@ export const pt: EnShape = {
     noUi: 'Este plugin não fornece interface.',
     loadFailed: 'Não foi possível carregar a página deste plugin. Recarregue a página para tentar novamente.',
     loadError: 'Falha ao carregar a interface do plugin.',
+    serial: {
+      title: '{{plugin}} quer usar uma porta série',
+      body: 'Escolha a porta onde o cabo está ligado. {{plugin}} pode depois ler e escrever nela até esta página fechar.',
+      choose: 'Escolher porta',
+      cancel: 'Cancelar',
+    },
     sites: {
       menu: 'Locais',
       title: 'Locais de {{name}}',

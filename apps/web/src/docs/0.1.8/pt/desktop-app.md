@@ -216,6 +216,31 @@ Para bloquear as teclas do sistema no Windows, execute a aplicação como progra
 
 A aplicação desbloqueia sem PIN quando a entrada já não existe. Para chegar ao ficheiro a partir de um PC bloqueado, use as teclas do próprio sistema para abrir uma janela de ficheiros, ou termine a sessão e entre com outra conta que chegue a ele.
 
+## Portas série
+
+A página de um plugin pode precisar de uma porta série, por exemplo para falar com um analisador por um cabo. A aplicação pergunta-lhe que porta, de cada vez.
+
+1. A página do plugin pede uma porta. O Studio mostra **<plugin> quer usar uma porta série**.
+2. Selecione **Escolher porta**. A aplicação abre uma janela pequena, **Escolha uma porta série**, com as portas deste PC.
+3. Selecione a linha do cabo. A porta escolhida da última vez já está selecionada e diz **usada da última vez**.
+4. Selecione **Usar esta porta**.
+
+**Cancelar** em qualquer das janelas não dá porta ao plugin. Se não for encontrada nenhuma porta, a janela diz isso, e a lista preenche-se sozinha quando um cabo é ligado.
+
+O plugin fica com a porta até a sua página fechar. A porta é libertada quando sai ou recarrega a página, quando sai da aplicação, quando o cabo é retirado, e quando o plugin é desligado ou atualizado. Depois de qualquer destes casos, escolhe a porta de novo. A aplicação nunca escolhe uma porta sozinha.
+
+A lista tem todos os aparelhos série que o sistema conhece, incluindo os aparelhos Bluetooth emparelhados. Escolha o do seu cabo.
+
+Em Linux, o seu utilizador tem de poder usar aparelhos série. Na maioria dos sistemas isso quer dizer pertencer ao grupo `dialout`:
+
+```sh
+sudo usermod -aG dialout "$USER"
+```
+
+Termine a sessão e entre de novo depois.
+
+Isto foi executado em Linux até à escolha de uma porta. Nenhuma porta foi aberta, porque o PC de teste não tinha aparelho série. O Windows e o macOS não foram experimentados.
+
 ## Atualizar
 
 Saia do OpenLDR e execute de novo a linha de instalação. Ela substitui a aplicação e não mexe na pasta de dados. O arranque seguinte atualiza a base de dados.

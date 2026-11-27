@@ -115,3 +115,17 @@ Através de `ce_read`, quem chama com `patients.find` e sem `patients.view`:
 - Os identificadores ficam ocultos, a menos que quem chama tenha `patients.view_identifiers`.
 
 Quem tem `patients.view` também pode pesquisar por identificador, ou por nome com data de nascimento, mas não na mesma chamada que `search`.
+
+## Uma porta série para a página de um plugin
+
+Um plugin cuja página fala com um instrumento por um cabo pede a capacidade `host:serial` no seu manifesto:
+
+```json
+{ "kind": "host:serial" }
+```
+
+Não leva parâmetros. No ecrã de instalação, o administrador vê a linha **Usar uma porta série do PC, quando uma pessoa escolhe uma (host:serial)**, e aprova-a com as outras capacidades do plugin.
+
+Esta capacidade não é uma das chaves de permissão do plugin, e nenhum papel a detém. Pertence à versão instalada do plugin. Qualquer pessoa que possa abrir a página do plugin pode então ser convidada a escolher uma porta. O Studio pergunta de cada vez, com o nome do plugin, e a pessoa pode cancelar.
+
+É o Studio que a aplica, não o servidor: as chamadas série não enviam nenhum byte para o servidor. Desligar o plugin, removê-lo ou ativar outra versão fecha qualquer porta aberta. [Tabelas e funções do anfitrião para plugins](/docs/plugin-host-functions) lista as chamadas.

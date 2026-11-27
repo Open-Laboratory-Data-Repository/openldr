@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { declaredSites, getSitesOff, uiAllows, visibleSites, type AppContext } from '@openldr/bootstrap';
+import { readGrant } from '@openldr/marketplace';
 import type { DataScope } from '@openldr/rbac';
 
 // A missing data limit fails closed: no facilities, never everything (operator, 2026-11-23).
@@ -26,6 +27,20 @@ interface UiPluginRow {
       permissions?: Array<{ key: string }>;
     };
   };
+}
+
+/**
+ * True only when this stored row was granted host:serial. A row from before capabilities existed
+ * has no list and gets no device. A list that cannot be read gets none either: a device is never
+ * handed out on a row the server cannot check.
+ */
+function serialGranted(manifest: unknown): boolean {
+  try {
+    const grant = readGrant(manifest as Record<string, unknown>);
+    return !grant.legacy && grant.capabilities.some((c) => c.kind === 'host:serial');
+  } catch {
+    return false;
+  }
 }
 
 export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
@@ -71,12 +86,16 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
           // The plugin's own permission keys. The studio passes the page only these and CE's own
           // capabilities, never another plugin's keys.
           permissionKeys: (r.manifest.payload!.permissions ?? []).map((p) => p.key),
+          // Devices on the PC the page may ask the studio for. Read from the active version's own
+          // grant, the row this entry is built from. The studio enforces it: serial bytes never
+          // come to the server.
+          devices: { serial: serialGranted(r.manifest) },
         };
       });
   });
 
   // Serve the stored ui.html bytes — the web iframe sandbox loads this URL as its srcdoc source.
-  app.get<{ Params: { id: string } }>('/api/plugins/:id/ui/asset', async (req, reply) => {
+  app.get<{ Params: { id: string }; Querystring: { version?: unknown } }>('/api/plugins/:id/ui/asset', async (req, reply) => {
     if (!req.user) {
       reply.code(401);
       return reply.send({ error: 'authentication required' });
@@ -96,7 +115,17 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
       reply.code(404);
       return reply.send({ error: 'no ui asset' });
     }
-    const bytes = await ctx.plugins.loadUi(req.params.id);
+    // The studio names the version its list gave it. The list also said what that version was
+    // granted, such as a serial port. If another version is active by now, its page must not be
+    // drawn under the old version's grant: refuse, and the studio shows no page.
+    const asked = (req.query as { version?: unknown } | undefined)?.version;
+    if (asked !== undefined && (typeof asked !== 'string' || asked !== row.version)) {
+      reply.code(409);
+      return reply.send({ error: 'plugin version changed' });
+    }
+    // Loaded by the version of the row just checked, never by "whatever is active now": the
+    // active version can change between the two reads.
+    const bytes = await ctx.plugins.loadUi(req.params.id, row.version);
     if (!bytes) {
       reply.code(404);
       return reply.send({ error: 'no ui asset' });

@@ -256,4 +256,99 @@ describe('plugin-ui routes: sites', () => {
     const body = await list(ctxWith([sited({ version: '2.0.0' }), sited({ version: '1.0.0', active: false })]));
     expect(body.map((p: any) => `${p.id}@${p.version}`)).toEqual(['sited@2.0.0']);
   });
+
+  describe('the page asset is bound to one version', () => {
+    const ui = { entry: 'ui.html', sha256: 'x', nav: { label: 'Analyzer', icon: 'plug', section: 'apps' }, uiSdkVersion: '1' };
+    const row = (version: string, active: boolean) => ({ id: 'analyzer', version, enabled: true, active, manifest: { capabilities: [], payload: { kind: 'plugin', ui } } });
+
+    function ctxWith(rows: () => unknown[]) {
+      const loaded: Array<[string, string | undefined]> = [];
+      const ctx = fakeCtx({ plugins: {
+        list: async () => rows(),
+        loadUi: async (id: string, version?: string) => { loaded.push([id, version]); return new TextEncoder().encode(`<p>${version}</p>`); },
+      } });
+      return { ctx, loaded };
+    }
+
+    it('serves the page of the version the studio asked for, loaded by that version', async () => {
+      const { ctx, loaded } = ctxWith(() => [row('1.0.0', false), row('2.0.0', true)]);
+      const res = await build(ctx).inject({ method: 'GET', url: '/api/plugins/analyzer/ui/asset?version=2.0.0' });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toBe('<p>2.0.0</p>');
+      expect(loaded).toEqual([['analyzer', '2.0.0']]);
+    });
+
+    it('refuses when another version became active after the studio read the list', async () => {
+      // The studio's list said 1.0.0. Since then 2.0.0 was made active.
+      const { ctx, loaded } = ctxWith(() => [row('1.0.0', false), row('2.0.0', true)]);
+      const res = await build(ctx).inject({ method: 'GET', url: '/api/plugins/analyzer/ui/asset?version=1.0.0' });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({ error: 'plugin version changed' });
+      expect(loaded).toEqual([]);
+    });
+
+    it('loads the bytes of the row it checked, even if the active version changes in between', async () => {
+      // The first read of the list says 1.0.0 is active. Any later read says 2.0.0.
+      let reads = 0;
+      const { ctx, loaded } = ctxWith(() => (reads++ === 0 ? [row('1.0.0', true), row('2.0.0', false)] : [row('1.0.0', false), row('2.0.0', true)]));
+      const res = await build(ctx).inject({ method: 'GET', url: '/api/plugins/analyzer/ui/asset?version=1.0.0' });
+      expect(res.statusCode).toBe(200);
+      // Never "whatever is active now": the version is named.
+      expect(loaded).toEqual([['analyzer', '1.0.0']]);
+      expect(res.body).toBe('<p>1.0.0</p>');
+    });
+
+    it('with no version asked for, still loads by the version of the row it checked', async () => {
+      const { ctx, loaded } = ctxWith(() => [row('1.0.0', false), row('2.0.0', true)]);
+      const res = await build(ctx).inject({ method: 'GET', url: '/api/plugins/analyzer/ui/asset' });
+      expect(res.statusCode).toBe(200);
+      expect(loaded).toEqual([['analyzer', '2.0.0']]);
+    });
+
+    it('refuses a version that is not a plain version string', async () => {
+      const { ctx, loaded } = ctxWith(() => [row('2.0.0', true)]);
+      for (const bad of ['', '../x', 'a'.repeat(200)]) {
+        const res = await build(ctx).inject({ method: 'GET', url: `/api/plugins/analyzer/ui/asset?version=${encodeURIComponent(bad)}` });
+        expect(res.statusCode, bad).toBe(409);
+      }
+      expect(loaded).toEqual([]);
+    });
+  });
+
+  describe('devices.serial', () => {
+    const ui = { entry: 'ui.html', sha256: 'x', nav: { label: 'Analyzer', icon: 'plug', section: 'apps' }, uiSdkVersion: '1' };
+    const row = (over: Record<string, unknown>) => ({ id: 'analyzer', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui } }, ...over });
+    const list = async (rows: unknown[]) => (await build(fakeCtx({ plugins: { list: async () => rows } })).inject({ method: 'GET', url: '/api/plugins/ui' })).json();
+
+    it('says serial is true for a plugin granted host:serial', async () => {
+      const body = await list([row({ manifest: { capabilities: [{ kind: 'host:db' }, { kind: 'host:serial' }], payload: { kind: 'plugin', ui } } })]);
+      expect(body[0].devices).toEqual({ serial: true });
+    });
+
+    it('says serial is false for a plugin without it', async () => {
+      const body = await list([row({ manifest: { capabilities: [{ kind: 'host:db' }], payload: { kind: 'plugin', ui } } })]);
+      expect(body[0].devices).toEqual({ serial: false });
+    });
+
+    it('reads the active version, not an older one that had the grant', async () => {
+      const body = await list([
+        row({ version: '1.0.0', active: false, manifest: { capabilities: [{ kind: 'host:serial' }], payload: { kind: 'plugin', ui } } }),
+        row({ version: '2.0.0', active: true, manifest: { capabilities: [], payload: { kind: 'plugin', ui } } }),
+      ]);
+      expect(body).toHaveLength(1);
+      expect(body[0].version).toBe('2.0.0');
+      expect(body[0].devices).toEqual({ serial: false });
+    });
+
+    it('says serial is false for a legacy plugin with no capabilities list', async () => {
+      const body = await list([row({})]);
+      expect(body[0].devices).toEqual({ serial: false });
+    });
+
+    it('says serial is false, and still lists the plugin, when its capabilities cannot be read', async () => {
+      const body = await list([row({ manifest: { capabilities: 'host:serial', payload: { kind: 'plugin', ui } } })]);
+      expect(body).toHaveLength(1);
+      expect(body[0].devices).toEqual({ serial: false });
+    });
+  });
 });

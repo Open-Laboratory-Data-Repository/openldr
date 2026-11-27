@@ -360,7 +360,7 @@ export function AppShell({
                     opened, and a refocused button reopens its tooltip over the header. */}
                 <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
                   {panelPlugins.map((p) => (
-                    <DropdownMenuItem key={p.id} onClick={() => openPluginPanel(p.id, p.sites!.panel!.title, p.permissionKeys ?? [])}>
+                    <DropdownMenuItem key={p.id} onClick={() => openPluginPanel(p.id, p.sites!.panel!.title, p.permissionKeys ?? [], { label: p.nav.label, version: p.version, serial: p.devices?.serial === true })}>
                       {p.sites!.panel!.title}
                     </DropdownMenuItem>
                   ))}

@@ -88,18 +88,32 @@ export function isTrustedAddress(shownAddress: string, connectMode: boolean): bo
   return parse(shownAddress)?.protocol === 'https:';
 }
 
+/** The permissions the window may grant, and only to its own trusted address. */
+const GRANTABLE: ReadonlySet<string> = new Set([
+  // Studio's copy buttons.
+  'clipboard-sanitized-write',
+  // A serial port for a plugin page. This only lets the page ask. A port is still chosen by a
+  // person, in the app's own list (serial.ts).
+  'serial',
+]);
+
 /**
- * Whether the window may grant a permission. Every request is refused, with one exception: a
- * sanitized clipboard write from a page on the window's own address, for Studio's copy buttons,
- * and only while that address is trusted: this computer, or the connected server in connect mode.
+ * Whether the window may grant a permission. Every request is refused, with two exceptions: a
+ * sanitized clipboard write and the serial feature, from a page on the window's own address, and
+ * only while that address is trusted: this computer, or the connected server in connect mode.
  */
 export function mayGrantPermission(
   permission: string,
   requestingUrl: string,
   shownAddress: string | undefined,
   connectMode?: boolean,
+  /** Where the request comes from, as Electron reports it. Serial is refused without it. */
+  from?: { isMainWindow: boolean; isMainFrame: boolean },
 ): boolean {
-  if (permission !== 'clipboard-sanitized-write' || shownAddress === undefined) return false;
+  if (!GRANTABLE.has(permission) || shownAddress === undefined) return false;
+  // A serial port goes only to Studio's own page: the main frame of the main window. Not to a
+  // frame inside it, and not to another window of the app.
+  if (permission === 'serial' && !(from?.isMainWindow === true && from.isMainFrame === true)) return false;
   return isTrustedAddress(shownAddress, connectMode === true) && sameOrigin(requestingUrl, shownAddress);
 }
 

@@ -1168,6 +1168,7 @@ export const en = {
         hostImport: 'Read the database connectors an admin allows, and save what it imports',
         hostDb: 'Keep its own tables in CE\'s database, apart from CE\'s tables',
         hostCeRead: 'Read CE\'s records, such as patients, requests and results',
+        hostSerial: 'Use a serial port on the PC, when a person chooses one',
         none: 'none',
       },
       heading: 'Marketplace',
@@ -2950,6 +2951,12 @@ export const en = {
     noUi: 'This plugin contributes no UI.',
     loadFailed: 'Could not load this plugin page. Reload the page to try again.',
     loadError: 'Failed to load plugin UI.',
+    serial: {
+      title: '{{plugin}} wants to use a serial port',
+      body: 'Choose the port the cable is plugged into. {{plugin}} can then read and write it until this page closes.',
+      choose: 'Choose port',
+      cancel: 'Cancel',
+    },
     sites: {
       menu: 'Places',
       title: 'Places for {{name}}',

@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SDK_BOOTSTRAP_V1, type PluginInitContext, type PluginSiteName } from '@openldr/plugin-ui-sdk';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import { LoadingState } from '@/components/ui/spinner';
 import { LoadFailed, useLoadErrorToast } from '@/components/ui/load-failed';
-import { authFetch, pluginUiAssetUrl, pluginBrokerCall } from '@/api';
+import { authFetch, listPluginUis, pluginUiAssetUrl, pluginBrokerCall } from '@/api';
 import { createDownloadGate, wireHostPort, type DownloadGate, type HostPortLike } from './host-bridge';
 import { createPrintGate, type PrintGate } from './print-frame';
+import { createSerialGate, type SerialGate, type SerialPortLike } from './serial-gate';
+import { nativeSerial } from './serial-native';
+import { isOpenElsewhere, registerOpenPorts } from './serial-registry';
+import { watchGrant } from './serial-grant-watch';
+import { useSerialPrompt } from './SerialPrompt';
 import { hostThemeTokens, themeStyleTag } from './plugin-theme';
 import { randomId } from '@/lib/random-id';
 import { CAPABILITY_KEYS } from '@openldr/rbac';
@@ -42,10 +47,28 @@ function buildSrcdoc(pluginBodyHtml: string, theme: 'light' | 'dark', tokens: Re
   return `<!doctype html><html data-openldr-theme="${theme}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}">${themeStyleTag(tokens)}</head><body><script>${SDK_BOOTSTRAP_V1}</script>${pluginBodyHtml}</body></html>`;
 }
 
-export function PluginFrame({ pluginId, context }: { pluginId: string; context: PluginInitContext }): JSX.Element {
+export interface PluginFrameProps {
+  pluginId: string;
+  context: PluginInitContext;
+  /** Whether the plugin's active version holds host:serial, from the server's listing. Undefined
+   *  while the listing loads: every serial call is then refused. */
+  serialGranted: boolean | undefined;
+  /** The plugin's name from the server's listing. The serial question shows this, never anything
+   *  the plugin's page sent. */
+  pluginLabel: string;
+  /** The listing's version. A change of version closes the ports. */
+  pluginVersion: string;
+}
+
+/** How often a frame that has gone looks whether its last ports are closed. */
+const RETIRE_CHECK_MS = 250;
+
+export function PluginFrame({ pluginId, context, serialGranted, pluginLabel, pluginVersion }: PluginFrameProps): JSX.Element {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [srcdoc, setSrcdoc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Goes up at every load of a document, so each one gets a frame element of its own. */
+  const [load, setLoad] = useState(0);
   const { t } = useTranslation();
   // The reason goes in a toast; the frame keeps only muted words in its place.
   useLoadErrorToast(error, t('plugins.loadFailed'));
@@ -57,20 +80,93 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
   // One print at a time per mounted frame, across its reloads. Leaving the page removes an open print frame.
   const printRef = useRef<PrintGate | null>(null);
 
+  // Serial ports. Unlike the download and print limits, the gate is NOT kept across a reload: a
+  // port must not outlive the page that was given it. Every load gets a fresh gate.
+  const serial = useMemo(() => nativeSerial(navigator, window.isSecureContext === true), []);
+  const prompt = useSerialPrompt(pluginLabel, serial);
+  const promptRef = useRef(prompt);
+  promptRef.current = prompt;
+  const serialRef = useRef<SerialGate | null>(null);
+  /** Gates of earlier loads. One stays here until its last port is really closed, so another frame
+   *  cannot open that port meanwhile. */
+  const retiredRef = useRef<SerialGate[]>([]);
+  const grantedRef = useRef(serialGranted);
+  grantedRef.current = serialGranted;
+  /** Set when the once-a-minute check found the grant gone. It holds until the listing is read again. */
+  const lostRef = useRef(false);
+  /** Every port this frame holds, in the live gate and in the retired ones. */
+  const heldPorts = useRef((): readonly SerialPortLike[] => {
+    retiredRef.current = retiredRef.current.filter((g) => g.open().length > 0);
+    return [...(serialRef.current?.open() ?? []), ...retiredRef.current.flatMap((g) => g.open())];
+  }).current;
+  /** Closes the live gate's ports and kills its handles. The gate stays in view until they are closed. */
+  const retire = useRef((): void => {
+    const gate = serialRef.current;
+    if (gate === null) return;
+    serialRef.current = null;
+    retiredRef.current.push(gate);
+    void gate.closeAll();
+  }).current;
+
+  useEffect(() => {
+    const remove = registerOpenPorts(heldPorts);
+    return () => {
+      retire();
+      // The list stays registered until the last port is closed, also one that was still opening.
+      const check = (): void => { if (heldPorts().length === 0) remove(); else setTimeout(check, RETIRE_CHECK_MS); };
+      check();
+    };
+  }, [heldPorts, retire]);
+
+  // The grant was taken away: the ports close. A change of plugin or of version is handled
+  // where the page is loaded, below: the whole page goes.
+  const grantSeen = useRef(serialGranted);
+  useEffect(() => {
+    const before = grantSeen.current;
+    grantSeen.current = serialGranted;
+    // What the listing says now replaces what the check found.
+    lostRef.current = false;
+    if (before === true && serialGranted !== true) void serialRef.current?.closeAll();
+  }, [serialGranted]);
+
+  // The studio reads the listing once. While a port is open, ask the server once a minute.
+  useEffect(() => watchGrant({
+    pluginId,
+    version: pluginVersion,
+    hasOpenPorts: () => heldPorts().length > 0,
+    fetchListing: listPluginUis,
+    onLost: () => {
+      lostRef.current = true;
+      void serialRef.current?.closeAll();
+    },
+  }), [pluginId, pluginVersion, heldPorts]);
+
   useEffect(() => () => {
     portRef.current?.close(); portRef.current = null;
     printRef.current?.dispose(); printRef.current = null;
   }, []);
 
+  // The page, its channel and its gate belong to one plugin at one version. When either changes,
+  // the old page goes at once: its channel is closed, its ports close, and a fresh document is
+  // loaded, also when the two versions have the same HTML. An old document must never get to ask
+  // with the new version's grant.
   useEffect(() => {
     let cancelled = false;
-    authFetch(pluginUiAssetUrl(pluginId))
+    portRef.current?.close(); portRef.current = null;
+    retire();
+    lostRef.current = false;
+    setSrcdoc(null);
+    setError(null);
+    setLoad((n) => n + 1);
+    // Named by version: the server serves this version's page or none. The grants this frame
+    // goes by belong to that version.
+    authFetch(pluginUiAssetUrl(pluginId, pluginVersion))
       .then(async (r) => { if (!r.ok) throw new Error(`asset ${r.status}`); return r.text(); })
       // Stamp the host theme at mount; later changes are pushed via postMessage below.
       .then((html) => { if (!cancelled) setSrcdoc(buildSrcdoc(html, hostTheme(), hostThemeTokens())); })
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); });
     return () => { cancelled = true; };
-  }, [pluginId]);
+  }, [pluginId, pluginVersion, retire]);
 
   // The sandboxed iframe can't see host CSS, so push host theme changes into it. The studio
   // switches light and dark with data-theme on <html>. A change to the root's style or class
@@ -93,11 +189,21 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
     const win = iframeRef.current?.contentWindow;
     if (!win) return;
     portRef.current?.close();
+    // Before the new channel is attached: the old page's ports close and its handles die.
+    retire();
+    const gate = createSerialGate({
+      serial,
+      granted: () => (lostRef.current ? false : grantedRef.current),
+      pick: () => promptRef.current.pick(),
+      openElsewhere: (p) => isOpenElsewhere(p, heldPorts) || retiredRef.current.some((g) => g.open().includes(p)),
+      cancelPick: () => promptRef.current.cancel(),
+    });
+    serialRef.current = gate;
     const channel = new MessageChannel();
     portRef.current = channel.port1;
     gateRef.current ??= createDownloadGate();
     printRef.current ??= createPrintGate();
-    wireHostPort(channel.port1 as unknown as HostPortLike, { call: (op) => pluginBrokerCall(pluginId, op), gate: gateRef.current, print: printRef.current,
+    wireHostPort(channel.port1 as unknown as HostPortLike, { call: (op) => pluginBrokerCall(pluginId, op), gate: gateRef.current, print: printRef.current, serial: gate,
       edition: async (key, open) => {
         if (context.site !== 'page') return false;
         const path = '/reports/issued/' + encodeURIComponent(pluginId) + '/' + encodeURIComponent(key);
@@ -118,13 +224,17 @@ export function PluginFrame({ pluginId, context }: { pluginId: string; context: 
   if (error) return <LoadFailed className="min-h-0 h-full" message={t('plugins.loadFailed')} />;
   if (!srcdoc) return <LoadingState />;
   return (
-    <iframe
-      ref={iframeRef}
-      title={`plugin-${pluginId}`}
-      sandbox="allow-scripts"
-      srcDoc={srcdoc}
-      onLoad={onLoad}
-      className="block h-full w-full border-0"
-    />
+    <>
+      <iframe
+        key={load}
+        ref={iframeRef}
+        title={`plugin-${pluginId}`}
+        sandbox="allow-scripts"
+        srcDoc={srcdoc}
+        onLoad={onLoad}
+        className="block h-full w-full border-0"
+      />
+      {prompt.element}
+    </>
   );
 }

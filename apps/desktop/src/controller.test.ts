@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DesktopController, pageState, type ControllerDeps, type Screen } from './controller';
+import { actionWindow, DesktopController, pageState, type ControllerDeps, type PageAction, type Screen } from './controller';
 import type { LauncherEvent, Status } from './launcher';
 import type { Settings } from './settings';
 import { STRINGS } from './strings';
@@ -178,6 +178,51 @@ const runningStatus = (host?: string): Status => ({
 });
 
 describe('pageState', () => {
+  it('takes serial-use only from the port window', () => {
+    // main.ts takes an action only from the window this names. The same action sent from the
+    // main window's own page, or from the PIN window, is ignored and the choice stays open.
+    expect(actionWindow('serial-use')).toBe('port');
+    expect(actionWindow('serial-cancel')).toBe('port');
+    expect(actionWindow('pin-submit')).toBe('pin');
+    expect(actionWindow('pin-cancel')).toBe('pin');
+    for (const id of ['choose-local', 'choose-connect', 'connect', 'back', 'trust', 'no-trust', 'retry', 'change-server'] as PageAction[]) {
+      expect(actionWindow(id), id).toBe('main');
+    }
+  });
+
+  it('gives the serial screen its rows, its note and its actions', () => {
+    const ports = [
+      { id: 'a1', label: 'COM3    USB Serial Port', last: false },
+      { id: 'b2', label: 'COM4', last: true },
+    ];
+    expect(pageState({ screen: 'serial', ports }, strings)).toEqual({
+      title: strings.serialTitle,
+      choices: [
+        { id: 'a1', label: 'COM3    USB Serial Port', selected: false },
+        { id: 'b2', label: 'COM4', note: strings.serialLastNote, selected: true },
+      ],
+      // The page keeps Use this port off until a row is selected.
+      actions: [{ id: 'serial-use', label: strings.serialUse, primary: true, needsChoice: true }, { id: 'serial-cancel', label: strings.serialCancel }],
+    });
+  });
+
+  it('turns Use this port off when no row is selected', () => {
+    const none = pageState({ screen: 'serial', ports: [{ id: 'a1', label: 'COM3', last: false }] }, strings);
+    expect(none.choices?.every((c) => !c.selected)).toBe(true);
+    expect(none.actions?.[0]).toEqual({ id: 'serial-use', label: strings.serialUse, primary: true, needsChoice: true });
+    // With a row selected from last time, the button is on at once.
+    const marked = pageState({ screen: 'serial', ports: [{ id: 'a1', label: 'COM3', last: true }] }, strings);
+    expect(marked.actions?.[0]).toEqual({ id: 'serial-use', label: strings.serialUse, primary: true, needsChoice: true });
+    expect(marked.choices?.[0]?.selected).toBe(true);
+  });
+
+  it('says so when no serial port was found, and still offers Cancel', () => {
+    const empty = pageState({ screen: 'serial', ports: [] }, strings);
+    expect(empty.message).toBe(strings.serialNone);
+    expect(empty.choices).toEqual([]);
+    expect(empty.actions?.map((a) => a.id)).toEqual(['serial-use', 'serial-cancel']);
+  });
+
   it('gives the pin screen its words for each purpose, and the wrong and too short lines', () => {
     const set = pageState({ screen: 'pin', purpose: 'set' }, strings);
     expect(set).toEqual({

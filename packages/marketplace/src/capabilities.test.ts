@@ -45,6 +45,12 @@ describe('host-service capabilities', () => {
   it('accepts host:import, the gate for reading a granted connector and saving records', () => {
     expect(parseCapabilities([{ kind: 'host:import' }])).toEqual([{ kind: 'host:import' }]);
   });
+  it('accepts host:serial with no parameters', () => {
+    expect(parseCapabilities([{ kind: 'host:serial' }])).toEqual([{ kind: 'host:serial' }]);
+    // Presence only: a parameter a plugin adds is not kept.
+    expect(parseCapabilities([{ kind: 'host:serial', baudRate: 9600 }])).toEqual([{ kind: 'host:serial' }]);
+  });
+
   it('accepts host:db and host:ce-read, presence-only like the other host gates', () => {
     expect(parseCapabilities([{ kind: 'host:db' }, { kind: 'host:ce-read' }])).toEqual([{ kind: 'host:db' }, { kind: 'host:ce-read' }]);
   });

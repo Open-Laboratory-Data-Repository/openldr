@@ -1,5 +1,6 @@
-import { checkDownload, utf8ByteLength, type PluginBrokerOp, type PluginOp, type PluginRpcResult } from '@openldr/plugin-ui-sdk';
+import { checkDownload, utf8ByteLength, type PluginBrokerOp, type PluginHostOp, type PluginOp, type PluginRpcResult } from '@openldr/plugin-ui-sdk';
 import { createPrintGate, type PrintGate } from './print-frame';
+import type { SerialGate } from './serial-gate';
 
 export interface HostPortLike {
   postMessage(message: unknown): void;
@@ -18,6 +19,9 @@ export interface HostBridgeDeps {
   edition?(key: string, open: boolean): Promise<boolean>;
   /** The frame's print limit, kept across its reloads like `gate`. Absent, this wiring gets its own. */
   print?: PrintGate;
+  /** The gate that holds this load's serial ports. PluginFrame makes a new one for every load of
+   *  the page. Absent, every serial call is refused. */
+  serial?: SerialGate;
 }
 
 /** The shortest time between two downloads from one frame. */
@@ -117,6 +121,15 @@ export function wireHostPort(port: HostPortLike, deps: HostBridgeDeps): void {
         void deps.edition(op.edition, op.open)
           .then(data => port.postMessage({ id, result: { ok: true, data } }))
           .catch(() => port.postMessage({ id, result: { ok: false, error: 'Report lookup failed' } }));
+      } else if (kind.startsWith('host.serial.')) {
+        // Serial bytes may hold patient results. They are answered here and never reach the server.
+        if (!deps.serial) {
+          port.postMessage({ id, result: { ok: false, error: 'serial-unavailable' } });
+        } else {
+          void deps.serial.handle(op as PluginHostOp)
+            .then((result) => port.postMessage({ id, result }))
+            .catch(() => port.postMessage({ id, result: { ok: false, error: 'serial-failed' } }));
+        }
       } else if (op.kind === 'host.print') {
         // Answered when the print dialog closes. The gate never throws.
         void printGate.print(op).then((result) => port.postMessage({ id, result }));

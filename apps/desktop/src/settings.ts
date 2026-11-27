@@ -23,6 +23,9 @@ export interface Settings {
   server?: { address: string; fingerprint?: string };
   /** Present means this PC is locked to OpenLDR. A salted hash of the PIN, both in hex. */
   lock?: { salt: string; hash: string };
+  /** The serial port a person chose last time, by its name. Only used to mark a row in the list
+   *  of ports. Never to pick one. */
+  lastSerialPort?: { portName: string };
 }
 
 /** The share port the launcher uses when the settings name none. The launcher's own default. */
@@ -72,6 +75,10 @@ function known(value: unknown): Settings {
   }
   const lock = value.lock;
   if (isRecord(lock) && isHex(lock.salt) && isHex(lock.hash)) s.lock = { salt: lock.salt, hash: lock.hash };
+  const lastPort = value.lastSerialPort;
+  if (isRecord(lastPort) && typeof lastPort.portName === 'string' && lastPort.portName !== '' && lastPort.portName.length <= 200) {
+    s.lastSerialPort = { portName: lastPort.portName };
+  }
   return s;
 }
 

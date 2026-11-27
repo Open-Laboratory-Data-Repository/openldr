@@ -29,6 +29,9 @@ export const capabilitySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('host:db') }),
   // host:ce-read: read CE's own records through structured requests the host checks.
   z.object({ kind: z.literal('host:ce-read') }),
+  // host:serial: a plugin page may ask the studio for a serial port on the PC it runs on.
+  // Enforced in the studio, not the broker: serial requests never reach the server.
+  z.object({ kind: z.literal('host:serial') }),
 ]);
 
 export type Capability = z.infer<typeof capabilitySchema>;

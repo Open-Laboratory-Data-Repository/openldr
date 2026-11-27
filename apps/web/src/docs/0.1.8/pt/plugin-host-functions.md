@@ -231,3 +231,106 @@ host::fhir_emit(&[json!({ "resourceType": "Observation", "id": "obs-1", "status"
 ```
 
 `HostError` tem o `code` e a `message` do CE. O plugin de teste em `wasm/test-sink`, construído com a funcionalidade `host`, chama cada função.
+
+## Portas série para a página de um plugin
+
+A página de um plugin pode ler e escrever numa porta série do PC onde corre, em bytes em bruto. Serve para uma página que fala com um instrumento por um cabo. As chamadas estão em `window.openldr.serial`, na página, e não no código de servidor do plugin. O Studio detém a porta e faz todas as verificações. Estas chamadas não enviam nenhum byte para o servidor. O que o seu plugin faz depois com os bytes, como guardar um resultado, é com ele.
+
+O plugin precisa da capacidade `host:serial`. [Permissões dos plugins](/docs/plugin-permissions) diz o que o administrador vê.
+
+Funciona onde o navegador tem a funcionalidade série: Chrome e Edge, num endereço `https` ou no endereço deste PC, e a aplicação de computador OpenLDR. O Firefox e o Safari não a têm. Aí cada chamada é recusada com `serial-unavailable`.
+
+### As seis chamadas
+
+| Chamada | O que faz |
+|---|---|
+| `ports()` | As portas dadas a esta página desde que carregou, como `{ port, label }`. Vazio até uma pessoa escolher uma. |
+| `choose()` | O Studio pergunta à pessoa, com o nome do plugin, e mostra a lista de portas. Dá `{ port, label }`, ou `null` quando a pessoa cancelou. |
+| `open(port, settings)` | Abre uma porta escolhida. |
+| `read(port, waitMs)` | Dá `{ bytes, lost }`. `bytes` é um `Uint8Array` do que chegou, no máximo 65 536 bytes. Com `waitMs`, espera até esse tempo por um primeiro byte. Sem ele, responde logo. |
+| `write(port, bytes)` | Envia um `Uint8Array` de 1 a 65 536 bytes. Termina quando a saída da porta os aceitou. |
+| `close(port)` | Fecha a porta. O mesmo `port` pode ser aberto de novo enquanto esta página estiver carregada, o plugin mantiver a capacidade e o aparelho continuar lá. |
+
+`port` é um identificador que o Studio inventa só para esta página. Não é o nome da porta, e não serve a outra página.
+
+Uma pessoa escolhe a porta de cada vez. Nada escolhe uma sozinho, e uma porta não é lembrada depois de recarregar.
+
+### Definições
+
+| Campo | Valores | Por omissão |
+|---|---|---|
+| `baudRate` | um número inteiro de 300 a 921600 | nenhum, é obrigatório |
+| `dataBits` | 7 ou 8 | 8 |
+| `stopBits` | 1 ou 2 | 1 |
+| `parity` | `none`, `even`, `odd` | `none` |
+| `flowControl` | `none`, `hardware` | `none` |
+
+Qualquer outro campo é recusado. Não há linhas de controlo: nem DTR, nem RTS, nem break.
+
+### Limites
+
+| Limite | Valor |
+|---|---|
+| Portas abertas, a abrir ou a fechar, para uma página de plugin | 2 |
+| Bytes que uma leitura devolve | 65 536 |
+| Bytes à espera de leitura, por porta | 1 048 576 |
+| Bytes que uma escrita aceita | 65 536 |
+| Bytes à espera de envio, por porta | 1 048 576 |
+| Espera mais longa de uma leitura | 30 000 ms |
+
+### Recusas
+
+Uma chamada recusada falha com um `Error` cuja mensagem é um destes códigos. `choose()` é a única exceção: um cancelamento dá `null`.
+
+| Código | Significado |
+|---|---|
+| `serial-not-granted` | O plugin não tem `host:serial`, ou o Studio ainda não sabe, ou a capacidade foi retirada. |
+| `serial-unavailable` | O navegador não tem a funcionalidade série aqui, ou recusou por segurança. |
+| `serial-cancelled` | A pessoa cancelou. Só se vê como `null` de `choose()`. |
+| `serial-unknown-port` | O identificador não é desta página, ou a porta não está aberta. |
+| `serial-busy` | A porta já está aberta ou a abrir, aqui ou noutra página, ou o seu último fecho ainda não terminou. Ou já há uma leitura à espera nela. Ou há outra pergunta de porta aberta. |
+| `serial-too-many` | Já há duas portas abertas, a abrir ou a fechar. |
+| `serial-too-large` | Os bytes não são um `Uint8Array`, estão vazios, passam de 65 536, ou a fila de envio está cheia. |
+| `serial-bad-settings` | As definições não seguem a tabela acima. |
+| `serial-closed` | A porta foi fechada, ou o cabo retirado, enquanto a chamada esperava. |
+| `serial-failed` | O aparelho ou o sistema recusou: uma abertura que falha, um erro de entrada e saída. |
+
+### O que a sua página tem de tratar
+
+- **Uma escolha cancelada.** `choose()` dá `null`. Deixe a pessoa onde estava.
+- **Uma ligação cortada.** Um cabo retirado ou um erro de entrada e saída termina uma leitura à espera com `serial-closed`. O identificador fica morto, sem recarregar: as chamadas seguintes dão `serial-unknown-port`. Peça à pessoa para escolher a porta de novo.
+- **Bytes perdidos.** Quando 1 048 576 bytes esperam sem serem lidos, o Studio deita fora tudo o que não foi lido. A leitura seguinte não dá bytes e dá `lost: true`, uma vez. Os bytes seguintes chegam como de costume. Recomece a separação das mensagens: os bytes de antes e de depois da falha nunca são juntos.
+- **Um recarregamento.** Cada carregamento da página começa sem porta. A pessoa escolhe de novo.
+- **Espere pelas escritas antes de fechar.** A promessa de uma escrita resolve-se quando a saída da porta aceitou os bytes. Isso não quer dizer que o instrumento os recebeu ou respondeu. `close()` não espera pelas escritas por terminar, por isso espere por elas primeiro.
+- **A capacidade que desaparece.** Enquanto uma porta está aberta, o Studio pergunta ao servidor uma vez por minuto. Uma verificação sem resposta não muda nada e é repetida um minuto depois. Quando uma verificação mostra que o plugin foi desligado, atualizado ou perdeu a capacidade, a porta fecha, o identificador fica morto e as chamadas dão `serial-not-granted`.
+
+### Exemplo
+
+```js
+async function readFromInstrument() {
+  await window.openldr.ready;
+  const serial = window.openldr.serial;
+
+  const chosen = await serial.choose();      // null when the person cancelled
+  if (!chosen) return;
+  await serial.open(chosen.port, { baudRate: 9600 });
+
+  let buffer = [];
+  for (;;) {
+    let read;
+    try {
+      read = await serial.read(chosen.port, 5000);   // waits up to 5 seconds for a first byte
+    } catch (err) {
+      // 'serial-closed': the cable was pulled or the port was closed. Ask the person to choose again.
+      break;
+    }
+    if (read.lost) buffer = [];                      // bytes were dropped: start the framing again
+    buffer.push(...read.bytes);
+    // ...cut whole messages out of buffer here...
+  }
+}
+```
+
+### Não provado
+
+Estas chamadas foram executadas no Chrome 158 e na aplicação de computador em Linux, até à escolha de uma porta. Nenhuma porta foi aberta: o PC de teste não tinha aparelho série. Um cabo real, um analisador real, o Edge, o Windows e o macOS não foram experimentados.

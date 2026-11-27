@@ -216,6 +216,31 @@ Pour bloquer les touches du système sous Windows, exécutez l'application comme
 
 L'application se déverrouille sans code PIN une fois l'entrée retirée. Pour atteindre le fichier depuis un PC verrouillé, utilisez les touches du système pour ouvrir une fenêtre de fichiers, ou fermez la session et connectez-vous avec un autre compte qui y a accès.
 
+## Ports série
+
+La page d'un plugin peut avoir besoin d'un port série, par exemple pour dialoguer avec un automate par un câble. L'application vous demande quel port, à chaque fois.
+
+1. La page du plugin demande un port. Studio affiche **<plugin> veut utiliser un port série**.
+2. Sélectionnez **Choisir le port**. L'application ouvre une petite fenêtre, **Choisissez un port série**, avec les ports de ce PC.
+3. Sélectionnez la ligne du câble. Le port choisi la dernière fois est déjà sélectionné et porte la mention **utilisé la dernière fois**.
+4. Sélectionnez **Utiliser ce port**.
+
+**Annuler** dans l'une ou l'autre fenêtre ne donne aucun port au plugin. Si aucun port n'est trouvé, la fenêtre le dit, et la liste se remplit d'elle-même quand un câble est branché.
+
+Le plugin garde le port jusqu'à la fermeture de sa page. Le port est libéré quand vous quittez ou rechargez la page, quand vous quittez l'application, quand le câble est retiré, et quand le plugin est désactivé ou mis à jour. Après chacun de ces cas, vous choisissez le port de nouveau. L'application ne choisit jamais un port d'elle-même.
+
+La liste contient tous les appareils série connus du système, y compris les appareils Bluetooth appairés. Prenez celui de votre câble.
+
+Sous Linux, votre utilisateur doit avoir le droit d'utiliser les appareils série. Sur la plupart des systèmes, cela veut dire appartenir au groupe `dialout` :
+
+```sh
+sudo usermod -aG dialout "$USER"
+```
+
+Fermez ensuite la session et rouvrez-la.
+
+Ceci a été exécuté sous Linux jusqu'au choix d'un port. Aucun port n'a été ouvert, car le PC de test n'avait pas d'appareil série. Windows et macOS n'ont pas été essayés.
+
 ## Mettre à jour
 
 Quittez OpenLDR, puis relancez la ligne d'installation. Elle remplace l'application et ne touche pas au dossier de données. Le démarrage suivant met à jour la base de données.

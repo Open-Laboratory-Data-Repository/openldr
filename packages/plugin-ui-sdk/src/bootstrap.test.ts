@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { describe, it, expect } from 'vitest';
 import { SDK_BOOTSTRAP_V1, makeRpc } from './bootstrap';
 
@@ -187,6 +188,155 @@ describe('SDK_BOOTSTRAP_V1', () => {
     };
     handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [port] });
     await expect(api.print.pages({ title: 'Manifest', paper: 'A4', pages: [] })).rejects.toThrow('print refused: no pages');
+  });
+
+  describe('serial', () => {
+    type Serial = {
+      ports(): Promise<unknown>;
+      choose(): Promise<unknown>;
+      open(port: string, settings: unknown): Promise<unknown>;
+      read(port: string, waitMs?: number): Promise<{ bytes: Uint8Array; lost: boolean }>;
+      write(port: string, bytes: Uint8Array): Promise<unknown>;
+      close(port: string): Promise<unknown>;
+    };
+    /** The toolkit text run as the frame runs it, with a fake port whose answers the test gives. */
+    function frame(answer: (op: { kind: string }) => { ok: true; data: unknown } | { ok: false; error: string }) {
+      let handler: ((ev: unknown) => void) | undefined;
+      const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      new Function('window', SDK_BOOTSTRAP_V1)(win);
+      const sent: Array<{ kind: string } & Record<string, unknown>> = [];
+      const port = {
+        start: () => {},
+        onmessage: null as null | ((e: { data: unknown }) => void),
+        postMessage(m: { id: number; op: { kind: string } & Record<string, unknown> }) { sent.push(m.op); queueMicrotask(() => port.onmessage?.({ data: { id: m.id, result: answer(m.op) } })); },
+      };
+      handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [port] });
+      return { serial: (win as unknown as { openldr: { serial: Serial } }).openldr.serial, sent };
+    }
+
+    it('sends each serial call as its host op', async () => {
+      const { serial, sent } = frame((op) => ({ ok: true, data: op.kind === 'host.serial.read' ? { bytes: new Uint8Array(0), lost: false } : op.kind === 'host.serial.ports' ? [] : op.kind === 'host.serial.choose' ? { port: 'h1', label: 'COM3' } : null }));
+      await expect(serial.ports()).resolves.toEqual([]);
+      await expect(serial.choose()).resolves.toEqual({ port: 'h1', label: 'COM3' });
+      await expect(serial.open('h1', { baudRate: 9600, parity: 'even' })).resolves.toBeUndefined();
+      await serial.read('h1', 250);
+      await serial.read('h1');
+      await expect(serial.write('h1', new Uint8Array([1, 2, 3]))).resolves.toBeUndefined();
+      await expect(serial.close('h1')).resolves.toBeUndefined();
+      expect(sent).toEqual([
+        { kind: 'host.serial.ports' },
+        { kind: 'host.serial.choose' },
+        { kind: 'host.serial.open', port: 'h1', settings: { baudRate: 9600, parity: 'even' } },
+        { kind: 'host.serial.read', port: 'h1', waitMs: 250 },
+        // No wait given: what is there now.
+        { kind: 'host.serial.read', port: 'h1', waitMs: 0 },
+        { kind: 'host.serial.write', port: 'h1', bytes: new Uint8Array([1, 2, 3]) },
+        { kind: 'host.serial.close', port: 'h1' },
+      ]);
+    });
+
+    it('gives null when the person cancelled the choice', async () => {
+      const { serial } = frame(() => ({ ok: false, error: 'serial-cancelled' }));
+      await expect(serial.choose()).resolves.toBeNull();
+    });
+
+    it('rejects with the refusal code for any other refusal', async () => {
+      const { serial } = frame(() => ({ ok: false, error: 'serial-not-granted' }));
+      await expect(serial.choose()).rejects.toThrow('serial-not-granted');
+      await expect(serial.ports()).rejects.toThrow('serial-not-granted');
+      await expect(serial.open('h1', { baudRate: 9600 })).rejects.toThrow('serial-not-granted');
+      await expect(serial.read('h1')).rejects.toThrow('serial-not-granted');
+      await expect(serial.write('h1', new Uint8Array([1]))).rejects.toThrow('serial-not-granted');
+      await expect(serial.close('h1')).rejects.toThrow('serial-not-granted');
+      // A cancelled answer is turned into null only for the choice.
+      const cancelled = frame(() => ({ ok: false, error: 'serial-cancelled' }));
+      await expect(cancelled.serial.read('h1')).rejects.toThrow('serial-cancelled');
+    });
+
+    it('passes read bytes through as a Uint8Array', async () => {
+      const { serial } = frame(() => ({ ok: true, data: { bytes: new Uint8Array([0, 127, 128, 255]), lost: true } }));
+      const got = await serial.read('h1');
+      expect(got.bytes).toBeInstanceOf(Uint8Array);
+      expect(Array.from(got.bytes)).toEqual([0, 127, 128, 255]);
+      expect(got.lost).toBe(true);
+    });
+
+    it('is not changed by a later change to the caller\'s array', async () => {
+      const { serial, sent } = frame(() => ({ ok: true, data: null }));
+      const mine = new Uint8Array([1, 2, 3]);
+      await serial.write('h1', mine);
+      mine[0] = 99;
+      expect(Array.from(sent[0]!.bytes as Uint8Array)).toEqual([1, 2, 3]);
+    });
+
+    /** The toolkit text across a real MessageChannel, with a host on the other port that keeps what it gets. */
+    function realChannel() {
+      let handler: ((ev: unknown) => void) | undefined;
+      const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      new Function('window', SDK_BOOTSTRAP_V1)(win);
+      const channel = new MessageChannel();
+      const got: Array<{ kind: string } & Record<string, unknown>> = [];
+      channel.port1.onmessage = (ev: MessageEvent) => {
+        const { id, op } = ev.data as { id: number; op: { kind: string } & Record<string, unknown> };
+        got.push(op);
+        const data = op.kind === 'host.serial.read' ? { bytes: new Uint8Array([0, 255]), lost: false } : op.kind === 'host.serial.ports' ? [{ port: 'h1', label: 'COM3' }] : op.kind === 'host.serial.choose' ? { port: 'h1', label: 'COM3' } : null;
+        channel.port1.postMessage({ id, result: { ok: true, data } });
+      };
+      handler!({ data: { type: 'openldr:init', context: { pluginId: 'p' } }, ports: [channel.port2] });
+      const close = () => { channel.port1.close(); channel.port2.close(); };
+      return { serial: (win as unknown as { openldr: { serial: Serial } }).openldr.serial, got, close };
+    }
+
+    it('works when the emitted toolkit text runs across a real MessageChannel', async () => {
+      const { serial, got, close } = realChannel();
+      try {
+        await expect(serial.ports()).resolves.toEqual([{ port: 'h1', label: 'COM3' }]);
+        await expect(serial.choose()).resolves.toEqual({ port: 'h1', label: 'COM3' });
+        await expect(serial.open('h1', { baudRate: 9600 })).resolves.toBeUndefined();
+        await expect(serial.write('h1', new Uint8Array([7, 8]))).resolves.toBeUndefined();
+        const read = await serial.read('h1', 10);
+        expect(Array.from(read.bytes)).toEqual([0, 255]);
+        await expect(serial.close('h1')).resolves.toBeUndefined();
+        expect(got.map((op) => op.kind)).toEqual(['host.serial.ports', 'host.serial.choose', 'host.serial.open', 'host.serial.write', 'host.serial.read', 'host.serial.close']);
+      } finally { close(); }
+    });
+
+    it('sends only the bytes of a view, not its whole buffer', async () => {
+      const { serial, got, close } = realChannel();
+      try {
+        const big = new Uint8Array(1024 * 1024);
+        big.set([5, 6, 7], 10);
+        await serial.write('h1', big.subarray(10, 13));
+        const bytes = got[0]!.bytes as Uint8Array;
+        expect(Array.from(bytes)).toEqual([5, 6, 7]);
+        expect(bytes.buffer.byteLength).toBe(3);
+      } finally { close(); }
+    });
+
+    it('sends only the bytes of a view made in another frame', async () => {
+      const { serial, got, close } = realChannel();
+      try {
+        // A Uint8Array from another realm, as a plugin gets from a nested frame or a worker. It is
+        // not an instance of this realm's Uint8Array.
+        const foreign = runInNewContext('const big = new Uint8Array(1024 * 1024); big.set([5, 6, 7], 10); big.subarray(10, 13)') as Uint8Array;
+        expect(foreign instanceof Uint8Array).toBe(false);
+        await serial.write('h1', foreign);
+        const bytes = got[0]!.bytes as Uint8Array;
+        expect(Array.from(bytes)).toEqual([5, 6, 7]);
+        expect(bytes.buffer.byteLength).toBe(3);
+      } finally { close(); }
+    });
+
+    it('keeps bytes 0 and 255 as they are', async () => {
+      const { serial, got, close } = realChannel();
+      try {
+        await serial.write('h1', new Uint8Array([0, 255, 0, 255]));
+        expect(Array.from(got[0]!.bytes as Uint8Array)).toEqual([0, 255, 0, 255]);
+        expect(Array.from((await serial.read('h1')).bytes)).toEqual([0, 255]);
+      } finally { close(); }
+    });
   });
 
   it('defines window.openldr SYNCHRONOUSLY (before any openldr:init) so screens never race the injection', () => {

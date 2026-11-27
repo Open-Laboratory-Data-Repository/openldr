@@ -15,6 +15,62 @@ function linkedPorts(): [HostPortLike, { post(m: unknown): void; onmessage: ((e:
 }
 
 describe('wireHostPort', () => {
+  describe('serial', () => {
+    const op = { kind: 'host.serial.read', port: 'h1', waitMs: 0 };
+
+    it('sends a host.serial op to the serial gate and posts its answer', async () => {
+      const [host, peer] = linkedPorts();
+      const call = vi.fn(async () => ({ ok: true as const, data: null }));
+      const bytes = new Uint8Array([0, 255]);
+      const handle = vi.fn(async () => ({ ok: true as const, data: { bytes, lost: false } }));
+      wireHostPort(host, { call, serial: { handle, closeAll: async () => {}, open: () => [], waitingWrites: () => 0 } });
+      const replies: any[] = [];
+      peer.onmessage = (e) => replies.push(e.data);
+      peer.post({ id: 3, op });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(handle).toHaveBeenCalledWith(op);
+      expect(replies).toEqual([{ id: 3, result: { ok: true, data: { bytes, lost: false } } }]);
+    });
+
+    it('refuses a host.serial op with serial-unavailable when there is no gate', async () => {
+      const [host, peer] = linkedPorts();
+      wireHostPort(host, { call: vi.fn(async () => ({ ok: true as const, data: null })) });
+      const replies: any[] = [];
+      peer.onmessage = (e) => replies.push(e.data);
+      for (const kind of ['host.serial.ports', 'host.serial.choose', 'host.serial.open', 'host.serial.read', 'host.serial.write', 'host.serial.close']) peer.post({ id: 1, op: { kind } });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(replies).toHaveLength(6);
+      for (const r of replies) expect(r).toEqual({ id: 1, result: { ok: false, error: 'serial-unavailable' } });
+    });
+
+    it('never sends a host.serial op to the server', async () => {
+      const [host, peer] = linkedPorts();
+      const call = vi.fn(async () => ({ ok: true as const, data: null }));
+      wireHostPort(host, { call, serial: { handle: async () => ({ ok: true as const, data: null }), closeAll: async () => {}, open: () => [], waitingWrites: () => 0 } });
+      peer.onmessage = () => {};
+      peer.post({ id: 1, op: { kind: 'host.serial.write', port: 'h1', bytes: new Uint8Array([1]) } });
+      peer.post({ id: 2, op: { kind: 'host.serial.nonsense' } });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(call).not.toHaveBeenCalled();
+      const [bare, barePeer] = linkedPorts();
+      wireHostPort(bare, { call });
+      barePeer.onmessage = () => {};
+      barePeer.post({ id: 1, op: { kind: 'host.serial.write', port: 'h1', bytes: new Uint8Array([1]) } });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(call).not.toHaveBeenCalled();
+    });
+
+    it('answers ok false when the gate itself throws', async () => {
+      const [host, peer] = linkedPorts();
+      wireHostPort(host, { call: vi.fn(), serial: { handle: async () => { throw new Error('boom'); }, closeAll: async () => {}, open: () => [], waitingWrites: () => 0 } });
+      const replies: any[] = [];
+      peer.onmessage = (e) => replies.push(e.data);
+      peer.post({ id: 9, op });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(replies).toEqual([{ id: 9, result: { ok: false, error: 'serial-failed' } }]);
+    });
+  });
+
   it('forwards a plugin op to the broker call and replies with the result, correlated by id', async () => {
     const [host, peer] = linkedPorts();
     const call = vi.fn(async () => ({ ok: true as const, data: [{ id: 'r1' }] }));

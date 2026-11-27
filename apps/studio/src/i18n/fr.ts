@@ -1164,6 +1164,7 @@ export const fr: EnShape = {
         hostImport: 'Lire les connecteurs de base de données qu\'un administrateur autorise, et enregistrer ce qu\'elle importe',
         hostDb: 'Garder ses propres tables dans la base de données de CE, à part des tables de CE',
         hostCeRead: 'Lire les enregistrements de CE, comme les patients, les demandes et les résultats',
+        hostSerial: 'Utiliser un port série du PC, quand une personne en choisit un',
         none: 'aucun',
       },
       heading: 'Marketplace',
@@ -2838,6 +2839,12 @@ export const fr: EnShape = {
     noUi: "Cette extension ne fournit aucune interface.",
     loadFailed: "Impossible de charger la page de cette extension. Rechargez la page pour réessayer.",
     loadError: "Échec du chargement de l'interface de l'extension.",
+    serial: {
+      title: '{{plugin}} veut utiliser un port série',
+      body: 'Choisissez le port où le câble est branché. {{plugin}} pourra ensuite le lire et y écrire jusqu\'à la fermeture de cette page.',
+      choose: 'Choisir le port',
+      cancel: 'Annuler',
+    },
     sites: {
       menu: 'Emplacements',
       title: 'Emplacements de {{name}}',

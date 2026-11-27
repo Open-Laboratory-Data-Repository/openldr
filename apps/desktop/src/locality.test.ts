@@ -152,6 +152,40 @@ describe('linkTarget', () => {
 describe('mayGrantPermission', () => {
   const launcher = 'http://127.0.0.1:3990/studio/';
 
+  it('grants serial to the trusted address and to nothing else', () => {
+    const main = { isMainWindow: true, isMainFrame: true };
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3990/studio/x/analyzer', launcher, false, main)).toBe(true);
+    expect(mayGrantPermission('serial', 'https://labpc:3443/studio/x/analyzer', 'https://labpc:3443/studio/', true, main)).toBe(true);
+    // Another origin, another port, the app's own page, no address, and a server the app is not connected to.
+    expect(mayGrantPermission('serial', 'https://example.org/', launcher, false, main)).toBe(false);
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3991/studio/', launcher, false, main)).toBe(false);
+    expect(mayGrantPermission('serial', 'file:///opt/openldr-desktop/pages/page.html', launcher, false, main)).toBe(false);
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3990/studio/', undefined, false, main)).toBe(false);
+    expect(mayGrantPermission('serial', 'https://labpc:3443/studio/', 'https://labpc:3443/studio/', false, main)).toBe(false);
+    // Plain http that is not this PC, also in connect mode.
+    expect(mayGrantPermission('serial', 'http://labpc:3080/studio/', 'http://labpc:3080/studio/', true, main)).toBe(false);
+    // With nothing known about where it comes from, it is refused.
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3990/studio/x/analyzer', launcher)).toBe(false);
+  });
+
+  it('grants serial only to the main frame of the main window, when that is known', () => {
+    const page = 'http://127.0.0.1:3990/studio/x/analyzer';
+    expect(mayGrantPermission('serial', page, launcher, false, { isMainWindow: true, isMainFrame: true })).toBe(true);
+    // A frame inside the page, on the same address.
+    expect(mayGrantPermission('serial', page, launcher, false, { isMainWindow: true, isMainFrame: false })).toBe(false);
+    // Another window of the app, such as the PIN window or the port window.
+    expect(mayGrantPermission('serial', page, launcher, false, { isMainWindow: false, isMainFrame: true })).toBe(false);
+    // The clipboard write is not changed by where it comes from.
+    expect(mayGrantPermission('clipboard-sanitized-write', page, launcher, false, { isMainWindow: true, isMainFrame: false })).toBe(true);
+  });
+
+  it('still refuses every other device permission', () => {
+    for (const permission of ['usb', 'hid', 'bluetooth', 'media', 'geolocation', 'notifications', 'midi', 'clipboard-read', 'serial-port', 'Serial']) {
+      expect(mayGrantPermission(permission, 'http://127.0.0.1:3990/studio/', launcher), permission).toBe(false);
+      expect(mayGrantPermission(permission, 'https://labpc:3443/studio/', 'https://labpc:3443/studio/', true), permission).toBe(false);
+    }
+  });
+
   it('allows a sanitized clipboard write from the window\'s own address on this computer', () => {
     expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3990/studio/users', launcher)).toBe(true);
     expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3990', launcher)).toBe(true);
@@ -267,7 +301,8 @@ describe('connect mode: the window trusts one named server', () => {
     expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3000/studio/x', 'http://127.0.0.1:3000/studio/', true)).toBe(true);
   });
 
-  it.each(['clipboard-read', 'media', 'geolocation', 'notifications', 'serial', 'fullscreen', 'openExternal', 'pointerLock'])('still refuses %s in connect mode', (p) => {
+  // 'serial' left this list on 2026-11-27: the serial ports plan grants it to the connected server.
+  it.each(['clipboard-read', 'media', 'geolocation', 'notifications', 'usb', 'hid', 'fullscreen', 'openExternal', 'pointerLock'])('still refuses %s in connect mode', (p) => {
     expect(mayGrantPermission(p, 'https://labpc:3443/x', SERVER, true)).toBe(false);
   });
 

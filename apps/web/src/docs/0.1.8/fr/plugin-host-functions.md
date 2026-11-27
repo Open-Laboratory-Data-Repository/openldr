@@ -231,3 +231,106 @@ host::fhir_emit(&[json!({ "resourceType": "Observation", "id": "obs-1", "status"
 ```
 
 `HostError` contient le `code` et le `message` de CE. Le plugin de test dans `wasm/test-sink`, construit avec la fonctionnalité `host`, appelle chaque fonction.
+
+## Ports série pour la page d'un plugin
+
+La page d'un plugin peut lire et écrire un port série du PC où elle s'exécute, en octets bruts. C'est fait pour une page qui dialogue avec un instrument par un câble. Les appels sont sur `window.openldr.serial`, dans la page, et non dans le code serveur du plugin. Studio détient le port et fait chaque contrôle. Ces appels n'envoient aucun octet au serveur. Ce que votre plugin fait ensuite des octets, comme enregistrer un résultat, lui appartient.
+
+Le plugin a besoin de la capacité `host:serial`. [Permissions des plugins](/docs/plugin-permissions) indique ce que voit l'administrateur.
+
+Cela fonctionne là où le navigateur a la fonction série : Chrome et Edge, sur une adresse `https` ou sur l'adresse de ce PC, et l'application de bureau OpenLDR. Firefox et Safari ne l'ont pas. Chaque appel y est refusé avec `serial-unavailable`.
+
+### Les six appels
+
+| Appel | Ce qu'il fait |
+|---|---|
+| `ports()` | Les ports donnés à cette page depuis son chargement, sous la forme `{ port, label }`. Vide tant qu'une personne n'en a pas choisi. |
+| `choose()` | Studio pose la question à la personne, en nommant le plugin, puis affiche la liste des ports. Donne `{ port, label }`, ou `null` si la personne a annulé. |
+| `open(port, settings)` | Ouvre un port choisi. |
+| `read(port, waitMs)` | Donne `{ bytes, lost }`. `bytes` est un `Uint8Array` de ce qui est arrivé, 65 536 octets au plus. Avec `waitMs`, l'appel attend jusqu'à ce délai un premier octet. Sans lui, il répond tout de suite. |
+| `write(port, bytes)` | Envoie un `Uint8Array` de 1 à 65 536 octets. Se termine quand la sortie du port les a pris. |
+| `close(port)` | Ferme le port. Le même `port` peut être rouvert tant que cette page reste chargée, que le plugin garde sa capacité et que l'appareil est toujours là. |
+
+`port` est un identifiant que Studio invente pour cette seule page. Ce n'est pas le nom du port, et il ne sert à rien pour une autre page.
+
+Une personne choisit le port à chaque fois. Rien n'en choisit un tout seul, et un port n'est pas retenu après un rechargement.
+
+### Réglages
+
+| Champ | Valeurs | Par défaut |
+|---|---|---|
+| `baudRate` | un nombre entier de 300 à 921600 | aucune, il est obligatoire |
+| `dataBits` | 7 ou 8 | 8 |
+| `stopBits` | 1 ou 2 | 1 |
+| `parity` | `none`, `even`, `odd` | `none` |
+| `flowControl` | `none`, `hardware` | `none` |
+
+Tout autre champ est refusé. Il n'y a pas de lignes de contrôle : ni DTR, ni RTS, ni break.
+
+### Limites
+
+| Limite | Valeur |
+|---|---|
+| Ports ouverts, en cours d'ouverture ou de fermeture, pour une page de plugin | 2 |
+| Octets rendus par une lecture | 65 536 |
+| Octets en attente de lecture, par port | 1 048 576 |
+| Octets pris par une écriture | 65 536 |
+| Octets en attente d'envoi, par port | 1 048 576 |
+| Attente la plus longue pour une lecture | 30 000 ms |
+
+### Refus
+
+Un appel refusé échoue avec une `Error` dont le message est l'un de ces codes. `choose()` est la seule exception : une annulation donne `null`.
+
+| Code | Sens |
+|---|---|
+| `serial-not-granted` | Le plugin n'a pas `host:serial`, ou Studio ne le sait pas encore, ou la capacité a été retirée. |
+| `serial-unavailable` | Le navigateur n'a pas la fonction série ici, ou a refusé pour des raisons de sécurité. |
+| `serial-cancelled` | La personne a annulé. Visible seulement comme `null` de `choose()`. |
+| `serial-unknown-port` | L'identifiant n'est pas l'un de ceux de cette page, ou le port n'est pas ouvert. |
+| `serial-busy` | Le port est déjà ouvert ou en cours d'ouverture, ici ou dans une autre page, ou sa dernière fermeture n'est pas terminée. Ou une lecture attend déjà dessus. Ou une autre question de port est ouverte. |
+| `serial-too-many` | Deux ports sont déjà ouverts, en cours d'ouverture ou de fermeture. |
+| `serial-too-large` | Les octets ne sont pas un `Uint8Array`, sont vides, dépassent 65 536, ou la file d'envoi est pleine. |
+| `serial-bad-settings` | Les réglages ne suivent pas le tableau ci-dessus. |
+| `serial-closed` | Le port a été fermé, ou le câble retiré, pendant que l'appel attendait. |
+| `serial-failed` | L'appareil ou le système a refusé : une ouverture qui échoue, une erreur d'entrée-sortie. |
+
+### Ce que votre page doit gérer
+
+- **Un choix annulé.** `choose()` donne `null`. Laissez la personne où elle était.
+- **Une liaison coupée.** Un câble retiré ou une erreur d'entrée-sortie termine une lecture en attente avec `serial-closed`. L'identifiant est alors mort, sans rechargement : les appels suivants donnent `serial-unknown-port`. Demandez à la personne de choisir le port de nouveau.
+- **Des octets perdus.** Quand 1 048 576 octets attendent sans être lus, Studio supprime tout ce qui n'est pas lu. La lecture suivante ne donne aucun octet et `lost: true`, une fois. Les octets suivants arrivent comme d'habitude. Recommencez votre découpage : les octets d'avant et d'après le trou ne sont jamais réunis.
+- **Un rechargement.** Chaque chargement de la page commence sans port. La personne choisit de nouveau.
+- **Attendez les écritures avant de fermer.** La promesse d'une écriture est résolue quand la sortie du port a pris les octets. Cela ne veut pas dire que l'instrument les a reçus ou y a répondu. `close()` n'attend pas les écritures non terminées, donc attendez-les d'abord.
+- **La capacité qui disparaît.** Tant qu'un port est ouvert, Studio interroge le serveur une fois par minute. Une vérification sans réponse ne change rien et est refaite une minute plus tard. Quand une vérification montre que le plugin a été désactivé, mis à niveau ou a perdu la capacité, le port se ferme, son identifiant est mort et les appels donnent `serial-not-granted`.
+
+### Exemple
+
+```js
+async function readFromInstrument() {
+  await window.openldr.ready;
+  const serial = window.openldr.serial;
+
+  const chosen = await serial.choose();      // null when the person cancelled
+  if (!chosen) return;
+  await serial.open(chosen.port, { baudRate: 9600 });
+
+  let buffer = [];
+  for (;;) {
+    let read;
+    try {
+      read = await serial.read(chosen.port, 5000);   // waits up to 5 seconds for a first byte
+    } catch (err) {
+      // 'serial-closed': the cable was pulled or the port was closed. Ask the person to choose again.
+      break;
+    }
+    if (read.lost) buffer = [];                      // bytes were dropped: start the framing again
+    buffer.push(...read.bytes);
+    // ...cut whole messages out of buffer here...
+  }
+}
+```
+
+### Non prouvé
+
+Ces appels ont été exécutés dans Chrome 158 et dans l'application de bureau sous Linux, jusqu'au choix d'un port. Aucun port n'a été ouvert : le PC de test n'avait pas d'appareil série. Un vrai câble, un vrai automate, Edge, Windows et macOS n'ont pas été essayés.

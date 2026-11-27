@@ -216,6 +216,31 @@ To block the system's keys on Windows, run the app as the kiosk program of a sep
 
 The app unlocks with no PIN once the entry is gone. To reach the file from a locked PC, use the system's own keys to open a file window, or sign out and sign in with another account that can reach it.
 
+## Serial ports
+
+A plugin page may need a serial port, for example to talk to an analyser over a cable. The app asks you which port, every time.
+
+1. The plugin's page asks for a port. Studio shows **<plugin> wants to use a serial port**.
+2. Select **Choose port**. The app opens a small window, **Choose a serial port**, with the ports of this PC.
+3. Select the row for the cable. The port you chose last time is selected already and says **used last time**.
+4. Select **Use this port**.
+
+**Cancel** in either window gives the plugin no port. With no port found, the window says so, and the list fills in by itself when a cable is plugged in.
+
+The plugin keeps the port until its page closes. The port is let go of when you leave or reload the page, when you quit the app, when the cable is pulled out, and when the plugin is turned off or updated. After any of these you choose the port again. The app never picks a port by itself.
+
+The list holds every serial device the system knows, paired Bluetooth devices included. Pick the one for your cable.
+
+On Linux, your user must be allowed to use serial devices. On most systems that means being in the `dialout` group:
+
+```sh
+sudo usermod -aG dialout "$USER"
+```
+
+Sign out and in again afterwards.
+
+This was run on Linux up to the choice of a port. No port was opened, because the test PC had no serial device. Windows and macOS were not run.
+
 ## Update
 
 Quit OpenLDR, then run the install line again. It replaces the app and leaves the data folder alone. The next start updates the database.
