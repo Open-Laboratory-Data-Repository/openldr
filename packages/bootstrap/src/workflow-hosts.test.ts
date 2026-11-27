@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TrustActor } from './network-trust';
-import { BAD_HOST, createWorkflowHosts, KEY_HOSTS, KEY_SELF, selfOrigin, SERVER_HOST, type WorkflowHostsDeps } from './workflow-hosts';
+import { guardedFetch } from '@openldr/workflows';
+import { BAD_HOST, createWorkflowHosts, KEY_HOSTS, KEY_SELF, selfOrigin, SERVER_HOST, WorkflowHostAuditFailed, type WorkflowHostsDeps } from './workflow-hosts';
 
 const ACTOR: TrustActor = { actorType: 'user', actorId: 'u1', actorName: 'ada' };
 
@@ -188,9 +189,55 @@ describe('workflow hosts', () => {
     expect((await m.svc.rule()).hosts).toEqual(['b.example', 'ok.example']);
   });
 
-  it('says the change is made when the audit row cannot be written', async () => {
+  it('says the change is made and the audit row is not, when the audit row cannot be written', async () => {
     const m = make({ auditFails: true });
-    await expect(m.svc.add('a.example', ACTOR)).rejects.toThrow('audit down');
+    const added = await m.svc.add('a.example', ACTOR).catch((e: unknown) => e);
+    expect(added).toBeInstanceOf(WorkflowHostAuditFailed);
+    expect(added).toMatchObject({ action: 'network.workflow_host.add', detail: 'a.example', actor: ACTOR });
+    expect((added as WorkflowHostAuditFailed).cause).toMatchObject({ message: 'audit down' });
     expect((await m.svc.rule()).hosts).toEqual(['a.example']);
+    expect(await m.svc.remove('a.example', ACTOR).catch((e: unknown) => e)).toMatchObject({ action: 'network.workflow_host.remove', detail: 'a.example' });
+    expect(await m.svc.setSelf(true, ACTOR).catch((e: unknown) => e)).toMatchObject({ action: 'network.workflow_self.set', detail: 'on' });
+    expect(await m.svc.rule()).toEqual({ hosts: [], origins: ['http://127.0.0.1:3000'] });
+    // A second try changes nothing, so it has no audit row to fail on.
+    await m.svc.setSelf(true, ACTOR);
+  });
+
+  it.each([
+    ['0:0:0:0:0:0:0:1', '::1'],
+    ['[0:0:0:0:0:0:0:1]', '::1'],
+    ['FD00:0000:0000:0000:0000:0000:0000:0020', 'fd00::20'],
+    ['::ffff:10.0.0.5', '::ffff:a00:5'],
+  ])('stores the IPv6 address %s the way a URL writes it, %s', async (typed, kept) => {
+    const m = make();
+    await m.svc.add(typed, ACTOR);
+    expect(await m.svc.list()).toEqual([{ host: kept, source: 'setting' }]);
+    // Typed again in any form, it is the same host.
+    await m.svc.add(typed.toUpperCase(), ACTOR);
+    expect(m.audits).toHaveLength(1);
+    await m.svc.remove(typed, ACTOR);
+    expect(await m.svc.list()).toEqual([]);
+  });
+
+  it('an IPv6 host added in long form lets the HTTP step reach it', async () => {
+    const m = make();
+    await m.svc.add('fd00:0:0:0:0:0:0:20', ACTOR);
+    const ok = (async () => new Response('{}', { status: 200 })) as unknown as typeof fetch;
+    await expect(guardedFetch({ url: 'http://[fd00::20]:8080/x' }, await m.svc.rule(), ok)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://[FD00:0000::0020]/x' }, await m.svc.rule(), ok)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://[fd00::21]/x' }, await m.svc.rule(), ok)).rejects.toThrow(/not allowed/);
+  });
+
+  it('an IPv6 host in the server setting, in long form, is matched too', async () => {
+    const m = make({ serverList: '0:0:0:0:0:0:0:1, [FD00:0:0:0:0:0:0:20]' });
+    expect((await m.svc.list()).map((r) => r.host)).toEqual(['::1', 'fd00::20']);
+    const ok = (async () => new Response('{}', { status: 200 })) as unknown as typeof fetch;
+    await expect(guardedFetch({ url: 'http://[::1]:9/x' }, await m.svc.rule(), ok)).resolves.toBeDefined();
+    await expect(m.svc.remove('::1', ACTOR)).rejects.toThrow(SERVER_HOST);
+  });
+
+  it.each(['010.0.0.1', '2130706433', '0x7f.0.0.1', '127.1'])('refuses %j, which a URL would read as another address', async (host) => {
+    const m = make();
+    await expect(m.svc.add(host, ACTOR)).rejects.toThrow(BAD_HOST);
   });
 });

@@ -299,4 +299,11 @@ describe('guardedFetch', () => {
     await expect(guardedFetch({ url: 'http://a.example/x' }, allow, okFetch as never)).resolves.toBeDefined();
     await expect(guardedFetch({ url: 'http://b.example/x' }, allow, okFetch as never)).rejects.toThrow(/not allowed/);
   });
+
+  it('matches an IPv6 host written in long form, in the rule or in the old list', async () => {
+    await expect(guardedFetch({ url: 'http://[::1]:9/x' }, { hosts: ['0:0:0:0:0:0:0:1'], origins: [] }, okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://[fd00::20]/x' }, 'FD00:0000:0000:0000:0000:0000:0000:0020', okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://[fd00:0:0:0:0:0:0:20]/x' }, '[fd00::20]', okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://[::2]/x' }, { hosts: ['0:0:0:0:0:0:0:1'], origins: [] }, okFetch as never)).rejects.toThrow(/not allowed/);
+  });
 });

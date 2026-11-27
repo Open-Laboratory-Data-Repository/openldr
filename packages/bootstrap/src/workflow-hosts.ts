@@ -9,7 +9,7 @@
  */
 import { isIP } from 'node:net';
 import type { AppSettingStore, AppSettingUpdater } from '@openldr/db';
-import { parseAllowlist, type HttpAllowRule } from '@openldr/workflows';
+import { canonicalHost, parseAllowlist, type HttpAllowRule } from '@openldr/workflows';
 import type { TrustActor } from './network-trust';
 
 /** A JSON array of host names. Local to this install: it never syncs. */
@@ -19,6 +19,25 @@ export const KEY_SELF = 'workflows.http_self';
 
 export const BAD_HOST = 'Type a host name or an IP address, with no port and no path.';
 export const SERVER_HOST = 'This host comes from the server setting WORKFLOW_HTTP_ALLOWLIST.';
+
+export type WorkflowHostAuditAction = 'network.workflow_host.add' | 'network.workflow_host.remove' | 'network.workflow_self.set';
+
+/**
+ * The setting is changed, and the audit row for the change could not be written. The change
+ * stands: trying again changes nothing and so writes no row. The caller must say both things, and
+ * must keep a durable line of who changed what.
+ */
+export class WorkflowHostAuditFailed extends Error {
+  constructor(
+    readonly action: WorkflowHostAuditAction,
+    readonly detail: string,
+    readonly actor: TrustActor,
+    cause: unknown,
+  ) {
+    super('The change was made, but its audit record could not be written.', { cause });
+    this.name = 'WorkflowHostAuditFailed';
+  }
+}
 
 export interface WorkflowHostRow {
   host: string;
@@ -44,7 +63,7 @@ export interface WorkflowHostsDeps {
   listenHost: string;
   /** cfg.PORT */
   port: number;
-  audit(action: 'network.workflow_host.add' | 'network.workflow_host.remove' | 'network.workflow_self.set', actor: TrustActor, detail: string): Promise<void>;
+  audit(action: WorkflowHostAuditAction, actor: TrustActor, detail: string): Promise<void>;
 }
 
 /**
@@ -64,10 +83,19 @@ const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 function hostOf(raw: string): string | undefined {
   const text = raw.trim().toLowerCase();
   const unwrapped = /^\[(.*)\]$/.exec(text);
-  if (unwrapped) return isIP(unwrapped[1] as string) === 6 ? unwrapped[1] : undefined;
-  if (isIP(text) !== 0) return text;
+  // An IPv6 address is kept in the short form a URL gives it, so it matches a request's URL.
+  if (unwrapped) return isIP(unwrapped[1] as string) === 6 ? canonicalHost(text) : undefined;
+  if (isIP(text) === 6) return canonicalHost(text);
+  if (isIP(text) === 4) return text;
   if (text.length === 0 || text.length > 253) return undefined;
-  return text.split('.').every((label) => LABEL.test(label)) ? text : undefined;
+  if (!text.split('.').every((label) => LABEL.test(label))) return undefined;
+  // A URL reads some names as numbers: `127.1`, `010.0.0.1` and `2130706433` all become another
+  // address. Such a name would be stored and never match, so it is refused.
+  try {
+    return new URL(`http://${text}`).hostname === text ? text : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function need(raw: string): string {
@@ -93,12 +121,19 @@ function parseStored(value: string | null | undefined): string[] {
 export function createWorkflowHosts(deps: WorkflowHostsDeps): WorkflowHosts {
   // The server setting is read as the HTTP step has always read it, so nothing it allowed is lost.
   // Both are worked out when asked for, as the HTTP step did, not when the context is built.
-  const server = (): string[] => [...new Set(parseAllowlist(deps.serverList))].sort();
+  const server = (): string[] => [...new Set(parseAllowlist(deps.serverList).map(canonicalHost))].sort();
   const origin = (): string => selfOrigin(deps.listenHost, deps.port);
 
   const stored = async (): Promise<string[]> => parseStored((await deps.appSettings.get(KEY_HOSTS))?.value);
   const selfOn = async (): Promise<boolean> => (await deps.appSettings.get(KEY_SELF))?.value === 'true';
   const by = (actor: TrustActor): string | null => actor.actorId ?? null;
+  const audited = async (action: WorkflowHostAuditAction, actor: TrustActor, detail: string): Promise<void> => {
+    try {
+      await deps.audit(action, actor, detail);
+    } catch (err) {
+      throw new WorkflowHostAuditFailed(action, detail, actor, err);
+    }
+  };
 
   return {
     async list() {
@@ -120,7 +155,7 @@ export function createWorkflowHosts(deps: WorkflowHostsDeps): WorkflowHosts {
         },
         by(actor),
       );
-      if (changed) await deps.audit('network.workflow_host.add', actor, host);
+      if (changed) await audited('network.workflow_host.add', actor, host);
     },
 
     async remove(raw, actor) {
@@ -136,7 +171,7 @@ export function createWorkflowHosts(deps: WorkflowHostsDeps): WorkflowHosts {
         },
         by(actor),
       );
-      if (changed) await deps.audit('network.workflow_host.remove', actor, host);
+      if (changed) await audited('network.workflow_host.remove', actor, host);
     },
 
     async self() {
@@ -153,7 +188,7 @@ export function createWorkflowHosts(deps: WorkflowHostsDeps): WorkflowHosts {
         },
         by(actor),
       );
-      if (changed) await deps.audit('network.workflow_self.set', actor, on ? 'on' : 'off');
+      if (changed) await audited('network.workflow_self.set', actor, on ? 'on' : 'off');
     },
 
     async rule() {

@@ -160,8 +160,20 @@ interface Allowed {
   origins: Set<string>;
 }
 
-/** An IPv6 host is written `[::1]` in a URL and `::1` by a person. Compare without the brackets. */
-const bare = (host: string): string => host.toLowerCase().replace(/^\[(.*)\]$/, '$1');
+/**
+ * A host in the one form used to compare: lower case, and an IPv6 address without brackets and
+ * in the short form a URL gives it. A person may write `0:0:0:0:0:0:0:1` or `[::1]`; the URL of a
+ * request always gives `[::1]`. Without this, an address typed in long form would never match.
+ */
+export function canonicalHost(raw: string): string {
+  const text = raw.trim().toLowerCase().replace(/^\[(.*)\]$/, '$1');
+  if (!text.includes(':')) return text;
+  try {
+    return new URL(`http://[${text}]`).hostname.replace(/^\[(.*)\]$/, '$1');
+  } catch {
+    return text;
+  }
+}
 
 function prepare(allow: string | HttpAllowRule): Allowed {
   const rule = typeof allow === 'string' ? { hosts: parseAllowlist(allow), origins: [] } : allow;
@@ -175,7 +187,7 @@ function prepare(allow: string | HttpAllowRule): Allowed {
       // Not a URL: it allows nothing.
     }
   }
-  return { hosts: new Set(rule.hosts.map((h) => bare(h.trim())).filter(Boolean)), origins };
+  return { hosts: new Set(rule.hosts.map(canonicalHost).filter(Boolean)), origins };
 }
 
 const MAX_REDIRECTS = 5;
@@ -199,7 +211,7 @@ function validateHop(rawUrl: string, allow: Allowed): URL {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error(`HTTP Request: unsupported URL scheme: ${parsed.protocol}`);
   }
-  const host = bare(parsed.hostname);
+  const host = canonicalHost(parsed.hostname);
   if (!allow.hosts.has(host) && !allow.origins.has(parsed.origin)) throw new Error(`HTTP host not allowed: ${host}`);
   return parsed;
 }
