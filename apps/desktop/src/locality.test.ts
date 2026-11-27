@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   frameTarget,
   isLocalAddress,
+  isTrustedAddress,
   linkTarget,
   mayAnswerStudio,
   mayGrantPermission,
@@ -227,5 +228,54 @@ describe('urlForLog', () => {
   it('gives a fixed word for a URL it cannot read', () => {
     expect(urlForLog('not a url token=PLANTED')).toBe('(unreadable address)');
     expect(urlForLog('')).toBe('(unreadable address)');
+  });
+});
+
+describe('connect mode: the window trusts one named server', () => {
+  const SERVER = 'https://labpc:3443/studio/';
+
+  it('grants the copy permission to the connected server in connect mode', () => {
+    expect(mayGrantPermission('clipboard-sanitized-write', 'https://labpc:3443/studio/x', SERVER, true)).toBe(true);
+  });
+
+  it('refuses it to the same address outside connect mode', () => {
+    expect(mayGrantPermission('clipboard-sanitized-write', 'https://labpc:3443/studio/x', SERVER)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'https://labpc:3443/studio/x', SERVER, false)).toBe(false);
+  });
+
+  it('refuses another origin, and a plain http server, in connect mode', () => {
+    expect(mayGrantPermission('clipboard-sanitized-write', 'https://other/x', SERVER, true)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'https://labpc:3444/x', SERVER, true)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://labpc:3443/x', SERVER, true)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://labpc/x', 'http://labpc/studio/', true)).toBe(false);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'https://labpc:3443/x', undefined, true)).toBe(false);
+  });
+
+  it('still grants it to this PC in either mode', () => {
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3000/studio/x', 'http://127.0.0.1:3000/studio/')).toBe(true);
+    expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3000/studio/x', 'http://127.0.0.1:3000/studio/', true)).toBe(true);
+  });
+
+  it.each(['clipboard-read', 'media', 'geolocation', 'notifications', 'serial', 'fullscreen', 'openExternal', 'pointerLock'])('still refuses %s in connect mode', (p) => {
+    expect(mayGrantPermission(p, 'https://labpc:3443/x', SERVER, true)).toBe(false);
+  });
+
+  it('says which shown address is trusted', () => {
+    expect(isTrustedAddress('http://127.0.0.1:3000/studio/', false)).toBe(true);
+    expect(isTrustedAddress(SERVER, true)).toBe(true);
+    expect(isTrustedAddress(SERVER, false)).toBe(false);
+    expect(isTrustedAddress('http://labpc/studio/', true)).toBe(false);
+    expect(isTrustedAddress('file:///etc/passwd', true)).toBe(false);
+    expect(isTrustedAddress('not an address', true)).toBe(false);
+  });
+
+  it('keeps links to the connected server inside and sends others to the browser', () => {
+    expect(linkTarget('https://labpc:3443/auth/realms/openldr', SERVER, [])).toBe('inside');
+    expect(linkTarget('https://example.org/', SERVER, [])).toBe('browser');
+    expect(frameTarget('https://example.org/', SERVER)).toBe('refuse');
+  });
+
+  it('never answers the bridge for a connected server', () => {
+    expect(mayAnswerStudio(SERVER, SERVER)).toBe(false);
   });
 });
