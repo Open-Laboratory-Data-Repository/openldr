@@ -8,7 +8,7 @@
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { homedir } from 'node:os';
+import { homedir, hostname, networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
@@ -37,9 +37,13 @@ import {
   readLock,
   releaseLock,
   resolveDataDir,
+  writeLockShare,
   type LockInfo,
+  type ShareInfo,
   type StandalonePaths,
 } from './state.js';
+import { loadOrCreateShareCert, shareNames, type MakeCert, type ShareCert } from './share-cert.js';
+import { startShareProxy, type ShareProxy } from './share-proxy.js';
 
 export type StopResult = 'clean' | 'forced';
 
@@ -56,6 +60,12 @@ export interface LauncherDeps {
   appVersion: string;
   /** The bundle's plain CLI entry (cliEntryFile), given to the server as CLI_ENTRY. */
   cliEntry: string;
+  /** This PC's name and network interfaces, for `--share`. Without it, the system's own. */
+  network?: () => { hostname: string; interfaces: NodeJS.Dict<NetworkInterfaceInfo[]> };
+  /** The HTTPS front for `--share`. Without it, the real one. */
+  startShareProxy?: typeof startShareProxy;
+  /** Makes the sharing certificate. Without it, the real maker. */
+  makeCert?: MakeCert;
   /**
    * Set with `--events-fd`: a program runs this launcher and reads its events. The start then makes
    * no setup code: that program asks for one itself, and none is printed where it reads.
@@ -71,6 +81,8 @@ export interface LauncherDeps {
 export interface Launcher {
   /** For example http://localhost:3000/studio/ */
   address: string;
+  /** Set when OpenLDR is shared on the lab network (`--share`). */
+  share?: ShareInfo;
   /**
    * Closes the server (waiting up to STOP_WAIT_MS, or not at all when forced), stops Postgres and
    * releases the lock. Runs once however often it is called. `stop(true)` during a stop that is
@@ -94,6 +106,9 @@ export const PENDING_RECHECK_MS = 10_000;
 /** How long `stop` waits for a running launcher to answer its stop request. */
 const STOP_REQUEST_MS = 90_000;
 const DEFAULT_PORT = 3000;
+export const DEFAULT_SHARE_PORT = 3443;
+/** Every address this computer has. The HTTPS front listens here. */
+const SHARE_HOST = '0.0.0.0';
 const DEFAULT_HOST = '127.0.0.1';
 /** Where a new install's Postgres port search starts. */
 const PREFERRED_PG_PORT = 54320;
@@ -284,14 +299,24 @@ function sameNames(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((name, i) => name === b[i]);
 }
 
-/** Binds the HTTP port for a moment, to fail with a clear message before Postgres starts. */
-function checkPortFree(host: string, port: number): Promise<void> {
+function sharePortTakenMessage(port: number): string {
+  return `Port ${port} is already in use. Choose another with --share-port.`;
+}
+
+/** The https addresses another PC can type: the PC's name when it has a usable one, then each address. */
+function shareAddresses(names: { dns: string[]; ips: string[] }, port: number): string[] {
+  const hosts = [...names.dns.filter((n) => n !== 'localhost'), ...names.ips.filter((ip) => ip !== '127.0.0.1')];
+  return hosts.map((host) => `https://${host}:${port}/studio/`);
+}
+
+/** Binds a port for a moment, to fail with a clear message before Postgres starts. */
+function checkPortFree(host: string, port: number, taken: (port: number) => string = portTakenMessage): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     const server = createServer();
     server.once('error', (err: NodeJS.ErrnoException) => {
       reject(
         err.code === 'EADDRINUSE'
-          ? new Error(portTakenMessage(port))
+          ? new Error(taken(port))
           : new Error(`Cannot listen on ${host} port ${port}: ${err.message}`),
       );
     });
@@ -347,7 +372,10 @@ async function liveLock(paths: StandalonePaths): Promise<LockInfo | null> {
 // ---------------------------------------------------------------------------------------------
 // start
 
-export async function runStart(opts: { dataDir?: string; port: number; host: string }, deps: LauncherDeps): Promise<Launcher> {
+export async function runStart(
+  opts: { dataDir?: string; port: number; host: string; share?: { port: number } },
+  deps: LauncherDeps,
+): Promise<Launcher> {
   // 1. The folders. Nothing is started before the studio build is known to be there.
   const paths = dataPaths(opts.dataDir);
   if (!existsSync(join(deps.studioDist, 'index.html'))) throw new Error(STUDIO_MISSING);
@@ -360,6 +388,8 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
   const secrets: string[] = [token];
 
   let server: RunningServer | undefined;
+  /** The HTTPS front, while OpenLDR is shared. */
+  let front: ShareProxy | undefined;
   let pg: RunningPostgres | undefined;
   let lockTaken = false;
   /** Removes each process listener this start added, apart from the two kinds of crash handler. */
@@ -433,6 +463,17 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     let result: StopResult = 'clean';
     const problems: string[] = [];
     const note = (what: string, err: unknown) => problems.push(`${what}: ${hideSecrets(err, secrets).message}`);
+    // The front first, so no other PC is let in while the server closes. A front that does not
+    // close never holds back the server, Postgres or the lock.
+    if (front) {
+      const running = front;
+      front = undefined;
+      try {
+        await running.close();
+      } catch (err) {
+        note('The front did not close cleanly', err);
+      }
+    }
     if (server) {
       const running = server;
       let timer: NodeJS.Timeout | undefined;
@@ -548,6 +589,7 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     // 5. The HTTP port, before Postgres. This leaves a gap; a taken port reported by the server
     //    itself gets the same message below.
     await checkPortFree(opts.host, opts.port);
+    if (opts.share) await checkPortFree(SHARE_HOST, opts.share.port, sharePortTakenMessage);
 
     // 6 and 7. Postgres.
     await deps.stopLeftoverPostgres({ clusterDir: paths.cluster, settings });
@@ -591,6 +633,19 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
 
     // 8. The environment and the config. The config comes from a copy of the environment, so
     //    loadConfig never reads a .env file.
+    // The sharing certificate, under the lock: two launchers must not both write it.
+    let shareCert: ShareCert | undefined;
+    let shareInfo: ShareInfo | undefined;
+    /** False when this PC has no address on any network: nobody else can reach it yet. */
+    let onNetwork = false;
+    if (opts.share) {
+      const net = (deps.network ?? (() => ({ hostname: hostname(), interfaces: networkInterfaces() })))();
+      const names = shareNames(net.hostname, net.interfaces);
+      onNetwork = names.ips.some((ip) => ip !== '127.0.0.1');
+      shareCert = await loadOrCreateShareCert(paths.shareDir, names, deps.now(), deps.makeCert);
+      shareInfo = { addresses: shareAddresses(names, opts.share.port), fingerprint: shareCert.fingerprint, certFile: shareCert.certFile };
+    }
+
     applyEnvironment(
       buildEnvironment({
         paths,
@@ -602,6 +657,7 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
         studioDist: deps.studioDist,
         appVersion: deps.appVersion,
         cliEntry: deps.cliEntry,
+        ...(shareCert ? { share: { certFile: shareCert.certFile } } : {}),
       }),
     );
     const cfg = loadConfig({ ...process.env });
@@ -674,14 +730,44 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       deps.print(`No administrator exists yet. Open the address and enter this setup code: ${code}`);
       deps.print('The setup code is valid for 30 minutes. For a new one run: openldr-standalone cli -- auth setup-code');
     }
+    // 12. The HTTPS front, once the server answers behind it. Then the lock says where it is.
+    if (opts.share && shareCert && shareInfo) {
+      try {
+        front = await (deps.startShareProxy ?? startShareProxy)({
+          host: SHARE_HOST,
+          port: opts.share.port,
+          certPem: shareCert.certPem,
+          keyPem: shareCert.keyPem,
+          upstreamPort: opts.port,
+        });
+      } catch (err) {
+        if (errorCode(err) === 'EADDRINUSE') throw new Error(sharePortTakenMessage(opts.share.port));
+        throw err;
+      }
+      await writeLockShare(paths, token, shareInfo);
+    }
+
     deps.print(`OpenLDR is running at ${address}`);
-    deps.emit?.({ event: 'ready', address });
+    if (shareInfo) {
+      const [first, ...others] = shareInfo.addresses;
+      // The PC's own name alone is not a network address: with no address, nobody can reach it.
+      if (first === undefined || !onNetwork) {
+        deps.print('No network address was found. Join a network, then start OpenLDR again.');
+      } else {
+        deps.print(`Shared on the lab network at ${first}`);
+        for (const other of others) deps.print(`Also at ${other}`);
+      }
+      deps.print(`Certificate fingerprint (SHA-256): ${shareInfo.fingerprint}`);
+      deps.print(`Certificate file: ${shareInfo.certFile}`);
+      deps.print('Another PC warns about the certificate the first time. Compare the fingerprint before you accept it.');
+    }
+    deps.emit?.({ event: 'ready', address, ...(shareInfo ? { share: shareInfo } : {}) });
     deps.print(`Server log: ${paths.serverLog}`);
-    if (!LOCAL_HOSTS.has(opts.host)) {
+    if (!shareInfo && !LOCAL_HOSTS.has(opts.host)) {
       deps.print(`Listening on ${opts.host}. Sign-in travels over plain HTTP on this network.`);
     }
     markStarted();
-    return { address, stop, done };
+    return { address, ...(shareInfo ? { share: shareInfo } : {}), stop, done };
   } catch (err) {
     // Server, Postgres, lock, listeners, then the control port.
     markStarted();
@@ -741,9 +827,16 @@ export async function runStatus(opts: { dataDir?: string; json?: boolean }, prin
   }
   print(
     opts.json
-      ? JSON.stringify({ dataDir, running: true, address: lock.address, ...(lock.host !== undefined ? { host: lock.host } : {}) })
+      ? JSON.stringify({
+          dataDir,
+          running: true,
+          address: lock.address,
+          ...(lock.host !== undefined ? { host: lock.host } : {}),
+          ...(lock.share !== undefined ? { share: lock.share } : {}),
+        })
       : `OpenLDR is running at ${lock.address}`,
   );
+  if (!opts.json && lock.share?.addresses[0] !== undefined) print(`Shared at ${lock.share.addresses[0]}`);
   return 0;
 }
 
@@ -1021,7 +1114,7 @@ export async function runCli(
 // The command line
 
 export type CommandLine =
-  | { command: 'start'; dataDir?: string; port: number; host: string; eventsFd?: number }
+  | { command: 'start'; dataDir?: string; port: number; host: string; eventsFd?: number; share?: { port: number } }
   | { command: 'stop'; dataDir?: string }
   | { command: 'status'; dataDir?: string; json?: boolean }
   | { command: 'cli'; dataDir?: string; args: string[] }
@@ -1040,6 +1133,7 @@ export const USAGE = [
   'Commands:',
   '  start    Start Postgres and the server. Ctrl+C stops both.',
   '           --data-dir <folder>  --port <port> (default 3000)  --host <address> (default 127.0.0.1)',
+  '           --share (open to the lab network over HTTPS)  --share-port <port> (default 3443)',
   '           --events-fd <n>  Write one JSON line per event to descriptor n (3 or higher).',
   '                            No setup code is made or printed.',
   '  stop     Stop the launcher running on the data folder.  --data-dir <folder>',
@@ -1049,10 +1143,10 @@ export const USAGE = [
   '           --data-dir <folder> goes before the --.',
 ].join('\n');
 
-function parsePort(text: string): number {
+function parsePort(text: string, flag = '--port'): number {
   const port = /^\d+$/.test(text) ? Number(text) : NaN;
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new UsageError('--port must be a whole number from 1 to 65535.');
+    throw new UsageError(`${flag} must be a whole number from 1 to 65535.`);
   }
   return port;
 }
@@ -1067,7 +1161,14 @@ function parseEventsFd(text: string): number {
 function parseOptions(command: 'start' | 'stop' | 'status', args: string[]) {
   const options: ParseArgsConfig['options'] =
     command === 'start'
-      ? { 'data-dir': { type: 'string' }, port: { type: 'string' }, host: { type: 'string' }, 'events-fd': { type: 'string' } }
+      ? {
+          'data-dir': { type: 'string' },
+          port: { type: 'string' },
+          host: { type: 'string' },
+          'events-fd': { type: 'string' },
+          share: { type: 'boolean' },
+          'share-port': { type: 'string' },
+        }
       : command === 'status'
         ? { 'data-dir': { type: 'string' }, json: { type: 'boolean' } }
         : { 'data-dir': { type: 'string' } };
@@ -1078,6 +1179,8 @@ function parseOptions(command: 'start' | 'stop' | 'status', args: string[]) {
       host?: string;
       'events-fd'?: string;
       json?: boolean;
+      share?: boolean;
+      'share-port'?: string;
     };
   } catch (err) {
     throw new UsageError(`${command}: ${errorMessage(err)}`);
@@ -1119,12 +1222,25 @@ export function parseCommandLine(argv: string[]): CommandLine {
     const values = parseOptions(command, rest);
     const dataDir = notBlank(command, '--data-dir', values['data-dir']);
     const eventsFd = values['events-fd'] === undefined ? undefined : parseEventsFd(values['events-fd']);
+    const port = values.port === undefined ? DEFAULT_PORT : parsePort(values.port);
+    const host = notBlank(command, '--host', values.host) ?? DEFAULT_HOST;
+    let share: { port: number } | undefined;
+    if (values.share === true) {
+      // The front reaches the server on 127.0.0.1 and nowhere else. `localhost` and `::1` can
+      // bind ::1, where the front does not look, and any other host is already on the network.
+      if (host !== DEFAULT_HOST) throw new UsageError('--share already opens OpenLDR to the network over HTTPS. Leave --host out.');
+      share = { port: values['share-port'] === undefined ? DEFAULT_SHARE_PORT : parsePort(values['share-port'], '--share-port') };
+      if (share.port === port) throw new UsageError('--share-port must differ from --port.');
+    } else if (values['share-port'] !== undefined) {
+      throw new UsageError('--share-port needs --share.');
+    }
     return {
       command,
-      port: values.port === undefined ? DEFAULT_PORT : parsePort(values.port),
-      host: notBlank(command, '--host', values.host) ?? DEFAULT_HOST,
+      port,
+      host,
       ...(dataDir !== undefined ? { dataDir } : {}),
       ...(eventsFd !== undefined ? { eventsFd } : {}),
+      ...(share !== undefined ? { share } : {}),
     };
   }
 

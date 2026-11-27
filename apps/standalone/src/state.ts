@@ -19,6 +19,8 @@ export interface StandalonePaths {
   work: string;
   stateFile: string;
   lockFile: string;
+  /** The sharing certificate and its key (share-cert.ts). Made on the first `start --share`. */
+  shareDir: string;
   /** The version of OpenLDR that last started this folder (data-version.ts). */
   versionFile: string;
   serverLog: string;
@@ -52,6 +54,18 @@ export interface LockInfo {
   /** The `--host` value the launcher was started with. Missing from locks written before it was
    *  added. The address alone cannot say this: `0.0.0.0` is shown as `localhost`. */
   host?: string;
+  /** Set while OpenLDR is shared on the lab network (`start --share`). Written once the HTTPS
+   *  front is listening, so a lock without it means not shared, or not shared yet. */
+  share?: ShareInfo;
+}
+
+/** What a running share looks like. In the lock, in `status --json` and in the `ready` event. */
+export interface ShareInfo {
+  /** https addresses ending in /studio/. The PC's name first when it has a valid one, then one per address. */
+  addresses: string[];
+  /** SHA-256 of the certificate, upper case hex pairs joined by colons. */
+  fingerprint: string;
+  certFile: string;
 }
 
 export class StateFileError extends Error {
@@ -125,6 +139,7 @@ export function pathsFor(root: string): StandalonePaths {
     work: join(root, 'work'),
     stateFile: join(root, 'standalone.json'),
     lockFile: join(root, 'standalone.lock'),
+    shareDir: join(root, 'share'),
     versionFile: join(root, 'last-version.json'),
     serverLog: join(logs, 'server.log'),
     postgresLog: join(logs, 'postgres.log'),
@@ -344,7 +359,38 @@ function parseLock(text: string): LockInfo | null {
   if (d.httpPort !== undefined) info.httpPort = d.httpPort;
   if (d.holder === 'recovery') info.holder = 'recovery';
   if (isNonEmptyString(d.host)) info.host = d.host;
+  const share = parseShare(d.share);
+  if (share) info.share = share;
   return info;
+}
+
+/** The share of a lock, or undefined when it is missing or malformed. A bad share never spoils the lock. */
+function parseShare(value: unknown): ShareInfo | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const v = value as Record<string, unknown>;
+  if (!Array.isArray(v.addresses) || !v.addresses.every(isNonEmptyString)) return undefined;
+  if (!isNonEmptyString(v.fingerprint) || !isNonEmptyString(v.certFile)) return undefined;
+  return { addresses: v.addresses as string[], fingerprint: v.fingerprint, certFile: v.certFile };
+}
+
+export const LOCK_NOT_HELD = 'The lock is not held by this launcher.';
+
+/**
+ * Writes `share` into the lock this launcher holds. Every other field stays as it is: the pid,
+ * the token, the control port and the start time, so `stop` and `status` still reach it. The new
+ * lock is written whole to a temp file and renamed over the old one, so a reader sees the old
+ * lock or the new one, never a part of either. Throws when the lock is not this launcher's.
+ */
+export async function writeLockShare(paths: StandalonePaths, token: string, share: ShareInfo): Promise<void> {
+  const current = await readLock(paths);
+  if (current?.token !== token) throw new Error(LOCK_NOT_HELD);
+  const tmp = tempPath(paths, 'standalone.lock');
+  try {
+    await writeOwnerOnly(tmp, `${JSON.stringify({ ...current, share })}\n`);
+    await rename(tmp, paths.lockFile);
+  } finally {
+    await rm(tmp, { force: true });
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

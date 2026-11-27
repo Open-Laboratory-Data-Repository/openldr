@@ -114,6 +114,31 @@ describe('local sign-in routes', () => {
       expect(String(r.headers['set-cookie'])).toContain('; Secure');
     });
 
+    // The standalone launcher's `--share` puts an HTTPS front on the same machine and sets
+    // TRUST_PROXY to exactly this value (apps/standalone/src/environment.ts).
+    it('trusts a front on 127.0.0.1: the cookie is Secure and the caller is the forwarded address', async () => {
+      const sharedApp = appFor(ctx, { trustProxy: '127.0.0.1' });
+      const r = await login(sharedApp, { username: 'ada', password: GOOD }, { 'x-forwarded-proto': 'https', 'x-forwarded-for': '192.168.1.50' });
+      expect(r.statusCode).toBe(200);
+      expect(String(r.headers['set-cookie'])).toContain('; Secure');
+      expect(fake.calls.login[0]).toMatchObject({ ip: '192.168.1.50' });
+      expect(events.find((e) => e.action === 'auth.login')).toMatchObject({ metadata: { ip: '192.168.1.50' } });
+    });
+
+    it('with that setting, does not trust the same headers from another machine', async () => {
+      const sharedApp = appFor(ctx, { trustProxy: '127.0.0.1' });
+      const r = await sharedApp.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'ada', password: GOOD },
+        headers: { 'x-forwarded-proto': 'https', 'x-forwarded-for': '192.168.1.50' },
+        remoteAddress: '10.0.0.9',
+      });
+      expect(r.statusCode).toBe(200);
+      expect(String(r.headers['set-cookie'])).not.toContain('Secure');
+      expect(fake.calls.login[0]).toMatchObject({ ip: '10.0.0.9' });
+    });
+
     it('does not trust x-forwarded-proto without TRUST_PROXY', async () => {
       const r = await login(app, { username: 'ada', password: GOOD }, { 'x-forwarded-proto': 'https' });
       expect(String(r.headers['set-cookie'])).not.toContain('Secure');

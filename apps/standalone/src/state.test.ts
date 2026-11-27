@@ -16,6 +16,7 @@ import {
   loadOrCreateState,
   pathsFor,
   readLock,
+  writeLockShare,
   releaseLock,
   resolveDataDir,
   type LockInfo,
@@ -114,6 +115,7 @@ describe('folders and state file', () => {
       work: '/d/work',
       stateFile: '/d/standalone.json',
       lockFile: '/d/standalone.lock',
+      shareDir: '/d/share',
       versionFile: '/d/last-version.json',
       serverLog: '/d/logs/server.log',
       postgresLog: '/d/logs/postgres.log',
@@ -224,6 +226,35 @@ describe('lock', () => {
     expect(old).not.toHaveProperty('httpPort');
     await writeFile(paths.lockFile, JSON.stringify({ ...base, httpPort: 0 }));
     expect(await readLock(paths)).toBeNull();
+  });
+
+  it('reads a well formed share and drops a malformed one', async () => {
+    const base = { pid: 1, address: 'http://localhost:80/studio/', startedAt: 's', controlPort: 40000, token: 't' };
+    const share = { addresses: ['https://labpc:3443/studio/'], fingerprint: 'AB:CD', certFile: '/d/share/cert.pem' };
+    await writeFile(paths.lockFile, JSON.stringify({ ...base, share }));
+    expect(await readLock(paths)).toEqual({ ...base, share });
+    for (const bad of [{ ...share, addresses: 'x' }, { ...share, addresses: [1] }, { ...share, fingerprint: '' }, { addresses: [] }, 'x']) {
+      await writeFile(paths.lockFile, JSON.stringify({ ...base, share: bad }));
+      expect(await readLock(paths)).toEqual(base);
+    }
+  });
+
+  it('writes the share into its own lock and changes nothing else', async () => {
+    const info = await liveLock(102);
+    await acquireLock(paths, info);
+    const share = { addresses: ['https://labpc:3443/studio/'], fingerprint: 'AB:CD', certFile: '/d/share/cert.pem' };
+    await writeLockShare(paths, info.token, share);
+    expect(await readLock(paths)).toEqual({ ...info, share });
+    if (!WINDOWS) expect(await mode(paths.lockFile)).toBe(0o600);
+    expect(await leftovers()).toEqual([]);
+  });
+
+  it('refuses to write the share into a lock it does not hold', async () => {
+    const info = await liveLock(103);
+    await acquireLock(paths, info);
+    const share = { addresses: [], fingerprint: 'AB', certFile: '/c' };
+    await expect(writeLockShare(paths, 'another-token', share)).rejects.toThrow('The lock is not held by this launcher.');
+    expect(await readLock(paths)).toEqual(info);
   });
 
   it.skipIf(WINDOWS)('writes the lock owner-only and reads it back', async () => {
