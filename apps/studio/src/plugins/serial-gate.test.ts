@@ -752,6 +752,58 @@ describe('serial gate: closing and losing a port', () => {
     expect(h.gate.waitingWrites()).toBe(0);
   });
 
+  it('does not open a port again while its old close is still under way', async () => {
+    const h = harness();
+    const a = fakePort();
+    const release = a.holdClose();
+    await h.openPort(a);
+    void h.gate.closeAll();
+    await settle();
+    // The grant still stands, so the page may choose again at once.
+    const again = await h.choose(a);
+    expect(await h.call({ kind: 'host.serial.open', port: again, settings: { baudRate: 9600 } })).toEqual(refused('serial-busy'));
+    expect(a.events.filter((e) => e === 'open')).toHaveLength(1);
+    release();
+    await settle();
+    expect(await h.call({ kind: 'host.serial.open', port: again, settings: { baudRate: 9600 } })).toEqual({ ok: true, data: null });
+  });
+
+  it('counts ports that are still closing against the limit of two', async () => {
+    const h = harness();
+    const a = fakePort();
+    const b = fakePort();
+    const releaseA = a.holdClose();
+    const releaseB = b.holdClose();
+    await h.openPort(a);
+    await h.openPort(b);
+    void h.gate.closeAll();
+    await settle();
+    const third = fakePort();
+    const handle = await h.choose(third);
+    expect(await h.call({ kind: 'host.serial.open', port: handle, settings: { baudRate: 9600 } })).toEqual(refused('serial-too-many'));
+    expect(third.events).toEqual([]);
+    releaseA();
+    await settle();
+    expect(await h.call({ kind: 'host.serial.open', port: handle, settings: { baudRate: 9600 } })).toEqual({ ok: true, data: null });
+    releaseB();
+  });
+
+  it('counts a port that was opening when the gate closed against the limit, until it is closed', async () => {
+    const h = harness();
+    const slow = fakePort();
+    const release = slow.holdOpen();
+    const first = await h.choose(slow);
+    const opening = h.call({ kind: 'host.serial.open', port: first, settings: { baudRate: 9600 } });
+    await settle();
+    await h.gate.closeAll();
+    await h.openPort(fakePort());
+    const third = await h.choose(fakePort());
+    expect(await h.call({ kind: 'host.serial.open', port: third, settings: { baudRate: 9600 } })).toEqual(refused('serial-too-many'));
+    release();
+    await opening;
+    expect(await h.call({ kind: 'host.serial.open', port: third, settings: { baudRate: 9600 } })).toEqual({ ok: true, data: null });
+  });
+
   it('closeAll closes every port and removes its listener', async () => {
     const h = harness();
     const a = fakePort();

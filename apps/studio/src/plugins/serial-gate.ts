@@ -252,9 +252,16 @@ export function createSerialGate(deps: SerialGateDeps): SerialGate {
 
   async function openPort(e: Entry, settings: PluginSerialSettings): Promise<PluginRpcResult> {
     if (checkSerialSettings(settings) !== null) return no('serial-bad-settings');
-    if (held(e) || deps.openElsewhere(e.port)) return no('serial-busy');
+    // Both checks go by every port this gate still owns, also one whose handle is dead and that
+    // is still closing, or still opening from before the gate was closed.
     let count = 0;
-    for (const other of entries.values()) if (held(other)) count++;
+    let samePort = false;
+    for (const other of owned) {
+      if (!held(other)) continue;
+      count++;
+      if (other.port === e.port) samePort = true;
+    }
+    if (samePort || deps.openElsewhere(e.port)) return no('serial-busy');
     if (count >= SERIAL_MAX_OPEN) return no('serial-too-many');
     const g = generation;
     // The slot is taken now, so a second open cannot slip in while this one waits.
