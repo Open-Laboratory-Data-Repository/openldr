@@ -12,6 +12,27 @@ on, saves the choice in its settings file, and restarts its launcher to apply it
 below names that folder. The web docs page `apps/web/src/docs/0.1.8/en/desktop-app.md`
 is the guide for people who install the app.
 
+## The two ways the app runs
+
+The app runs in one of two ways, saved as `mode` in its settings file.
+
+- `local`: this PC holds the lab's data. The app starts its launcher, as described above.
+- `connect`: the app shows an OpenLDR that runs on another PC. It starts no launcher, no server and
+  no database. The settings file holds the server's address and, for a certificate the system does
+  not trust, the fingerprint the person accepted.
+
+A first start on a PC with no install asks which one. A PC that already has an install stays
+`local` without a question. The tray switches between them, and asks first.
+
+In connect mode the app accepts one certificate beyond what the system trusts: the saved one, for
+the saved host only. Electron asks its certificate check once per certificate in a session and
+keeps the answer until the app ends. Nothing clears it (proved on Electron 45 on 2026-11-27). So
+the app checks a server in a session of its own, made for that fingerprint, and tells the window's
+session the fingerprint only when Studio is about to be shown. If the window still refuses a
+certificate that such a check accepts, the app starts itself again once.
+
+Studio's two calls to the app (`setupCode` and `info`) are refused in connect mode.
+
 This package is private. It is never published.
 
 ## Build and start from a checkout
@@ -64,7 +85,8 @@ These are for development and tests only.
 | `OPENLDR_DESKTOP_DATA_DIR` | The data folder, passed to the launcher as `--data-dir`. Without it the launcher uses its own default. |
 | `OPENLDR_DESKTOP_PORT` | Use exactly this port. The app remembers nothing. |
 | `OPENLDR_DESKTOP_USER_DIR` | The app's own folder (settings, log, browser profile). Without it, `OpenLDR Desktop` under the system's app data folder. |
-| `OPENLDR_DESKTOP_SELFCHECK` | A file path. The app writes one JSON object there about what it shows. It then does what `OPENLDR_DESKTOP_SELFCHECK_THEN` says, and quits when that is not set. |
+| `OPENLDR_DESKTOP_SERVER` | A server address. The app runs in connect mode with it, unless a mode is already saved. It is never written to the settings file. |
+| `OPENLDR_DESKTOP_SELFCHECK` | A file path. The app writes one JSON object there about what it shows, with its `mode` and `childProcesses`, the count of processes it started itself. It then does what `OPENLDR_DESKTOP_SELFCHECK_THEN` says, and quits when that is not set. |
 | `OPENLDR_DESKTOP_SELFCHECK_THEN` | What the app does after it writes the self-check file: `close` closes the window and keeps running, `stay` does nothing. Without it, the app quits. |
 
 From a worktree, also set `OPENLDR_SKIP_ENV_FILE=true`. Otherwise the server finds the main
