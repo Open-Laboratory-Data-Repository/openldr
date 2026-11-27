@@ -143,8 +143,7 @@ export function registerNetworkRoutes(app: FastifyInstance<any, any, any, any>, 
       return { error: 'invalid input' };
     }
     try {
-      await ctx.workflowHosts.setSelf(parsed.data.on, actorFromRequest(req));
-      return await ctx.workflowHosts.self();
+      return await ctx.workflowHosts.setSelf(parsed.data.on, actorFromRequest(req));
     } catch (err) {
       return refused(reply, err);
     }

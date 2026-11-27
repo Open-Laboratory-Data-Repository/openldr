@@ -50,7 +50,8 @@ export interface WorkflowHosts {
   add(host: string, actor: TrustActor): Promise<void>;
   remove(host: string, actor: TrustActor): Promise<void>;
   self(): Promise<{ on: boolean; origin: string }>;
-  setSelf(on: boolean, actor: TrustActor): Promise<void>;
+  /** Answers with what it applied. It does not read the setting again. */
+  setSelf(on: boolean, actor: TrustActor): Promise<{ on: boolean; origin: string }>;
   /** The rule in force right now. Read from the database on every call. */
   rule(): Promise<HttpAllowRule>;
 }
@@ -189,6 +190,7 @@ export function createWorkflowHosts(deps: WorkflowHostsDeps): WorkflowHosts {
         by(actor),
       );
       if (changed) await audited('network.workflow_self.set', actor, on ? 'on' : 'off');
+      return { on, origin: origin() };
     },
 
     async rule() {

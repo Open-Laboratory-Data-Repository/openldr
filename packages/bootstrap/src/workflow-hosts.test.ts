@@ -135,6 +135,20 @@ describe('workflow hosts', () => {
     expect(m.audits.at(-1)!.detail).toBe('off');
   });
 
+  it('the switch answers with what it applied, without reading the setting again', async () => {
+    const t = table();
+    let reads = 0;
+    const get = t.store.get;
+    t.store.get = async (key) => {
+      reads++;
+      return get(key);
+    };
+    const m = make({ store: t });
+    expect(await m.svc.setSelf(true, ACTOR)).toEqual({ on: true, origin: 'http://127.0.0.1:3000' });
+    expect(await m.svc.setSelf(false, ACTOR)).toEqual({ on: false, origin: 'http://127.0.0.1:3000' });
+    expect(reads).toBe(0);
+  });
+
   it('setting the switch to what it already is audits nothing', async () => {
     const m = make();
     await m.svc.setSelf(false, ACTOR);
