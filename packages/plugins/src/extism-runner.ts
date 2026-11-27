@@ -56,8 +56,6 @@ export function canRunOffThread(execArgv: readonly string[] = process.execArgv):
   return !execArgv.some((arg) => LOADER_FLAGS.some((flag) => arg === flag || arg.startsWith(`${flag}=`)));
 }
 
-/** Whether this call takes the worker path: always for pinned hosts, as before; for `offThread`
- *  only where `canRunOffThread` allows it. */
 /**
  * A fetch that never follows a redirect. The plugin gets the redirect answer itself (its 3xx
  * status) and decides what to do.
@@ -72,6 +70,8 @@ export function withoutRedirects(base: typeof fetch): typeof fetch {
   return ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => base(input, { ...init, redirect: 'manual' })) as typeof fetch;
 }
 
+/** Whether this call takes the worker path: always for pinned hosts, as before; for `offThread`
+ *  only where `canRunOffThread` allows it. */
 export function usesWorker(opts: Pick<RunOptions, 'allowedHosts' | 'offThread'>, execArgv: readonly string[] = process.execArgv): boolean {
   if ((opts.allowedHosts?.length ?? 0) > 0) return true;
   return opts.offThread === true && canRunOffThread(execArgv);
