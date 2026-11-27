@@ -6,7 +6,7 @@
 // Design: docs/superpowers/specs/2026-11-27-trusted-certificates-and-workflow-hosts-design.md
 
 import { randomBytes, X509Certificate } from 'node:crypto';
-import { link, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -132,6 +132,14 @@ export interface TrustDeps {
   loaded(): Promise<LoadedTrust>;
   /** The certificate a host presents, as PEM, or undefined when nothing answers. */
   readPeer(host: string, port: number): Promise<string | undefined>;
+  /**
+   * Guards one short step on the lock file: making it, letting go of it, or unlocking it. Each is
+   * a look at the file followed by a change to it, and two processes must not do those at the same
+   * moment. The app context gives a database lock for this (`runExclusive`), which a stopped
+   * process loses with its connection. It guards only these instants. The lock file itself is
+   * what holds a change from its read to its write, and what stays after a power cut.
+   */
+  transition<T>(work: () => Promise<T>): Promise<T>;
   /** How long a change waits for the lock. 10 seconds when not given. */
   lockWaitMs?: number;
   /** For `network.trust.unlock`, `fingerprint` is 'lock' and `subject` is the time the lock was made. */
@@ -236,33 +244,6 @@ export function readPeerCertificate(host: string, port: number, timeoutMs = 10_0
   });
 }
 
-/**
- * Removes the lock file only if it still holds `content`, the text the caller looked at. True
- * when it removed it.
- *
- * A file cannot be removed "if unchanged" in one step. So the file is first moved aside, which
- * only one caller can do, and then read. If it is another lock (a second unlock got there first
- * and a new change made its own), it is put back. If a third lock has appeared in that moment the
- * put-back fails, and the change that lost its lock refuses its write, because it checks the lock
- * is still its own.
- */
-export async function removeLockIfSame(lockFile: string, content: string): Promise<boolean> {
-  const aside = `${lockFile}.${randomBytes(8).toString('hex')}.unlock`;
-  try {
-    await rename(lockFile, aside);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw err;
-  }
-  try {
-    if ((await readFile(aside, 'utf8')) === content) return true;
-    await link(aside, lockFile).catch(() => {});
-    return false;
-  } finally {
-    await rm(aside, { force: true });
-  }
-}
-
 const LOCK_WAIT_MS = 10_000;
 const LOCK_STEP_MS = 50;
 const LOCK_STUCK_MS = 30_000;
@@ -270,15 +251,21 @@ const LOCK_STUCK_MS = 30_000;
 export function createTrustService(deps: TrustDeps): TrustService {
   const lockFile = `${deps.file ?? ''}.lock`;
 
-  /** The lock file as it is now, or undefined when there is none. */
+  /** The lock file as it is now, or undefined when there is none. Text and age come from one open file. */
   async function lockNow(): Promise<{ since: string; stuck: boolean; content: string } | undefined> {
     if (deps.file === undefined) return undefined;
+    let handle;
     try {
-      const content = await readFile(lockFile, 'utf8');
-      const made = (await stat(lockFile)).mtimeMs;
-      return { since: new Date(made).toISOString(), stuck: Date.now() - made > LOCK_STUCK_MS, content };
+      handle = await open(lockFile, 'r');
     } catch {
       return undefined;
+    }
+    try {
+      const made = (await handle.stat()).mtimeMs;
+      const content = await handle.readFile('utf8');
+      return { since: new Date(made).toISOString(), stuck: Date.now() - made > LOCK_STUCK_MS, content };
+    } finally {
+      await handle.close();
     }
   }
 
@@ -288,6 +275,9 @@ export function createTrustService(deps: TrustDeps): TrustService {
    * old: age does not prove the holder stopped, and taking a live holder's lock loses a change. A
    * lock that a power cut left behind stays until a person removes it with `unlock`.
    *
+   * Making the file and letting go of it each run inside `deps.transition`, as `unlock` does. So
+   * "look at the lock, then remove it" never runs beside another process making or removing one.
+   *
    * `mine` tells the work whether the lock is still this process's. It is not when a person
    * unlocked in the meantime.
    */
@@ -296,40 +286,49 @@ export function createTrustService(deps: TrustDeps): TrustService {
     const content = JSON.stringify({ token: randomBytes(16).toString('hex'), pid: process.pid });
     const deadline = Date.now() + (deps.lockWaitMs ?? LOCK_WAIT_MS);
     for (;;) {
-      let handle;
-      try {
-        handle = await open(lockFile, 'wx', 0o644);
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
-        if (Date.now() >= deadline) refuse('busy');
-        await sleep(LOCK_STEP_MS);
-        continue;
-      }
-      try {
-        await handle.writeFile(content);
-        await handle.close();
-      } catch (err) {
-        // This process made the file, so it may remove it. Otherwise it would be left behind. Only
-        // while it is still the empty file just made: never a lock another process made since.
-        await handle.close().catch(() => {});
-        await removeLockIfSame(lockFile, '').catch(() => {});
-        throw err;
-      }
-      break;
+      const made = await deps.transition(async () => {
+        let handle;
+        try {
+          handle = await open(lockFile, 'wx', 0o644);
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+          return false;
+        }
+        try {
+          await handle.writeFile(content);
+          await handle.close();
+        } catch (err) {
+          // Still inside the step, so the file is the one just made here. Remove it, or it would
+          // be left behind with nobody holding it.
+          await handle.close().catch(() => {});
+          await rm(lockFile, { force: true });
+          throw err;
+        }
+        return true;
+      });
+      if (made) break;
+      if (Date.now() >= deadline) refuse('busy');
+      await sleep(LOCK_STEP_MS);
     }
-    const mine = async (): Promise<boolean> => {
-      try {
-        return (await readFile(lockFile, 'utf8')) === content;
-      } catch {
-        return false;
-      }
-    };
+    const mine = async (): Promise<boolean> => (await lockNow())?.content === content;
+    let result: T;
     try {
-      return await work(mine);
-    } finally {
-      // Only this process's own lock. A person may have unlocked it, and a new change made its own.
-      await removeLockIfSame(lockFile, content);
+      result = await work(mine);
+    } catch (err) {
+      await release(content).catch(() => {});
+      throw err;
     }
+    // The work is done. If letting go fails, the lock stays and shows as stuck, which a person can
+    // unlock. The work's result must still reach the caller, who writes the audit row.
+    await release(content).catch(() => {});
+    return result;
+  }
+
+  /** Lets go of the lock, only if it is still the one this process made. */
+  function release(content: string): Promise<void> {
+    return deps.transition(async () => {
+      if ((await lockNow())?.content === content) await rm(lockFile, { force: true });
+    });
   }
 
   const managed = deps.file !== undefined && deps.nodeExtraCaFile !== undefined && resolve(deps.file) === resolve(deps.nodeExtraCaFile);
@@ -447,15 +446,20 @@ export function createTrustService(deps: TrustDeps): TrustService {
 
     async unlock(actor) {
       if (!managed) refuse('read-only');
-      const lock = await lockNow();
-      if (lock === undefined) return false;
-      if (!lock.stuck) refuse('busy');
-      // Only the lock that was looked at. A second unlock, or a new change, may have got in.
-      if (!(await removeLockIfSame(lockFile, lock.content))) return false;
+      // The look and the removal are one guarded step. A lock that is fresh by then is another
+      // change's, made after an earlier unlock, and is left where it is.
+      const since = await deps.transition(async () => {
+        const lock = await lockNow();
+        if (lock === undefined) return undefined;
+        if (!lock.stuck) refuse('busy');
+        await rm(lockFile, { force: true });
+        return lock.since;
+      });
+      if (since === undefined) return false;
       try {
-        await deps.audit('network.trust.unlock', actor, 'lock', lock.since);
+        await deps.audit('network.trust.unlock', actor, 'lock', since);
       } catch (err) {
-        throw new TrustAuditFailed('network.trust.unlock', 'lock', lock.since, actor, err);
+        throw new TrustAuditFailed('network.trust.unlock', 'lock', since, actor, err);
       }
       return true;
     },

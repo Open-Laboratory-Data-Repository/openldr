@@ -16,7 +16,6 @@ import {
   readLoadedTrust,
   readPeerCertificate,
   recordLoadedTrust,
-  removeLockIfSame,
   TRUST_BUSY,
   TrustAuditFailed,
   TrustRefused,
@@ -36,7 +35,19 @@ interface Made {
   audits: Array<{ action: string; actor: TrustActor; fingerprint: string; subject: string }>;
 }
 
-function make(o: { content?: string | null; file?: string | null; extra?: string | null; loaded?: LoadedTrust | (() => Promise<LoadedTrust>); peer?: string | undefined; auditFails?: boolean; lockWaitMs?: number; now?: () => Date } = {}): Made {
+type Transition = <T>(work: () => Promise<T>) => Promise<T>;
+
+/** One thing at a time, in this process. It stands for the database lock that guards each short lock step; the db package proves that one on real PostgreSQL. */
+function mutex(): Transition {
+  let tail: Promise<unknown> = Promise.resolve();
+  return (work) => {
+    const run = tail.then(work, work);
+    tail = run.catch(() => {});
+    return run;
+  };
+}
+
+function make(o: { content?: string | null; file?: string | null; extra?: string | null; loaded?: LoadedTrust | (() => Promise<LoadedTrust>); peer?: string | undefined; auditFails?: boolean; lockWaitMs?: number; now?: () => Date; transition?: Transition } = {}): Made {
   const dir = mkdtempSync(join(tmpdir(), 'trust-'));
   const file = join(dir, 'ca.pem');
   if (o.content !== null) writeFileSync(file, o.content ?? '');
@@ -47,6 +58,7 @@ function make(o: { content?: string | null; file?: string | null; extra?: string
     loaded: typeof o.loaded === 'function' ? o.loaded : async () => (o.loaded as LoadedTrust | undefined) ?? { known: true, pems: [], since: '2026-11-30T00:00:00.000Z' },
     readPeer: async () => o.peer,
     lockWaitMs: o.lockWaitMs,
+    transition: o.transition ?? mutex(),
     audit: async (action, actor, fingerprint, subject) => {
       if (o.auditFails) throw new Error('audit down');
       audits.push({ action, actor, fingerprint, subject });
@@ -143,6 +155,7 @@ describe('status', () => {
       nodeExtraCaFile: relative(process.cwd(), m.file),
       loaded: async () => ({ known: false }),
       readPeer: async () => undefined,
+      transition: mutex(),
       audit: async () => {},
       now: () => NOW,
     });
@@ -322,6 +335,7 @@ describe('add and remove', () => {
       nodeExtraCaFile: m.file,
       loaded: async () => ({ known: false }),
       readPeer: async () => undefined,
+      transition: mutex(),
       audit: async () => {},
       now: () => NOW,
     });
@@ -518,6 +532,7 @@ describe('preview', () => {
         asked.push([host, port]);
         return CERT_A;
       },
+      transition: mutex(),
       audit: async () => {},
       now: () => NOW,
     });
@@ -758,24 +773,63 @@ describe('a lock left behind', () => {
     expect(await m.svc.status()).toMatchObject({ mode: 'damaged', lock: { stuck: true } });
   });
 
-  it('unlock puts back a lock that is not the one it looked at', async () => {
-    // Between looking at a stuck lock and removing it, another unlock removed it and a new change
-    // made its own. That new lock must stay.
+  it('makes, lets go of and unlocks the lock only inside the short step guard', async () => {
+    // Each of those is a look at the lock file followed by a change to it. The guard keeps two
+    // processes from doing them at the same moment.
+    const steps: string[] = [];
+    let lock = '';
+    const inner = mutex();
+    const m = make({
+      lockWaitMs: 150,
+      transition: (work) =>
+        inner(async () => {
+          steps.push(existsSync(lock) ? 'lock there' : 'no lock');
+          return work();
+        }),
+    });
+    lock = `${m.file}.lock`;
+    await m.svc.add(CERT_A, ACTOR);
+    expect(steps).toEqual(['no lock', 'lock there']);
+    writeFileSync(lock, 'held');
+    old(lock, 60_000);
+    await m.svc.unlock(ACTOR);
+    expect(steps).toEqual(['no lock', 'lock there', 'lock there']);
+  });
+
+  it('refuses as busy, with nothing changed and no lock made, when the guard cannot be had', async () => {
+    const m = make({ content: CERT_A, transition: async () => { throw new TrustRefused('busy'); } });
+    expect(await code(m.svc.add(CERT_B, ACTOR))).toBe('busy');
+    expect(await code(m.svc.remove(FP_A, ACTOR))).toBe('busy');
+    expect(readFileSync(m.file, 'utf8')).toBe(CERT_A);
+    expect(readdirSync(m.dir)).toEqual(['ca.pem']);
+    expect(m.audits).toEqual([]);
+  });
+
+  it('keeps the change and audits it when the guard fails as the change lets go', async () => {
+    // The file is in place. Only letting go failed, so the lock stays and shows as stuck later.
+    let calls = 0;
+    const inner = mutex();
+    const m = make({
+      transition: (work) => {
+        if (++calls === 2) return Promise.reject(new Error('database gone'));
+        return inner(work);
+      },
+    });
+    expect(await m.svc.add(CERT_A, ACTOR)).toMatchObject({ fingerprint: FP_A });
+    expect(readFileSync(m.file, 'utf8')).toBe(CERT_A);
+    expect(m.audits.map((a) => a.action)).toEqual(['network.trust.add']);
+    expect(readdirSync(m.dir).sort()).toEqual(['ca.pem', 'ca.pem.lock']);
+    expect(await m.svc.status()).toMatchObject({ lock: { stuck: false } });
+  });
+
+  it('a stale unlock leaves a fresh lock where it is', async () => {
+    // The lock was judged stuck, then removed by someone else, and a new change made its own.
     const m = make();
     const lock = `${m.file}.lock`;
     writeFileSync(lock, JSON.stringify({ token: 'new holder' }));
-    expect(await removeLockIfSame(lock, 'the stuck one that was looked at')).toBe(false);
+    expect(await code(m.svc.unlock(ACTOR))).toBe('busy');
     expect(JSON.parse(readFileSync(lock, 'utf8'))).toEqual({ token: 'new holder' });
     expect(readdirSync(m.dir).sort()).toEqual(['ca.pem', 'ca.pem.lock']);
-  });
-
-  it('unlock removes the lock it looked at, and says so when it is already gone', async () => {
-    const m = make();
-    const lock = `${m.file}.lock`;
-    writeFileSync(lock, 'held');
-    expect(await removeLockIfSame(lock, 'held')).toBe(true);
-    expect(await removeLockIfSame(lock, 'held')).toBe(false);
-    expect(readdirSync(m.dir)).toEqual(['ca.pem']);
   });
 
   it('two unlocks at once remove one lock and audit once', async () => {

@@ -101,7 +101,8 @@ import { brokerAccessDetails } from './check-read-audit';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 import { createPluginConnectorAccess, type PluginConnectorAccess } from './plugin-connector-access';
 import { createWorkflowHosts, type WorkflowHosts } from './workflow-hosts';
-import { createTrustService, readLoadedTrust, readPeerCertificate, type TrustService } from './network-trust';
+import { createTrustService, readLoadedTrust, readPeerCertificate, TrustRefused, type TrustService } from './network-trust';
+import { runExclusive, ExclusiveBusy } from '@openldr/db';
 import { createResultsRead, type ResultsQuery } from './results-read';
 import { createPluginRemoval, type PluginRemoval } from './plugin-removal';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
@@ -2125,6 +2126,16 @@ const reporting: ReportingApi = {
     nodeExtraCaFile: process.env.NODE_EXTRA_CA_CERTS,
     loaded: () => readLoadedTrust(appSettings),
     readPeer: (host, port) => readPeerCertificate(host, port),
+    // A database lock around each short step on the lock file. The server and a CLI command share
+    // this database, and a process that stops loses the lock with its connection.
+    transition: async (work) => {
+      try {
+        return await runExclusive(internal.db, 'openldr:network-trust-lock', 10_000, work);
+      } catch (err) {
+        if (err instanceof ExclusiveBusy) throw new TrustRefused('busy');
+        throw err;
+      }
+    },
     // Not safeRecord: the file is already changed, so the caller must learn that the row failed.
     audit: async (action, actor, fingerprint, subject) => {
       try {
