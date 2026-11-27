@@ -65,8 +65,14 @@ export function createPortSelection(show: (ports: PortChoice[] | undefined) => v
   let open: { ports: PortChoice[]; answer: (portId: string) => void } | null = null;
   const chosen = new Set<string>();
 
-  const draw = (ports: PortChoice[] | undefined): void => {
-    try { show(ports); } catch { /* a window that will not draw must not hold the browser's request */ }
+  /** False when the window could not be drawn. */
+  const draw = (ports: PortChoice[] | undefined): boolean => {
+    try {
+      show(ports);
+      return true;
+    } catch {
+      return false;
+    }
   };
   /** Answers the browser exactly once for the open request, then closes the window. */
   const finish = (portId: string): void => {
@@ -85,12 +91,13 @@ export function createPortSelection(show: (ports: PortChoice[] | undefined) => v
         return;
       }
       open = { ports, answer };
-      draw(ports);
+      // With no window there is no way to answer. The request is not left waiting.
+      if (!draw(ports)) finish('');
     },
     update(ports) {
       if (open === null) return;
       open.ports = ports;
-      draw(ports);
+      if (!draw(ports)) finish('');
     },
     choose(id) {
       if (open === null) return;

@@ -107,8 +107,13 @@ export function mayGrantPermission(
   requestingUrl: string,
   shownAddress: string | undefined,
   connectMode?: boolean,
+  /** Where the request comes from, as Electron reports it. Serial is refused without it. */
+  from?: { isMainWindow: boolean; isMainFrame: boolean },
 ): boolean {
   if (!GRANTABLE.has(permission) || shownAddress === undefined) return false;
+  // A serial port goes only to Studio's own page: the main frame of the main window. Not to a
+  // frame inside it, and not to another window of the app.
+  if (permission === 'serial' && !(from?.isMainWindow === true && from.isMainFrame === true)) return false;
   return isTrustedAddress(shownAddress, connectMode === true) && sameOrigin(requestingUrl, shownAddress);
 }
 

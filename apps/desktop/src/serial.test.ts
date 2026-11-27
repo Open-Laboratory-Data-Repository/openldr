@@ -167,9 +167,38 @@ describe('createPortSelection', () => {
     expect(h.answers).toEqual(['']);
   });
 
-  it('is not stopped by an answer or a window that throws', () => {
-    const selection = createPortSelection(() => { throw new Error('no window'); });
-    expect(() => selection.begin(portChoices(PORTS, undefined), () => { throw new Error('gone'); })).not.toThrow();
+  it('answers empty at once when the window cannot be shown, and is free for the next request', () => {
+    let fail = true;
+    const shown: Array<PortChoice[] | undefined> = [];
+    const selection = createPortSelection((ports) => { if (fail && ports !== undefined) throw new Error('no window'); shown.push(ports); });
+    const answers: string[] = [];
+    expect(() => selection.begin(portChoices(PORTS, undefined), (id) => void answers.push(id))).not.toThrow();
+    // A request with no window would wait for ever. It is answered with no port, once.
+    expect(answers).toEqual(['']);
+    expect(selection.active()).toBe(false);
+    selection.cancel();
+    expect(answers).toEqual(['']);
+    fail = false;
+    selection.begin(portChoices(PORTS, undefined), (id) => void answers.push(id));
+    expect(selection.active()).toBe(true);
+    selection.choose('a1');
+    expect(answers).toEqual(['', 'a1']);
+  });
+
+  it('answers empty when the window cannot be redrawn with a changed list', () => {
+    let fail = false;
+    const selection = createPortSelection((ports) => { if (fail && ports !== undefined) throw new Error('window gone'); });
+    const answers: string[] = [];
+    selection.begin(portChoices(PORTS, undefined), (id) => void answers.push(id));
+    fail = true;
+    expect(() => selection.update([])).not.toThrow();
+    expect(answers).toEqual(['']);
+    expect(selection.active()).toBe(false);
+  });
+
+  it('is not stopped by an answer that throws', () => {
+    const selection = createPortSelection(() => {});
+    selection.begin(portChoices(PORTS, undefined), () => { throw new Error('gone'); });
     expect(() => selection.choose('a1')).not.toThrow();
     expect(selection.active()).toBe(false);
   });

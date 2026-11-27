@@ -322,11 +322,14 @@ function main(): void {
     const s = strings();
     const settings = loadSettings(settingsFile);
 
-    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) =>
-      callback(mayGrantPermission(permission, details.requestingUrl, running?.controller.address(), connectMode())),
+    // Electron says which window and which frame asks. A serial port goes only to the main
+    // frame of the main window.
+    const isMain = (wc: Electron.WebContents | null): boolean => wc !== null && win !== undefined && !win.isDestroyed() && wc === win.webContents;
+    session.defaultSession.setPermissionRequestHandler((wc, permission, callback, details) =>
+      callback(mayGrantPermission(permission, details.requestingUrl, running?.controller.address(), connectMode(), { isMainWindow: isMain(wc), isMainFrame: details.isMainFrame })),
     );
-    session.defaultSession.setPermissionCheckHandler((_wc, permission, requestingOrigin) =>
-      mayGrantPermission(permission, requestingOrigin, running?.controller.address(), connectMode()),
+    session.defaultSession.setPermissionCheckHandler((wc, permission, requestingOrigin, details) =>
+      mayGrantPermission(permission, details.securityOrigin ?? requestingOrigin, running?.controller.address(), connectMode(), { isMainWindow: isMain(wc), isMainFrame: details.isMainFrame }),
     );
     // The window's own certificate check. Chromium's verdict stands, plus the one pinned
     // certificate in connect mode. Electron asks this once per certificate and keeps the answer
@@ -514,7 +517,11 @@ function main(): void {
         onEscape();
       });
       made.on('closed', onClosed);
-      void made.loadFile(pagePath).catch((err: unknown) => log(`A small window did not load: ${String(err)}`));
+      void made.loadFile(pagePath).catch((err: unknown) => {
+        // With no page there is no button to answer with. Closing it runs onClosed, which cancels.
+        log(`A small window did not load: ${String(err)}`);
+        if (!made.isDestroyed()) made.destroy();
+      });
       return made;
     };
     const openPin = (screen: Extract<Screen, { screen: 'pin' }>): void => {
@@ -568,7 +575,12 @@ function main(): void {
     };
     session.defaultSession.on('select-serial-port', (event, portList, webContents, callback) => {
       event.preventDefault();
-      // Electron names the page's window here, not its frame. The address is the main frame's own.
+      // One list at a time. An overlapping request is refused before anything of it is kept, so
+      // the ports of the list on screen stay the ones it was opened with.
+      if (selection.active()) return callback('');
+      // This event names the window, not the frame, so the frame cannot be checked here: the
+      // address is the window's own. The frame is checked where Electron does report it, in the
+      // permission handlers above, which refuse serial to anything but the main frame.
       const allowed = maySelectPort({
         isMainWindow: !w.isDestroyed() && webContents === w.webContents,
         isMainFrame: true,

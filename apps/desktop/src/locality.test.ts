@@ -153,16 +153,30 @@ describe('mayGrantPermission', () => {
   const launcher = 'http://127.0.0.1:3990/studio/';
 
   it('grants serial to the trusted address and to nothing else', () => {
-    expect(mayGrantPermission('serial', 'http://127.0.0.1:3990/studio/x/analyzer', launcher)).toBe(true);
-    expect(mayGrantPermission('serial', 'https://labpc:3443/studio/x/analyzer', 'https://labpc:3443/studio/', true)).toBe(true);
+    const main = { isMainWindow: true, isMainFrame: true };
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3990/studio/x/analyzer', launcher, false, main)).toBe(true);
+    expect(mayGrantPermission('serial', 'https://labpc:3443/studio/x/analyzer', 'https://labpc:3443/studio/', true, main)).toBe(true);
     // Another origin, another port, the app's own page, no address, and a server the app is not connected to.
-    expect(mayGrantPermission('serial', 'https://example.org/', launcher)).toBe(false);
-    expect(mayGrantPermission('serial', 'http://127.0.0.1:3991/studio/', launcher)).toBe(false);
-    expect(mayGrantPermission('serial', 'file:///opt/openldr-desktop/pages/page.html', launcher)).toBe(false);
-    expect(mayGrantPermission('serial', 'http://127.0.0.1:3990/studio/', undefined)).toBe(false);
-    expect(mayGrantPermission('serial', 'https://labpc:3443/studio/', 'https://labpc:3443/studio/', false)).toBe(false);
+    expect(mayGrantPermission('serial', 'https://example.org/', launcher, false, main)).toBe(false);
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3991/studio/', launcher, false, main)).toBe(false);
+    expect(mayGrantPermission('serial', 'file:///opt/openldr-desktop/pages/page.html', launcher, false, main)).toBe(false);
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3990/studio/', undefined, false, main)).toBe(false);
+    expect(mayGrantPermission('serial', 'https://labpc:3443/studio/', 'https://labpc:3443/studio/', false, main)).toBe(false);
     // Plain http that is not this PC, also in connect mode.
-    expect(mayGrantPermission('serial', 'http://labpc:3080/studio/', 'http://labpc:3080/studio/', true)).toBe(false);
+    expect(mayGrantPermission('serial', 'http://labpc:3080/studio/', 'http://labpc:3080/studio/', true, main)).toBe(false);
+    // With nothing known about where it comes from, it is refused.
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3990/studio/x/analyzer', launcher)).toBe(false);
+  });
+
+  it('grants serial only to the main frame of the main window, when that is known', () => {
+    const page = 'http://127.0.0.1:3990/studio/x/analyzer';
+    expect(mayGrantPermission('serial', page, launcher, false, { isMainWindow: true, isMainFrame: true })).toBe(true);
+    // A frame inside the page, on the same address.
+    expect(mayGrantPermission('serial', page, launcher, false, { isMainWindow: true, isMainFrame: false })).toBe(false);
+    // Another window of the app, such as the PIN window or the port window.
+    expect(mayGrantPermission('serial', page, launcher, false, { isMainWindow: false, isMainFrame: true })).toBe(false);
+    // The clipboard write is not changed by where it comes from.
+    expect(mayGrantPermission('clipboard-sanitized-write', page, launcher, false, { isMainWindow: true, isMainFrame: false })).toBe(true);
   });
 
   it('still refuses every other device permission', () => {
