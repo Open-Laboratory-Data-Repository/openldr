@@ -220,25 +220,29 @@ export function Network() {
               {certView.length > 0 ? (
                 <Table wrapperClassName="min-h-0 flex-1">
                   <TableHeader className="sticky top-0 z-10 bg-background">
+                    {/* Three columns, so the table fits a phone. The fingerprint is 95 characters: it
+                        sits under the name and may break anywhere. The date sits under the state. */}
                     <TableRow>
                       <TableHead>{t('settings.network.colName')}</TableHead>
-                      <TableHead>{t('settings.network.colFingerprint')}</TableHead>
-                      <TableHead className="whitespace-nowrap">{t('settings.network.colValidTo')}</TableHead>
                       <TableHead>{t('settings.network.colState')}</TableHead>
-                      <TableHead className="text-right">{t('settings.network.colActions')}</TableHead>
+                      <TableHead className="w-12 text-right"><span className="sr-only">{t('settings.network.colActions')}</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className="[&_tr:last-child]:border-b">
                     {certView.map((c) => (
                       <TableRow key={c.fingerprint} data-testid={`trust-row-${c.fingerprint}`}>
-                        <TableCell className="break-all">{c.subject}</TableCell>
-                        <TableCell className="min-w-[12rem] break-all font-mono text-xs">{c.fingerprint}</TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {c.validTo.slice(0, 10)}
-                          {c.expired ? <span className="ml-2 text-destructive">{t('settings.network.expired')}</span> : null}
+                        <TableCell className="align-top">
+                          <div data-testid={`trust-name-${c.fingerprint}`} className="break-words font-medium [overflow-wrap:anywhere]">{c.subject}</div>
+                          <div data-testid={`trust-fingerprint-${c.fingerprint}`} className="mt-1 break-all font-mono text-xs text-muted-foreground">{c.fingerprint}</div>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">{t(STATE_KEY[c.state])}</TableCell>
-                        <TableCell>
+                        <TableCell className="w-32 align-top sm:w-48">
+                          <div>{t(STATE_KEY[c.state])}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {t('settings.network.colValidTo')} <span className="whitespace-nowrap">{c.validTo.slice(0, 10)}</span>
+                            {c.expired ? <span className="ml-1 whitespace-nowrap text-destructive">{t('settings.network.expired')}</span> : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-12 align-top">
                           <div className="flex items-center justify-end">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -289,15 +293,15 @@ export function Network() {
                     <TableRow>
                       <TableHead>{t('settings.network.colHost')}</TableHead>
                       <TableHead>{t('settings.network.colSource')}</TableHead>
-                      <TableHead className="text-right">{t('settings.network.colActions')}</TableHead>
+                      <TableHead className="w-12 text-right"><span className="sr-only">{t('settings.network.colActions')}</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className="[&_tr:last-child]:border-b">
                     {hostView.map((h) => (
                       <TableRow key={h.host} data-testid={`host-row-${h.host}`}>
                         <TableCell className="break-all font-mono text-xs">{h.host}</TableCell>
-                        <TableCell className="whitespace-nowrap">{t(h.source === 'server' ? 'settings.network.sourceServer' : 'settings.network.sourceSetting')}</TableCell>
-                        <TableCell>
+                        <TableCell className="w-32 sm:w-48">{t(h.source === 'server' ? 'settings.network.sourceServer' : 'settings.network.sourceSetting')}</TableCell>
+                        <TableCell className="w-12">
                           {/* A host from the server setting is changed on the server, so it has no menu. */}
                           {h.source === 'setting' ? (
                             <div className="flex items-center justify-end">

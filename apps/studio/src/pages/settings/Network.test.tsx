@@ -77,6 +77,26 @@ describe('the Network settings page', () => {
     expect(screen.getByTestId('trust-row-F1')).toHaveTextContent('2030-05-01');
   });
 
+  it('keeps each table to three columns, so it fits a phone without scrolling sideways', async () => {
+    // Four columns with a 95 character fingerprint were 560 px wide on a 375 px phone. The
+    // fingerprint now sits under the name, and the date under the state.
+    mount();
+    const row = await screen.findByTestId(`trust-row-${FP}`);
+    expect(row.querySelectorAll('td')).toHaveLength(3);
+    expect(row.closest('table')!.querySelectorAll('th')).toHaveLength(3);
+    const [certificate, state] = row.querySelectorAll('td');
+    expect(certificate).toHaveTextContent('hub.district');
+    expect(certificate).toHaveTextContent(FP);
+    expect(state).toHaveTextContent('In use');
+    expect(state).toHaveTextContent('Valid until 2030-05-01');
+    // The name wraps between words, never inside one. Only the fingerprint may break anywhere.
+    expect(within(row).getByTestId(`trust-name-${FP}`).className).not.toContain('break-all');
+    expect(within(row).getByTestId(`trust-fingerprint-${FP}`).className).toContain('break-all');
+    await showHosts();
+    const host = await screen.findByTestId('host-row-a.example');
+    expect(host.querySelectorAll('td')).toHaveLength(3);
+  });
+
   it('shows Not known for a certificate whose state is unknown, and Expired beside its date', async () => {
     vi.mocked(api.getNetworkTrust).mockResolvedValue({ mode: 'editable', certificates: [cert({ state: 'unknown', expired: true })] });
     mount();
