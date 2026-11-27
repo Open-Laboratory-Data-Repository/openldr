@@ -383,6 +383,20 @@ describe('RemoteController, with a saved server', () => {
     expect(h.controller.dataDir()).toBeUndefined();
   });
 
+  it('records connect as the mode with the first server it saves, and not before', async () => {
+    // Until a server works, the person can still go back to the choice of mode.
+    const h = harness({ probes: ['no-answer', 'ok'] });
+    await h.controller.start();
+    await h.controller.connect('labpc:3443');
+    expect(h.settings().mode).toBeUndefined();
+    expect(h.last()).toEqual({ screen: 'connect', value: 'labpc:3443', problem: 'no-answer' });
+    await h.controller.connect('labpc:3443');
+    expect(h.settings()).toEqual({ startAtSignIn: false, mode: 'connect', server: { address: ADDRESS } });
+    // Forgetting the server later keeps the mode.
+    h.controller.changeServer();
+    expect(h.settings().mode).toBe('connect');
+  });
+
   it('keeps every other setting when it saves the server', async () => {
     const h = harness({ settings: { startAtSignIn: true, window: { width: 900, height: 700 }, mode: 'connect', lock: { salt: 'ab', hash: 'cd' } }, probes: ['ok'] });
     await h.controller.connect('labpc:3443');

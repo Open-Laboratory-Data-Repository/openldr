@@ -8,7 +8,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 import { INFO_CHANNEL, SETUP_CODE_CHANNEL } from './bridge';
-import { RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
+import { ACTION_CHANNEL, RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
 import type { PageState } from './controller';
 
 /**
@@ -32,6 +32,10 @@ if (protocol === 'file:') {
     },
     retry(): void {
       ipcRenderer.send(RETRY_CHANNEL);
+    },
+    /** A button on the page was pressed. `value` is what the page's one input holds. */
+    act(id: string, value?: string): void {
+      ipcRenderer.send(ACTION_CHANNEL, { id, ...(typeof value === 'string' ? { value } : {}) });
     },
   });
 } else if ((protocol === 'http:' || protocol === 'https:') && LOCAL_HOSTS.includes(hostname)) {

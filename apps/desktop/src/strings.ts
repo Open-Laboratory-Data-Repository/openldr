@@ -79,6 +79,14 @@ export interface AppStrings {
   unreachableMessage: string;
   changeServer: string;
   studioWillNotLoad: string;
+  /** Switching between the two ways of running, from the tray. */
+  trayChangeServer: string;
+  trayUseLocal: string;
+  trayUseConnect: string;
+  switchConfirmYes: string;
+  switchConfirmNo: string;
+  switchToConnectBody: string;
+  switchToLocalBody: string;
 }
 
 const en: AppStrings = {
@@ -140,6 +148,13 @@ const en: AppStrings = {
   unreachableMessage: "{address} is not answering. OpenLDR will come back by itself when it does.",
   changeServer: "Change server",
   studioWillNotLoad: "The server answers, but OpenLDR did not load from it.",
+  trayChangeServer: "Change server...",
+  trayUseLocal: "Use this PC for the lab's data...",
+  trayUseConnect: "Connect to a lab server...",
+  switchConfirmYes: "Switch and restart",
+  switchConfirmNo: "Cancel",
+  switchToConnectBody: "This PC will show OpenLDR from another PC. The data on this PC stays where it is and is not used.",
+  switchToLocalBody: "OpenLDR and its database will run on this PC.",
 };
 
 const fr: AppStrings = {
@@ -201,6 +216,13 @@ const fr: AppStrings = {
   unreachableMessage: "{address} ne répond pas. OpenLDR reviendra de lui-même dès que le serveur répondra.",
   changeServer: "Changer de serveur",
   studioWillNotLoad: "Le serveur répond, mais OpenLDR ne s'est pas chargé depuis celui-ci.",
+  trayChangeServer: "Changer de serveur...",
+  trayUseLocal: "Utiliser ce PC pour les données du laboratoire...",
+  trayUseConnect: "Se connecter à un serveur de laboratoire...",
+  switchConfirmYes: "Changer et redémarrer",
+  switchConfirmNo: "Annuler",
+  switchToConnectBody: "Ce PC affichera OpenLDR depuis un autre PC. Les données de ce PC restent où elles sont et ne sont pas utilisées.",
+  switchToLocalBody: "OpenLDR et sa base de données fonctionneront sur ce PC.",
 };
 
 const pt: AppStrings = {
@@ -262,6 +284,13 @@ const pt: AppStrings = {
   unreachableMessage: "{address} não responde. O OpenLDR volta sozinho quando o servidor responder.",
   changeServer: "Mudar de servidor",
   studioWillNotLoad: "O servidor responde, mas o OpenLDR não carregou a partir dele.",
+  trayChangeServer: "Mudar de servidor...",
+  trayUseLocal: "Usar este PC para os dados do laboratório...",
+  trayUseConnect: "Ligar a um servidor de laboratório...",
+  switchConfirmYes: "Mudar e reiniciar",
+  switchConfirmNo: "Cancelar",
+  switchToConnectBody: "Este PC vai mostrar o OpenLDR de outro PC. Os dados deste PC ficam onde estão e não são usados.",
+  switchToLocalBody: "O OpenLDR e a sua base de dados vão funcionar neste PC.",
 };
 
 export const STRINGS: Record<Lang, AppStrings> = { en, fr, pt };

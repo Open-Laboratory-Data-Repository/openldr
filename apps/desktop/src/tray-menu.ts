@@ -12,6 +12,10 @@ export interface TrayState {
   share: ShareInfo | undefined;
   /** True while OpenLDR restarts to turn sharing on or off. */
   busy: boolean;
+  /** 'connect' when the app shows OpenLDR from another PC. Missing means 'local'. */
+  mode?: 'local' | 'connect';
+  /** Connect mode: the server's address, once there is one. */
+  server?: string;
 }
 
 export interface TrayActions {
@@ -22,6 +26,10 @@ export interface TrayActions {
   saveCertificate(certFile: string): void;
   openLogs(): void;
   quit(): void;
+  /** Connect mode: forget the server and ask for another. */
+  changeServer(): void;
+  /** Ask, then switch to the other way of running and start the app again. */
+  switchMode(to: 'local' | 'connect'): void;
 }
 
 type Item = Electron.MenuItemConstructorOptions;
@@ -45,7 +53,22 @@ function shareItems(share: ShareInfo, s: AppStrings, act: TrayActions): Item[] {
   ];
 }
 
+/** Connect mode has no launcher on this PC, so nothing to share. It shows the server instead. */
+function connectTemplate(state: TrayState, s: AppStrings, act: TrayActions): Item[] {
+  return [
+    { label: s.trayOpen, click: () => act.open() },
+    { label: s.trayStartAtSignIn, type: 'checkbox', checked: state.startAtSignIn, click: (item) => act.setStartAtSignIn(item.checked) },
+    ...(state.server !== undefined ? [{ label: state.server, enabled: false } as Item] : []),
+    { label: s.trayChangeServer, click: () => act.changeServer() },
+    { label: s.trayUseLocal, click: () => act.switchMode('local') },
+    { label: s.trayOpenLogs, click: () => act.openLogs() },
+    { type: 'separator' },
+    { label: s.trayQuit, click: () => act.quit() },
+  ];
+}
+
 export function trayTemplate(state: TrayState, s: AppStrings, act: TrayActions): Item[] {
+  if (state.mode === 'connect') return connectTemplate(state, s, act);
   return [
     { label: s.trayOpen, click: () => act.open() },
     { label: s.trayStartAtSignIn, type: 'checkbox', checked: state.startAtSignIn, click: (item) => act.setStartAtSignIn(item.checked) },
@@ -57,6 +80,7 @@ export function trayTemplate(state: TrayState, s: AppStrings, act: TrayActions):
       click: (item) => act.setShare(item.checked),
     },
     ...(state.share ? shareItems(state.share, s, act) : []),
+    { label: s.trayUseConnect, click: () => act.switchMode('connect') },
     { label: s.trayOpenLogs, click: () => act.openLogs() },
     { type: 'separator' },
     { label: s.trayQuit, click: () => act.quit() },

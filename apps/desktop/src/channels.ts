@@ -4,3 +4,5 @@
 export const SCREEN_CHANNEL = 'openldr-desktop:screen';
 /** The app's own page to main: the person asked to start again. */
 export const RETRY_CHANNEL = 'openldr-desktop:retry';
+/** The app's own page to main: a button was pressed. Carries { id: PageAction; value?: string }. */
+export const ACTION_CHANNEL = 'openldr-desktop:action';

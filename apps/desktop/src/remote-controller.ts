@@ -306,7 +306,8 @@ export class RemoteController {
   private saveServer(server: Settings['server']): boolean {
     try {
       const { server: _old, ...rest } = this.deps.loadSettings();
-      this.deps.saveSettings(server === undefined ? rest : { ...rest, server });
+      // The first server that works also settles the mode. Until then the person can go back.
+      this.deps.saveSettings(server === undefined ? rest : { ...rest, mode: rest.mode ?? 'connect', server });
       return true;
     } catch (err) {
       this.deps.log(`could not save the settings: ${err instanceof Error ? err.message : String(err)}`);
