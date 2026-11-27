@@ -62,6 +62,7 @@ export function linkTarget(
   url: string,
   launcherAddress: string | undefined,
   ownPages: readonly string[],
+  locked = false,
 ): 'inside' | 'browser' | 'refuse' {
   const u = parse(url);
   if (u === undefined) return 'refuse';
@@ -70,18 +71,36 @@ export function linkTarget(
     const o = parse(own);
     if (o !== undefined && page(o) === page(u)) return 'inside';
   }
+  // A PC locked to OpenLDR opens nothing else: a link that would leave for the browser is dropped.
+  if (locked) return 'refuse';
   if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:') return 'browser';
   return 'refuse';
 }
 
 /**
+ * True for an address on this PC, or an https address when the app is in connect mode. In connect
+ * mode the window shows one named server, which the person chose and whose certificate was
+ * checked, so it is trusted the way 127.0.0.1 is in local mode. Plain http never is.
+ */
+export function isTrustedAddress(shownAddress: string, connectMode: boolean): boolean {
+  if (isLocalAddress(shownAddress)) return true;
+  if (!connectMode) return false;
+  return parse(shownAddress)?.protocol === 'https:';
+}
+
+/**
  * Whether the window may grant a permission. Every request is refused, with one exception: a
  * sanitized clipboard write from a page on the window's own address, for Studio's copy buttons,
- * and only while that address is this computer.
+ * and only while that address is trusted: this computer, or the connected server in connect mode.
  */
-export function mayGrantPermission(permission: string, requestingUrl: string, shownAddress: string | undefined): boolean {
+export function mayGrantPermission(
+  permission: string,
+  requestingUrl: string,
+  shownAddress: string | undefined,
+  connectMode?: boolean,
+): boolean {
   if (permission !== 'clipboard-sanitized-write' || shownAddress === undefined) return false;
-  return isLocalAddress(shownAddress) && sameOrigin(requestingUrl, shownAddress);
+  return isTrustedAddress(shownAddress, connectMode === true) && sameOrigin(requestingUrl, shownAddress);
 }
 
 /** The two about: pages a frame may load. Studio's plugin frames load `about:srcdoc`. */

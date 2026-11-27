@@ -46,6 +46,35 @@ The first PC makes its own certificate, so a browser does not know it. Check tha
 
 **Expected result:** the two fingerprints are the same. Then accept the certificate. If they differ, stop and do not sign in.
 
+## Use the OpenLDR app on another PC
+
+Do this on the other PC when you want the OpenLDR app there instead of a browser. The app then shows this lab's OpenLDR and runs no lab database of its own.
+
+1. Install the OpenLDR desktop app on the other PC and start it.
+2. On the first screen, select **Connect to the lab's server**.
+3. In **Server address**, type the address from the first PC, such as `https://labpc:3443/studio/`.
+4. Select **Connect**.
+5. If the app shows **Check the server's certificate**, compare its fingerprint with the one from the first PC. See **Check the certificate** above.
+6. Select **It matches** only when the two are the same.
+7. Sign in with your OpenLDR username and password.
+
+**Expected result:** Studio opens in the app, with the same data as on the first PC. The app goes straight to it the next time it starts.
+
+A PC that already holds OpenLDR data does not show the first screen. Use **Connect to a lab server...** in its tray menu.
+
+## Lock a PC to OpenLDR
+
+Do this on a PC in a shared room that should show OpenLDR and nothing else.
+
+1. Open the OpenLDR icon in the system tray.
+2. Select **Lock this PC to OpenLDR...**.
+3. Type a PIN of at least 4 characters.
+4. Select **Lock**.
+
+**Expected result:** the window fills the screen, closing it does nothing, and links to other sites do not open.
+
+To unlock, press `Ctrl+Shift+L`, type the PIN, and select **Unlock**. Quitting the app asks for the PIN too. The web guide for the desktop app says what the lock does not stop, and what to do about a forgotten PIN.
+
 ## Limits
 
 - The first PC must be on, with OpenLDR running, whenever the others use it.
@@ -57,6 +86,8 @@ The first PC makes its own certificate, so a browser does not know it. Check tha
 - **The tray menu shows "No network address was found".** The PC is on no network. Join one, quit OpenLDR and open it again.
 - **The app says port 3443 is already in use.** Another program uses it. The web guide for the desktop app shows how to pick another port.
 - **The other PC cannot open the address.** Check that both PCs are on the same network, and that the first PC's firewall allows port 3443.
+- **The app shows "Cannot reach the server" when it starts.** The first PC is off, or the network is down. The app comes back by itself when the first PC answers.
+- **The app shows "The server's certificate has changed".** The certificate is not the one this PC accepted. Compare the new fingerprint with the one on the first PC, and select **It matches** only when they are the same. If nobody can explain the change, select **Cancel**.
 
 ## Related guides
 

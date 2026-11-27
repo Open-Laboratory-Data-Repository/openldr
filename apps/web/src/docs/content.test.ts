@@ -132,7 +132,7 @@ describe('website docs content', () => {
   it('keeps each existing guide URL available once after grouping the reading paths', () => {
     expect(new Set(SLUGS).size).toBe(SLUGS.length);
     expect(SLUGS).toEqual(expect.arrayContaining([
-      'getting-started', 'desktop-app', 'requirements', 'install', 'windows-server', 'upgrading',
+      'getting-started', 'desktop-app', 'lab-setups', 'requirements', 'install', 'windows-server', 'upgrading',
       'environment', 'auth-providers', 'load-data', 'map-to-fhir', 'connector-diagnose',
       'cli', 'cli-access', 'standalone', 'development', 'profile-packs', 'lab-setup', 'lab-plugin',
     ]));

@@ -38,7 +38,7 @@ describe('DocsPage', () => {
       const nav = screen.getByRole('navigation', { name: 'Public documentation' });
       const groups = within(nav).getAllByRole('group');
       expect(groups.map(group => group.getAttribute('aria-label'))).toEqual(labels);
-      expect(within(groups[0]).getByRole('link')).toHaveAttribute('href', '/docs/desktop-app');
+      expect(within(groups[0]).getAllByRole('link').map(link => link.getAttribute('href'))).toEqual(['/docs/desktop-app', '/docs/lab-setups']);
       expect(within(groups[1]).getByRole('link')).toHaveAttribute('href', '/docs/using-studio');
       expect(within(groups[3]).getAllByRole('link').map(link => link.getAttribute('href'))).toEqual([
         '/docs/cli', '/docs/cli-access', '/docs/standalone', '/docs/development', '/docs/profile-packs', '/docs/plugin-host-functions', '/docs/plugin-permissions',

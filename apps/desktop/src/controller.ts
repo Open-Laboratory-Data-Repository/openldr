@@ -12,7 +12,22 @@ export type Screen =
   | { screen: 'starting'; note: 'checking' | 'postgres' | 'recovering' | 'server' }
   | { screen: 'studio'; address: string }
   | { screen: 'stopping' }
-  | { screen: 'error'; message: string; serverLog?: string; postgresLog?: string; desktopLog?: string };
+  | { screen: 'error'; message: string; serverLog?: string; postgresLog?: string; desktopLog?: string }
+  /** The first question on a PC with no data: run OpenLDR here, or show another PC's. */
+  | { screen: 'choose' }
+  /** Connect mode: the server's address. `fixed` means a mode is already saved, so there is no way back to 'choose'. */
+  | { screen: 'connect'; value?: string; problem?: 'empty' | 'not-https' | 'unreadable' | 'no-answer' | 'certificate' | 'not-saved'; fixed?: true }
+  /** Connect mode: a certificate this PC's system does not trust, for the person to compare. */
+  | { screen: 'certificate'; address: string; fingerprint: string; changed: boolean }
+  /** Connect mode: the server does not answer. */
+  | { screen: 'unreachable'; address: string }
+  /** The lock's PIN, asked in a small window of its own. Never carries the PIN. */
+  | { screen: 'pin'; purpose: 'set' | 'unlock' | 'quit'; wrong?: boolean; tooShort?: boolean };
+
+/** What a button on the app's own page asks for. */
+export type PageAction =
+  | 'choose-local' | 'choose-connect' | 'connect' | 'back' | 'trust' | 'no-trust' | 'retry' | 'change-server'
+  | 'pin-submit' | 'pin-cancel';
 
 /** What main sends to the app's own page. The words are already in the person's language. */
 export interface PageState {
@@ -21,7 +36,22 @@ export interface PageState {
   message?: string;
   logs?: string[];
   retryLabel?: string;
+  /** Shown in a fixed-width font: a certificate fingerprint. */
+  detail?: string;
+  /** One line under the input that says what is wrong with what was typed. */
+  problem?: string;
+  input?: { label: string; value: string; placeholder: string; secret?: boolean };
+  actions?: Array<{ id: PageAction; label: string; primary?: boolean }>;
 }
+
+const PROBLEMS = {
+  empty: 'problemEmpty',
+  'not-https': 'problemNotHttps',
+  unreadable: 'problemUnreadable',
+  'no-answer': 'problemNoAnswer',
+  certificate: 'problemCertificate',
+  'not-saved': 'problemNotSaved',
+} as const;
 
 const NOTES = {
   checking: 'checkingNote',
@@ -45,6 +75,56 @@ export function pageState(screen: Exclude<Screen, { screen: 'studio' }>, strings
         retryLabel: strings.retryLabel,
       };
     }
+    case 'choose':
+      return {
+        title: strings.chooseTitle,
+        message: strings.chooseMessage,
+        actions: [{ id: 'choose-local', label: strings.chooseLocal }, { id: 'choose-connect', label: strings.chooseConnect }],
+      };
+    case 'connect':
+      return {
+        title: strings.connectTitle,
+        input: { label: strings.connectLabel, value: screen.value ?? '', placeholder: strings.connectPlaceholder },
+        ...(screen.problem ? { problem: strings[PROBLEMS[screen.problem]] } : {}),
+        actions: [
+          { id: 'connect', label: strings.connectAction, primary: true },
+          // Back goes to the mode choice, which is offered only while no mode is saved.
+          ...(screen.fixed ? [] : [{ id: 'back' as const, label: strings.backAction }]),
+        ],
+      };
+    case 'certificate':
+      // For a changed certificate the safe answer is the primary one.
+      return {
+        title: screen.changed ? strings.certChangedTitle : strings.certFirstTitle,
+        message: (screen.changed ? strings.certChangedMessage : strings.certFirstMessage).replace('{address}', screen.address),
+        detail: screen.fingerprint,
+        actions: [
+          { id: 'trust', label: strings.trustYes, ...(screen.changed ? {} : { primary: true }) },
+          { id: 'no-trust', label: strings.trustNo, ...(screen.changed ? { primary: true } : {}) },
+        ],
+      };
+    case 'pin': {
+      const words = {
+        set: { title: strings.pinSetTitle, message: strings.pinSetMessage, action: strings.pinSetAction },
+        unlock: { title: strings.pinUnlockTitle, message: undefined, action: strings.pinUnlockAction },
+        quit: { title: strings.pinQuitTitle, message: strings.pinQuitMessage, action: strings.pinQuitAction },
+      }[screen.purpose];
+      const problem = screen.wrong ? strings.pinWrong : screen.tooShort ? strings.pinTooShort : undefined;
+      return {
+        title: words.title,
+        ...(words.message !== undefined ? { message: words.message } : {}),
+        // Always empty: what was typed is never sent back to the page.
+        input: { label: strings.pinLabel, value: '', placeholder: '', secret: true },
+        ...(problem !== undefined ? { problem } : {}),
+        actions: [{ id: 'pin-submit', label: words.action, primary: true }, { id: 'pin-cancel', label: strings.pinCancel }],
+      };
+    }
+    case 'unreachable':
+      return {
+        title: strings.unreachableTitle,
+        message: strings.unreachableMessage.replace('{address}', screen.address),
+        actions: [{ id: 'retry', label: strings.retryLabel, primary: true }, { id: 'change-server', label: strings.changeServer }],
+      };
   }
 }
 

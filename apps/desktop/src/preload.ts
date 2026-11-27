@@ -2,13 +2,13 @@
 // in, so the built file needs only `electron`.
 //
 // On the app's own file: pages it gives the page `window.openldrDesktopPage`. On an http or https
-// page on this computer it gives `window.openldrDesktop`, the two calls Studio may make. The main
+// page on this computer, in local mode, it gives `window.openldrDesktop`, the two calls Studio may make. The main
 // process checks every call's sender again; this check only keeps the object off other pages.
 // Pages at any other address get nothing from here.
 
 import { contextBridge, ipcRenderer } from 'electron';
 import { INFO_CHANNEL, SETUP_CODE_CHANNEL } from './bridge';
-import { RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
+import { ACTION_CHANNEL, CONNECT_MODE_CHANNEL, RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
 import type { PageState } from './controller';
 
 /**
@@ -33,8 +33,15 @@ if (protocol === 'file:') {
     retry(): void {
       ipcRenderer.send(RETRY_CHANNEL);
     },
+    /** A button on the page was pressed. `value` is what the page's one input holds. */
+    act(id: string, value?: string): void {
+      ipcRenderer.send(ACTION_CHANNEL, { id, ...(typeof value === 'string' ? { value } : {}) });
+    },
   });
-} else if ((protocol === 'http:' || protocol === 'https:') && LOCAL_HOSTS.includes(hostname)) {
+} else if ((protocol === 'http:' || protocol === 'https:') && LOCAL_HOSTS.includes(hostname) && ipcRenderer.sendSync(CONNECT_MODE_CHANNEL) !== true) {
+  // Not in connect mode: the two calls are refused there, and Studio reads the object's presence
+  // as "the app on this PC can make a setup code". A server reached at this PC's own address
+  // would otherwise be told so wrongly.
   contextBridge.exposeInMainWorld('openldrDesktop', {
     setupCode(): Promise<string> {
       return ipcRenderer.invoke(SETUP_CODE_CHANNEL).catch((err: unknown) => Promise.reject(mainError(err)));

@@ -82,13 +82,15 @@ The simple way out is to select **Quit** in the tray menu and start the app agai
 
 Closing the window keeps OpenLDR running. To stop OpenLDR, use **Quit**.
 
-The app has an icon in the system tray, the area of the taskbar or top bar that holds small icons for running programs. Its menu has five items, and more while OpenLDR is shared:
+The app has an icon in the system tray, the area of the taskbar or top bar that holds small icons for running programs. Its menu has seven items, and more while OpenLDR is shared:
 
 | Item | What it does |
 | --- | --- |
 | **Open OpenLDR** | Shows the window again. |
 | **Start when I sign in** | A tick, off at first. When it is on, the app starts when you sign in to the computer, with no window open. |
 | **Share on the lab network** | A tick, off at first. See **Share on the lab network** below. |
+| **Connect to a lab server...** | Asks, then restarts the app as a screen onto another PC. See **Connect to the lab's server** below. |
+| **Lock this PC to OpenLDR...** | Asks for a PIN and locks this PC to OpenLDR. See **Lock this PC to OpenLDR** below. |
 | **Open the log folder** | Opens `logs` in the data folder. |
 | **Quit** | Shows **Stopping OpenLDR**, stops the server and the database, then closes the app. |
 
@@ -117,6 +119,102 @@ If OpenLDR was started outside the app, the tick is saved and applies the next t
 ### When no tray icon shows
 
 Some Linux desktops show no tray icons. There, start the app again from the applications menu to bring its window back. To stop OpenLDR, press Alt in the window to show its menu bar, and use the quit item in its File menu. Or run `openldr-standalone stop` in a terminal.
+
+## Connect to the lab's server
+
+A lab needs one OpenLDR. On every other PC, the app can show that OpenLDR instead of running its own. The PC then runs no server and no local lab database. [Choose a lab setup](/docs/lab-setups) says when to use this.
+
+### Choose it on the first start
+
+On a PC with no OpenLDR data, the app asks **How will this PC use OpenLDR?** before it starts anything.
+
+1. Select **Connect to the lab's server**.
+2. In **Server address**, type the address of the lab's OpenLDR, such as `https://labpc:3443/studio/`. For a shared desktop app, that is the address its tray menu shows.
+3. Select **Connect**.
+4. If the app shows **Check the server's certificate**, compare the fingerprint. See the next section.
+
+Studio then opens from the server. Sign in with your OpenLDR username and password. The app remembers the address and goes straight to it at the next start.
+
+The address must start with `https`. A PC that already holds OpenLDR data is not asked. It stays as it is.
+
+The app enters no setup code in this mode. Create the first administrator on the server itself.
+
+### Check the server's certificate
+
+A shared desktop app makes its own certificate, so the system on your PC does not know it. The app then shows the certificate's SHA-256 fingerprint and asks.
+
+1. On the server, open the tray menu and select **Copy certificate fingerprint**. With the launcher, read the line `Certificate fingerprint (SHA-256):` in its terminal.
+2. Compare it with the fingerprint in the app, pair by pair.
+3. Select **It matches** only when they are the same. Otherwise select **Cancel**.
+
+The app remembers that certificate for that address only. A server whose certificate your system already trusts is not asked about.
+
+If the app later shows **The server's certificate has changed**, stop. The screen only tells you the fingerprint is different. Compare the new fingerprint with the one on the server itself, as above, and select **It matches** only when they are the same. A new name or network address for the server is one cause. If nobody can explain the change, select **Cancel**. After **It matches**, the app may close and open again by itself.
+
+### When the server does not answer
+
+At the start, the app shows **Cannot reach the server** when the server is off or the network is down. It tries again every 10 seconds and shows Studio by itself once the server answers. **Try again** tries at once.
+
+While you work, the app never replaces Studio by itself. If the server goes off, Studio stays on screen with what you typed, and its own requests fail until the server is back.
+
+### Change the server or the mode
+
+In this mode the tray menu has these items:
+
+| Item | What it does |
+| --- | --- |
+| **Open OpenLDR** | Shows the window again. |
+| **Start when I sign in** | Starts the app when you sign in to the computer. |
+| The server's address | A line you cannot press. |
+| **Change server...** | Forgets the server and asks for another address. |
+| **Use this PC for the lab's data...** | Asks, then restarts the app so OpenLDR and its database run on this PC. |
+| **Lock this PC to OpenLDR...** | See **Lock this PC to OpenLDR** below. |
+| **Open the log folder** | Opens the app's own folder, which holds `desktop.log`. |
+| **Quit** | Closes the app. The server keeps running. |
+
+**Change server** is also a button on the **Cannot reach the server** screen. After you connect to another server, the app may close and open again by itself.
+
+A PC that holds the lab's data has **Connect to a lab server...** in its tray menu. It asks, stops OpenLDR on this PC, and restarts the app as a screen onto another PC. The data on this PC stays where it is and is not used.
+
+## Lock this PC to OpenLDR
+
+In a shared room, a PC can be set to show OpenLDR and nothing else. The lock works in both modes.
+
+### Turn the lock on
+
+1. Open the tray menu and select **Lock this PC to OpenLDR...**.
+2. Type a PIN of at least 4 characters.
+3. Select **Lock**.
+
+The window then fills the screen. While the PC is locked:
+
+- Closing the window does nothing.
+- Links to other sites do not open.
+- The app starts when you sign in to the computer.
+- The tray menu has three items: **Open OpenLDR**, **Unlock this PC...** and **Quit**.
+- **Quit** asks for the PIN, from the tray, the menu and the keyboard.
+
+### Unlock
+
+Press `Ctrl+Shift+L` in the window, or select **Unlock this PC...** in the tray menu. Type the PIN and select **Unlock**. A small window on top asks for the PIN, so what you typed in Studio stays. A wrong PIN is refused after two seconds.
+
+### What the lock does not stop
+
+The lock stops a casual user. It does not stop these:
+
+- The operating system's own keys, such as Alt+Tab or the Windows key. Blocking them is the system's job.
+- Shutting down or signing out of the PC. The app then quits with no PIN, so OpenLDR stops cleanly.
+- Someone who can edit files with the PC's account. They can remove the lock from the settings file.
+
+To block the system's keys on Windows, run the app as the kiosk program of a separate Windows account. For a desktop program this is the Shell Launcher feature in Windows Enterprise and Education, or a kiosk profile that lists `%LOCALAPPDATA%\Programs\OpenLDR\OpenLDR.exe`. Microsoft's [kiosk configuration overview](https://learn.microsoft.com/en-us/windows/configuration/kiosk/) has the steps. We have not tested this.
+
+### A forgotten PIN
+
+1. Open `settings.json` in the app's own folder with a text editor. **Where the data is** below gives its place.
+2. Remove the whole `"lock"` entry and save the file.
+3. In the app's window, press `Ctrl+Shift+L`.
+
+The app unlocks with no PIN once the entry is gone. To reach the file from a locked PC, use the system's own keys to open a file window, or sign out and sign in with another account that can reach it.
 
 ## Update
 
@@ -170,7 +268,7 @@ The data folder stays. The last line says where it is, such as `Your data was le
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-The data folder holds the database, stored files, the logs and the secrets key. [Run without Docker](/docs/standalone) lists what is in it. The app's own folder holds its settings, its log `desktop.log`, and the window's browser data. The settings are the port, start at sign-in, the window size, whether OpenLDR is shared on the lab network, and the port for sharing when you set one. They hold no secret.
+The data folder holds the database, stored files, the logs and the secrets key. [Run without Docker](/docs/standalone) lists what is in it. The app's own folder holds its settings, its log `desktop.log`, and the window's browser data. The settings are the port, start at sign-in, the window size, whether OpenLDR is shared on the lab network, and the port for sharing when you set one. In connect mode they also hold the server's address and the fingerprint of the certificate you accepted. A locked PC adds the lock, kept as a salted hash of the PIN. They hold no password and no key.
 
 The data folder is the same one `openldr-standalone` uses. The app brings that command with it:
 
@@ -236,6 +334,7 @@ Still unreported:
 
 ## Related guides
 
+- [Choose a lab setup](/docs/lab-setups)
 - [Using Studio](/docs/using-studio)
 - [Run without Docker](/docs/standalone)
 - [Install](/docs/install)

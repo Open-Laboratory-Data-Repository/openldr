@@ -35,6 +35,10 @@ export interface SelfcheckReport {
   /** Whether the setup code field is read-only, as it is once the app has filled it. */
   setupCodeLocked: boolean;
   attached: boolean;
+  /** Which way the app runs: OpenLDR on this PC, or shown from another PC. */
+  mode: 'local' | 'connect';
+  /** How many processes the app itself started. Connect mode starts none. */
+  childProcesses: number;
   electron: string;
   node: string;
   platform: string;
@@ -88,6 +92,10 @@ export interface SelfcheckDeps {
   sleep(ms: number): Promise<void>;
   address(): string | undefined;
   attached(): boolean;
+  /** Without it: 'local'. */
+  mode?(): 'local' | 'connect';
+  /** Without it: 0. */
+  childProcesses?(): number;
   log(line: string): void;
   /** What to do once the file is written. */
   after(then: SelfcheckThen): void;
@@ -182,6 +190,8 @@ export class Selfcheck {
       setupCodeLength: facts.setupCodeLength,
       setupCodeLocked: facts.setupCodeLocked,
       attached: this.deps.attached(),
+      mode: this.deps.mode?.() ?? 'local',
+      childProcesses: this.deps.childProcesses?.() ?? 0,
       electron: process.versions.electron ?? '',
       node: process.versions.node,
       platform: process.platform,

@@ -46,6 +46,35 @@ Le premier PC crée son propre certificat, donc un navigateur ne le connaît pas
 
 **Résultat attendu :** les deux empreintes sont identiques. Acceptez alors le certificat. Si elles diffèrent, arrêtez et ne vous connectez pas.
 
+## Utiliser l'application OpenLDR sur un autre PC
+
+Faites ceci sur l'autre PC quand vous y voulez l'application OpenLDR plutôt qu'un navigateur. L'application affiche alors l'OpenLDR de ce laboratoire et n'exécute aucune base de données de laboratoire.
+
+1. Installez l'application de bureau OpenLDR sur l'autre PC et démarrez-la.
+2. Sur le premier écran, sélectionnez **Se connecter au serveur du laboratoire**.
+3. Dans **Adresse du serveur**, saisissez l'adresse du premier PC, par exemple `https://labpc:3443/studio/`.
+4. Sélectionnez **Se connecter**.
+5. Si l'application affiche **Vérifiez le certificat du serveur**, comparez son empreinte avec celle du premier PC. Voir **Vérifier le certificat** plus haut.
+6. Sélectionnez **Elle correspond** seulement si les deux sont identiques.
+7. Connectez-vous avec votre nom d'utilisateur et votre mot de passe OpenLDR.
+
+**Résultat attendu :** Studio s'ouvre dans l'application, avec les mêmes données que sur le premier PC. L'application y va directement au démarrage suivant.
+
+Un PC qui contient déjà des données OpenLDR n'affiche pas le premier écran. Utilisez **Se connecter à un serveur de laboratoire...** dans son menu de la zone de notification.
+
+## Verrouiller un PC sur OpenLDR
+
+Faites ceci sur un PC d'une salle partagée qui doit afficher OpenLDR et rien d'autre.
+
+1. Ouvrez l'icône OpenLDR dans la zone de notification.
+2. Sélectionnez **Verrouiller ce PC sur OpenLDR...**.
+3. Saisissez un code PIN d'au moins 4 caractères.
+4. Sélectionnez **Verrouiller**.
+
+**Résultat attendu :** la fenêtre occupe tout l'écran, la fermer ne fait rien, et les liens vers d'autres sites ne s'ouvrent pas.
+
+Pour déverrouiller, appuyez sur `Ctrl+Maj+L`, saisissez le code PIN et sélectionnez **Déverrouiller**. Quitter l'application demande aussi le code PIN. Le guide web de l'application de bureau indique ce que le verrou n'empêche pas, et quoi faire si le code PIN est oublié.
+
 ## Limites
 
 - Le premier PC doit être allumé, avec OpenLDR en marche, chaque fois que les autres l'utilisent.
@@ -57,6 +86,8 @@ Le premier PC crée son propre certificat, donc un navigateur ne le connaît pas
 - **Le menu affiche « Aucune adresse réseau n'a été trouvée ».** Le PC n'est sur aucun réseau. Rejoignez-en un, quittez OpenLDR et rouvrez-le.
 - **L'application dit que le port 3443 est déjà utilisé.** Un autre programme l'utilise. Le guide web de l'application de bureau montre comment choisir un autre port.
 - **L'autre PC ne peut pas ouvrir l'adresse.** Vérifiez que les deux PC sont sur le même réseau, et que le pare-feu du premier PC autorise le port 3443.
+- **L'application affiche « Impossible de joindre le serveur » au démarrage.** Le premier PC est éteint, ou le réseau est coupé. L'application revient d'elle-même quand le premier PC répond.
+- **L'application affiche « Le certificat du serveur a changé ».** Le certificat n'est pas celui que ce PC avait accepté. Comparez la nouvelle empreinte avec celle du premier PC, et sélectionnez **Elle correspond** seulement si elles sont identiques. Si personne ne peut expliquer le changement, sélectionnez **Annuler**.
 
 ## Guides associés
 
