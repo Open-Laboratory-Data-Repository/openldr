@@ -80,11 +80,12 @@ export interface WorkflowTriggerRunner {
  * each run and at start; a save calls it for the schedule it just stored (bootstrap
  * syncWorkflowSchedules), so that schedule needs no restart.
  *
- * When the run cannot be queued, the stored time is taken off again and the error is thrown. A
- * stored time with no queued run would look armed, and a start before that time would skip it.
+ * When the run cannot be queued, the time stored here is taken off again (only that one) and the
+ * error is thrown. A stored time with no queued run would look armed, and a start before that
+ * time would skip it.
  */
 export async function armWorkflowSchedule(
-  schedules: Pick<WorkflowScheduleStore, 'setNextDue'>,
+  schedules: Pick<WorkflowScheduleStore, 'setNextDue' | 'claimDue'>,
   eventing: Pick<EventingPort, 'publish'>,
   s: { workflowId: string; nodeId: string; cron: string; tz: string | null },
 ): Promise<void> {
@@ -94,7 +95,8 @@ export async function armWorkflowSchedule(
   try {
     await eventing.publish({ type: SCHEDULE_DUE, payload: { workflowId: s.workflowId, nodeId: s.nodeId, dueAt } }, { availableAt: due });
   } catch (err) {
-    await schedules.setNextDue(s.workflowId, s.nodeId, null).catch(() => {});
+    // Only the time stored above. One a concurrent save armed meanwhile has its own queued run.
+    await schedules.claimDue(s.workflowId, s.nodeId, dueAt, dueAt).catch(() => {});
     throw err;
   }
 }

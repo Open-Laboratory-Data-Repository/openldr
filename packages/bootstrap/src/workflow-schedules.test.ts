@@ -13,6 +13,7 @@ function world() {
         upsert: async (s: (typeof rows)[number]) => { const i = rows.findIndex((r) => r.workflowId === s.workflowId && r.nodeId === s.nodeId); if (i >= 0) rows[i] = { ...s }; else rows.push({ ...s }); },
         removeForWorkflow: async (w: string) => { for (let i = rows.length - 1; i >= 0; i--) if (rows[i].workflowId === w) rows.splice(i, 1); },
         setNextDue: async (w: string, n: string, at: string | null) => { const r = find(w, n); if (r) r.nextDueAt = at; },
+        claimDue: async (w: string, n: string, dueAt: string | null) => { const r = find(w, n); if (!r || dueAt === null || r.nextDueAt !== dueAt) return false; r.nextDueAt = null; return true; },
       },
       eventing: { publish: async (e: never, o?: { availableAt?: Date }) => { published.push({ ...(e as object), availableAt: o?.availableAt } as never); } },
       logger: { warn: (...a: unknown[]) => { warned.push(a); } },

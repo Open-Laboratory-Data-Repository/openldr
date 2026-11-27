@@ -98,6 +98,11 @@ function fakeWorkflowExtras() {
       setNextDue: async (workflowId: string, nodeId: string, at: string | null) => {
         const r = scheduleRows.find((x) => x.workflowId === workflowId && x.nodeId === nodeId); if (r) r.nextDueAt = at;
       },
+      claimDue: async (workflowId: string, nodeId: string, dueAt: string | null) => {
+        const r = scheduleRows.find((x) => x.workflowId === workflowId && x.nodeId === nodeId);
+        if (!r || dueAt === null || r.nextDueAt !== dueAt) return false;
+        r.nextDueAt = null; return true;
+      },
     },
     webhooks: {
       register: (path: string, entry: any) => { webhookEntries.set(norm(path), entry); },

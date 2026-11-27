@@ -461,23 +461,44 @@ describe('heldSummary', () => {
 
 describe('armWorkflowSchedule', () => {
   const row = { workflowId: 'w1', nodeId: 's', cron: '*/5 * * * *', tz: 'UTC' };
+  function store() {
+    const state = { nextDueAt: null as string | null, cleared: [] as string[] };
+    return {
+      state,
+      api: {
+        setNextDue: async (_w: string, _n: string, at: string | null) => { state.nextDueAt = at; },
+        // As the real store: takes the time off only when it is still the one named.
+        claimDue: async (_w: string, _n: string, dueAt: string | null) => {
+          if (dueAt === null || state.nextDueAt !== dueAt) return false;
+          state.cleared.push(dueAt); state.nextDueAt = null; return true;
+        },
+      },
+    };
+  }
 
   it('stores the next time and queues a run that names it', async () => {
     const ev = fakeEventing();
-    const stored: Array<string | null> = [];
-    await armWorkflowSchedule({ setNextDue: async (_w, _n, at) => { stored.push(at); } }, ev.port as never, row);
-    expect(stored).toHaveLength(1);
+    const s = store();
+    await armWorkflowSchedule(s.api, ev.port as never, row);
+    expect(s.state.nextDueAt).not.toBeNull();
     expect(ev.published).toHaveLength(1);
-    expect(ev.published[0].payload).toEqual({ workflowId: 'w1', nodeId: 's', dueAt: stored[0] });
-    expect(ev.published[0].availableAt?.toISOString()).toBe(stored[0]);
+    expect(ev.published[0].payload).toEqual({ workflowId: 'w1', nodeId: 's', dueAt: s.state.nextDueAt });
+    expect(ev.published[0].availableAt?.toISOString()).toBe(s.state.nextDueAt);
   });
 
   it('when the run cannot be queued, takes the time off again and says so', async () => {
-    const stored: Array<string | null> = [];
+    const s = store();
     const bus = { publish: async () => { throw new Error('queue is away'); } };
-    await expect(armWorkflowSchedule({ setNextDue: async (_w, _n, at) => { stored.push(at); } }, bus as never, row)).rejects.toThrow('queue is away');
+    await expect(armWorkflowSchedule(s.api, bus as never, row)).rejects.toThrow('queue is away');
     // A stored time with no queued run would look armed, and a start before that time would skip it.
-    expect(stored).toHaveLength(2);
-    expect(stored[1]).toBeNull();
+    expect(s.state.nextDueAt).toBeNull();
+    expect(s.state.cleared).toHaveLength(1);
+  });
+
+  it('takes off only its own time: one armed by another save meanwhile stays', async () => {
+    const s = store();
+    const bus = { publish: async () => { s.state.nextDueAt = '2099-01-01T00:00:00.000Z'; throw new Error('queue is away'); } };
+    await expect(armWorkflowSchedule(s.api, bus as never, row)).rejects.toThrow('queue is away');
+    expect(s.state.nextDueAt).toBe('2099-01-01T00:00:00.000Z');
   });
 });

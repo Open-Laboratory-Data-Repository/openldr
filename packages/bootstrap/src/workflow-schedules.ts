@@ -15,7 +15,7 @@ import type { EventingPort } from '@openldr/ports';
  */
 export async function syncWorkflowSchedules(
   deps: {
-    schedules: Pick<WorkflowScheduleStore, 'upsert' | 'removeForWorkflow' | 'setNextDue'>;
+    schedules: Pick<WorkflowScheduleStore, 'upsert' | 'removeForWorkflow' | 'setNextDue' | 'claimDue'>;
     eventing: Pick<EventingPort, 'publish'>;
     logger: { warn(obj: unknown, msg: string): void };
   },
