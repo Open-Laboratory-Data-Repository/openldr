@@ -1087,8 +1087,9 @@ else
   # own choice and stays: the page then shows the list as set outside OpenLDR. Only when the
   # folder above is ready: with the path moved and no copy, the api would start on an empty list
   # and stop trusting the central. The whole new file is built first and put in place in one
-  # step, so a run that stops half way leaves the old file. Line ends are kept as they are.
-  if [ "$TRUST_READY" -eq 1 ] && tr -d '\r' < "$DIR/.env" | grep -qx 'NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem'; then
+  # step, so a run that stops half way leaves the old file. Line ends are kept as they are. The
+  # check is on the exact text (grep -F): a pattern would take the dot for any character.
+  if [ "$TRUST_READY" -eq 1 ] && tr -d '\r' < "$DIR/.env" | grep -Fqx 'NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem'; then
     ( umask 077; awk -v gid="$(id -g)" '
         { cr = ""; line = $0; if (sub(/\r$/, "", line)) cr = "\r" }
         line == "NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem" { line = "NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem"; eol = cr }

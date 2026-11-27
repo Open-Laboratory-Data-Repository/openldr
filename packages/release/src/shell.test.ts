@@ -586,6 +586,21 @@ describe('install.sh trusted certificates', () => {
     expect(env).not.toContain('OPENLDR_TRUST_GID');
   }, 60_000);
 
+  it.each([
+    'NODE_EXTRA_CA_CERTS=/etc/ssl/central-caXpem',
+    'NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem.bak',
+    'node_extra_ca_certs=/etc/ssl/central-ca.pem',
+    'NODE_EXTRA_CA_CERTS=/etc/ssl/Central-CA.pem',
+    '#NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem',
+  ])('leaves the near match %s alone and adds nothing', (line) => {
+    const dir = oldInstall(line, '');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    const env = readFileSync(join(dir, '.env'), 'utf8');
+    expect(env).toContain(`${line}\n`);
+    expect(env).not.toContain('TRUSTED_CA_FILE');
+    expect(env).not.toContain('OPENLDR_TRUST_GID');
+  }, 60_000);
+
   it('leaves an .env with no NODE_EXTRA_CA_CERTS line alone', () => {
     const r = installSh(['--no-start'], ENV_BEFORE_LOCAL_SIGN_IN);
     const env = readFileSync(join(r.dir, '.env'), 'utf8');
@@ -689,6 +704,7 @@ describe('install.sh trusted certificates', () => {
     expect(ps1).toContain('config/nginx/certs/central/fullchain.pem');
     // The old default, as the pattern that finds it in an existing .env. No other value is moved.
     expect(ps1).toContain("'(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\\.pem\\r?$'");
+    expect(ps1).toContain("-cnotmatch '(?m)^TRUSTED_CA_FILE='");
     // Only when the marker is missing, through a temporary name, and the marker is written after the copy.
     const guard = ps1.indexOf('if (-not (Test-Path $trustMarker)) {');
     const copy = ps1.indexOf('Copy-Item -Path $centralCa -Destination "$trustCa.tmp" -Force');
@@ -705,7 +721,19 @@ describe('install.sh trusted certificates', () => {
     const block = ps1.slice(ps1.indexOf('# An install made before the trust folder'), ps1.indexOf('$certDir = "$Dir/config/nginx/certs"'));
     expect(block).toContain('if ($trustReady -and (');
     expect(block).toContain('[System.IO.File]::ReadAllText($envPath)');
-    expect(block.match(/WriteAllText\(\$envPath, \$envText, \(New-Object System\.Text\.UTF8Encoding\(\$false\)\)\)/g)).toHaveLength(1);
+    // Through a temporary file beside it that gets the same access rules, then one replace, so a
+    // run that stops half way leaves a whole old file or a whole new one.
+    const acl = block.indexOf('Set-Acl -Path $envTmp -AclObject (Get-Acl -Path $envPath)');
+    const write = block.indexOf('[System.IO.File]::WriteAllText($envTmp, $envText, (New-Object System.Text.UTF8Encoding($false)))');
+    const swap = block.indexOf('[System.IO.File]::Replace($envTmp, $envPath, [NullString]::Value)');
+    expect(acl).toBeGreaterThan(-1);
+    expect(write).toBeGreaterThan(acl);
+    expect(swap).toBeGreaterThan(write);
+    expect(block).not.toContain('WriteAllText($envPath');
+    // The old default is matched and replaced with case kept: PowerShell's plain -match ignores case.
+    expect(block).toContain("$envText -cmatch '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\\.pem\\r?$'");
+    expect(block).toContain("$envText -creplace '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\\.pem(\\r?)$'");
+    expect(block).not.toMatch(/ -(match|replace|notmatch) /);
     expect(block).not.toContain('-Encoding ascii');
     expect(block).not.toContain('Add-Content');
     expect(ps1).toContain('$trustReady = (Test-Path $trustCa -PathType Leaf) -and (Test-Path $trustMarker)');

@@ -680,14 +680,21 @@ MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-
   # folder above is ready: with the path moved and no copy, the api would start on an empty list
   # and stop trusting the central. The whole new text is built first and written in one step.
   # Read and written as UTF-8 with no byte order mark, so a value someone typed with letters
-  # outside ASCII stays as it is. Writing into the existing file keeps its owner-only ACL.
+  # outside ASCII stays as it is. Matching keeps case, which PowerShell's default operators ignore.
   $envText = [System.IO.File]::ReadAllText($envPath)
-  if ($trustReady -and ($envText -match '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem\r?$')) {
+  if ($trustReady -and ($envText -cmatch '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem\r?$')) {
     $eol = if ($envText.Contains("`r`n")) { "`r`n" } else { "`n" }
-    $envText = $envText -replace '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem(\r?)$', 'NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem$1'
+    $envText = $envText -creplace '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem(\r?)$', 'NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem$1'
     if ($envText -and -not $envText.EndsWith("`n")) { $envText += $eol }
-    if ($envText -notmatch '(?m)^TRUSTED_CA_FILE=') { $envText += "TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem$eol" }
-    [System.IO.File]::WriteAllText($envPath, $envText, (New-Object System.Text.UTF8Encoding($false)))
+    if ($envText -cnotmatch '(?m)^TRUSTED_CA_FILE=') { $envText += "TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem$eol" }
+    # Never into the live file: a stop half way would leave it cut short, and it holds the
+    # passwords. A new file beside it gets the same access rules first, then the text, and then
+    # takes the old one's place in one step.
+    $envTmp = "$envPath.tmp"
+    New-Item -ItemType File -Path $envTmp -Force | Out-Null
+    Set-Acl -Path $envTmp -AclObject (Get-Acl -Path $envPath)
+    [System.IO.File]::WriteAllText($envTmp, $envText, (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::Replace($envTmp, $envPath, [NullString]::Value)
     Write-Host "-> Moved NODE_EXTRA_CA_CERTS in .env to config/trust/ca.pem, so Settings > Network manages the trusted certificates"
   }
 }
