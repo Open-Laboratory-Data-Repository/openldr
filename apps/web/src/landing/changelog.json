@@ -6,6 +6,156 @@
       "version": null,
       "entries": [
         {
+          "hash": "185a95493",
+          "type": "fix",
+          "scope": "studio",
+          "title": "One certificate and one host are counted in the singular"
+        },
+        {
+          "hash": "1ff795d86",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The Network tables fit a phone"
+        },
+        {
+          "hash": "6d8ff1989",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The Network sheets lock their fields while a save is on its way"
+        },
+        {
+          "hash": "dbe283234",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The Network page drops late answers and says when a refresh fails"
+        },
+        {
+          "hash": "d410542ec",
+          "type": "feat",
+          "scope": "studio",
+          "title": "A Network settings page for trusted certificates and workflow hosts"
+        },
+        {
+          "hash": "7ca01de09",
+          "type": "fix",
+          "scope": "install",
+          "title": "The old trust path is matched as exact text, and Windows replaces .env in one step"
+        },
+        {
+          "hash": "b8b545820",
+          "type": "fix",
+          "scope": "install",
+          "title": "An upgrade never moves the trust path without the copy"
+        },
+        {
+          "hash": "15049f989",
+          "type": "feat",
+          "scope": "install",
+          "title": "The server edition gets a managed trust folder"
+        },
+        {
+          "hash": "761594780",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "The trust start keeps hangup, bounds the descriptor, and checks the file"
+        },
+        {
+          "hash": "90c62aca2",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "The launcher starts Node with a managed trust file"
+        },
+        {
+          "hash": "b9a2ac439",
+          "type": "fix",
+          "scope": "cli",
+          "title": "The refusal to remove a workflow host says only what the list entry grants"
+        },
+        {
+          "hash": "5ae8c4919",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Network commands say only what they changed"
+        },
+        {
+          "hash": "9276b1d2b",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Trust and workflow host commands"
+        },
+        {
+          "hash": "10d1715fe",
+          "type": "fix",
+          "scope": "server",
+          "title": "The workflow switch answers with what it applied"
+        },
+        {
+          "hash": "57ad1349b",
+          "type": "feat",
+          "scope": "server",
+          "title": "Routes for trusted certificates and workflow hosts"
+        },
+        {
+          "hash": "a9764b4dc",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Each step on the trust lock file is guarded"
+        },
+        {
+          "hash": "9b4d2e15c",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "IPv6 hosts match in any written form"
+        },
+        {
+          "hash": "59ca36351",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "A trust change lets go of its own lock only"
+        },
+        {
+          "hash": "43c20c063",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Unlock removes only the lock it looked at"
+        },
+        {
+          "hash": "a088a9d81",
+          "type": "feat",
+          "scope": "workflows",
+          "title": "An administrator names the hosts an HTTP step may call"
+        },
+        {
+          "hash": "01af82014",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "The trust lock is a file again, with an unlock"
+        },
+        {
+          "hash": "c9ce2456c",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "A trust change survives a lock that fails late"
+        },
+        {
+          "hash": "c31173780",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Trust changes take a database lock, not a lock file"
+        },
+        {
+          "hash": "1c8187b1f",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "A service that manages trusted certificates"
+        },
+        {
+          "hash": "d115bd9ee",
+          "type": "feat",
+          "scope": "rbac",
+          "title": "A permission for network trust"
+        },
+        {
           "hash": "ebd20d1b1",
           "type": "fix",
           "scope": "desktop",
