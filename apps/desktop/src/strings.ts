@@ -44,6 +44,7 @@ export interface AppStrings {
   shareConfirmNo: string;
   shareNextStart: string;
   shareRestartFailed: string;
+  shareSaveFailed: string;
   /** Error lines. */
   launcherEnded: string;
   launcherGone: string;
@@ -82,6 +83,7 @@ const en: AppStrings = {
   shareConfirmNo: 'Cancel',
   shareNextStart: 'OpenLDR was started outside this app. The change applies the next time this app starts it.',
   shareRestartFailed: 'OpenLDR did not stop, so sharing was not changed. Quit OpenLDR and open it again.',
+  shareSaveFailed: 'The setting could not be saved, so sharing was not changed. See the app log.',
   launcherEnded: 'OpenLDR stopped unexpectedly.',
   launcherGone: 'OpenLDR is no longer running.',
   statusNoAnswer: 'OpenLDR did not respond to a status check.',
@@ -117,6 +119,7 @@ const fr: AppStrings = {
   shareConfirmNo: 'Annuler',
   shareNextStart: "OpenLDR a été démarré en dehors de cette application. Le changement s'appliquera au prochain démarrage par cette application.",
   shareRestartFailed: "OpenLDR ne s'est pas arrêté, donc le partage n'a pas été modifié. Quittez OpenLDR et rouvrez-le.",
+  shareSaveFailed: "Le réglage n'a pas pu être enregistré, donc le partage n'a pas été modifié. Consultez le journal de l'application.",
   launcherEnded: "OpenLDR s'est arrêté de façon inattendue.",
   launcherGone: "OpenLDR n'est plus en cours d'exécution.",
   statusNoAnswer: "OpenLDR n'a pas répondu à une vérification d'état.",
@@ -152,6 +155,7 @@ const pt: AppStrings = {
   shareConfirmNo: 'Cancelar',
   shareNextStart: 'O OpenLDR foi iniciado fora desta aplicação. A alteração aplica-se da próxima vez que esta aplicação o iniciar.',
   shareRestartFailed: 'O OpenLDR não parou, por isso a partilha não foi alterada. Saia do OpenLDR e volte a abri-lo.',
+  shareSaveFailed: 'Não foi possível guardar a definição, por isso a partilha não foi alterada. Veja o registo da aplicação.',
   launcherEnded: 'O OpenLDR parou inesperadamente.',
   launcherGone: 'O OpenLDR já não está em execução.',
   statusNoAnswer: 'O OpenLDR não respondeu a uma verificação de estado.',

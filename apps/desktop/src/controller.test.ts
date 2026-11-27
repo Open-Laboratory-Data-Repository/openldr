@@ -955,4 +955,77 @@ describe('sharing on the lab network', () => {
     expect(h.launchers).toHaveLength(1);
     expect(h.exits).toEqual([0]);
   });
+
+  it('refreshes the share of an attached launcher once it answers', async () => {
+    // The launcher's lock is live before its HTTPS front is up, so the first status has no share.
+    let up = false;
+    const h = harness({
+      statuses: [runningStatus('127.0.0.1'), { ...runningStatus('127.0.0.1'), share } as Status],
+      answers: async () => up,
+    });
+    void h.controller.start();
+    await settle();
+    expect(h.controller.share()).toBeUndefined();
+    up = true;
+    await h.tick();
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    expect(h.controller.share()).toEqual(share);
+  });
+
+  it('takes the share from a later status read of an attached launcher', async () => {
+    let up = true;
+    const h = harness({
+      statuses: [runningStatus('127.0.0.1'), { ...runningStatus('127.0.0.1'), share } as Status],
+      answers: async () => up,
+      pollMs: 1000,
+    });
+    void h.controller.start();
+    await settle();
+    expect(h.controller.share()).toBeUndefined();
+    // The address stops answering for one poll, so the status is read again.
+    up = false;
+    await h.tick();
+    expect(h.controller.share()).toEqual(share);
+  });
+
+  it('a quit during a restart shares the one stop, and exits by its result', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const h = harness({
+      requestStop: async (hh) => {
+        await held;
+        return obeys(hh);
+      },
+    });
+    await ready(h);
+    const restarting = h.controller.restart();
+    await settle();
+    const quitting = h.controller.quit();
+    await settle();
+    // One stop was asked for, not two. The quit waits for it.
+    expect(h.stops()).toBe(1);
+    expect(h.exits).toEqual([]);
+    release();
+    await restarting;
+    await quitting;
+    await settle();
+    expect(h.stops()).toBe(1);
+    expect(h.exits).toEqual([0]);
+    expect(h.launchers).toHaveLength(1);
+  });
+
+  it('after a restart that could not stop the launcher, a quit still stops that launcher', async () => {
+    let obey = false;
+    const h = harness({ requestStop: async (hh) => (obey ? obeys(hh) : 1), stopWaitMs: 2000 });
+    await ready(h);
+    await h.controller.restart();
+    await settle();
+    expect(h.last()).toMatchObject({ screen: 'error', message: strings.shareRestartFailed });
+    obey = true;
+    await h.controller.quit();
+    await settle();
+    // The launcher this app started is still its to stop: it asks again and waits for the exit.
+    expect(h.stops()).toBe(2);
+    expect(h.exits).toEqual([0]);
+  });
 });

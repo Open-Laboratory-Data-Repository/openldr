@@ -16,6 +16,7 @@ import { choosePort } from './ports';
 import { Selfcheck, selfcheckConfig } from './selfcheck';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import { pickLang, STRINGS } from './strings';
+import { createShareSwitch } from './share-switch';
 import { trayTemplate } from './tray-menu';
 
 export type MainWindow = BrowserWindow;
@@ -294,37 +295,31 @@ function main(): void {
     tray = new Tray(nativeImage.createFromPath(join(here, '..', 'assets', 'tray.png')));
     tray.setToolTip(s.trayTooltip);
     // The tray menu is rebuilt whenever what it shows changes: a setting, or the launcher's share.
-    let shareBusy = false;
-    const setShare = async (on: boolean): Promise<void> => {
-      if (shareBusy) return;
-      if (on) {
-        // A yes or no question outside Studio, so a native box. Cancel is the default.
-        const options = {
-          type: 'question' as const,
-          buttons: [s.shareConfirmYes, s.shareConfirmNo],
-          defaultId: 1,
-          cancelId: 1,
-          title: s.shareConfirmTitle,
-          message: s.shareConfirmTitle,
-          detail: s.shareConfirmBody,
-        };
-        const answer = w.isDestroyed() ? await dialog.showMessageBox(options) : await dialog.showMessageBox(w, options);
-        if (answer.response !== 0) return rebuildTray();
-      }
-      const { shareOnNetwork: _was, ...rest } = loadSettings(settingsFile);
-      save(on ? { ...rest, shareOnNetwork: true } : rest);
-      shareBusy = true;
-      rebuildTray();
-      let applied = false;
-      try {
-        applied = (await controller?.restart()) ?? false;
-      } finally {
-        shareBusy = false;
-        rebuildTray();
-      }
-      // The launcher was started outside this app, or is not ready. The setting waits for the next start.
-      if (!applied) void dialog.showMessageBox({ type: 'info', message: s.shareNextStart, buttons: ['OK'] });
-    };
+    // A box with no parent when the window is hidden or gone: a box tied to a hidden window may never show.
+    const box = (options: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> =>
+      !w.isDestroyed() && w.isVisible() ? dialog.showMessageBox(w, options) : dialog.showMessageBox(options);
+    const shareSwitch = createShareSwitch({
+      // A yes or no question outside Studio, so a native box. Cancel is the default.
+      confirm: async () =>
+        (
+          await box({
+            type: 'question',
+            buttons: [s.shareConfirmYes, s.shareConfirmNo],
+            defaultId: 1,
+            cancelId: 1,
+            title: s.shareConfirmTitle,
+            message: s.shareConfirmTitle,
+            detail: s.shareConfirmBody,
+          })
+        ).response === 0,
+      loadSettings: () => loadSettings(settingsFile),
+      // Not `save`: that one swallows a failed write, and this change must know.
+      saveSettings: (v) => saveSettings(settingsFile, v),
+      restart: async () => (await controller?.restart()) ?? false,
+      tell: (what) => void box({ type: what === 'save-failed' ? 'error' : 'info', message: what === 'save-failed' ? s.shareSaveFailed : s.shareNextStart, buttons: ['OK'] }),
+      changed: () => rebuildTray(),
+      log,
+    });
     const saveCertificate = async (certFile: string): Promise<void> => {
       try {
         const picked = await dialog.showSaveDialog({ defaultPath: 'openldr-certificate.pem' });
@@ -339,7 +334,7 @@ function main(): void {
       const now = loadSettings(settingsFile);
       tray.setContextMenu(
         Menu.buildFromTemplate(
-          trayTemplate({ startAtSignIn: now.startAtSignIn, shareOnNetwork: now.shareOnNetwork === true, share: controller?.share(), busy: shareBusy }, s, {
+          trayTemplate({ startAtSignIn: now.startAtSignIn, shareOnNetwork: now.shareOnNetwork === true, share: controller?.share(), busy: shareSwitch.busy() }, s, {
             open: showWindow,
             setStartAtSignIn: (on) => {
               try {
@@ -350,7 +345,7 @@ function main(): void {
               }
               rebuildTray();
             },
-            setShare: (on) => void setShare(on),
+            setShare: (on) => void shareSwitch.set(on),
             copy: (text) => clipboard.writeText(text),
             saveCertificate: (certFile) => void saveCertificate(certFile),
             openLogs: () => {

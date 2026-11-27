@@ -89,6 +89,8 @@ interface Child {
   sawStopped: boolean;
   lastError?: string;
   lastStderr?: string;
+  /** A stop of this launcher that is in flight. A quit and a restart share it. */
+  stopping?: Promise<number>;
 }
 
 /** How long to wait between asks while waiting for an attached launcher to answer, and between `stop` asks. */
@@ -300,7 +302,9 @@ export class DesktopController {
     // Its lock is live before its server listens, so it may still be starting. Ask once a second,
     // and read its status every pollMs in case it ends before it ever answers.
     let waited = 0;
+    let waitedForIt = false;
     while (!(await this.deps.answers(address))) {
+      waitedForIt = true;
       if (this.stale(run)) return;
       await this.deps.sleep(STEP_MS);
       if (this.stale(run)) return;
@@ -311,6 +315,13 @@ export class DesktopController {
       }
     }
     if (this.stale(run)) return;
+    // A launcher that was still starting when this app attached had not published its share yet:
+    // the lock is live before the HTTPS front is. So its status is read once more, now it answers.
+    if (waitedForIt) {
+      const fresh = await this.boundedStatus();
+      if (this.stale(run)) return;
+      if (fresh?.running) this.shared = fresh.share;
+    }
     this.show({ screen: 'studio', address });
 
     // An address that answers needs no `status` child. Only when it stops answering is the status read.
@@ -327,7 +338,11 @@ export class DesktopController {
   private async stillRunning(run: number): Promise<boolean> {
     const s = await this.boundedStatus();
     if (this.stale(run)) return false;
-    if (s?.running) return true;
+    if (s?.running) {
+      // Its share may have started, stopped or changed since the last read.
+      this.shared = s.share;
+      return true;
+    }
     if (s === undefined) {
       this.fail(this.deps.strings.statusNoAnswer);
       return false;
@@ -419,7 +434,9 @@ export class DesktopController {
   }
 
   private async stopAndExit(): Promise<void> {
-    const child = this.phase === 'own' ? this.child : undefined;
+    // Whatever the phase: after a restart that could not stop it, the launcher this app started
+    // is on the error screen and is still this app's to stop.
+    const child = this.child;
     if (child !== undefined && !child.exited) {
       this.show({ screen: 'stopping' });
       return this.deps.exit(await this.stopOwn(child));
@@ -438,7 +455,16 @@ export class DesktopController {
    * taken its lock, `stop` says "not running" with code 0, so until the launcher is ready or says
    * it is stopping, the stop is asked for again each second.
    */
-  private async stopOwn(child: Child): Promise<number> {
+  private stopOwn(child: Child): Promise<number> {
+    // One stop at a time for one launcher. A quit that comes during a restart waits for the
+    // restart's stop and takes its result, where a second `stop` could fail and end the app early.
+    child.stopping ??= this.askToStop(child).finally(() => {
+      child.stopping = undefined;
+    });
+    return child.stopping;
+  }
+
+  private async askToStop(child: Child): Promise<number> {
     let waited = 0;
     for (;;) {
       const code = await this.deps.requestStop();
