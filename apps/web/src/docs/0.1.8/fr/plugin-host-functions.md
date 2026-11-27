@@ -192,6 +192,8 @@ CE exécute alors le point d'entrée avec les réglages du connecteur comme conf
 
 La page ne voit jamais les réglages. Si le code met un réglage secret (mot de passe, jeton ou clé) dans sa réponse, CE retient toute la réponse. La ligne d'audit de l'appel nomme le connecteur. La même autorisation couvre aussi les appels `connectors.*` de la page : un plugin ne liste et n'utilise que les connecteurs pour lesquels il a été activé.
 
+CE ne suit jamais une redirection pour l'appel réseau d'un plugin. Si l'adresse du connecteur répond par une redirection, votre code reçoit cette réponse elle-même, avec son statut 3xx, et rien n'est envoyé plus loin. Traitez-la comme un échec, et dites à l'administrateur de mettre l'adresse finale dans le connecteur. Une adresse qui renvoie `http` vers `https`, ou qui ajoute un chemin, en est la cause habituelle.
+
 ## fhir_emit
 
 Envoie des enregistrements FHIR terminés dans CE. La requête est `{ "resources": [ ... ] }`.

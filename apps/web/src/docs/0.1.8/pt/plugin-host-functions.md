@@ -192,6 +192,8 @@ O CE corre então o ponto de entrada com as definições do conector como config
 
 A página nunca vê as definições. Se o código puser uma definição secreta (palavra-passe, token ou chave) na sua resposta, o CE retém a resposta toda. A linha de auditoria da chamada nomeia o conector. A mesma autorização cobre também as chamadas `connectors.*` da página: um plugin só lista e usa os conectores para que foi ativado.
 
+O CE nunca segue um redirecionamento na chamada de rede de um plugin. Se o endereço do conector responder com um redirecionamento, o seu código recebe essa mesma resposta, com o estado 3xx, e nada é enviado adiante. Trate-a como uma falha, e diga ao administrador para pôr o endereço final no conector. Um endereço que passa `http` para `https`, ou que acrescenta um caminho, é a causa habitual.
+
 ## fhir_emit
 
 Envia registos FHIR prontos para o CE. O pedido é `{ "resources": [ ... ] }`.
