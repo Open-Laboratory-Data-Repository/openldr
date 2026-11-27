@@ -35,6 +35,7 @@ import { registerReportCategoryRoutes } from './report-categories-routes';
 import { registerMarketplaceRoutes } from './marketplace-routes';
 import { registerWorkflowRoutes } from './workflows-routes';
 import { registerConnectorsRoutes } from './connectors-routes';
+import { registerNetworkRoutes } from './network-routes';
 import { registerSettingsRoutes } from './settings-routes';
 import { registerActivityRoutes } from './activity-routes';
 import { registerNotificationRoutes } from './notification-routes';
@@ -211,6 +212,7 @@ export async function buildApp(ctx: AppContext) {
   registerMarketplaceRoutes(app, ctx);
   registerPluginUiRoutes(app, ctx);
   registerConnectorsRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
+  registerNetworkRoutes(app, ctx);
   registerWorkflowRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
   registerQueryRoutes(app, ctx, {
     // referenceCapture: an operator-authored query on CENTRAL is reference config that must
