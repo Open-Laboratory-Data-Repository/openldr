@@ -278,9 +278,11 @@ function installSh(
   args: string[],
   existingEnv?: string,
   extraEnv: Record<string, string> = {},
+  /** Run in this install folder, as a second run does, and leave what is in it. */
+  into?: string,
 ): { code: number; out: string; dir: string } {
   const bin = tempDir('openldr-fakebin-');
-  const dir = join(tempDir('openldr-install-'), 'openldr');
+  const dir = into ?? join(tempDir('openldr-install-'), 'openldr');
   // A re-run: the installer adopts an .env it finds and never rewrites it whole.
   if (existingEnv !== undefined) {
     mkdirSync(dir, { recursive: true });
@@ -431,6 +433,162 @@ describe('install.sh Docker Compose version', () => {
   }, 60_000);
 });
 
+describe('install.sh trusted certificates', () => {
+  const OLD_DEFAULT = 'NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem';
+  const trust = (dir: string, name: string): string => join(dir, 'config', 'trust', name);
+  const central = (dir: string): string => join(dir, 'config', 'nginx', 'certs', 'central', 'fullchain.pem');
+  /** An install folder as an older installer left it: an .env, and a central certificate file. */
+  function oldInstall(envLine: string, centralCert: string): string {
+    const dir = join(tempDir('openldr-install-'), 'openldr');
+    mkdirSync(join(dir, 'config', 'nginx', 'certs', 'central'), { recursive: true });
+    writeFileSync(join(dir, '.env'), `${ENV_BEFORE_LOCAL_SIGN_IN}${envLine}\n`);
+    writeFileSync(central(dir), centralCert);
+    return dir;
+  }
+
+  it('a fresh install gets the trust folder, an empty file and both settings', () => {
+    const r = installSh(['--no-start']);
+    expect(r.code).toBe(0);
+    expect(readFileSync(trust(r.dir, 'ca.pem'), 'utf8')).toBe('');
+    expect(existsSync(trust(r.dir, '.migrated'))).toBe(true);
+    const env = readFileSync(join(r.dir, '.env'), 'utf8');
+    expect(envValue(env, 'TRUSTED_CA_FILE')).toBe('/etc/openldr/trust/ca.pem');
+    expect(envValue(env, 'NODE_EXTRA_CA_CERTS')).toBe('/etc/openldr/trust/ca.pem');
+    // The group of the person who installs: the openldr wrapper runs the CLI as that person.
+    expect(envValue(env, 'OPENLDR_TRUST_GID')).toBe(String(process.getgid?.()));
+    // The old placeholder is still made: the compose file still mounts it.
+    expect(readFileSync(central(r.dir), 'utf8')).toBe('');
+  }, 60_000);
+
+  it('an upgrade copies an old central certificate once and writes the marker', () => {
+    const dir = oldInstall(OLD_DEFAULT, 'OLD CENTRAL CERTIFICATE\n');
+    const r = installSh(['--no-start'], undefined, {}, dir);
+    expect(r.code).toBe(0);
+    expect(readFileSync(trust(dir, 'ca.pem'), 'utf8')).toBe('OLD CENTRAL CERTIFICATE\n');
+    expect(existsSync(trust(dir, '.migrated'))).toBe(true);
+    expect(readdirSync(join(dir, 'config', 'trust')).sort()).toEqual(['.migrated', 'ca.pem']);
+    // The old file is left where it is.
+    expect(readFileSync(central(dir), 'utf8')).toBe('OLD CENTRAL CERTIFICATE\n');
+  }, 60_000);
+
+  it('a second run after the last certificate was removed copies nothing', () => {
+    const dir = oldInstall(OLD_DEFAULT, 'OLD CENTRAL CERTIFICATE\n');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    // The administrator removes the last certificate in Settings > Network. Empty is a real state.
+    writeFileSync(trust(dir, 'ca.pem'), '');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    expect(readFileSync(trust(dir, 'ca.pem'), 'utf8')).toBe('');
+  }, 120_000);
+
+  it('a second run leaves certificates added since the first one', () => {
+    const dir = oldInstall(OLD_DEFAULT, 'OLD CENTRAL CERTIFICATE\n');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    writeFileSync(trust(dir, 'ca.pem'), 'OLD CENTRAL CERTIFICATE\nADDED IN THE APP\n');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    expect(readFileSync(trust(dir, 'ca.pem'), 'utf8')).toBe('OLD CENTRAL CERTIFICATE\nADDED IN THE APP\n');
+  }, 120_000);
+
+  it('a run that stopped before the marker copies again', () => {
+    const dir = oldInstall(OLD_DEFAULT, 'OLD CENTRAL CERTIFICATE\n');
+    // As a run left it that stopped after making the folder and before the copy was in place.
+    mkdirSync(join(dir, 'config', 'trust'), { recursive: true });
+    writeFileSync(trust(dir, 'ca.pem'), '');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    expect(readFileSync(trust(dir, 'ca.pem'), 'utf8')).toBe('OLD CENTRAL CERTIFICATE\n');
+    expect(existsSync(trust(dir, '.migrated'))).toBe(true);
+  }, 60_000);
+
+  it('an upgrade with an empty old file copies nothing, and still writes the marker', () => {
+    const dir = oldInstall(OLD_DEFAULT, '');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    expect(readFileSync(trust(dir, 'ca.pem'), 'utf8')).toBe('');
+    expect(existsSync(trust(dir, '.migrated'))).toBe(true);
+    // A certificate put in the old file afterwards, as the old guide said, is not picked up.
+    writeFileSync(central(dir), 'LATE\n');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    expect(readFileSync(trust(dir, 'ca.pem'), 'utf8')).toBe('');
+  }, 120_000);
+
+  it('moves the old default path in an existing .env to the new one', () => {
+    const dir = oldInstall(OLD_DEFAULT, '');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    const env = readFileSync(join(dir, '.env'), 'utf8');
+    expect(env.split('\n').filter((l) => l.startsWith('NODE_EXTRA_CA_CERTS='))).toEqual(['NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem']);
+    expect(env.split('\n').filter((l) => l.startsWith('TRUSTED_CA_FILE='))).toEqual(['TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem']);
+    expect(envValue(env, 'OPENLDR_TRUST_GID')).toBe(String(process.getgid?.()));
+    // Every other line is as it was.
+    for (const line of ENV_BEFORE_LOCAL_SIGN_IN.split('\n').filter(Boolean)) expect(env).toContain(`${line}\n`);
+    // A third run changes nothing more.
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    expect(readFileSync(join(dir, '.env'), 'utf8')).toBe(env);
+  }, 120_000);
+
+  it('leaves a custom NODE_EXTRA_CA_CERTS in an existing .env alone and adds no TRUSTED_CA_FILE', () => {
+    const dir = oldInstall('NODE_EXTRA_CA_CERTS=/etc/ssl/our-own-ca.pem', '');
+    expect(installSh(['--no-start'], undefined, {}, dir).code).toBe(0);
+    const env = readFileSync(join(dir, '.env'), 'utf8');
+    expect(envValue(env, 'NODE_EXTRA_CA_CERTS')).toBe('/etc/ssl/our-own-ca.pem');
+    expect(env).not.toContain('TRUSTED_CA_FILE');
+    expect(env).not.toContain('OPENLDR_TRUST_GID');
+  }, 60_000);
+
+  it('leaves an .env with no NODE_EXTRA_CA_CERTS line alone', () => {
+    const r = installSh(['--no-start'], ENV_BEFORE_LOCAL_SIGN_IN);
+    const env = readFileSync(join(r.dir, '.env'), 'utf8');
+    expect(env).not.toContain('TRUSTED_CA_FILE');
+    expect(env).not.toContain('NODE_EXTRA_CA_CERTS');
+  }, 60_000);
+
+  describe('the compose file', () => {
+    const compose = readFileSync(join(REPO, 'deploy/install/docker-compose.yml'), 'utf8');
+    const service = (name: string): string => new RegExp(`^  ${name}:\\n((?:    .*\\n|\\n)+)`, 'm').exec(compose)?.[1] ?? '';
+
+    it('mounts the trust folder in the api, read and write, and keeps the old file mount', () => {
+      const api = service('api');
+      expect(api).toMatch(/^      - \.\/config\/trust:\/etc\/openldr\/trust$/m);
+      expect(api).toContain('./config/nginx/certs/central/fullchain.pem:/etc/ssl/central-ca.pem:ro');
+    });
+
+    it('gives the folder to the api user before the api starts', () => {
+      const init = service('trust-init');
+      expect(init).toContain('./config/trust:/trust');
+      expect(init).toMatch(/user: "0:0"/);
+      expect(init).toContain('chown 10001:${OPENLDR_TRUST_GID:-10001} /trust');
+      expect(init).toContain('chmod 2775 /trust');
+      expect(init).toMatch(/restart: "no"/);
+      expect(init).toMatch(/network_mode: none/);
+      expect(service('api')).toMatch(/trust-init: \{ condition: service_completed_successfully \}/);
+    });
+
+    it('names uid 10001, the user the api image runs as', () => {
+      expect(readFileSync(join(REPO, 'apps/server/Dockerfile'), 'utf8')).toMatch(/useradd --system --uid 10001 openldr/);
+    });
+  });
+
+  it('the PowerShell installer holds the same paths, marker and migration', () => {
+    // A static check. Nothing here runs PowerShell.
+    const ps1 = readFileSync(join(REPO, 'install/install.ps1'), 'utf8');
+    expect(ps1).toContain('TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem');
+    expect(ps1).toContain('NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem');
+    expect(ps1).toContain('config/trust/ca.pem');
+    expect(ps1).toContain('config/trust/.migrated');
+    expect(ps1).toContain('config/nginx/certs/central/fullchain.pem');
+    // The old default, as the pattern that finds it in an existing .env. No other value is moved.
+    expect(ps1).toContain("'(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\\.pem\\r?$'");
+    // Only when the marker is missing, through a temporary name, and the marker is written after the copy.
+    const guard = ps1.indexOf('if (-not (Test-Path $trustMarker)) {');
+    const copy = ps1.indexOf('Copy-Item -Path $centralCa -Destination "$trustCa.tmp" -Force');
+    const move = ps1.indexOf('Move-Item -Path "$trustCa.tmp" -Destination $trustCa -Force');
+    const marker = ps1.indexOf('New-Item -ItemType File -Path $trustMarker');
+    expect(guard).toBeGreaterThan(-1);
+    expect(copy).toBeGreaterThan(guard);
+    expect(move).toBeGreaterThan(copy);
+    expect(marker).toBeGreaterThan(move);
+    // An empty old file is not copied.
+    expect(ps1).toContain('(Get-Item $centralCa).Length -gt 0');
+  });
+});
+
 describe('install.sh storage keys', () => {
   it('writes Garage-format storage keys and points S3 at the storage service', () => {
     const r = installSh(['--no-start']);
@@ -466,6 +624,8 @@ const KEYS_BEFORE_LOCAL_SIGN_IN = [
   'SEED_ON_START', 'LETSENCRYPT_EMAIL', 'MARKETPLACE_REGISTRY_URL',
 ];
 const KEYCLOAK_ONLY_KEY = /^(OIDC_|KC_|KEYCLOAK_|INITIAL_LAB_ADMIN_PASSWORD$)/;
+// Added with the managed trust folder: the file Settings > Network changes, and the group that may write it.
+const TRUST_KEYS = ['TRUSTED_CA_FILE', 'OPENLDR_TRUST_GID'];
 
 // The shape of an .env written by an installer from before this change: no AUTH_ADAPTER line
 // (so the server defaults to Keycloak) and no COMPOSE_PROFILES line.
@@ -488,7 +648,7 @@ describe('install.sh sign-in mode', () => {
     const r = installSh(['--no-start']);
     expect(r.code).toBe(0);
     const env = readFileSync(join(r.dir, '.env'), 'utf8');
-    const expected = [...KEYS_BEFORE_LOCAL_SIGN_IN.filter((k) => !KEYCLOAK_ONLY_KEY.test(k)), 'AUTH_ADAPTER'];
+    const expected = [...KEYS_BEFORE_LOCAL_SIGN_IN.filter((k) => !KEYCLOAK_ONLY_KEY.test(k)), 'AUTH_ADAPTER', ...TRUST_KEYS];
     expect(envKeys(env).sort()).toEqual(expected.sort());
     expect(envValue(env, 'AUTH_ADAPTER')).toBe('local');
     expect(envValue(env, 'SECRETS_ENCRYPTION_KEY')).toMatch(/^.{40,}$/);
@@ -498,7 +658,7 @@ describe('install.sh sign-in mode', () => {
     const r = installSh(['--no-start', '--auth', 'keycloak']);
     expect(r.code).toBe(0);
     const env = readFileSync(join(r.dir, '.env'), 'utf8');
-    expect(envKeys(env).sort()).toEqual([...KEYS_BEFORE_LOCAL_SIGN_IN, 'AUTH_ADAPTER', 'COMPOSE_PROFILES'].sort());
+    expect(envKeys(env).sort()).toEqual([...KEYS_BEFORE_LOCAL_SIGN_IN, 'AUTH_ADAPTER', 'COMPOSE_PROFILES', ...TRUST_KEYS].sort());
     expect(envValue(env, 'AUTH_ADAPTER')).toBe('keycloak');
     expect(envValue(env, 'COMPOSE_PROFILES')).toBe('keycloak');
     expect(envValue(env, 'OIDC_ISSUER_URL')).toBe('https://localhost:18443/auth/realms/openldr');

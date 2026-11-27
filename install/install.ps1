@@ -425,6 +425,28 @@ New-Item -ItemType Directory -Force -Path "$Dir/config/nginx/certs","$Dir/config
 # operator has already installed.
 $centralCa = "$Dir/config/nginx/certs/central/fullchain.pem"
 if (-not (Test-Path $centralCa)) { New-Item -ItemType File -Path $centralCa | Out-Null }
+
+# The trusted certificates, changed in Settings > Network and with `openldr trust`. The api mounts
+# this folder and reads config/trust/ca.pem. An empty file means nothing extra is trusted.
+#
+# Once only, an install made before this folder existed brings its central certificate along.
+# The marker says that step is done. Without it, a later run would copy the old file again over
+# a list the administrator has since changed, and an empty list is a real state. The copy goes
+# through a temporary name and the marker is written last, so a run that stops half way copies
+# again next time.
+New-Item -ItemType Directory -Force -Path "$Dir/config/trust" | Out-Null
+$trustCa = "$Dir/config/trust/ca.pem"
+$trustMarker = "$Dir/config/trust/.migrated"
+if (-not (Test-Path $trustMarker)) {
+  if ((Test-Path $centralCa) -and ((Get-Item $centralCa).Length -gt 0)) {
+    Copy-Item -Path $centralCa -Destination "$trustCa.tmp" -Force
+    Move-Item -Path "$trustCa.tmp" -Destination $trustCa -Force
+    Write-Host "-> Copied the central certificate into config/trust/ca.pem. It is now managed in Settings > Network."
+  }
+  if (-not (Test-Path $trustCa)) { New-Item -ItemType File -Path $trustCa | Out-Null }
+  New-Item -ItemType File -Path $trustMarker | Out-Null
+}
+if (-not (Test-Path $trustCa)) { New-Item -ItemType File -Path $trustCa | Out-Null }
 function Fetch($rel, $out) { Invoke-WebRequest -UseBasicParsing "$RepoRaw/$rel" -OutFile $out }
 Fetch "deploy/install/docker-compose.yml" "$Dir/docker-compose.yml"
 # The realm is imported by Keycloak only, so a local install does not download it.
@@ -616,7 +638,8 @@ GARAGE_RPC_SECRET=$garageRpc
 GARAGE_ADMIN_TOKEN=$garageAdmin
 $authEnvBlock
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
-NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem
+TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem
+NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem
 SECRETS_ENCRYPTION_KEY=$secretsKey
 MIGRATE_ON_START=true
 SEED_ON_START=$seedOnStart
@@ -648,6 +671,18 @@ MARKETPLACE_REGISTRY_URL=https://raw.githubusercontent.com/Open-Laboratory-Data-
       }
       Write-Host "-> Added the keycloak profile to COMPOSE_PROFILES in .env, so Keycloak keeps running"
     }
+  }
+  # An install made before the trust folder names the old single file. Move exactly that default
+  # to the new path, so Settings > Network can manage the list. Any other value is the person's
+  # own choice and stays: the page then shows the list as set outside OpenLDR.
+  $envText = Get-Content $envPath -Raw
+  if ($envText -match '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem\r?$') {
+    $envText = $envText -replace '(?m)^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem(\r?)$', 'NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem$1'
+    if ($envText -and -not $envText.EndsWith("`n")) { $envText += "`r`n" }
+    if ($envText -notmatch '(?m)^TRUSTED_CA_FILE=') { $envText += "TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem`r`n" }
+    # Set-Content writes into the existing file, so the owner-only ACL set at install stays.
+    Set-Content -Path $envPath -Value $envText -NoNewline -Encoding ascii
+    Write-Host "-> Moved NODE_EXTRA_CA_CERTS in .env to config/trust/ca.pem, so Settings > Network manages the trusted certificates"
   }
 }
 

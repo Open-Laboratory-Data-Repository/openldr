@@ -854,6 +854,31 @@ mkdir -p "$DIR/config/nginx/certs" "$DIR/config/nginx/certs/central" "$DIR/confi
 # api image's node v22). To trust a central, overwrite this file with its certificate and restart
 # the api — no .env or compose edit needed.
 [ -f "$DIR/config/nginx/certs/central/fullchain.pem" ] || : > "$DIR/config/nginx/certs/central/fullchain.pem"
+
+# The trusted certificates, changed in Settings > Network and with `openldr trust`. The api mounts
+# this folder and reads config/trust/ca.pem. An empty file means nothing extra is trusted.
+#
+# Once only, an install made before this folder existed brings its central certificate along.
+# The marker says that step is done. Without it, a later run would copy the old file again over
+# a list the administrator has since changed, and an empty list is a real state. The copy goes
+# through a temporary name and the marker is written last, so a run that stops half way copies
+# again next time.
+TRUST_DIR="$DIR/config/trust"
+OLD_CENTRAL="$DIR/config/nginx/certs/central/fullchain.pem"
+if mkdir -p "$TRUST_DIR" 2>/dev/null && [ -w "$TRUST_DIR" ]; then
+  if [ ! -f "$TRUST_DIR/.migrated" ]; then
+    if [ -s "$OLD_CENTRAL" ]; then
+      cp "$OLD_CENTRAL" "$TRUST_DIR/ca.pem.tmp" && mv "$TRUST_DIR/ca.pem.tmp" "$TRUST_DIR/ca.pem" \
+        || err "could not copy the central certificate into $TRUST_DIR"
+      echo "→ Copied the central certificate into config/trust/ca.pem. It is now managed in Settings > Network."
+    fi
+    [ -f "$TRUST_DIR/ca.pem" ] || : > "$TRUST_DIR/ca.pem"
+    : > "$TRUST_DIR/.migrated"
+  fi
+  [ -f "$TRUST_DIR/ca.pem" ] || : > "$TRUST_DIR/ca.pem"
+else
+  echo "⚠ Cannot write to $TRUST_DIR as this user. Left it as it is." >&2
+fi
 fetch() { curl -fsSL "$REPO_RAW/$1" -o "$2" || err "failed to download $1"; }
 fetch "deploy/install/docker-compose.yml" "$DIR/docker-compose.yml"
 # The realm is imported by Keycloak only, so a local install does not download it.
@@ -1020,7 +1045,9 @@ GARAGE_RPC_SECRET=$GARAGE_RPC
 GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN
 $AUTH_ENV_BLOCK
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
-NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem
+TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem
+NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem
+OPENLDR_TRUST_GID=$(id -g)
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
 MIGRATE_ON_START=true
 SEED_ON_START=$SEED_ON_START_VAL
@@ -1050,6 +1077,17 @@ else
         echo "→ Added the keycloak profile to COMPOSE_PROFILES in .env, so Keycloak keeps running"
         ;;
     esac
+  fi
+  # An install made before the trust folder names the old single file. Move exactly that default
+  # to the new path, so Settings > Network can manage the list. Any other value is the person's
+  # own choice and stays: the page then shows the list as set outside OpenLDR.
+  if grep -qxE 'NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem\r?' "$DIR/.env"; then
+    ( umask 077; sed 's|^NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca\.pem\(\r\{0,1\}\)$|NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem\1|' "$DIR/.env" > "$DIR/.env.tmp" )
+    mv "$DIR/.env.tmp" "$DIR/.env"
+    [ -z "$(tail -c1 "$DIR/.env")" ] || printf '\n' >> "$DIR/.env"
+    grep -qE '^TRUSTED_CA_FILE=' "$DIR/.env" || printf 'TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem\n' >> "$DIR/.env"
+    grep -qE '^OPENLDR_TRUST_GID=' "$DIR/.env" || printf 'OPENLDR_TRUST_GID=%s\n' "$(id -g)" >> "$DIR/.env"
+    echo "→ Moved NODE_EXTRA_CA_CERTS in .env to config/trust/ca.pem, so Settings > Network manages the trusted certificates"
   fi
 fi
 
