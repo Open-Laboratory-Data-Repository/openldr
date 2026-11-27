@@ -496,7 +496,7 @@ What changes in `main.ts`:
 - A silent `local` (an existing install) also saves `mode: 'local'`.
 - `OPENLDR_DESKTOP_SERVER` is for development and tests. It skips the choice and is used as the saved server's address. It is never written to the settings file.
 - The `controller` variable becomes a `Running | undefined`. `share()`, `restart()` and the setup code are reached only after `mode === 'local'`.
-- The check that the launcher is built (`existsSync(target.entry)` at `main.ts:190`) runs in local mode only.
+- The check that the launcher is built (`existsSync(target.entry)` at `main.ts:190` and `:362`) runs in local mode only.
 - `session.defaultSession.setCertificateVerifyProc` calls `verifyDecision(request, pinned)`. `RemoteDeps.pin` stores the new pin and then sets the check again. Electron keeps old answers of this check, and setting it again is what drops them. Step 1 below proves that before anything else is built.
 - Both permission handlers pass `connectMode`.
 - `ACTION_CHANNEL` is handled only from the app's own page, by the same check `RETRY_CHANNEL` uses at `main.ts:186`. Each action calls the matching controller method. `retry` keeps working through `RETRY_CHANNEL` too.
@@ -596,7 +596,7 @@ What the lock does when on:
 - Links to other sites are dropped (`linkTarget` with `locked`).
 - Start at sign-in is turned on.
 - The tray shows three items only: Open OpenLDR, Unlock this PC..., Quit. Every other item is hidden: the share switch, change server, switch mode, open logs, and start at sign-in. Each of them leaves the app, changes its server or restarts it.
-- Every way to quit asks for the PIN first: the tray, the app menu, and the keyboard. They all pass through `requestQuit` at `main.ts:88`.
+- Every way to quit asks for the PIN first: the tray, the app menu, and the keyboard. They all pass through `requestQuit` at `main.ts:89`.
 - A shutdown or sign-out of the PC still quits without a PIN.
 - `Ctrl+Shift+L` in the window (`before-input-event`) asks for the PIN to unlock. The tray may be hidden in kiosk mode, so this is the way in.
 
