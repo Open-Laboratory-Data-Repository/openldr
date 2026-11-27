@@ -20,6 +20,15 @@ function fakeEventing() {
   };
 }
 
+/** A schedule store's armDue for tests: one step that stores the time and queues the run. The
+ *  queued run shows up in `ev.published`, as it would on the durable queue. */
+const armInto = (ev: ReturnType<typeof fakeEventing>, onStore?: (workflowId: string, nodeId: string, dueAt: string) => void) =>
+  async (workflowId: string, nodeId: string, dueAt: string, event: { type: string; payload: unknown }) => {
+    onStore?.(workflowId, nodeId, dueAt);
+    ev.published.push({ ...event, availableAt: new Date(dueAt) });
+    return true;
+  };
+
 const wfWith = (nodes: unknown[], edges: unknown[] = []) => ({
   id: 'w1',
   name: 'W',
@@ -42,7 +51,7 @@ describe('workflow trigger runner', () => {
           enabled: true, nextDueAt: null,
         }),
         list: async () => [],
-        setNextDue: async () => {},
+        armDue: armInto(ev),
         claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
@@ -72,7 +81,7 @@ describe('workflow trigger runner', () => {
           enabled: false, nextDueAt: null,
         }),
         list: async () => [],
-        setNextDue: async () => {},
+        armDue: armInto(ev),
         claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
@@ -101,7 +110,7 @@ describe('workflow trigger runner', () => {
       schedules: {
         list: async () => [],
         get: async () => undefined,
-        setNextDue: async () => {},
+        armDue: armInto(ev),
         claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
@@ -130,7 +139,7 @@ describe('workflow trigger runner', () => {
         ]),
       } as never,
       runs: { record: async (r: unknown) => { recorded.push(r); } } as never,
-      schedules: { list: async () => [], get: async () => undefined, setNextDue: async () => {} } as never,
+      schedules: { list: async () => [], get: async () => undefined, armDue: async () => true } as never,
       webhooks: { resolve: () => undefined } as never,
       runWorkflow,
       logger: { error: () => {}, warn: () => {} },
@@ -159,7 +168,7 @@ describe('workflow trigger runner', () => {
           { workflowId: 'w1', nodeId: 'n1', cron: '0 9 * * *', tz: 'UTC', enabled: true, nextDueAt: null },
         ],
         get: async () => undefined,
-        setNextDue: async (...args: unknown[]) => { setNextDueCalls.push(args); },
+        armDue: armInto(ev, (...args: unknown[]) => { setNextDueCalls.push(args); }),
         claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
@@ -183,7 +192,7 @@ describe('workflow trigger runner', () => {
           { workflowId: 'w1', nodeId: 'n1', cron: '0 9 * * *', tz: 'UTC', enabled: true, nextDueAt: futureDate },
         ],
         get: async () => undefined,
-        setNextDue: async () => {},
+        armDue: armInto(ev),
         claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
@@ -211,7 +220,7 @@ describe('workflow trigger runner', () => {
       schedules: {
         list: async () => [],
         get: async () => undefined,
-        setNextDue: async () => {},
+        armDue: armInto(ev),
         claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
@@ -245,7 +254,7 @@ const eventRunner = (nodes: unknown[], recorded: unknown[]) =>
   createWorkflowTriggerRunner({
     store: { get: async () => wfWith(nodes) } as never,
     runs: { record: async (r: unknown) => { recorded.push(r); } } as never,
-    schedules: { list: async () => [], get: async () => undefined, setNextDue: async () => {} } as never,
+    schedules: { list: async () => [], get: async () => undefined, armDue: async () => true } as never,
     webhooks: { resolve: () => undefined } as never,
     runWorkflow,
     logger: { error: () => {}, warn: () => {} },
@@ -265,7 +274,7 @@ describe('a queued scheduled run', () => {
       schedules: {
         get: async (w: string, n: string) => rows.find((r) => r.workflowId === w && r.nodeId === n),
         list: async () => rows,
-        setNextDue: async (w: string, n: string, at: string) => { const r = rows.find((x) => x.workflowId === w && x.nodeId === n); if (r) r.nextDueAt = at; },
+        armDue: armInto(ev, (w, n, at) => { const r = rows.find((x) => x.workflowId === w && x.nodeId === n); if (r) r.nextDueAt = at; }),
         claimDue: async (_w: string, _n: string, dueAt: string | null) => { claims.push(dueAt); return claim(dueAt); },
       } as never,
       webhooks: { resolve: () => undefined } as never,
@@ -301,7 +310,7 @@ describe('a queued scheduled run', () => {
       runs: { record: async () => {} } as never,
       schedules: {
         get: async () => rows[0], list: async () => rows,
-        setNextDue: async (_w: string, _n: string, at: string) => { rows[0].nextDueAt = at; },
+        armDue: armInto(ev, (_w, _n, at) => { rows[0].nextDueAt = at; }),
         claimDue: async () => { rows[0].nextDueAt = null; return true; },
       } as never,
       webhooks: { resolve: () => undefined } as never,
@@ -399,7 +408,7 @@ describe('runAndRecord — nodeMeta', () => {
         ),
       } as never,
       runs: { record: async (r: unknown) => { recorded.push(r); } } as never,
-      schedules: { get: async () => null, list: async () => [], setNextDue: async () => {} } as never,
+      schedules: { get: async () => null, list: async () => [], armDue: async () => true } as never,
       webhooks: { resolve: () => undefined } as never,
       runWorkflow,
       logger: { error: () => {}, warn: () => {} },
@@ -427,7 +436,7 @@ describe('runAndRecord — nodeMeta', () => {
     const runner = createWorkflowTriggerRunner({
       store: { get: async () => wfWith([{ id: 't', type: 'trigger', data: {} }]) } as never,
       runs: { record: async (r: unknown) => { recorded.push(r); } } as never,
-      schedules: { get: async () => null, list: async () => [], setNextDue: async () => {} } as never,
+      schedules: { get: async () => null, list: async () => [], armDue: async () => true } as never,
       webhooks: { resolve: () => undefined } as never,
       runWorkflow,
       logger: { error: () => {}, warn: () => {} },
@@ -461,70 +470,21 @@ describe('heldSummary', () => {
 
 describe('armWorkflowSchedule', () => {
   const row = { workflowId: 'w1', nodeId: 's', cron: '* * * * *', tz: 'UTC' };
-  /** Records the order of the two steps, and the stored time. */
-  function world(publish?: () => Promise<void>) {
-    const steps: string[] = [];
-    const state = { nextDueAt: null as string | null };
-    const published: Array<{ payload: { dueAt: string }; availableAt?: Date }> = [];
-    return {
-      steps, state, published,
-      schedules: { setNextDue: async (_w: string, _n: string, at: string | null) => { steps.push('store'); state.nextDueAt = at; } },
-      bus: { publish: async (e: { payload: { dueAt: string } }, o?: { availableAt?: Date }) => { steps.push('queue'); if (publish) await publish(); published.push({ payload: e.payload, availableAt: o?.availableAt }); } },
-    };
-  }
 
-  it('queues a run that names its time, then stores that time', async () => {
-    const w = world();
-    await armWorkflowSchedule(w.schedules, w.bus as never, row);
-    expect(w.steps).toEqual(['queue', 'store']);
-    expect(w.state.nextDueAt).not.toBeNull();
-    expect(w.published[0].payload).toEqual({ workflowId: 'w1', nodeId: 's', dueAt: w.state.nextDueAt });
-    expect(w.published[0].availableAt?.toISOString()).toBe(w.state.nextDueAt);
+  it('asks the store for one step: the time, and the run that names it', async () => {
+    const calls: unknown[][] = [];
+    await armWorkflowSchedule({ armDue: async (...a: unknown[]) => { calls.push(a); return true; } } as never, row, () => new Date('2026-01-01T10:00:10.000Z'));
+    expect(calls).toEqual([['w1', 's', '2026-01-01T10:01:00.000Z', { type: 'workflow.schedule.due', payload: { workflowId: 'w1', nodeId: 's', dueAt: '2026-01-01T10:01:00.000Z' } }]]);
   });
 
-  it('when the run cannot be queued, stores nothing and says so', async () => {
-    const w = world(async () => { throw new Error('queue is away'); });
-    await expect(armWorkflowSchedule(w.schedules, w.bus as never, row)).rejects.toThrow('queue is away');
-    // Nothing looks armed that has no queued run.
-    expect(w.steps).toEqual(['queue']);
-    expect(w.state.nextDueAt).toBeNull();
+  it('takes the very next time, however close: a daily 09:00 saved at 08:59:59 runs that day', async () => {
+    const calls: unknown[][] = [];
+    await armWorkflowSchedule({ armDue: async (...a: unknown[]) => { calls.push(a); return true; } } as never,
+      { ...row, cron: '0 9 * * *' }, () => new Date('2026-11-27T08:59:59.000Z'));
+    expect(calls[0][2]).toBe('2026-11-27T09:00:00.000Z');
   });
 
-  it('a failed arm leaves alone a time that another arm stored, the same time included', async () => {
-    // Two arms overlap and pick the same minute. The other one queued its run and stored the time.
-    const w = world(async () => { throw new Error('queue is away'); });
-    w.state.nextDueAt = '2026-01-01T10:01:00.000Z';
-    await expect(armWorkflowSchedule(w.schedules, w.bus as never, row, () => new Date('2026-01-01T10:00:10.000Z'))).rejects.toThrow('queue is away');
-    expect(w.state.nextDueAt).toBe('2026-01-01T10:01:00.000Z');
-  });
-
-  it('two arms of one schedule overlap, the first cannot queue, the second can: the second run still claims its time', async () => {
-    // The interleaving a review reproduced: A starts queueing and waits, B queues and stores,
-    // then A fails. Both arms name the same time.
-    const clock = () => new Date('2026-01-01T10:00:10.000Z');
-    const state = { nextDueAt: null as string | null };
-    const queued: string[] = [];
-    const schedules = { setNextDue: async (_w: string, _n: string, at: string) => { state.nextDueAt = at; } };
-    let failA!: (e: Error) => void;
-    const busA = { publish: () => new Promise<void>((_resolve, reject) => { failA = reject; }) };
-    const busB = { publish: async (e: { payload: { dueAt: string } }) => { queued.push(e.payload.dueAt); } };
-
-    const a = armWorkflowSchedule(schedules, busA as never, row, clock);
-    await armWorkflowSchedule(schedules, busB as never, row, clock);
-    failA(new Error('queue is away'));
-    await expect(a).rejects.toThrow('queue is away');
-
-    expect(queued).toEqual(['2026-01-01T10:01:00.000Z']);
-    // The time B stored is still there, so B's queued run can claim it.
-    expect(state.nextDueAt).toBe('2026-01-01T10:01:00.000Z');
-  });
-
-  it('never arms for a time under 2 seconds away, so the time is stored before the run can start', async () => {
-    const far = world();
-    await armWorkflowSchedule(far.schedules, far.bus as never, row, () => new Date('2026-01-01T10:00:57.000Z'));
-    expect(far.state.nextDueAt).toBe('2026-01-01T10:01:00.000Z');
-    const near = world();
-    await armWorkflowSchedule(near.schedules, near.bus as never, row, () => new Date('2026-01-01T10:00:58.500Z'));
-    expect(near.state.nextDueAt).toBe('2026-01-01T10:02:00.000Z');
+  it('hands on the error when the store cannot arm', async () => {
+    await expect(armWorkflowSchedule({ armDue: async () => { throw new Error('database is away'); } } as never, row)).rejects.toThrow('database is away');
   });
 });

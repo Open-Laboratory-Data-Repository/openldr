@@ -19,7 +19,7 @@ import { isProtectedWorkflowId, rebuildSystemWorkflow } from './system-workflows
 /** Store a saved workflow's schedules and queue their first run (bootstrap syncWorkflowSchedules,
  *  which the CLI calls too). Webhook paths are stored with the definition. */
 async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; enabled: boolean; definition: unknown }): Promise<void> {
-  await syncWorkflowSchedules({ schedules: ctx.workflows.schedules, eventing: ctx.eventing, logger: ctx.logger }, workflow);
+  await syncWorkflowSchedules({ schedules: ctx.workflows.schedules, logger: ctx.logger }, workflow);
 }
 
 /** Scan all saved workflows for ingest trigger nodes; returns the ids that should fire on ingest. */

@@ -8,8 +8,8 @@ import { redactError } from './redact-error';
  * `openldr workflows enable|disable <id>`: the studio row menu's Enable and Disable, through the same
  * shared code (bootstrap workflow-enabled.ts). Only `enabled` changes. A webhook follows at once,
  * because each request reads the stored workflow. A schedule follows at once too: its rows are
- * stored and its first run is put on the durable queue the running server drains (bootstrap
- * workflow-schedules.ts, as the save routes do). A running server picks up listeners, ingest and
+ * stored and its first run is put on the durable queue the running server drains, in one
+ * database write (bootstrap workflow-schedules.ts, as the save routes do). A running server picks up listeners, ingest and
  * event triggers at its next start.
  */
 export async function runWorkflowSetEnabled(id: string, enabled: boolean): Promise<number> {
@@ -20,7 +20,7 @@ export async function runWorkflowSetEnabled(id: string, enabled: boolean): Promi
       process.stderr.write(`Workflow not found: ${id}\n`);
       return 1;
     }
-    await syncWorkflowSchedules({ schedules: ctx.workflows.schedules, eventing: ctx.eventing, logger: ctx.logger }, changed.after);
+    await syncWorkflowSchedules({ schedules: ctx.workflows.schedules, logger: ctx.logger }, changed.after);
     await recordAuditEvent(ctx, cliNamedActor(), {
       action: enabled ? 'workflow.enable' : 'workflow.disable', entityType: 'workflow', entityId: id,
     });

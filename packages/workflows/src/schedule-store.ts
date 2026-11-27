@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Kysely } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
 import { type WorkflowSchedule, WorkflowScheduleSchema } from './types';
@@ -15,8 +16,13 @@ export interface WorkflowScheduleStore {
   removeForWorkflow(workflowId: string): Promise<void>;
   list(opts: { enabledOnly?: boolean }): Promise<WorkflowSchedule[]>;
   get(workflowId: string, nodeId: string): Promise<WorkflowSchedule | undefined>;
-  /** Stores the time the schedule is armed for. */
-  setNextDue(workflowId: string, nodeId: string, nextDueAt: string): Promise<void>;
+  /**
+   * Arms a schedule in one transaction: stores the time, and puts the run for that time on the
+   * durable queue (outbox_events, the table the event bus drains). Either both are written or
+   * neither. So a schedule never looks armed without a queued run, and a queued run always finds
+   * its time stored. False, with nothing queued, when the schedule is no longer there.
+   */
+  armDue(workflowId: string, nodeId: string, dueAt: string, event: { type: string; payload: Record<string, unknown> }): Promise<boolean>;
   /**
    * Takes the armed time off a schedule, once. True for the caller that took it, false for every
    * other. `dueAt` is the time the queued run names: it must be the time the schedule is armed
@@ -51,8 +57,18 @@ export function createWorkflowScheduleStore(db: Kysely<InternalSchema>): Workflo
       const r = await db.selectFrom(T).selectAll().where('workflow_id', '=', workflowId).where('node_id', '=', nodeId).executeTakeFirst();
       return r ? fromRow(r as Record<string, unknown>) : undefined;
     },
-    async setNextDue(workflowId, nodeId, nextDueAt) {
-      await db.updateTable(T).set({ next_due_at: nextDueAt } as never).where('workflow_id', '=', workflowId).where('node_id', '=', nodeId).execute();
+    async armDue(workflowId, nodeId, dueAt, event) {
+      return db.transaction().execute(async (trx) => {
+        const stored = await trx.updateTable(T).set({ next_due_at: dueAt } as never)
+          .where('workflow_id', '=', workflowId).where('node_id', '=', nodeId).returning('workflow_id').execute();
+        if (stored.length === 0) return false;
+        // The same row the event bus's publish writes. The worker finds it by its own polling, so
+        // a run for a later time needs no notification.
+        await trx.insertInto('outbox_events').values({
+          id: randomUUID(), type: event.type, payload: JSON.stringify(event.payload), batch_id: null, available_at: dueAt,
+        } as never).execute();
+        return true;
+      });
     },
     async claimDue(workflowId, nodeId, dueAt, now) {
       // One UPDATE, so the database decides which caller wins.

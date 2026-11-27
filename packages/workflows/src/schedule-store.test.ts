@@ -15,6 +15,14 @@ beforeEach(async () => {
     .addColumn('enabled', 'boolean')
     .addColumn('next_due_at', 'text')
     .execute();
+  // The durable queue. A schedule is armed by one transaction over both tables.
+  await db.schema.createTable('outbox_events')
+    .addColumn('id', 'text')
+    .addColumn('type', 'text')
+    .addColumn('payload', 'text')
+    .addColumn('batch_id', 'text')
+    .addColumn('available_at', 'text')
+    .execute();
 });
 
 describe('WorkflowScheduleStore', () => {
@@ -23,7 +31,7 @@ describe('WorkflowScheduleStore', () => {
     await store.upsert({ workflowId: 'w1', nodeId: 'n1', cron: '0 9 * * *', tz: 'UTC', enabled: true, nextDueAt: null });
     await store.upsert({ workflowId: 'w1', nodeId: 'n1', cron: '0 10 * * *', tz: 'UTC', enabled: true, nextDueAt: null }); // update
     expect((await store.list({ enabledOnly: true })).length).toBe(1);
-    await store.setNextDue('w1', 'n1', '2026-01-01T10:00:00Z');
+    await store.armDue('w1', 'n1', '2026-01-01T10:00:00Z', { type: 't', payload: {} });
     expect((await store.get('w1', 'n1'))?.nextDueAt).toBe('2026-01-01T10:00:00Z');
     await store.removeForWorkflow('w1');
     expect((await store.list({})).length).toBe(0);
@@ -36,7 +44,7 @@ describe('WorkflowScheduleStore', () => {
     async function armed() {
       const store = createWorkflowScheduleStore(db);
       await store.upsert({ workflowId: 'w1', nodeId: 'n1', cron: '0 10 * * *', tz: 'UTC', enabled: true, nextDueAt: null });
-      await store.setNextDue('w1', 'n1', DUE);
+      await store.armDue('w1', 'n1', DUE, { type: 'workflow.schedule.due', payload: { workflowId: 'w1', nodeId: 'n1', dueAt: DUE } });
       return store;
     }
 
@@ -66,6 +74,48 @@ describe('WorkflowScheduleStore', () => {
       expect(await store.claimDue('w1', 'n1', DUE, DUE)).toBe(false);
       expect(await store.claimDue('w1', 'n1', null, DUE)).toBe(false);
       expect(await store.claimDue('w9', 'n1', DUE, DUE)).toBe(false);
+    });
+  });
+
+  // Storing the time and queueing the run are one write. Either both are there or neither, so a
+  // schedule never looks armed without a queued run, and a queued run always finds its time.
+  describe('armDue', () => {
+    const DUE = '2026-01-01T10:00:00.000Z';
+    const EVENT = { type: 'workflow.schedule.due', payload: { workflowId: 'w1', nodeId: 'n1', dueAt: DUE } };
+    const queue = async () => (await db.selectFrom('outbox_events').selectAll().execute()) as Array<Record<string, unknown>>;
+    const fresh = async () => {
+      const store = createWorkflowScheduleStore(db);
+      await store.upsert({ workflowId: 'w1', nodeId: 'n1', cron: '0 10 * * *', tz: 'UTC', enabled: true, nextDueAt: null });
+      return store;
+    };
+
+    it('stores the time and queues one run for that time', async () => {
+      const store = await fresh();
+      expect(await store.armDue('w1', 'n1', DUE, EVENT)).toBe(true);
+      expect((await store.get('w1', 'n1'))?.nextDueAt).toBe(DUE);
+      const rows = await queue();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ type: 'workflow.schedule.due', batch_id: null, available_at: DUE });
+      expect(JSON.parse(String(rows[0].payload))).toEqual(EVENT.payload);
+      expect(String(rows[0].id)).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it('queues nothing for a schedule that is no longer there', async () => {
+      const store = createWorkflowScheduleStore(db);
+      expect(await store.armDue('gone', 'n1', DUE, EVENT)).toBe(false);
+      expect(await queue()).toEqual([]);
+    });
+
+    // That a failed queue write leaves no stored time needs real Postgres: pg-mem does not undo a
+    // failed transaction. See bootstrap workflow-schedules.live.test.ts.
+
+    it('two arms for one time leave two queued runs and one stored time: the first claim wins', async () => {
+      const store = await fresh();
+      await store.armDue('w1', 'n1', DUE, EVENT);
+      await store.armDue('w1', 'n1', DUE, EVENT);
+      expect(await queue()).toHaveLength(2);
+      expect(await store.claimDue('w1', 'n1', DUE, DUE)).toBe(true);
+      expect(await store.claimDue('w1', 'n1', DUE, DUE)).toBe(false);
     });
   });
 });

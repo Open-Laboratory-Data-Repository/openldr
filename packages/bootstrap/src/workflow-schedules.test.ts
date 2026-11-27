@@ -5,17 +5,21 @@ function world() {
   const rows: Array<{ workflowId: string; nodeId: string; cron: string; tz: string | null; enabled: boolean; nextDueAt: string | null }> = [];
   const published: Array<{ type: string; payload: { workflowId: string; nodeId: string; dueAt: string }; availableAt?: Date }> = [];
   const warned: unknown[] = [];
+  const failing = { queue: false };
   const find = (w: string, n: string) => rows.find((r) => r.workflowId === w && r.nodeId === n);
   return {
-    rows, published, warned,
+    rows, published, warned, failing,
     deps: {
       schedules: {
         upsert: async (s: (typeof rows)[number]) => { const i = rows.findIndex((r) => r.workflowId === s.workflowId && r.nodeId === s.nodeId); if (i >= 0) rows[i] = { ...s }; else rows.push({ ...s }); },
         removeForWorkflow: async (w: string) => { for (let i = rows.length - 1; i >= 0; i--) if (rows[i].workflowId === w) rows.splice(i, 1); },
-        setNextDue: async (w: string, n: string, at: string | null) => { const r = find(w, n); if (r) r.nextDueAt = at; },
-        claimDue: async (w: string, n: string, dueAt: string | null) => { const r = find(w, n); if (!r || dueAt === null || r.nextDueAt !== dueAt) return false; r.nextDueAt = null; return true; },
+        // As the real store: one step that stores the time and queues the run.
+        armDue: async (wf: string, n: string, dueAt: string, event: never) => {
+          const r = find(wf, n); if (!r) return false;
+          if (failing.queue) throw new Error('queue is away');
+          r.nextDueAt = dueAt; published.push({ ...(event as object), availableAt: new Date(dueAt) } as never); return true;
+        },
       },
-      eventing: { publish: async (e: never, o?: { availableAt?: Date }) => { published.push({ ...(e as object), availableAt: o?.availableAt } as never); } },
       logger: { warn: (...a: unknown[]) => { warned.push(a); } },
     },
   };
@@ -61,7 +65,7 @@ describe('syncWorkflowSchedules', () => {
 
   it('when the run cannot be queued: does not throw, warns, and leaves no stored time', async () => {
     const w = world();
-    w.deps.eventing.publish = async () => { throw new Error('queue is away'); };
+    w.failing.queue = true;
     await expect(syncWorkflowSchedules(w.deps as never, timed('wf1'))).resolves.toBeUndefined();
     expect(w.rows[0]).toMatchObject({ enabled: true, nextDueAt: null });
     expect(w.warned).toHaveLength(1);

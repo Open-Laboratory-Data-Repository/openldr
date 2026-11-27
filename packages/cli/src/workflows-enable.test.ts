@@ -41,7 +41,7 @@ describe('openldr workflows enable|disable (follow-up C7-7)', () => {
     h.setWorkflowEnabled.mockResolvedValue({ before: wf(false), after: wf(true) });
     await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'workflows', 'enable', 'wf_1']);
     expect(h.syncWorkflowSchedules).toHaveBeenCalledWith(
-      { schedules: h.ctx.workflows.schedules, eventing: h.ctx.eventing, logger: h.ctx.logger }, wf(true));
+      { schedules: h.ctx.workflows.schedules, logger: h.ctx.logger }, wf(true));
     expect(process.stdout.write).toHaveBeenCalledWith(expect.stringContaining('Webhooks and schedules follow now'));
     expect(process.exitCode).toBe(0);
   });

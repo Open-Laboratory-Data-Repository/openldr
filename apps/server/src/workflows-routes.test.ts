@@ -71,13 +71,15 @@ function fakeSecretStore() {
 function fakeWorkflowExtras() {
   const runRecords: any[] = [];
   const scheduleRows: any[] = [];
+  // The durable queue a schedule's run is put on, in the same step as its stored time.
+  const queue = { published: [] as any[], failing: false };
   const webhookEntries = new Map<string, { workflowId: string; secret: string | null }>();
   const norm = (p: string) => p.replace(/^\/+/, '').replace(/\/+$/, '');
   let ingestIds: string[] = [];
   let eventIds: string[] = [];
   const runAndRecordCalls: any[] = [];
   return {
-    runRecords, scheduleRows, webhookEntries, runAndRecordCalls,
+    runRecords, scheduleRows, webhookEntries, runAndRecordCalls, queue,
     getIngestIds: () => ingestIds,
     getEventIds: () => eventIds,
     runs: {
@@ -95,13 +97,12 @@ function fakeWorkflowExtras() {
       },
       list: async () => scheduleRows as any[],
       get: async (workflowId: string, nodeId: string) => scheduleRows.find((x) => x.workflowId === workflowId && x.nodeId === nodeId),
-      setNextDue: async (workflowId: string, nodeId: string, at: string | null) => {
-        const r = scheduleRows.find((x) => x.workflowId === workflowId && x.nodeId === nodeId); if (r) r.nextDueAt = at;
-      },
-      claimDue: async (workflowId: string, nodeId: string, dueAt: string | null) => {
+      // As the real store: one step that stores the time and queues the run.
+      armDue: async (workflowId: string, nodeId: string, dueAt: string, event: any) => {
         const r = scheduleRows.find((x) => x.workflowId === workflowId && x.nodeId === nodeId);
-        if (!r || dueAt === null || r.nextDueAt !== dueAt) return false;
-        r.nextDueAt = null; return true;
+        if (!r) return false;
+        if (queue.failing) throw new Error('queue is away');
+        r.nextDueAt = dueAt; queue.published.push({ ...event, availableAt: new Date(dueAt) }); return true;
       },
     },
     webhooks: {
@@ -141,8 +142,7 @@ function fakeCtx() {
   const extras = fakeWorkflowExtras();
   const secretStore = fakeSecretStore();
   return {
-    // The durable queue the save routes put a schedule's first run on.
-    eventing: (() => { const published: any[] = []; return { published, publish: async (e: any, o?: { availableAt?: Date }) => { published.push({ ...e, availableAt: o?.availableAt }); } }; })(),
+    scheduleQueue: extras.queue,
     workflows: {
       store: {
         list: async () => data as any[],
@@ -1777,7 +1777,7 @@ describe('workflow on/off and stale saves (follow-up C7-1)', () => {
       definition: { nodes: [{ id: 'tick', type: 'trigger', position: { x: 0, y: 0 }, data: { triggerType: 'schedule', cron: '*/5 * * * *', tz: 'UTC' } }], edges: [] },
       ...over,
     });
-    const queued = (ctx: any, id: string) => (ctx.eventing.published as any[]).filter((e) => e.type === 'workflow.schedule.due' && e.payload.workflowId === id);
+    const queued = (ctx: any, id: string) => (ctx.scheduleQueue.published as any[]).filter((e) => e.type === 'workflow.schedule.due' && e.payload.workflowId === id);
     const rowOf = async (ctx: any, id: string) => ctx.workflows.schedules.get(id, 'tick');
 
     it('creating one queues its first run and stores the time', async () => {
@@ -1820,7 +1820,7 @@ describe('workflow on/off and stale saves (follow-up C7-1)', () => {
 
     it('a save still succeeds when the run cannot be queued, and the time is not left stored', async () => {
       const { app, ctx } = setup();
-      (ctx as any).eventing.publish = async () => { throw new Error('queue is away'); };
+      (ctx as any).scheduleQueue.failing = true;
       const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t4') });
       expect(res.statusCode).toBeLessThan(300);
       expect(await rowOf(ctx, 'wf-t4')).toMatchObject({ enabled: true, nextDueAt: null });
