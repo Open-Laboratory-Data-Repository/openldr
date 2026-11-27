@@ -21,7 +21,9 @@ interface Options {
   /** Answers to probe, in order. The last one repeats. */
   probes?: Probe[];
   /** A probe of its own, for a test that holds it open. */
-  probe?: (address: string) => Promise<Probe>;
+  probe?: (address: string, pin: PinnedServer | undefined) => Promise<Probe>;
+  /** True when this process is one the app started again by itself. */
+  relaunched?: boolean;
   certificate?: ServerCertificate;
   /** Makes saveSettings throw while it is true. */
   saveFails?: { now: boolean };
@@ -32,6 +34,9 @@ function harness(o: Options = {}) {
   const screens: Screen[] = [];
   const pins: Array<PinnedServer | undefined> = [];
   const probed: string[] = [];
+  /** The pin each probe was run with. */
+  const probePins: Array<PinnedServer | undefined> = [];
+  let relaunches = 0;
   const read: Array<[string, number]> = [];
   const exits: number[] = [];
   const logs: string[] = [];
@@ -40,8 +45,9 @@ function harness(o: Options = {}) {
   const sleeps: Array<() => void> = [];
   const answers = [...(o.probes ?? ['ok'])];
   const deps: RemoteDeps = {
-    probe: o.probe ?? (async (address) => {
+    probe: o.probe ?? (async (address, pin) => {
       probed.push(address);
+      probePins.push(pin);
       return answers.length > 1 ? (answers.shift() as Probe) : (answers[0] as Probe);
     }),
     readCertificate: async (host, port) => {
@@ -49,6 +55,8 @@ function harness(o: Options = {}) {
       return o.certificate ?? { ok: true, fingerprint: FP_A };
     },
     pin: (server) => void pins.push(server),
+    relaunch: () => void relaunches++,
+    ...(o.relaunched ? { relaunched: true } : {}),
     loadSettings: () => ({ ...settings }),
     saveSettings: (s) => {
       if (o.saveFails?.now) throw new Error('disk full');
@@ -68,7 +76,7 @@ function harness(o: Options = {}) {
     for (const done of sleeps.splice(0)) done();
     await settle();
   };
-  return { controller, screens, pins, probed, read, exits, logs, saves, sleeps, tick, settings: () => settings, last: () => screens.at(-1) };
+  return { controller, screens, pins, probed, probePins, read, exits, logs, saves, sleeps, tick, settings: () => settings, last: () => screens.at(-1), relaunches: () => relaunches };
 }
 
 const saved = (fingerprint?: string): Settings => ({ startAtSignIn: false, mode: 'connect', server: { address: ADDRESS, ...(fingerprint ? { fingerprint } : {}) } });
@@ -148,7 +156,10 @@ describe('RemoteController, connecting for the first time', () => {
     await h.controller.trust(true);
     expect(h.last()).toEqual({ screen: 'studio', address: ADDRESS });
     expect(h.settings().server).toEqual({ address: ADDRESS, fingerprint: FP_A });
-    expect(h.pins.at(-1)).toEqual({ host: 'labpc', fingerprint: FP_A });
+    // The first check ran with nothing accepted, the second with the certificate the person accepted.
+    expect(h.probePins).toEqual([undefined, { host: 'labpc', fingerprint: FP_A }]);
+    // The window's own pin is set once, when Studio is about to be shown.
+    expect(h.pins).toEqual([{ host: 'labpc', fingerprint: FP_A }]);
   });
 
   it('goes back to the connect screen on no, and saves nothing', async () => {
@@ -166,19 +177,19 @@ describe('RemoteController, connecting for the first time', () => {
     await h.controller.trust(true);
     expect(h.last()).toEqual({ screen: 'connect', value: 'labpc:3443', problem: 'certificate' });
     expect(h.probed).toHaveLength(2);
-    // The certificate the person accepted did not work, so it is not kept.
+    // The certificate the person accepted did not work, so it is not kept, and the window never got it.
     expect(h.settings().server).toBeUndefined();
-    expect(h.pins.at(-1)).toBeUndefined();
+    expect(h.pins).toEqual([]);
   });
 
-  it('drops the pin of the server before it tries another one', async () => {
+  it('checks another server with nothing accepted, whatever was pinned for the last one', async () => {
     const h = harness({ settings: saved(FP_A), probes: ['ok'] });
     await h.controller.start();
     await h.controller.connect('other.example:3443');
-    // The old pin is for labpc. It must not be in force while another host is probed.
+    // The pin for labpc must play no part when another host is checked.
     const i = h.probed.indexOf('https://other.example:3443/studio/');
     expect(i).toBeGreaterThan(0);
-    expect(h.pins.at(-1)).toBeUndefined();
+    expect(h.probePins[i]).toBeUndefined();
   });
 
   it('answering the certificate screen twice does nothing the second time', async () => {
@@ -196,6 +207,7 @@ describe('RemoteController, with a saved server', () => {
   it('pins it and shows Studio', async () => {
     const h = harness({ settings: saved(FP_A), probes: ['ok'] });
     await h.controller.start();
+    expect(h.probePins).toEqual([{ host: 'labpc', fingerprint: FP_A }]);
     expect(h.pins).toEqual([{ host: 'labpc', fingerprint: FP_A }]);
     expect(h.screens).toEqual([{ screen: 'starting', note: 'checking' }, { screen: 'studio', address: ADDRESS }]);
     expect(h.controller.address()).toBe(ADDRESS);
@@ -227,10 +239,12 @@ describe('RemoteController, with a saved server', () => {
     await h.controller.start();
     expect(h.last()).toEqual({ screen: 'certificate', address: ADDRESS, fingerprint: FP_B, changed: true });
     expect(h.settings().server).toEqual({ address: ADDRESS, fingerprint: FP_A });
-    expect(h.pins.at(-1)).toEqual({ host: 'labpc', fingerprint: FP_A });
+    // Studio has not been shown, so the window has no pin yet.
+    expect(h.pins).toEqual([]);
     await h.controller.trust(true);
     expect(h.settings().server).toEqual({ address: ADDRESS, fingerprint: FP_B });
-    expect(h.pins.at(-1)).toEqual({ host: 'labpc', fingerprint: FP_B });
+    expect(h.probePins.at(-1)).toEqual({ host: 'labpc', fingerprint: FP_B });
+    expect(h.pins).toEqual([{ host: 'labpc', fingerprint: FP_B }]);
     expect(h.last()).toEqual({ screen: 'studio', address: ADDRESS });
   });
 
@@ -398,9 +412,10 @@ describe('RemoteController, with a saved server', () => {
     await h.controller.connect('other.example:3443');
     await h.controller.trust(true);
     expect(h.last()).toEqual({ screen: 'connect', value: 'other.example:3443', problem: 'certificate', fixed: true });
-    // The earlier server and its certificate are untouched, and its pin is back in force.
+    // The earlier server and its certificate are untouched, and the window's pin never moved.
     expect(h.settings().server).toEqual({ address: ADDRESS, fingerprint: FP_A });
-    expect(h.pins.at(-1)).toEqual({ host: 'labpc', fingerprint: FP_A });
+    expect(h.pins).toEqual([{ host: 'labpc', fingerprint: FP_A }]);
+    expect(h.probePins.at(-1)).toEqual({ host: 'other.example', fingerprint: FP_B });
   });
 
   it('keeps the old certificate when a changed one was accepted and then did not work', async () => {
@@ -408,7 +423,7 @@ describe('RemoteController, with a saved server', () => {
     await h.controller.start();
     await h.controller.trust(true);
     expect(h.settings().server).toEqual({ address: ADDRESS, fingerprint: FP_A });
-    expect(h.pins.at(-1)).toEqual({ host: 'labpc', fingerprint: FP_A });
+    expect(h.pins).toEqual([]);
   });
 
   it('says so when the server cannot be saved, drops the pin, and works on the next try', async () => {
@@ -417,7 +432,7 @@ describe('RemoteController, with a saved server', () => {
     await h.controller.connect('labpc:3443');
     await h.controller.trust(true);
     expect(h.last()).toEqual({ screen: 'connect', value: 'labpc:3443', problem: 'not-saved' });
-    expect(h.pins.at(-1)).toBeUndefined();
+    expect(h.pins).toEqual([]);
     expect(h.controller.address()).toBeUndefined();
     expect(h.logs.join(' ')).toContain('disk full');
     saveFails.now = false;
@@ -442,5 +457,47 @@ describe('RemoteController, with a saved server', () => {
     h.controller.changeServer();
     expect(h.last()).toEqual({ screen: 'connect', value: ADDRESS, problem: 'not-saved', fixed: true });
     expect(h.pins.at(-1)).toBeUndefined();
+  });
+
+  // Electron keeps its answer about a certificate until the app ends. So the window can hold a
+  // refusal from before the person accepted a certificate, and only a new process forgets it.
+  it('starts the app again when the window refuses a certificate that a fresh check accepts', async () => {
+    const h = harness({ settings: saved(FP_A), probes: ['ok'] });
+    await h.controller.start();
+    await h.controller.studioFailed('certificate');
+    expect(h.relaunches()).toBe(1);
+    expect(h.probePins.at(-1)).toEqual({ host: 'labpc', fingerprint: FP_A });
+    // It shows nothing more and counts no failed load: the new process takes over.
+    expect(h.last()).toEqual({ screen: 'studio', address: ADDRESS });
+  });
+
+  it('does not start again a second time, and goes on as for any failed load', async () => {
+    const h = harness({ settings: saved(FP_A), probes: ['ok'], relaunched: true });
+    await h.controller.start();
+    void h.controller.studioFailed('certificate');
+    await settle();
+    expect(h.relaunches()).toBe(0);
+    expect(h.last()).toEqual({ screen: 'unreachable', address: ADDRESS });
+  });
+
+  it('does not start again when a fresh check refuses the certificate too', async () => {
+    const h = harness({ settings: saved(FP_A), probes: ['ok', 'untrusted'], certificate: { ok: true, fingerprint: FP_B } });
+    await h.controller.start();
+    void h.controller.studioFailed('certificate');
+    await settle();
+    expect(h.relaunches()).toBe(0);
+    expect(h.last()).toEqual({ screen: 'unreachable', address: ADDRESS });
+    // After the wait it finds the changed certificate and asks.
+    await h.tick();
+    expect(h.last()).toEqual({ screen: 'certificate', address: ADDRESS, fingerprint: FP_B, changed: true });
+  });
+
+  it('does not start again for a failed load that is not about the certificate', async () => {
+    const h = harness({ settings: saved(FP_A), probes: ['ok'] });
+    await h.controller.start();
+    void h.controller.studioFailed();
+    await settle();
+    expect(h.relaunches()).toBe(0);
+    expect(h.probed).toHaveLength(1);
   });
 });

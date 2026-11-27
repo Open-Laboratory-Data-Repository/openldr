@@ -20,13 +20,26 @@ export const STUDIO_LOAD_TRIES = 3;
 
 export interface RemoteDeps {
   /**
-   * GET <origin>/health through the window's own session, so Electron's certificate check decides.
-   * 'untrusted' when that check refused the certificate.
+   * GET <origin>/health with Electron's certificate check deciding, and `pin` as the one
+   * certificate accepted beyond what the system trusts. 'untrusted' when that check refused the
+   * certificate.
+   *
+   * Electron asks its check once per certificate in a session and keeps the answer until the app
+   * ends. Nothing clears it (proved on Electron 45 on 2026-11-27). So a probe never runs in the
+   * window's own session: main.ts runs it in a session made for that pin, whose check never
+   * changes. The window's session then meets the server only once the pin is settled.
    */
-  probe(address: string): Promise<'ok' | 'no-answer' | 'untrusted'>;
+  probe(address: string, pin: PinnedServer | undefined): Promise<'ok' | 'no-answer' | 'untrusted'>;
   readCertificate(host: string, port: number): Promise<ServerCertificate>;
-  /** Tells the window's certificate check which host and certificate to accept. */
+  /** Tells the window's own certificate check which host and certificate to accept. */
   pin(server: PinnedServer | undefined): void;
+  /**
+   * Starts the app again. For the one case the window's session holds an old refusal of a
+   * certificate the person has since accepted: only a new process forgets it.
+   */
+  relaunch(): void;
+  /** True when this process was started by `relaunch`. It then never asks for another. */
+  relaunched?: boolean;
   loadSettings(): Settings;
   saveSettings(s: Settings): void;
   show(screen: Screen): void;
@@ -81,9 +94,7 @@ export class RemoteController {
       this.showConnect({ value: input, problem: parsed.reason });
       return;
     }
-    // A pin belongs to one host. None is in force while another address is tried.
-    this.deps.pin(undefined);
-    const first = await this.deps.probe(parsed.address);
+    const first = await this.deps.probe(parsed.address, undefined);
     if (run !== this.run) return;
     if (first === 'ok') {
       // Electron already trusts the certificate, or the address is plain http on this PC.
@@ -121,15 +132,13 @@ export class RemoteController {
       else this.showConnect({ value: q.typed });
       return;
     }
-    // The pin is in force for this one check only. Nothing goes on disk until the check has
-    // passed on this same run: a quit or another action in the meantime leaves the settings as
-    // they were.
-    this.deps.pin({ host: q.host, fingerprint: q.fingerprint });
-    const answer = await this.deps.probe(q.address);
+    // The check runs with this certificate accepted, away from the window's session. Nothing goes
+    // on disk, and the window's own pin does not move, until the check has passed on this same
+    // run: a quit or another action in the meantime leaves everything as it was.
+    const answer = await this.deps.probe(q.address, { host: q.host, fingerprint: q.fingerprint });
     if (run !== this.run) return;
     if (answer === 'ok') {
       if (!this.saveServer({ address: q.address, fingerprint: q.fingerprint })) {
-        this.pinSaved();
         this.showConnect({ value: q.typed, problem: 'not-saved' });
         return;
       }
@@ -137,8 +146,7 @@ export class RemoteController {
       return;
     }
     // One try. The certificate the person accepted did not work. The server this PC had, if any,
-    // is untouched, and its pin goes back in force.
-    this.pinSaved();
+    // is untouched.
     this.showConnect({ value: q.typed, problem: 'certificate' });
   }
 
@@ -153,10 +161,30 @@ export class RemoteController {
     this.showConnect({ ...(old === undefined ? {} : { value: old }), ...(saved ? {} : { problem: 'not-saved' as const }) });
   }
 
-  /** main.ts calls this when Studio's own page failed to load from the server. */
-  async studioFailed(): Promise<void> {
+  /**
+   * main.ts calls this when Studio's own page failed to load from the server. `why` is
+   * 'certificate' when the window's session refused the server's certificate.
+   */
+  async studioFailed(why: 'certificate' | 'other' = 'other'): Promise<void> {
     const run = ++this.run;
     this.shown = undefined;
+    if (why === 'certificate' && !this.deps.relaunched) {
+      // The window's session refused a certificate. If a check with the saved pin passes, that
+      // session is holding an answer from before the person accepted it, and only a new process
+      // forgets it. If the check does not pass, the certificate really is refused: go on below.
+      const server = this.deps.loadSettings().server;
+      const parsed = server === undefined ? undefined : parseServerAddress(server.address);
+      if (server !== undefined && parsed?.ok) {
+        const pin = server.fingerprint === undefined ? undefined : { host: parsed.host, fingerprint: server.fingerprint };
+        const answer = await this.deps.probe(parsed.address, pin);
+        if (run !== this.run) return;
+        if (answer === 'ok') {
+          this.deps.log('the window holds an old refusal of an accepted certificate: starting again');
+          this.deps.relaunch();
+          return;
+        }
+      }
+    }
     this.failedLoads++;
     if (this.failedLoads >= STUDIO_LOAD_TRIES) {
       this.deps.log(`Studio did not load ${this.failedLoads} times in a row while the server answered`);
@@ -225,10 +253,10 @@ export class RemoteController {
       this.showConnect({ value: server.address, problem: parsed.reason });
       return;
     }
-    this.deps.pin(server.fingerprint === undefined ? undefined : { host: parsed.host, fingerprint: server.fingerprint });
+    const pin = server.fingerprint === undefined ? undefined : { host: parsed.host, fingerprint: server.fingerprint };
     let waiting = unreachableShown;
     for (;;) {
-      const answer = await this.deps.probe(parsed.address);
+      const answer = await this.deps.probe(parsed.address, pin);
       if (run !== this.run) return;
       if (answer === 'ok') {
         this.showStudio(parsed.address);
@@ -260,7 +288,9 @@ export class RemoteController {
     }
   }
 
+  /** Sets the window's own pin to the saved server's, then shows Studio from it. */
   private showStudio(address: string): void {
+    this.pinSaved();
     this.shown = address;
     this.deps.show({ screen: 'studio', address });
   }
