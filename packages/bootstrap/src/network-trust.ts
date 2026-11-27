@@ -293,7 +293,7 @@ export function createTrustService(deps: TrustDeps): TrustService {
    */
   async function withLock<T>(work: (mine: () => Promise<boolean>) => Promise<T>): Promise<T> {
     await mkdir(dirname(lockFile), { recursive: true });
-    const token = randomBytes(16).toString('hex');
+    const content = JSON.stringify({ token: randomBytes(16).toString('hex'), pid: process.pid });
     const deadline = Date.now() + (deps.lockWaitMs ?? LOCK_WAIT_MS);
     for (;;) {
       let handle;
@@ -306,19 +306,20 @@ export function createTrustService(deps: TrustDeps): TrustService {
         continue;
       }
       try {
-        await handle.writeFile(JSON.stringify({ token, pid: process.pid }));
+        await handle.writeFile(content);
         await handle.close();
       } catch (err) {
-        // This process made the file, so it may remove it. Otherwise it would be left behind.
+        // This process made the file, so it may remove it. Otherwise it would be left behind. Only
+        // while it is still the empty file just made: never a lock another process made since.
         await handle.close().catch(() => {});
-        await rm(lockFile, { force: true });
+        await removeLockIfSame(lockFile, '').catch(() => {});
         throw err;
       }
       break;
     }
     const mine = async (): Promise<boolean> => {
       try {
-        return (JSON.parse(await readFile(lockFile, 'utf8')) as { token?: unknown }).token === token;
+        return (await readFile(lockFile, 'utf8')) === content;
       } catch {
         return false;
       }
@@ -326,7 +327,8 @@ export function createTrustService(deps: TrustDeps): TrustService {
     try {
       return await work(mine);
     } finally {
-      if (await mine()) await rm(lockFile, { force: true });
+      // Only this process's own lock. A person may have unlocked it, and a new change made its own.
+      await removeLockIfSame(lockFile, content);
     }
   }
 

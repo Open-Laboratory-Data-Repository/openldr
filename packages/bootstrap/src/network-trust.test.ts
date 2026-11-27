@@ -388,6 +388,27 @@ describe('add and remove', () => {
     expect(readdirSync(m.dir).sort()).toEqual(['ca.pem', 'ca.pem.lock']);
   });
 
+  it('does not remove a new lock when its own was unlocked and replaced just as it finished', async () => {
+    // The change is done and about to let go. In that moment its lock is unlocked by a person and
+    // a new change makes its own. Letting go must not take the new one.
+    let lock = '';
+    let asked = 0;
+    const m = make({
+      now: () => {
+        // The second time the service asks the time it is under the lock. Swap the lock for
+        // another holder's there.
+        if (lock !== '' && ++asked === 2) writeFileSync(lock, JSON.stringify({ token: 'new holder' }));
+        return NOW;
+      },
+    });
+    lock = `${m.file}.lock`;
+    // A duplicate is refused inside the lock, so the change ends without a write and lets go.
+    writeFileSync(m.file, CERT_A);
+    expect(await code(m.svc.add(CERT_A, ACTOR))).toBe('duplicate');
+    expect(JSON.parse(readFileSync(lock, 'utf8'))).toEqual({ token: 'new holder' });
+    expect(readdirSync(m.dir).sort()).toEqual(['ca.pem', 'ca.pem.lock']);
+  });
+
   it('writes nothing when the file changed between its read and its write', async () => {
     let file = '';
     let asked = 0;
