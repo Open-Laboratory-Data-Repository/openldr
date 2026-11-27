@@ -149,8 +149,21 @@ describe('openldr trust add', () => {
     expect(s.asked).toEqual([]);
     expect(readFileSync(s.file, 'utf8')).toBe(CERT_A);
     expect(s.out).toContain('Saved. Restart OpenLDR to use it.');
+    expect(s.out).not.toContain('Saved. The running server already uses it.');
     expect(s.err).toEqual(['That certificate is already trusted.']);
     expect(s.audits).toEqual([{ action: 'network.trust.add', actor: CLI, detail: FP_A }]);
+  });
+
+  it('says what the running server does with the saved certificate', async () => {
+    // Removed earlier and added again: the server still has it loaded, so no restart is needed.
+    const used = setup({ loaded: { known: true, pems: [CERT_A], since: 'x' } });
+    writeFileSync(used.pem, CERT_A);
+    await trustAdd(used.trust, { file: used.pem, fingerprint: FP_A }, used.io);
+    expect(used.out).toEqual(['Saved. The running server already uses it.']);
+    const unknown = setup({ loaded: { known: false } });
+    writeFileSync(unknown.pem, CERT_A);
+    await trustAdd(unknown.trust, { file: unknown.pem, fingerprint: FP_A }, unknown.io);
+    expect(unknown.out).toEqual(['Saved. No running server has reported what it loaded. A server uses it from its next start.']);
   });
 
   it('refuses when the fingerprint does not match and saves nothing', async () => {
@@ -307,7 +320,9 @@ describe('openldr workflows hosts', () => {
   it('adds a host and says what it stored', async () => {
     const s = setup();
     expect(await hostsAdd(s.workflowHosts, 'FD00:0:0:0:0:0:0:20', s.io)).toBe(0);
-    expect(s.out).toEqual(['A workflow may now call fd00::20.']);
+    expect(s.out).toEqual(['fd00::20 is now on the list of hosts a workflow may call.']);
+    expect(await hostsAdd(s.workflowHosts, '[fd00::20]', s.io)).toBe(0);
+    expect(s.out.at(-1)).toBe('fd00::20 is already on the list of hosts a workflow may call.');
     expect(await hostsAdd(s.workflowHosts, 'http://x', s.io)).toBe(1);
     expect(s.err).toEqual(['Type a host name or an IP address, with no port and no path.']);
   });
@@ -318,8 +333,12 @@ describe('openldr workflows hosts', () => {
     expect(await hostsRemove(s.workflowHosts, 'a.example', { force: false }, s.io)).toBe(1);
     expect(s.err[0]).toMatch(/^Refusing to remove a\.example without --force\./);
     expect((await s.workflowHosts.list()).map((h) => h.host)).toEqual(['a.example']);
-    expect(await hostsRemove(s.workflowHosts, 'a.example', { force: true }, s.io)).toBe(0);
+    expect(await hostsRemove(s.workflowHosts, ' A.example', { force: true }, s.io)).toBe(0);
     expect(await s.workflowHosts.list()).toEqual([]);
+    // Only the list changed. Another grant, such as the switch for this OpenLDR, may still allow it.
+    expect(s.out.at(-1)).toBe('a.example is no longer on the list of hosts a workflow may call.');
+    expect(await hostsRemove(s.workflowHosts, 'a.example', { force: true }, s.io)).toBe(0);
+    expect(s.out.at(-1)).toBe('a.example was not on the list.');
   });
 
   it('says why a host from the server setting cannot be removed', async () => {
@@ -331,10 +350,10 @@ describe('openldr workflows hosts', () => {
   it('turns the switch on and off', async () => {
     const s = setup();
     expect(await hostsSelf(s.workflowHosts, 'on', s.io)).toBe(0);
-    expect(s.out).toEqual(['A workflow may now call this OpenLDR at http://127.0.0.1:3000.']);
+    expect(s.out).toEqual(['The switch is on: a workflow may call this OpenLDR at http://127.0.0.1:3000.']);
     expect((await s.workflowHosts.rule()).origins).toEqual(['http://127.0.0.1:3000']);
     expect(await hostsSelf(s.workflowHosts, 'off', s.io)).toBe(0);
-    expect(s.out.at(-1)).toBe('A workflow may no longer call this OpenLDR.');
+    expect(s.out.at(-1)).toBe('The switch is off. A host on the list is still allowed.');
     expect(await hostsSelf(s.workflowHosts, 'maybe', s.io)).toBe(1);
     expect(s.err).toEqual(['Say on or off.']);
     expect(s.audits.map((a) => [a.action, a.detail, a.actor])).toEqual([

@@ -76,6 +76,12 @@ const MODE: Record<Exclude<TrustStatus['mode'], 'editable'>, string> = {
   damaged: 'The trust file holds text that is not a certificate. Fix the file first.',
 };
 
+const SAVED: Partial<Record<TrustedCert['state'], string>> = {
+  added: 'Saved. Restart OpenLDR to use it.',
+  'in-use': 'Saved. The running server already uses it.',
+  unknown: 'Saved. No running server has reported what it loaded. A server uses it from its next start.',
+};
+
 /** Thirty seconds is when a lock may be removed. It is not proof that the change stopped. */
 const LOCK_AGE_NOTE = 'A lock may be removed once it is 30 seconds old. That age does not prove the change stopped: first make sure nobody else is changing the list.';
 
@@ -159,8 +165,9 @@ export async function trustAdd(trust: TrustService, opts: TrustAddOptions, io: N
         return 1;
       }
     }
-    await trust.add(cert.pem, io.actor());
-    io.out('Saved. Restart OpenLDR to use it.');
+    // What the running server does with it. A certificate it already loaded needs no restart.
+    const saved = await trust.add(cert.pem, io.actor());
+    io.out(SAVED[saved.state] ?? 'Saved.');
     return 0;
   });
 }
@@ -204,11 +211,9 @@ export async function hostsList(hosts: WorkflowHosts, opts: { json: boolean }, i
 
 export async function hostsAdd(hosts: WorkflowHosts, host: string, io: NetworkIo): Promise<number> {
   return guarded(io, async () => {
-    const before = new Set((await hosts.list()).map((r) => r.host));
-    await hosts.add(host, io.actor());
-    // Say the host as it is stored: lower case, and an IPv6 address in its short form.
-    const stored = (await hosts.list()).map((r) => r.host).find((h) => !before.has(h));
-    io.out(stored ? `A workflow may now call ${stored}.` : 'That host is already allowed.');
+    // The host as it is stored: lower case, and an IPv6 address in its short form.
+    const done = await hosts.add(host, io.actor());
+    io.out(`${done.host} is ${done.changed ? 'now' : 'already'} on the list of hosts a workflow may call.`);
     return 0;
   });
 }
@@ -219,8 +224,9 @@ export async function hostsRemove(hosts: WorkflowHosts, host: string, opts: { fo
     return 1;
   }
   return guarded(io, async () => {
-    await hosts.remove(host, io.actor());
-    io.out(`A workflow may no longer call ${host.trim().toLowerCase()}.`);
+    // Only the list changed. Another grant may still allow the same address, so this says no more.
+    const done = await hosts.remove(host, io.actor());
+    io.out(done.changed ? `${done.host} is no longer on the list of hosts a workflow may call.` : `${done.host} was not on the list.`);
     return 0;
   });
 }
@@ -232,7 +238,7 @@ export async function hostsSelf(hosts: WorkflowHosts, value: string, io: Network
   }
   return guarded(io, async () => {
     const now = await hosts.setSelf(value === 'on', io.actor());
-    io.out(now.on ? `A workflow may now call this OpenLDR at ${now.origin}.` : 'A workflow may no longer call this OpenLDR.');
+    io.out(now.on ? `The switch is on: a workflow may call this OpenLDR at ${now.origin}.` : 'The switch is off. A host on the list is still allowed.');
     return 0;
   });
 }

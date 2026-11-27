@@ -47,8 +47,10 @@ export interface WorkflowHostRow {
 export interface WorkflowHosts {
   /** Server hosts first, then the stored ones, each sorted. A host in both appears once, as 'server'. */
   list(): Promise<WorkflowHostRow[]>;
-  add(host: string, actor: TrustActor): Promise<void>;
-  remove(host: string, actor: TrustActor): Promise<void>;
+  /** Answers with the host as it is stored, and whether this call changed the list. */
+  add(host: string, actor: TrustActor): Promise<{ host: string; changed: boolean }>;
+  /** Answers with the host as it is stored, and whether this call changed the list. */
+  remove(host: string, actor: TrustActor): Promise<{ host: string; changed: boolean }>;
   self(): Promise<{ on: boolean; origin: string }>;
   /** Answers with what it applied. It does not read the setting again. */
   setSelf(on: boolean, actor: TrustActor): Promise<{ on: boolean; origin: string }>;
@@ -145,7 +147,7 @@ export function createWorkflowHosts(deps: WorkflowHostsDeps): WorkflowHosts {
 
     async add(raw, actor) {
       const host = need(raw);
-      if (server().includes(host)) return;
+      if (server().includes(host)) return { host, changed: false };
       let changed = false;
       await deps.appSettings.update(
         KEY_HOSTS,
@@ -157,6 +159,7 @@ export function createWorkflowHosts(deps: WorkflowHostsDeps): WorkflowHosts {
         by(actor),
       );
       if (changed) await audited('network.workflow_host.add', actor, host);
+      return { host, changed };
     },
 
     async remove(raw, actor) {
@@ -173,6 +176,7 @@ export function createWorkflowHosts(deps: WorkflowHostsDeps): WorkflowHosts {
         by(actor),
       );
       if (changed) await audited('network.workflow_host.remove', actor, host);
+      return { host, changed };
     },
 
     async self() {

@@ -64,15 +64,15 @@ describe('workflow hosts', () => {
 
   it('adding a host twice writes one audit row', async () => {
     const m = make();
-    await m.svc.add('hub.district', ACTOR);
-    await m.svc.add('HUB.district', ACTOR);
+    expect(await m.svc.add('hub.district', ACTOR)).toEqual({ host: 'hub.district', changed: true });
+    expect(await m.svc.add('HUB.district', ACTOR)).toEqual({ host: 'hub.district', changed: false });
     expect(m.audits).toHaveLength(1);
     expect(await m.svc.list()).toHaveLength(1);
   });
 
   it('adding a host the server setting already names does nothing', async () => {
     const m = make({ serverList: 'a.example' });
-    await m.svc.add('a.example', ACTOR);
+    expect(await m.svc.add('a.example', ACTOR)).toEqual({ host: 'a.example', changed: false });
     expect(m.audits).toEqual([]);
     expect(m.rows.has(KEY_HOSTS)).toBe(false);
   });
@@ -104,7 +104,10 @@ describe('workflow hosts', () => {
 
   it('removing a host that is not there does nothing and audits nothing', async () => {
     const m = make();
-    await m.svc.remove('a.example', ACTOR);
+    expect(await m.svc.remove('A.example', ACTOR)).toEqual({ host: 'a.example', changed: false });
+    await m.svc.add('a.example', ACTOR);
+    expect(await m.svc.remove('a.example', ACTOR)).toEqual({ host: 'a.example', changed: true });
+    m.audits.length = 0;
     expect(m.audits).toEqual([]);
   });
 
