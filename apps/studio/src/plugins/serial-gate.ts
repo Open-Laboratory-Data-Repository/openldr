@@ -42,8 +42,11 @@ export interface SerialGate {
   handle(op: PluginHostOp): Promise<PluginRpcResult>;
   /** Closes every port and kills every handle. Called when the frame goes away or the grant does. */
   closeAll(): Promise<void>;
-  /** The ports this gate holds open, or is opening. */
+  /** The ports this gate holds: open, opening or still closing. A port stays here until it is
+   *  really closed, also after its handle was killed, so no other gate opens it meanwhile. */
   open(): readonly SerialPortLike[];
+  /** How many writes have not ended. For a test to see that an ended write leaves nothing behind. */
+  waitingWrites(): number;
 }
 
 /** The size the browser is asked to read ahead by. One read's worth. */
@@ -67,10 +70,11 @@ interface Entry {
   queued: number;
   /** Goes up at every open and close, so a read loop or a write from before one knows it is old. */
   session: number;
-  /** Ends every write that is waiting on this port. Set while the port is open. */
-  dropWrites: (() => void) | null;
-  /** Settles when dropWrites is called. */
-  dropped: Promise<'dropped'> | null;
+  /** One entry per write that has not ended: it ends that write when the port is let go of. A
+   *  write takes its entry out when it ends, so a port that runs for days keeps nothing. */
+  waitingWrites: Set<() => void>;
+  /** The close that is under way, for a second close to join. */
+  closing: Promise<void> | null;
 }
 
 const ok = (data: unknown): PluginRpcResult => ({ ok: true, data });
@@ -96,6 +100,8 @@ function labelOf(port: SerialPortLike): string {
 
 export function createSerialGate(deps: SerialGateDeps): SerialGate {
   const entries = new Map<string, Entry>();
+  /** Every entry whose port is not closed yet, also one whose handle was killed. */
+  const owned = new Set<Entry>();
   /** Goes up on closeAll. A call that waited across one finds the number changed. */
   let generation = 0;
   let listening = false;
@@ -174,38 +180,50 @@ export function createSerialGate(deps: SerialGateDeps): SerialGate {
    * locks are released, then the port is closed. A real port refuses to close while a reader or a
    * writer still holds it. Nothing here waits on a write, because a blocked write never ends.
    */
-  async function release(e: Entry): Promise<void> {
-    e.session++;
-    e.state = 'closing';
-    e.waiter?.('closed');
-    const { reader, writer } = e;
-    e.reader = null;
-    e.writer = null;
-    // A write stuck in the port never ends by itself, and the stream does not end it either.
-    e.dropWrites?.();
-    e.dropWrites = null;
-    e.chunks = [];
-    e.waitingBytes = 0;
-    e.lost = false;
-    if (reader) {
-      try { await reader.cancel(); } catch { /* the port is going anyway */ }
-      try { reader.releaseLock(); } catch { /* already released */ }
-    }
-    if (writer) {
-      // Not awaited: with a write stuck in the port, an abort does not end either.
-      void writer.abort().catch(() => {});
-      try { writer.releaseLock(); } catch { /* already released */ }
-    }
-    try { await e.port.close(); } catch { /* a port that will not close is still let go of */ }
-    e.queued = 0;
-    e.state = 'closed';
+  function release(e: Entry): Promise<void> {
+    // A second call joins the one under way.
+    e.closing ??= (async () => {
+      e.session++;
+      e.state = 'closing';
+      e.waiter?.('closed');
+      const { reader, writer } = e;
+      e.reader = null;
+      e.writer = null;
+      e.chunks = [];
+      e.waitingBytes = 0;
+      e.lost = false;
+      // A write stuck in the port never ends by itself, and the stream does not end it either.
+      for (const drop of Array.from(e.waitingWrites)) drop();
+      e.waitingWrites.clear();
+      if (reader) {
+        try { await reader.cancel(); } catch { /* the port is going anyway */ }
+        try { reader.releaseLock(); } catch { /* already released */ }
+      }
+      if (writer) {
+        // Not awaited: with a write stuck in the port, an abort does not end either.
+        void writer.abort().catch(() => {});
+        try { writer.releaseLock(); } catch { /* already released */ }
+      }
+      try { await e.port.close(); } catch { /* a port that will not close is still let go of */ }
+      e.queued = 0;
+      e.state = 'closed';
+      e.closing = null;
+      settled(e);
+    })();
+    return e.closing;
+  }
+
+  /** A port that is closed and whose handle is dead is no longer this gate's. */
+  function settled(e: Entry): void {
+    if (e.state === 'closed' && entries.get(e.handle) !== e) owned.delete(e);
   }
 
   /** A pulled cable or a port error: the handle is forgotten. */
   async function lose(e: Entry): Promise<void> {
     if (entries.get(e.handle) !== e) return;
     entries.delete(e.handle);
-    if (held(e) && e.state !== 'closing') await release(e);
+    if (e.state === 'open' || e.state === 'closing') await release(e);
+    settled(e);
     if (entries.size === 0) unlisten();
   }
 
@@ -217,18 +235,17 @@ export function createSerialGate(deps: SerialGateDeps): SerialGate {
     } catch {
       return no('serial-failed');
     }
-    if (!alive(g)) {
-      // The gate closed, or the grant went, while the list was up. A port given now is not kept.
-      if ('port' in picked) { try { await picked.port.close(); } catch { /* it was never opened */ } }
-      return no('serial-not-granted');
-    }
+    // The gate closed, or the grant went, while the list was up. A port given now is dropped as
+    // it is. This gate never opened it, and another gate may hold it open, so it is not closed here.
+    if (!alive(g)) return no('serial-not-granted');
     if (!('port' in picked)) return no(picked.refused);
     for (const e of entries.values()) if (e.port === picked.port) return ok({ port: e.handle, label: e.label });
     const entry: Entry = {
       handle: randomHandle(), label: labelOf(picked.port), port: picked.port, state: 'closed',
-      chunks: [], waitingBytes: 0, lost: false, waiter: null, reader: null, writer: null, queued: 0, session: 0, dropWrites: null, dropped: null,
+      chunks: [], waitingBytes: 0, lost: false, waiter: null, reader: null, writer: null, queued: 0, session: 0, waitingWrites: new Set(), closing: null,
     };
     entries.set(entry.handle, entry);
+    owned.add(entry);
     listen();
     return ok({ port: entry.handle, label: entry.label });
   }
@@ -254,13 +271,17 @@ export function createSerialGate(deps: SerialGateDeps): SerialGate {
       });
     } catch {
       if (e.session === session) e.state = 'closed';
+      settled(e);
       return no('serial-failed');
     }
-    if (!alive(g) || e.session !== session) {
-      // It opened too late: the gate closed or the grant went while it was opening.
+    const forgotten = entries.get(e.handle) !== e;
+    if (!alive(g) || e.session !== session || forgotten) {
+      // It opened too late: the gate closed, the grant went, or the cable was pulled while it was
+      // opening. This gate opened it, so this gate closes it, and owns it until then.
       try { await e.port.close(); } catch { /* let go of either way */ }
       if (e.session === session) e.state = 'closed';
-      return no('serial-not-granted');
+      settled(e);
+      return no(alive(g) ? 'serial-closed' : 'serial-not-granted');
     }
     try {
       const readable = e.port.readable;
@@ -277,7 +298,6 @@ export function createSerialGate(deps: SerialGateDeps): SerialGate {
     e.lost = false;
     e.queued = 0;
     e.state = 'open';
-    e.dropped = new Promise<'dropped'>((resolve) => { e.dropWrites = () => resolve('dropped'); });
     void pump(e, e.reader, session);
     return ok(null);
   }
@@ -322,9 +342,17 @@ export function createSerialGate(deps: SerialGateDeps): SerialGate {
     try {
       // The stream keeps writes in the order they were given.
       const sent = e.writer.write(copy);
-      // If the port is let go of first, the stream may never settle this write.
-      sent.catch(() => {});
-      if ((await Promise.race([sent, e.dropped])) === 'dropped') throw new Error('dropped');
+      // If the port is let go of first, the stream may never settle this write. So the gate can
+      // end it. The entry goes when the write ends, whichever way.
+      let drop: () => void = () => {};
+      const dropped = new Promise<'dropped'>((resolve) => { drop = () => resolve('dropped'); });
+      e.waitingWrites.add(drop);
+      try {
+        sent.catch(() => {});
+        if ((await Promise.race([sent, dropped])) === 'dropped') throw new Error('dropped');
+      } finally {
+        e.waitingWrites.delete(drop);
+      }
     } catch {
       if (e.session === session) e.queued -= copy.length;
       if (!alive(g)) return no('serial-not-granted');
@@ -341,7 +369,7 @@ export function createSerialGate(deps: SerialGateDeps): SerialGate {
 
   async function closePort(e: Entry): Promise<PluginRpcResult> {
     if (e.state === 'opening') return no('serial-busy');
-    if (e.state === 'open') await release(e);
+    if (e.state === 'open' || e.state === 'closing') await release(e);
     // The handle stays known and can be opened again.
     return ok(null);
   }
@@ -380,14 +408,15 @@ export function createSerialGate(deps: SerialGateDeps): SerialGate {
       const all = Array.from(entries.values());
       entries.clear();
       unlisten();
-      for (const e of all) {
-        try {
-          // A port that is still opening is closed by its own open call, which sees the new number.
-          if (e.state === 'open') await release(e);
-        } catch { /* go on to the next port */ }
-      }
+      // Every port is let go of now, before any wait: a slow one must not leave another reading.
+      // A port that is still opening is closed by its own open call, which sees the new number.
+      const closing = all.map((e) => (e.state === 'open' || e.state === 'closing' ? release(e).catch(() => {}) : Promise.resolve()));
+      for (const e of all) settled(e);
+      await Promise.all(closing);
     },
 
-    open: () => Array.from(entries.values()).filter(held).map((e) => e.port),
+    open: () => Array.from(owned).filter(held).map((e) => e.port),
+
+    waitingWrites: () => { let n = 0; for (const e of owned) n += e.waitingWrites.size; return n; },
   };
 }

@@ -19,6 +19,7 @@ function fakePort(o: { info?: { usbVendorId?: number; usbProductId?: number }; o
   let unblock: (() => void) | null = null;
   let blockWrites = false;
   let holdOpen: Promise<void> | null = null;
+  let holdClose: Promise<void> | null = null;
   const opened: unknown[] = [];
   const port: SerialPortLike & { __name?: string } = {
     readable: null,
@@ -48,6 +49,8 @@ function fakePort(o: { info?: { usbVendorId?: number; usbProductId?: number }; o
       if (port.readable?.locked) throw Object.assign(new Error('The port is locked.'), { name: 'InvalidStateError' });
       if (port.writable?.locked) throw Object.assign(new Error('The port is locked.'), { name: 'InvalidStateError' });
       events.push('port.close');
+      if (holdClose) await holdClose;
+      events.push('port.closed');
       port.readable = null;
       port.writable = null;
       if (o.closeFails) throw new Error('close failed');
@@ -61,6 +64,7 @@ function fakePort(o: { info?: { usbVendorId?: number; usbProductId?: number }; o
     blockWrites: () => { blockWrites = true; },
     unblock: () => unblock?.(),
     holdOpen: () => { let release = () => {}; holdOpen = new Promise<void>((r) => { release = r; }); return release; },
+    holdClose: () => { let release = () => {}; holdClose = new Promise<void>((r) => { release = r; }); return release; },
   };
 }
 
@@ -192,7 +196,7 @@ describe('serial gate: choosing a port', () => {
     expect(await one.call({ kind: 'host.serial.close', port: foreign })).toEqual(refused('serial-unknown-port'));
   });
 
-  it('closes a port that was picked after the gate was closed', async () => {
+  it('drops a port that was picked after the gate was closed, without closing it', async () => {
     const h = harness();
     const late = fakePort();
     let give: (v: { port: SerialPortLike }) => void = () => {};
@@ -203,8 +207,43 @@ describe('serial gate: choosing a port', () => {
     expect(h.cancels()).toBe(1);
     give({ port: late.port });
     expect(await answer).toEqual(refused('serial-not-granted'));
-    expect(late.events).not.toContain('open');
+    // Discarded as it is. The gate never opened it, so it is not the gate's to close.
+    expect(late.events).toEqual([]);
     expect(await h.call({ kind: 'host.serial.ports' })).toEqual({ ok: true, data: [] });
+  });
+});
+
+describe('serial gate: a port it was given too late', () => {
+  it('leaves alone a port that another gate holds open', async () => {
+    const other = harness();
+    const shared = fakePort();
+    const theirs = await other.openPort(shared);
+    const h = harness();
+    let give: (v: { port: SerialPortLike }) => void = () => {};
+    h.picks.push(new Promise((r) => { give = r; }));
+    const answer = h.call({ kind: 'host.serial.choose' });
+    await settle();
+    await h.gate.closeAll();
+    give({ port: shared.port });
+    expect(await answer).toEqual(refused('serial-not-granted'));
+    expect(shared.events).toEqual(['open']);
+    // The other gate still reads from it.
+    shared.push([1, 2]);
+    await settle();
+    expect(Array.from((await other.read(theirs)).bytes)).toEqual([1, 2]);
+  });
+
+  it('leaves it alone when the grant went while the list was up', async () => {
+    const h = harness();
+    const late = fakePort();
+    let give: (v: { port: SerialPortLike }) => void = () => {};
+    h.picks.push(new Promise((r) => { give = r; }));
+    const answer = h.call({ kind: 'host.serial.choose' });
+    await settle();
+    h.state.granted = false;
+    give({ port: late.port });
+    expect(await answer).toEqual(refused('serial-not-granted'));
+    expect(late.events).toEqual([]);
   });
 });
 
@@ -292,7 +331,7 @@ describe('serial gate: opening', () => {
     h.state.granted = false;
     release();
     expect(await opening).toEqual(refused('serial-not-granted'));
-    expect(slow.events).toEqual(['open', 'port.close']);
+    expect(slow.events).toEqual(['open', 'port.close', 'port.closed']);
     expect(h.gate.open()).toEqual([]);
   });
 
@@ -306,7 +345,7 @@ describe('serial gate: opening', () => {
     await h.gate.closeAll();
     release();
     expect(await opening).toEqual(refused('serial-not-granted'));
-    expect(slow.events).toEqual(['open', 'port.close']);
+    expect(slow.events).toEqual(['open', 'port.close', 'port.closed']);
   });
 });
 
@@ -514,7 +553,7 @@ describe('serial gate: closing and losing a port', () => {
     const a = fakePort();
     const handle = await h.openPort(a);
     expect(await h.call({ kind: 'host.serial.close', port: handle })).toEqual({ ok: true, data: null });
-    expect(a.events).toEqual(['open', 'reader.cancel', 'writer.abort', 'port.close']);
+    expect(a.events).toEqual(['open', 'reader.cancel', 'writer.abort', 'port.close', 'port.closed']);
     expect(h.gate.open()).toEqual([]);
   });
 
@@ -588,6 +627,21 @@ describe('serial gate: closing and losing a port', () => {
     expect(h.gate.open()).toEqual([]);
   });
 
+  it('does not keep a port whose cable was pulled while it was opening', async () => {
+    const h = harness();
+    const slow = fakePort();
+    const release = slow.holdOpen();
+    const handle = await h.choose(slow);
+    const opening = h.call({ kind: 'host.serial.open', port: handle, settings: { baudRate: 9600 } });
+    await settle();
+    h.disconnect(slow.port);
+    release();
+    expect(await opening).toEqual(refused('serial-closed'));
+    expect(slow.events).toEqual(['open', 'port.close', 'port.closed']);
+    expect(h.gate.open()).toEqual([]);
+    expect(await h.call({ kind: 'host.serial.read', port: handle, waitMs: 0 })).toEqual(refused('serial-unknown-port'));
+  });
+
   it('ignores a disconnect of a port it does not hold', async () => {
     const h = harness();
     const a = fakePort();
@@ -622,6 +676,80 @@ describe('serial gate: closing and losing a port', () => {
     expect(await waiting).toEqual(refused('serial-closed'));
     await settle();
     expect(await h.call({ kind: 'host.serial.read', port: handle, waitMs: 0 })).toEqual(refused('serial-unknown-port'));
+  });
+
+  it('lets go of every port at once, without waiting for a slow one', async () => {
+    const h = harness();
+    const slow = fakePort();
+    const quick = fakePort();
+    const releaseSlow = slow.holdClose();
+    await h.openPort(slow);
+    const hq = await h.openPort(quick);
+    const write = h.call({ kind: 'host.serial.write', port: hq, bytes: new Uint8Array([1]) });
+    let closed = false;
+    void h.gate.closeAll().then(() => { closed = true; });
+    await settle();
+    // The slow port is still closing. The quick one is already cancelled and closed.
+    expect(closed).toBe(false);
+    expect(slow.events).toEqual(['open', 'reader.cancel', 'writer.abort', 'port.close']);
+    expect(quick.events).toEqual(['open', 'reader.cancel', 'writer.abort', 'port.close', 'port.closed']);
+    await write;
+    // Bytes that arrive on the quick port now go nowhere.
+    // The gate still owns the slow port until it is really closed, so no other gate may open it.
+    expect(h.gate.open()).toEqual([slow.port]);
+    releaseSlow();
+    await settle();
+    expect(closed).toBe(true);
+    expect(h.gate.open()).toEqual([]);
+  });
+
+  it('still owns a port that is opening when it is closed, until that port is closed', async () => {
+    const h = harness();
+    const slow = fakePort();
+    const release = slow.holdOpen();
+    const handle = await h.choose(slow);
+    const opening = h.call({ kind: 'host.serial.open', port: handle, settings: { baudRate: 9600 } });
+    await settle();
+    await h.gate.closeAll();
+    expect(h.gate.open()).toEqual([slow.port]);
+    release();
+    await opening;
+    expect(h.gate.open()).toEqual([]);
+  });
+
+  it('a second close joins one that is under way', async () => {
+    const h = harness();
+    const a = fakePort();
+    const release = a.holdClose();
+    const handle = await h.openPort(a);
+    const first = h.call({ kind: 'host.serial.close', port: handle });
+    await settle();
+    const second = h.call({ kind: 'host.serial.close', port: handle });
+    let secondDone = false;
+    void second.then(() => { secondDone = true; });
+    await settle();
+    expect(secondDone).toBe(false);
+    // Not open and not free: it cannot be opened again until the close has ended.
+    expect(await h.call({ kind: 'host.serial.open', port: handle, settings: { baudRate: 9600 } })).toEqual(refused('serial-busy'));
+    release();
+    expect(await first).toEqual({ ok: true, data: null });
+    expect(await second).toEqual({ ok: true, data: null });
+    expect(a.events.filter((e) => e === 'port.close')).toHaveLength(1);
+  });
+
+  it('keeps nothing for a write once it has ended', async () => {
+    const h = harness();
+    const a = fakePort();
+    const handle = await h.openPort(a);
+    for (let i = 0; i < 50; i++) await h.call({ kind: 'host.serial.write', port: handle, bytes: new Uint8Array([i]) });
+    expect(h.gate.waitingWrites()).toBe(0);
+    a.blockWrites();
+    void h.call({ kind: 'host.serial.write', port: handle, bytes: new Uint8Array([1]) });
+    void h.call({ kind: 'host.serial.write', port: handle, bytes: new Uint8Array([2]) });
+    await settle();
+    expect(h.gate.waitingWrites()).toBe(2);
+    await h.call({ kind: 'host.serial.close', port: handle });
+    expect(h.gate.waitingWrites()).toBe(0);
   });
 
   it('closeAll closes every port and removes its listener', async () => {
