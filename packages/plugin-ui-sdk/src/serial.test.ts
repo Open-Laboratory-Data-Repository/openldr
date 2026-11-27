@@ -33,6 +33,11 @@ describe('checkSerialSettings', () => {
     expect(checkSerialSettings(settings)).toBe('serial-bad-settings');
   });
 
+  it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__', 'valueOf'])('refuses a field named %s without throwing', (name) => {
+    const settings = JSON.parse(`{"baudRate":9600,"${name}":1}`) as unknown;
+    expect(checkSerialSettings(settings)).toBe('serial-bad-settings');
+  });
+
   it('refuses a field the design does not have, such as a control line', () => {
     expect(checkSerialSettings({ baudRate: 9600, dtr: true })).toBe('serial-bad-settings');
     expect(checkSerialSettings({ baudRate: 9600, bufferSize: 1 << 30 })).toBe('serial-bad-settings');

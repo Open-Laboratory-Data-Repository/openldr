@@ -60,8 +60,9 @@ export function checkSerialSettings(s: unknown): null | 'serial-bad-settings' {
   if (typeof speed !== 'number' || !Number.isInteger(speed) || speed < SPEED_MIN || speed > SPEED_MAX) return 'serial-bad-settings';
   for (const name of Object.keys(settings)) {
     if (name === 'baudRate') continue;
-    const allowed = FIELDS[name];
-    if (allowed === undefined) return 'serial-bad-settings';
+    // An own entry only: a name such as `toString` is on every object and is not a field.
+    if (!Object.prototype.hasOwnProperty.call(FIELDS, name)) return 'serial-bad-settings';
+    const allowed = FIELDS[name]!;
     if (settings[name] !== undefined && !allowed.includes(settings[name])) return 'serial-bad-settings';
   }
   return null;

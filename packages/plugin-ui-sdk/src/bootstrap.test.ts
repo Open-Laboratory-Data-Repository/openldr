@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { describe, it, expect } from 'vitest';
 import { SDK_BOOTSTRAP_V1, makeRpc } from './bootstrap';
 
@@ -308,6 +309,20 @@ describe('SDK_BOOTSTRAP_V1', () => {
         const big = new Uint8Array(1024 * 1024);
         big.set([5, 6, 7], 10);
         await serial.write('h1', big.subarray(10, 13));
+        const bytes = got[0]!.bytes as Uint8Array;
+        expect(Array.from(bytes)).toEqual([5, 6, 7]);
+        expect(bytes.buffer.byteLength).toBe(3);
+      } finally { close(); }
+    });
+
+    it('sends only the bytes of a view made in another frame', async () => {
+      const { serial, got, close } = realChannel();
+      try {
+        // A Uint8Array from another realm, as a plugin gets from a nested frame or a worker. It is
+        // not an instance of this realm's Uint8Array.
+        const foreign = runInNewContext('const big = new Uint8Array(1024 * 1024); big.set([5, 6, 7], 10); big.subarray(10, 13)') as Uint8Array;
+        expect(foreign instanceof Uint8Array).toBe(false);
+        await serial.write('h1', foreign);
         const bytes = got[0]!.bytes as Uint8Array;
         expect(Array.from(bytes)).toEqual([5, 6, 7]);
         expect(bytes.buffer.byteLength).toBe(3);
