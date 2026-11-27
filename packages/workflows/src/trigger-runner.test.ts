@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createWorkflowTriggerRunner, heldSummary } from './trigger-runner';
+import { createWorkflowTriggerRunner, heldSummary, armWorkflowSchedule } from './trigger-runner';
 import { runWorkflow } from './engine/run-workflow';
 
 function fakeEventing() {
@@ -254,7 +254,7 @@ const eventRunner = (nodes: unknown[], recorded: unknown[]) =>
 const fireDataPersisted = async (ev: ReturnType<typeof fakeEventing>, payload: unknown) =>
   ev.handlers.get('data.persisted')!({ type: 'data.persisted', payload });
 
-describe('a schedule that is saved while the server runs', () => {
+describe('a queued scheduled run', () => {
   function build(rows: Array<{ workflowId: string; nodeId: string; cron: string; tz: string; enabled: boolean; nextDueAt: string | null }>, claim: (dueAt: string | null) => boolean = () => true) {
     const ev = fakeEventing();
     const recorded: unknown[] = [];
@@ -275,30 +275,6 @@ describe('a schedule that is saved while the server runs', () => {
     return { ev, recorded, claims, runner, rows };
   }
   const row = () => ({ workflowId: 'w1', nodeId: 's', cron: '*/5 * * * *', tz: 'UTC', enabled: true, nextDueAt: null as string | null });
-
-  it('armSaved arms it at once, with no restart, and the queued run names its time', async () => {
-    const { ev, runner, rows } = build([row()]);
-    await runner.registerRunner(ev.port as never);
-    await runner.armSaved();
-    expect(rows[0].nextDueAt).not.toBeNull();
-    const queued = ev.published.filter((p) => p.type === 'workflow.schedule.due');
-    expect(queued).toHaveLength(1);
-    expect(queued[0].payload).toEqual({ workflowId: 'w1', nodeId: 's', dueAt: rows[0].nextDueAt });
-    expect(queued[0].availableAt?.toISOString()).toBe(rows[0].nextDueAt);
-  });
-
-  it('armSaved leaves a schedule that is already armed alone', async () => {
-    const { ev, runner } = build([{ ...row(), nextDueAt: new Date(Date.now() + 60_000).toISOString() }]);
-    await runner.registerRunner(ev.port as never);
-    await runner.armSaved();
-    expect(ev.published).toHaveLength(0);
-  });
-
-  it('armSaved does nothing in a process that runs no schedules', async () => {
-    const { ev, runner } = build([row()]);
-    await expect(runner.armSaved()).resolves.toBeUndefined();
-    expect(ev.published).toHaveLength(0);
-  });
 
   it('a queued run claims its time before it starts the workflow', async () => {
     const { ev, runner, recorded, claims } = build([{ ...row(), nextDueAt: '2026-01-01T10:00:00.000Z' }]);
@@ -480,5 +456,28 @@ describe('heldSummary', () => {
 
   it('is undefined when nothing was held', () => {
     expect(heldSummary([{ mapped: 2, held: 0, heldReasons: [] }, { batchId: 'b', persisted: 2 }, undefined])).toBeUndefined();
+  });
+});
+
+describe('armWorkflowSchedule', () => {
+  const row = { workflowId: 'w1', nodeId: 's', cron: '*/5 * * * *', tz: 'UTC' };
+
+  it('stores the next time and queues a run that names it', async () => {
+    const ev = fakeEventing();
+    const stored: Array<string | null> = [];
+    await armWorkflowSchedule({ setNextDue: async (_w, _n, at) => { stored.push(at); } }, ev.port as never, row);
+    expect(stored).toHaveLength(1);
+    expect(ev.published).toHaveLength(1);
+    expect(ev.published[0].payload).toEqual({ workflowId: 'w1', nodeId: 's', dueAt: stored[0] });
+    expect(ev.published[0].availableAt?.toISOString()).toBe(stored[0]);
+  });
+
+  it('when the run cannot be queued, takes the time off again and says so', async () => {
+    const stored: Array<string | null> = [];
+    const bus = { publish: async () => { throw new Error('queue is away'); } };
+    await expect(armWorkflowSchedule({ setNextDue: async (_w, _n, at) => { stored.push(at); } }, bus as never, row)).rejects.toThrow('queue is away');
+    // A stored time with no queued run would look armed, and a start before that time would skip it.
+    expect(stored).toHaveLength(2);
+    expect(stored[1]).toBeNull();
   });
 });

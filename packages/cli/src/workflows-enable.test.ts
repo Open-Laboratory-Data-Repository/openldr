@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({
-  ctx: { close: vi.fn(), workflows: { store: {} } },
+  ctx: { close: vi.fn(), workflows: { store: {}, schedules: {} }, eventing: {}, logger: {} },
   setWorkflowEnabled: vi.fn(),
+  syncWorkflowSchedules: vi.fn(),
   recordAuditEvent: vi.fn(),
 }));
 vi.mock('@openldr/config', () => ({ loadConfig: vi.fn(() => ({})) }));
 vi.mock('@openldr/bootstrap', () => ({
   createAppContext: vi.fn(async () => h.ctx),
   setWorkflowEnabled: h.setWorkflowEnabled,
+  syncWorkflowSchedules: h.syncWorkflowSchedules,
   recordAuditEvent: h.recordAuditEvent,
   dangerResetDashboards: vi.fn(), dangerClearAudit: vi.fn(), dangerFactoryReset: vi.fn(),
 }));
@@ -33,6 +35,27 @@ describe('openldr workflows enable|disable (follow-up C7-7)', () => {
     expect(process.stdout.write).toHaveBeenCalledWith(expect.stringContaining('Samples is disabled'));
     expect(process.exitCode).toBe(0);
     expect(h.ctx.close).toHaveBeenCalledOnce();
+  });
+
+  it('enabling stores the schedule and queues its run through the shared function, so no restart is needed for it', async () => {
+    h.setWorkflowEnabled.mockResolvedValue({ before: wf(false), after: wf(true) });
+    await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'workflows', 'enable', 'wf_1']);
+    expect(h.syncWorkflowSchedules).toHaveBeenCalledWith(
+      { schedules: h.ctx.workflows.schedules, eventing: h.ctx.eventing, logger: h.ctx.logger }, wf(true));
+    expect(process.stdout.write).toHaveBeenCalledWith(expect.stringContaining('Webhooks and schedules follow now'));
+    expect(process.exitCode).toBe(0);
+  });
+
+  it('disabling goes through the same function, so the schedule stops', async () => {
+    h.setWorkflowEnabled.mockResolvedValue({ before: wf(true), after: wf(false) });
+    await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'workflows', 'disable', 'wf_1']);
+    expect(h.syncWorkflowSchedules).toHaveBeenCalledWith(expect.anything(), wf(false));
+  });
+
+  it('an unknown workflow syncs nothing', async () => {
+    h.setWorkflowEnabled.mockResolvedValue(null);
+    await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'workflows', 'enable', 'nope']);
+    expect(h.syncWorkflowSchedules).not.toHaveBeenCalled();
   });
 
   it('prints the refusal when another enabled workflow holds the path, and exits 1', async () => {

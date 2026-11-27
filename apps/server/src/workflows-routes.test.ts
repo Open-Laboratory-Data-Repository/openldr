@@ -95,7 +95,9 @@ function fakeWorkflowExtras() {
       },
       list: async () => scheduleRows as any[],
       get: async (workflowId: string, nodeId: string) => scheduleRows.find((x) => x.workflowId === workflowId && x.nodeId === nodeId),
-      setNextDue: async () => {},
+      setNextDue: async (workflowId: string, nodeId: string, at: string | null) => {
+        const r = scheduleRows.find((x) => x.workflowId === workflowId && x.nodeId === nodeId); if (r) r.nextDueAt = at;
+      },
     },
     webhooks: {
       register: (path: string, entry: any) => { webhookEntries.set(norm(path), entry); },
@@ -116,8 +118,6 @@ function fakeWorkflowExtras() {
       },
       registerRunner: async () => {},
       reconcile: async () => {},
-      armSavedCalls: 0,
-      async armSaved() { (this as { armSavedCalls: number }).armSavedCalls++; },
     },
     datasets: {
       list: async () => [],
@@ -136,6 +136,8 @@ function fakeCtx() {
   const extras = fakeWorkflowExtras();
   const secretStore = fakeSecretStore();
   return {
+    // The durable queue the save routes put a schedule's first run on.
+    eventing: (() => { const published: any[] = []; return { published, publish: async (e: any, o?: { availableAt?: Date }) => { published.push({ ...e, availableAt: o?.availableAt }); } }; })(),
     workflows: {
       store: {
         list: async () => data as any[],
@@ -1762,36 +1764,61 @@ describe('workflow on/off and stale saves (follow-up C7-1)', () => {
     return { app, ctx };
   };
 
-  // A schedule that is saved must start without a restart: every save route arms what it stored.
-  describe('arming a saved schedule', () => {
-    const timed = (id: string, cron = '*/5 * * * *') => ({
+  // A schedule that is saved must start without a restart: every save route stores it and queues its
+  // first run (bootstrap syncWorkflowSchedules, the same code the CLI calls).
+  describe('a saved schedule', () => {
+    const timed = (id: string, over: Record<string, unknown> = {}) => ({
       id, name: 'Timed', description: null, enabled: true, createdBy: null,
-      definition: { nodes: [{ id: 'tick', type: 'trigger', position: { x: 0, y: 0 }, data: { triggerType: 'schedule', cron, tz: 'UTC' } }], edges: [] },
+      definition: { nodes: [{ id: 'tick', type: 'trigger', position: { x: 0, y: 0 }, data: { triggerType: 'schedule', cron: '*/5 * * * *', tz: 'UTC' } }], edges: [] },
+      ...over,
     });
-    const armedCalls = (ctx: any) => ctx.workflows.runner.armSavedCalls as number;
+    const queued = (ctx: any, id: string) => (ctx.eventing.published as any[]).filter((e) => e.type === 'workflow.schedule.due' && e.payload.workflowId === id);
+    const rowOf = async (ctx: any, id: string) => ctx.workflows.schedules.get(id, 'tick');
 
-    it('creating a scheduled workflow arms it', async () => {
+    it('creating one queues its first run and stores the time', async () => {
       const { app, ctx } = setup();
       const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t1') });
       expect(res.statusCode).toBeLessThan(300);
-      expect(armedCalls(ctx)).toBe(1);
+      const row = await rowOf(ctx, 'wf-t1');
+      expect(row).toMatchObject({ enabled: true });
+      expect(row.nextDueAt).toBeTruthy();
+      expect(queued(ctx, 'wf-t1').map((e) => e.payload.dueAt)).toEqual([row.nextDueAt]);
     });
 
-    it('editing it arms it again, and so does switching it on', async () => {
+    it('one that is saved switched off is stored switched off, and nothing is queued', async () => {
       const { app, ctx } = setup();
-      await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t2') });
-      await app.inject({ method: 'PUT', url: '/api/workflows/wf-t2', payload: timed('wf-t2', '0 * * * *') });
-      expect(armedCalls(ctx)).toBe(2);
-      await app.inject({ method: 'PUT', url: '/api/workflows/wf-t2/enabled', payload: { enabled: false } });
-      await app.inject({ method: 'PUT', url: '/api/workflows/wf-t2/enabled', payload: { enabled: true } });
-      expect(armedCalls(ctx)).toBe(4);
+      await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t2', { enabled: false }) });
+      expect(await rowOf(ctx, 'wf-t2')).toMatchObject({ enabled: false, nextDueAt: null });
+      expect(queued(ctx, 'wf-t2')).toEqual([]);
     });
 
-    it('a save still succeeds when arming fails', async () => {
+    it('switching it off stores that, and switching it on queues a run', async () => {
       const { app, ctx } = setup();
-      (ctx as any).workflows.runner.armSaved = async () => { throw new Error('bus is away'); };
-      const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t3') });
+      await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t3') });
+      await app.inject({ method: 'PUT', url: '/api/workflows/wf-t3/enabled', payload: { enabled: false } });
+      expect(await rowOf(ctx, 'wf-t3')).toMatchObject({ enabled: false, nextDueAt: null });
+      expect(queued(ctx, 'wf-t3')).toHaveLength(1);
+      await app.inject({ method: 'PUT', url: '/api/workflows/wf-t3/enabled', payload: { enabled: true } });
+      expect(await rowOf(ctx, 'wf-t3')).toMatchObject({ enabled: true });
+      expect(queued(ctx, 'wf-t3')).toHaveLength(2);
+    });
+
+    it('saving one workflow leaves the stored time of another alone', async () => {
+      const { app, ctx } = setup();
+      await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-a1') });
+      // A is overdue: its run is queued and its worker is late.
+      (await rowOf(ctx, 'wf-a1')).nextDueAt = '2020-01-01T00:00:00.000Z';
+      await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-b1') });
+      expect((await rowOf(ctx, 'wf-a1')).nextDueAt).toBe('2020-01-01T00:00:00.000Z');
+      expect(queued(ctx, 'wf-a1')).toHaveLength(1);
+    });
+
+    it('a save still succeeds when the run cannot be queued, and the time is not left stored', async () => {
+      const { app, ctx } = setup();
+      (ctx as any).eventing.publish = async () => { throw new Error('queue is away'); };
+      const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t4') });
       expect(res.statusCode).toBeLessThan(300);
+      expect(await rowOf(ctx, 'wf-t4')).toMatchObject({ enabled: true, nextDueAt: null });
     });
   });
 

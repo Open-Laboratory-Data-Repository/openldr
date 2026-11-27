@@ -15,7 +15,8 @@ export interface WorkflowScheduleStore {
   removeForWorkflow(workflowId: string): Promise<void>;
   list(opts: { enabledOnly?: boolean }): Promise<WorkflowSchedule[]>;
   get(workflowId: string, nodeId: string): Promise<WorkflowSchedule | undefined>;
-  setNextDue(workflowId: string, nodeId: string, nextDueAt: string): Promise<void>;
+  /** Stores the time the schedule is armed for. Null takes it off again. */
+  setNextDue(workflowId: string, nodeId: string, nextDueAt: string | null): Promise<void>;
   /**
    * Takes the armed time off a schedule, once. True for the caller that took it, false for every
    * other. `dueAt` is the time the queued run names: it must be the time the schedule is armed
