@@ -117,8 +117,10 @@ export function withTransportAnswer(base: typeof fetch, limitMs: () => number): 
     // Nothing left of the call's time: do not start a request that cannot finish.
     if (ms <= 0) return answer('timeout');
     const limit = AbortSignal.timeout(ms);
+    // A signal the caller gave still counts: whichever ends first stops the request.
+    const signal = init?.signal ? AbortSignal.any([init.signal, limit]) : limit;
     try {
-      const res = await base(input, { ...init, signal: limit });
+      const res = await base(input, { ...init, signal });
       // The body is read here, under the same limit. Read later, a stalled body would throw in
       // the SDK and end the plugin call after all.
       const body = await res.arrayBuffer();

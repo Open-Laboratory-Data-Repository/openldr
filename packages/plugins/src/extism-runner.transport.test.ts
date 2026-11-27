@@ -96,6 +96,43 @@ describe('egressBudget', () => {
     expect(left()).toBe(0);
   });
 
+  it('a call shorter than the reserve has nothing to give: zero, not a floor', () => {
+    expect(egressBudget(500, () => 0)()).toBe(0);
+    expect(egressBudget(2_400, () => 0)()).toBe(400);
+  });
+
+  it('two slow requests in one call: both are answered inside the call, the second with what was left', async () => {
+    const server: Server = createServer(() => { /* never answers */ });
+    await listening(server);
+    try {
+      // A call of 2.6 s keeps 2 s back, so 600 ms are shared by every request it makes.
+      const started = Date.now();
+      const egress = withTransportAnswer(fetch, egressBudget(2_600));
+      const first = await egress(`http://127.0.0.1:${port(server)}/submit`, {});
+      const afterFirst = Date.now() - started;
+      const second = await egress(`http://127.0.0.1:${port(server)}/status`, {});
+      const afterBoth = Date.now() - started;
+      expect(await read(first)).toEqual(said('timeout'));
+      expect(await read(second)).toEqual(said('timeout'));
+      expect(afterFirst).toBeGreaterThanOrEqual(550);
+      // The second had nothing left, so it cost no time: both are done well inside 2.6 s.
+      expect(afterBoth).toBeLessThan(1_500);
+    } finally { await closed(server); }
+  });
+
+  it('a signal the caller gave still stops the request', async () => {
+    const server: Server = createServer(() => { /* never answers */ });
+    await listening(server);
+    try {
+      const mine = new AbortController();
+      setTimeout(() => mine.abort(), 100);
+      const started = Date.now();
+      const res = await withTransportAnswer(fetch, () => 5_000)(`http://127.0.0.1:${port(server)}/x`, { signal: mine.signal });
+      expect(await read(res)).toEqual(said('timeout'));
+      expect(Date.now() - started).toBeLessThan(2_000);
+    } finally { await closed(server); }
+  });
+
   it('with nothing left the call is not made, and the plugin gets a timeout answer at once', async () => {
     let called = 0;
     const base = (async () => { called++; return new Response('x'); }) as typeof fetch;
