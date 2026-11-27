@@ -498,6 +498,27 @@ describe('armWorkflowSchedule', () => {
     expect(w.state.nextDueAt).toBe('2026-01-01T10:01:00.000Z');
   });
 
+  it('two arms of one schedule overlap, the first cannot queue, the second can: the second run still claims its time', async () => {
+    // The interleaving a review reproduced: A starts queueing and waits, B queues and stores,
+    // then A fails. Both arms name the same time.
+    const clock = () => new Date('2026-01-01T10:00:10.000Z');
+    const state = { nextDueAt: null as string | null };
+    const queued: string[] = [];
+    const schedules = { setNextDue: async (_w: string, _n: string, at: string) => { state.nextDueAt = at; } };
+    let failA!: (e: Error) => void;
+    const busA = { publish: () => new Promise<void>((_resolve, reject) => { failA = reject; }) };
+    const busB = { publish: async (e: { payload: { dueAt: string } }) => { queued.push(e.payload.dueAt); } };
+
+    const a = armWorkflowSchedule(schedules, busA as never, row, clock);
+    await armWorkflowSchedule(schedules, busB as never, row, clock);
+    failA(new Error('queue is away'));
+    await expect(a).rejects.toThrow('queue is away');
+
+    expect(queued).toEqual(['2026-01-01T10:01:00.000Z']);
+    // The time B stored is still there, so B's queued run can claim it.
+    expect(state.nextDueAt).toBe('2026-01-01T10:01:00.000Z');
+  });
+
   it('never arms for a time under 2 seconds away, so the time is stored before the run can start', async () => {
     const far = world();
     await armWorkflowSchedule(far.schedules, far.bus as never, row, () => new Date('2026-01-01T10:00:57.000Z'));
