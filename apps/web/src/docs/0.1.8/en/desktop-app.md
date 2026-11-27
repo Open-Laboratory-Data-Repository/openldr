@@ -100,7 +100,7 @@ Starting the app again while it runs brings its window back. Links that leave Op
 
 Tick **Share on the lab network** to let other PCs in the lab open this OpenLDR. The app asks first. OpenLDR then restarts, and anyone using it waits a moment.
 
-While it is shared, the tray menu also shows the address other PCs use, and three more items. The menu shows one address. If it does not open on another PC, run `openldr-standalone status --json` in a terminal and try the other addresses under `share.addresses`.
+While it is shared, the tray menu also shows the address other PCs use, and three more items. The menu shows one address. If it does not open on another PC, run `openldr-standalone status --json` in a terminal and try the other addresses under `share.addresses`. **Where the data is** below gives the command's full path, which Windows needs.
 
 | Item | What it does |
 | --- | --- |
@@ -170,7 +170,7 @@ The data folder stays. The last line says where it is, such as `Your data was le
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-The data folder holds the database, stored files, the logs and the secrets key. [Run without Docker](/docs/standalone) lists what is in it. The app's own folder holds its settings, its log `desktop.log`, and the window's browser data. The settings are the port, start at sign-in and the window size. They hold no secret.
+The data folder holds the database, stored files, the logs and the secrets key. [Run without Docker](/docs/standalone) lists what is in it. The app's own folder holds its settings, its log `desktop.log`, and the window's browser data. The settings are the port, start at sign-in, the window size, whether OpenLDR is shared on the lab network, and the port for sharing when you set one. They hold no secret.
 
 The data folder is the same one `openldr-standalone` uses. The app brings that command with it:
 
@@ -232,7 +232,7 @@ Still unreported:
 - The app carries no publisher's signature on macOS or Windows.
 - On macOS, the window may open when the app starts at sign-in. That is not proven.
 - `desktop.log` grows without limit, like `server.log` and `postgres.log`. Delete it after you select **Quit**.
-- The limits of [Run without Docker](/docs/standalone) apply too, such as no TLS and backup by copying the stopped data folder.
+- The limits of [Run without Docker](/docs/standalone) apply too, such as backup by copying the stopped data folder.
 
 ## Related guides
 

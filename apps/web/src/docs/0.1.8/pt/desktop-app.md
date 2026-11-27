@@ -100,7 +100,7 @@ Abrir a aplicação de novo enquanto está a funcionar traz a janela de volta. A
 
 Marque **Partilhar na rede do laboratório** para que outros PC do laboratório abram este OpenLDR. A aplicação pergunta primeiro. O OpenLDR reinicia depois, e quem o estiver a usar espera um momento.
 
-Enquanto está partilhado, o menu mostra também o endereço que os outros PC usam, e mais três itens. O menu mostra um só endereço. Se não abrir noutro PC, execute `openldr-standalone status --json` num terminal e experimente os outros endereços em `share.addresses`.
+Enquanto está partilhado, o menu mostra também o endereço que os outros PC usam, e mais três itens. O menu mostra um só endereço. Se não abrir noutro PC, execute `openldr-standalone status --json` num terminal e experimente os outros endereços em `share.addresses`. **Onde ficam os dados** mais abaixo indica o caminho completo do comando, necessário no Windows.
 
 | Item | O que faz |
 | --- | --- |
@@ -170,7 +170,7 @@ A pasta de dados fica. A última linha diz onde está, por exemplo `Your data wa
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-A pasta de dados guarda a base de dados, os ficheiros armazenados, os registos e a chave dos segredos. [Executar sem Docker](/docs/standalone) descreve o que contém. A pasta da própria aplicação guarda as definições dela, o registo `desktop.log` e os dados de navegador da janela. As definições são a porta, o arranque ao entrar na sessão e o tamanho da janela. Não guardam nenhum segredo.
+A pasta de dados guarda a base de dados, os ficheiros armazenados, os registos e a chave dos segredos. [Executar sem Docker](/docs/standalone) descreve o que contém. A pasta da própria aplicação guarda as definições dela, o registo `desktop.log` e os dados de navegador da janela. As definições são a porta, o arranque ao entrar na sessão, o tamanho da janela, a partilha do OpenLDR na rede do laboratório, e a porta da partilha quando define uma. Não guardam nenhum segredo.
 
 A pasta de dados é a mesma que o `openldr-standalone` usa. A aplicação traz esse comando:
 
@@ -232,7 +232,7 @@ Ainda sem relato:
 - A aplicação não tem a assinatura de nenhum editor em macOS nem em Windows.
 - No macOS, a janela pode abrir quando a aplicação arranca ao entrar na sessão. Não está provado.
 - `desktop.log` cresce sem limite, tal como `server.log` e `postgres.log`. Apague-o depois de selecionar **Sair**.
-- Os limites de [Executar sem Docker](/docs/standalone) também se aplicam, como a falta de TLS e a cópia de segurança feita a copiar a pasta de dados com o OpenLDR parado.
+- Os limites de [Executar sem Docker](/docs/standalone) também se aplicam, como a cópia de segurança feita a copiar a pasta de dados com o OpenLDR parado.
 
 ## Guias relacionados
 

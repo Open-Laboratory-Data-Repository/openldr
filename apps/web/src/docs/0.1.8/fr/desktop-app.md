@@ -100,7 +100,7 @@ Relancer l'application pendant qu'elle tourne fait revenir sa fenêtre. Les lien
 
 Cochez **Partager sur le réseau du laboratoire** pour que d'autres PC du laboratoire ouvrent cet OpenLDR. L'application demande d'abord. OpenLDR redémarre ensuite, et les personnes qui l'utilisent attendent un instant.
 
-Pendant le partage, le menu affiche aussi l'adresse qu'utilisent les autres PC, et trois éléments de plus. Le menu affiche une seule adresse. Si elle ne s'ouvre pas sur un autre PC, lancez `openldr-standalone status --json` dans un terminal et essayez les autres adresses sous `share.addresses`.
+Pendant le partage, le menu affiche aussi l'adresse qu'utilisent les autres PC, et trois éléments de plus. Le menu affiche une seule adresse. Si elle ne s'ouvre pas sur un autre PC, lancez `openldr-standalone status --json` dans un terminal et essayez les autres adresses sous `share.addresses`. **Emplacement des données** plus bas donne le chemin complet de la commande, nécessaire sous Windows.
 
 | Élément | Effet |
 | --- | --- |
@@ -170,7 +170,7 @@ Le dossier de données reste. La dernière ligne dit où il se trouve, par exemp
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-Le dossier de données contient la base de données, les fichiers stockés, les journaux et la clé des secrets. [Exécuter sans Docker](/docs/standalone) détaille son contenu. Le dossier propre à l'application contient ses réglages, son journal `desktop.log` et les données de navigateur de la fenêtre. Les réglages sont le port, le démarrage à la connexion et la taille de la fenêtre. Ils ne contiennent aucun secret.
+Le dossier de données contient la base de données, les fichiers stockés, les journaux et la clé des secrets. [Exécuter sans Docker](/docs/standalone) détaille son contenu. Le dossier propre à l'application contient ses réglages, son journal `desktop.log` et les données de navigateur de la fenêtre. Les réglages sont le port, le démarrage à la connexion, la taille de la fenêtre, le partage d'OpenLDR sur le réseau du laboratoire, et le port du partage quand vous en fixez un. Ils ne contiennent aucun secret.
 
 Le dossier de données est le même que celui de `openldr-standalone`. L'application fournit cette commande :
 
@@ -232,7 +232,7 @@ Pas encore signalé :
 - L'application ne porte la signature d'aucun éditeur sous macOS ni sous Windows.
 - Sous macOS, la fenêtre peut s'ouvrir quand l'application démarre à la connexion. Ce n'est pas prouvé.
 - `desktop.log` grossit sans limite, comme `server.log` et `postgres.log`. Supprimez-le après avoir sélectionné **Quitter**.
-- Les limites de la page [Exécuter sans Docker](/docs/standalone) s'appliquent aussi, comme l'absence de TLS et la sauvegarde par copie du dossier de données arrêté.
+- Les limites de la page [Exécuter sans Docker](/docs/standalone) s'appliquent aussi, comme la sauvegarde par copie du dossier de données arrêté.
 
 ## Guides associés
 
