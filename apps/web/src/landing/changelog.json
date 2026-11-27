@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "3f572dc2a",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Plugin code is told which connector its settings came from"
+        },
+        {
+          "hash": "db55ae382",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A plugin's network call never follows a redirect"
+        },
+        {
           "hash": "b6985c2ae",
           "type": "fix",
           "scope": "desktop",
