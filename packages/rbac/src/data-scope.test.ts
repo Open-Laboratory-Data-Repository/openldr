@@ -8,6 +8,11 @@ describe('capabilities under a data limit', () => {
     for (const c of LIMITED_SCOPE_DROPS) expect(CAPABILITY_KEYS).toContain(c);
   });
 
+  // The operator decided on 2026-11-27 that a user limited to certain facilities may hold it.
+  it('leaves network.manage with a facility-limited user', () => {
+    expect(LIMITED_SCOPE_DROPS).not.toContain('network.manage');
+  });
+
   it('drops exactly the planned list for a limited user', () => {
     expect([...LIMITED_SCOPE_DROPS].sort()).toEqual([
       'activity.view', 'audit.view', 'connectors.manage', 'dashboards.create', 'dashboards.edit', 'data.export',

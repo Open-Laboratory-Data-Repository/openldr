@@ -17,9 +17,29 @@ describe('capability catalog', () => {
   // 47 -> 48: forms.void_entries, for marking a form entry as entered in error (plan 2026-11-22-form-entries).
   // 48 -> 49: patients.find, a strong-match lookup a limited user keeps (plan 2026-11-23-plugin-host-2b, ruling 5).
   // 49 -> 50: reports.view_issued, for reading individual signed results.
-  it('exposes 50 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(50);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(50);
+  // 50 -> 51: network.manage, for trusted certificates and the hosts a workflow may call
+  // (design 2026-11-27-trusted-certificates-and-workflow-hosts).
+  it('exposes 51 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(51);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(51);
+  });
+
+  it('has network.manage in its own group, named Network', () => {
+    expect(CAPABILITIES.find((c) => c.key === 'network.manage')).toEqual({
+      key: 'network.manage',
+      group: 'network',
+      label: 'Manage network trust',
+      description: 'Add trusted certificates and name the hosts a workflow may call.',
+    });
+    expect(CAPABILITY_GROUPS.find((g) => g.key === 'network')?.label).toBe('Network');
+  });
+
+  it('gives the Administrator preset network.manage', () => {
+    expect(SYSTEM_ROLES.find((r) => r.slug === 'lab_admin')?.capabilities).toContain('network.manage');
+  });
+
+  it('gives network.manage to no other preset', () => {
+    for (const role of SYSTEM_ROLES.filter((r) => r.slug !== 'lab_admin')) expect(role.capabilities).not.toContain('network.manage');
   });
 
   it('has forms.void_entries in the forms group', () => {
