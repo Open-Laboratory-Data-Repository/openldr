@@ -6,6 +6,72 @@
       "version": null,
       "entries": [
         {
+          "hash": "771d6c955",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "A locked PC checks start at sign-in against the system"
+        },
+        {
+          "hash": "43770fd87",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "Lock a PC to OpenLDR with a PIN"
+        },
+        {
+          "hash": "65682e694",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "An accepted certificate that is left or replaced needs a new start"
+        },
+        {
+          "hash": "ef6f624ff",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "Choose between holding the data and connecting to a server (wiring, not yet run in Electron)"
+        },
+        {
+          "hash": "f2a0db0e2",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "A server is checked with its pin given, away from the window"
+        },
+        {
+          "hash": "20f3988d6",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "A server is saved only once its check has passed"
+        },
+        {
+          "hash": "f3b451f7b",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "A controller that shows OpenLDR from another PC"
+        },
+        {
+          "hash": "a6a903227",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "An address's scheme is read only at its start"
+        },
+        {
+          "hash": "32623a375",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "Read and pin a server's certificate"
+        },
+        {
+          "hash": "d34a2506d",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "The window can trust one named server"
+        },
+        {
+          "hash": "997cfeff0",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "Settings and address parsing for connect mode"
+        },
+        {
           "hash": "185a95493",
           "type": "fix",
           "scope": "studio",
