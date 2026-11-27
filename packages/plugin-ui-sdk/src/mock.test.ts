@@ -72,4 +72,14 @@ describe('createMockOpenldr', () => {
     const api = createMockOpenldr({ pluginId: 'p1', capabilities: ['host:reports'], reports: [{ id: 'r1' }] });
     expect(await api.reports.list()).toEqual([{ id: 'r1' }]);
   });
+
+  it('refuses every serial call with serial-unavailable', async () => {
+    const api = createMockOpenldr({ pluginId: 'p', capabilities: ['host:serial'] });
+    await expect(api.serial.ports()).rejects.toThrow('serial-unavailable');
+    await expect(api.serial.choose()).rejects.toThrow('serial-unavailable');
+    await expect(api.serial.open('h1', { baudRate: 9600 })).rejects.toThrow('serial-unavailable');
+    await expect(api.serial.read('h1')).rejects.toThrow('serial-unavailable');
+    await expect(api.serial.write('h1', new Uint8Array([1]))).rejects.toThrow('serial-unavailable');
+    await expect(api.serial.close('h1')).rejects.toThrow('serial-unavailable');
+  });
 });

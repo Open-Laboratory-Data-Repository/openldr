@@ -1,4 +1,5 @@
 import type { PluginPrintPaper } from './print';
+import type { PluginSerialPort, PluginSerialRead, PluginSerialSettings } from './serial';
 
 /** The init context the host mints and transfers to the plugin iframe. */
 export interface PluginInitContext {
@@ -71,7 +72,15 @@ export type PluginDownloadMime = 'text/csv' | 'application/json' | 'text/plain';
 export type PluginHostOp =
   | { kind: 'host.edition'; edition: string; open: boolean }
   | { kind: 'host.download'; filename: string; mime: PluginDownloadMime; text: string }
-  | { kind: 'host.print'; title: string; paper: PluginPrintPaper; pages: string[] };
+  | { kind: 'host.print'; title: string; paper: PluginPrintPaper; pages: string[] }
+  // Serial ports on the PC the page runs on. The bytes may hold patient results, so these never
+  // reach the server.
+  | { kind: 'host.serial.ports' }
+  | { kind: 'host.serial.choose' }
+  | { kind: 'host.serial.open'; port: string; settings: PluginSerialSettings }
+  | { kind: 'host.serial.read'; port: string; waitMs: number }
+  | { kind: 'host.serial.write'; port: string; bytes: Uint8Array }
+  | { kind: 'host.serial.close'; port: string };
 
 /** Everything a page may send over its port. */
 export type PluginOp = PluginBrokerOp | PluginHostOp;
@@ -335,6 +344,26 @@ export interface OpenLdrPluginApi {
      *  `data:image/png;base64,` URL or is over 10,000 pixels a side, the pages are over 64 MB
      *  together, or another print from this page is still open. The pages never go to the server. */
     pages(input: { title: string; paper: PluginPrintPaper; pages: string[] }): Promise<void>;
+  };
+  /** A serial port on the PC this page runs on, as raw bytes. Needs the `host:serial` capability.
+   *  The studio holds the port and does every check. The bytes never go to the server. A refused
+   *  call rejects with an Error whose message is one of the `PluginSerialRefusal` codes. */
+  serial: {
+    /** The ports this page has been given in this load. Empty until a person chooses one. */
+    ports(): Promise<PluginSerialPort[]>;
+    /** The studio asks the person, naming the plugin, then shows the list of ports. Resolves with
+     *  the chosen port, or null when the person cancelled. A port is chosen by a person every time. */
+    choose(): Promise<PluginSerialPort | null>;
+    /** Opens a chosen port. At most 2 ports open for one page. */
+    open(port: string, settings: PluginSerialSettings): Promise<void>;
+    /** The bytes that have arrived, at most 65,536. With `waitMs` it waits up to that long, at most
+     *  30,000, for the first byte; without it, it answers with what is there now. `lost` is true
+     *  once after unread bytes were dropped because over 1 MiB was waiting. */
+    read(port: string, waitMs?: number): Promise<PluginSerialRead>;
+    /** Sends 1 to 65,536 bytes. Resolves when the port has taken them. */
+    write(port: string, bytes: Uint8Array): Promise<void>;
+    /** Closes the port. The handle stays good for another `open` until the page reloads. */
+    close(port: string): Promise<void>;
   };
 }
 

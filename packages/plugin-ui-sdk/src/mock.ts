@@ -134,6 +134,15 @@ export function createMockOpenldr(opts: MockOptions): MockOpenLdrPluginApi {
         prints.push({ title: input.title, paper: input.paper, pages: [...input.pages] });
       },
     },
+    // A test has no serial port. Every call is refused the way a browser without the feature is.
+    serial: {
+      async ports() { throw new Error('serial-unavailable'); },
+      async choose() { throw new Error('serial-unavailable'); },
+      async open() { throw new Error('serial-unavailable'); },
+      async read() { throw new Error('serial-unavailable'); },
+      async write() { throw new Error('serial-unavailable'); },
+      async close() { throw new Error('serial-unavailable'); },
+    },
     downloads,
     prints,
   };
