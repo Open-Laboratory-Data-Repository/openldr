@@ -122,7 +122,7 @@ Certains bureaux Linux n'affichent aucune icône de notification. Dans ce cas, r
 
 ## Se connecter au serveur du laboratoire
 
-Un laboratoire a besoin d'un seul OpenLDR. Sur chaque autre PC, l'application peut afficher cet OpenLDR au lieu d'exécuter le sien. Le PC n'exécute alors ni serveur ni base de données, et ne contient aucune donnée. [Choisir une installation pour le laboratoire](/docs/lab-setups) explique quand l'utiliser.
+Un laboratoire a besoin d'un seul OpenLDR. Sur chaque autre PC, l'application peut afficher cet OpenLDR au lieu d'exécuter le sien. Le PC n'exécute alors ni serveur ni base de données de laboratoire locale. [Choisir une installation pour le laboratoire](/docs/lab-setups) explique quand l'utiliser.
 
 ### Le choisir au premier démarrage
 
@@ -149,7 +149,7 @@ Une application de bureau partagée fabrique son propre certificat, donc le syst
 
 L'application retient ce certificat pour cette adresse seulement. Un serveur dont le certificat est déjà reconnu par votre système ne donne lieu à aucune question.
 
-Si l'application affiche plus tard **Le certificat du serveur a changé**, arrêtez-vous et cherchez pourquoi. Un nouveau nom ou une nouvelle adresse réseau du serveur produit un nouveau certificat. Si personne n'a changé le serveur, sélectionnez **Annuler**. Après **Elle correspond**, l'application se ferme et se rouvre d'elle-même.
+Si l'application affiche plus tard **Le certificat du serveur a changé**, arrêtez-vous. L'écran dit seulement que l'empreinte est différente. Comparez la nouvelle empreinte avec celle du serveur lui-même, comme plus haut, et sélectionnez **Elle correspond** seulement si elles sont identiques. Un nouveau nom ou une nouvelle adresse réseau du serveur est une cause possible. Si personne ne peut expliquer le changement, sélectionnez **Annuler**. Après **Elle correspond**, l'application peut se fermer et se rouvrir d'elle-même.
 
 ### Quand le serveur ne répond pas
 
@@ -206,7 +206,7 @@ Le verrou arrête un utilisateur occasionnel. Il n'empêche pas ceci :
 - Éteindre le PC ou fermer la session. L'application quitte alors sans code PIN, pour qu'OpenLDR s'arrête proprement.
 - Une personne qui peut modifier des fichiers avec le compte du PC. Elle peut retirer le verrou du fichier de réglages.
 
-Pour fermer ces brèches sous Windows, exécutez l'application comme programme kiosque d'un compte Windows séparé. Pour un programme de bureau, c'est la fonction Shell Launcher de Windows Entreprise et Éducation, ou un profil kiosque qui liste `%LOCALAPPDATA%\Programs\OpenLDR\OpenLDR.exe`. Le guide de Microsoft « Configure kiosks and digital signs on Windows » donne les étapes. Nous ne l'avons pas testé.
+Pour bloquer les touches du système sous Windows, exécutez l'application comme programme kiosque d'un compte Windows séparé. Pour un programme de bureau, c'est la fonction Shell Launcher de Windows Entreprise et Éducation, ou un profil kiosque qui liste `%LOCALAPPDATA%\Programs\OpenLDR\OpenLDR.exe`. La [présentation des kiosques](https://learn.microsoft.com/en-us/windows/configuration/kiosk/) de Microsoft, en anglais, donne les étapes. Nous ne l'avons pas testé.
 
 ### Un code PIN oublié
 

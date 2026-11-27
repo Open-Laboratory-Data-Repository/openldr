@@ -122,7 +122,7 @@ Some Linux desktops show no tray icons. There, start the app again from the appl
 
 ## Connect to the lab's server
 
-A lab needs one OpenLDR. On every other PC, the app can show that OpenLDR instead of running its own. The PC then runs no server and no database, and holds no data. [Choose a lab setup](/docs/lab-setups) says when to use this.
+A lab needs one OpenLDR. On every other PC, the app can show that OpenLDR instead of running its own. The PC then runs no server and no local lab database. [Choose a lab setup](/docs/lab-setups) says when to use this.
 
 ### Choose it on the first start
 
@@ -149,7 +149,7 @@ A shared desktop app makes its own certificate, so the system on your PC does no
 
 The app remembers that certificate for that address only. A server whose certificate your system already trusts is not asked about.
 
-If the app later shows **The server's certificate has changed**, stop and find out why. A new name or network address for the server makes a new certificate. If nobody changed the server, select **Cancel**. After **It matches**, the app closes and opens again by itself.
+If the app later shows **The server's certificate has changed**, stop. The screen only tells you the fingerprint is different. Compare the new fingerprint with the one on the server itself, as above, and select **It matches** only when they are the same. A new name or network address for the server is one cause. If nobody can explain the change, select **Cancel**. After **It matches**, the app may close and open again by itself.
 
 ### When the server does not answer
 
@@ -206,7 +206,7 @@ The lock stops a casual user. It does not stop these:
 - Shutting down or signing out of the PC. The app then quits with no PIN, so OpenLDR stops cleanly.
 - Someone who can edit files with the PC's account. They can remove the lock from the settings file.
 
-To close those gaps on Windows, run the app as the kiosk program of a separate Windows account. For a desktop program this is the Shell Launcher feature in Windows Enterprise and Education, or a kiosk profile that lists `%LOCALAPPDATA%\Programs\OpenLDR\OpenLDR.exe`. Microsoft's guide "Configure kiosks and digital signs on Windows" has the steps. We have not tested this.
+To block the system's keys on Windows, run the app as the kiosk program of a separate Windows account. For a desktop program this is the Shell Launcher feature in Windows Enterprise and Education, or a kiosk profile that lists `%LOCALAPPDATA%\Programs\OpenLDR\OpenLDR.exe`. Microsoft's [kiosk configuration overview](https://learn.microsoft.com/en-us/windows/configuration/kiosk/) has the steps. We have not tested this.
 
 ### A forgotten PIN
 

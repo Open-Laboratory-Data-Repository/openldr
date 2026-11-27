@@ -122,7 +122,7 @@ Alguns ambientes de trabalho Linux não mostram ícones de notificação. Aí, a
 
 ## Ligar ao servidor do laboratório
 
-Um laboratório precisa de um só OpenLDR. Em cada outro PC, a aplicação pode mostrar esse OpenLDR em vez de executar o seu. O PC não executa então nem servidor nem base de dados, e não guarda dados. [Escolher uma instalação para o laboratório](/docs/lab-setups) diz quando usar isto.
+Um laboratório precisa de um só OpenLDR. Em cada outro PC, a aplicação pode mostrar esse OpenLDR em vez de executar o seu. O PC não executa então nem servidor nem base de dados local do laboratório. [Escolher uma instalação para o laboratório](/docs/lab-setups) diz quando usar isto.
 
 ### Escolher no primeiro arranque
 
@@ -149,7 +149,7 @@ Uma aplicação de computador partilhada cria o seu próprio certificado, por is
 
 A aplicação lembra-se desse certificado só para esse endereço. Um servidor cujo certificado o seu sistema já reconhece não dá origem a pergunta.
 
-Se a aplicação mostrar mais tarde **O certificado do servidor mudou**, pare e descubra porquê. Um novo nome ou um novo endereço de rede do servidor cria um novo certificado. Se ninguém mudou o servidor, selecione **Cancelar**. Depois de **Corresponde**, a aplicação fecha-se e volta a abrir sozinha.
+Se a aplicação mostrar mais tarde **O certificado do servidor mudou**, pare. O ecrã só diz que a impressão digital é diferente. Compare a nova impressão digital com a do próprio servidor, como acima, e selecione **Corresponde** só quando forem iguais. Um novo nome ou um novo endereço de rede do servidor é uma causa possível. Se ninguém souber explicar a mudança, selecione **Cancelar**. Depois de **Corresponde**, a aplicação pode fechar-se e voltar a abrir sozinha.
 
 ### Quando o servidor não responde
 
@@ -206,7 +206,7 @@ O bloqueio trava um utilizador ocasional. Não impede isto:
 - Desligar o PC ou terminar a sessão. A aplicação sai então sem PIN, para que o OpenLDR pare de forma limpa.
 - Alguém que possa editar ficheiros com a conta do PC. Pode retirar o bloqueio do ficheiro de definições.
 
-Para fechar estas falhas no Windows, execute a aplicação como programa de quiosque de uma conta Windows separada. Para um programa de ambiente de trabalho, é a funcionalidade Shell Launcher do Windows Enterprise e Education, ou um perfil de quiosque que liste `%LOCALAPPDATA%\Programs\OpenLDR\OpenLDR.exe`. O guia da Microsoft "Configure kiosks and digital signs on Windows" tem os passos. Não testámos isto.
+Para bloquear as teclas do sistema no Windows, execute a aplicação como programa de quiosque de uma conta Windows separada. Para um programa de ambiente de trabalho, é a funcionalidade Shell Launcher do Windows Enterprise e Education, ou um perfil de quiosque que liste `%LOCALAPPDATA%\Programs\OpenLDR\OpenLDR.exe`. A [visão geral dos quiosques](https://learn.microsoft.com/en-us/windows/configuration/kiosk/) da Microsoft, em inglês, tem os passos. Não testámos isto.
 
 ### Um PIN esquecido
 

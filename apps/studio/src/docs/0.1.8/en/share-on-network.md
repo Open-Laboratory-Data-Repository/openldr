@@ -48,14 +48,14 @@ The first PC makes its own certificate, so a browser does not know it. Check tha
 
 ## Use the OpenLDR app on another PC
 
-Do this on the other PC when you want the OpenLDR app there instead of a browser. The app then shows this lab's OpenLDR and holds no data of its own.
+Do this on the other PC when you want the OpenLDR app there instead of a browser. The app then shows this lab's OpenLDR and runs no lab database of its own.
 
 1. Install the OpenLDR desktop app on the other PC and start it.
 2. On the first screen, select **Connect to the lab's server**.
 3. In **Server address**, type the address from the first PC, such as `https://labpc:3443/studio/`.
 4. Select **Connect**.
-5. Compare the fingerprint the app shows with the one from the first PC. See **Check the certificate** above.
-6. Select **It matches**.
+5. If the app shows **Check the server's certificate**, compare its fingerprint with the one from the first PC. See **Check the certificate** above.
+6. Select **It matches** only when the two are the same.
 7. Sign in with your OpenLDR username and password.
 
 **Expected result:** Studio opens in the app, with the same data as on the first PC. The app goes straight to it the next time it starts.
@@ -86,8 +86,8 @@ To unlock, press `Ctrl+Shift+L`, type the PIN, and select **Unlock**. Quitting t
 - **The tray menu shows "No network address was found".** The PC is on no network. Join one, quit OpenLDR and open it again.
 - **The app says port 3443 is already in use.** Another program uses it. The web guide for the desktop app shows how to pick another port.
 - **The other PC cannot open the address.** Check that both PCs are on the same network, and that the first PC's firewall allows port 3443.
-- **The app shows "Cannot reach the server".** The first PC is off, or the network is down. The app comes back by itself when the first PC answers.
-- **The app shows "The server's certificate has changed".** The first PC has a new name or network address. Compare the new fingerprint before you select **It matches**.
+- **The app shows "Cannot reach the server" when it starts.** The first PC is off, or the network is down. The app comes back by itself when the first PC answers.
+- **The app shows "The server's certificate has changed".** The certificate is not the one this PC accepted. Compare the new fingerprint with the one on the first PC, and select **It matches** only when they are the same. If nobody can explain the change, select **Cancel**.
 
 ## Related guides
 

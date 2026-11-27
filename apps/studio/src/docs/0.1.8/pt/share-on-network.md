@@ -48,14 +48,14 @@ O primeiro PC cria o seu próprio certificado, por isso um navegador não o conh
 
 ## Usar a aplicação OpenLDR noutro PC
 
-Faça isto no outro PC quando quiser lá a aplicação OpenLDR em vez de um navegador. A aplicação mostra então o OpenLDR deste laboratório e não guarda dados.
+Faça isto no outro PC quando quiser lá a aplicação OpenLDR em vez de um navegador. A aplicação mostra então o OpenLDR deste laboratório e não executa nenhuma base de dados do laboratório.
 
 1. Instale a aplicação de computador OpenLDR no outro PC e inicie-a.
 2. No primeiro ecrã, selecione **Ligar ao servidor do laboratório**.
 3. Em **Endereço do servidor**, escreva o endereço do primeiro PC, por exemplo `https://labpc:3443/studio/`.
 4. Selecione **Ligar**.
-5. Compare a impressão digital que a aplicação mostra com a do primeiro PC. Veja **Verificar o certificado** acima.
-6. Selecione **Corresponde**.
+5. Se a aplicação mostrar **Verifique o certificado do servidor**, compare a impressão digital com a do primeiro PC. Veja **Verificar o certificado** acima.
+6. Selecione **Corresponde** só quando as duas forem iguais.
 7. Inicie sessão com o seu nome de utilizador e a sua palavra-passe do OpenLDR.
 
 **Resultado esperado:** o Studio abre na aplicação, com os mesmos dados do primeiro PC. A aplicação vai direta a ele no arranque seguinte.
@@ -86,8 +86,8 @@ Para desbloquear, prima `Ctrl+Shift+L`, escreva o PIN e selecione **Desbloquear*
 - **O menu mostra «Não foi encontrado nenhum endereço de rede».** O PC não está em nenhuma rede. Ligue-o a uma, saia do OpenLDR e volte a abri-lo.
 - **A aplicação diz que a porta 3443 já está em uso.** Outro programa usa-a. O guia web da aplicação de ambiente de trabalho mostra como escolher outra porta.
 - **O outro PC não consegue abrir o endereço.** Confirme que os dois PC estão na mesma rede, e que a firewall do primeiro PC permite a porta 3443.
-- **A aplicação mostra «Não é possível alcançar o servidor».** O primeiro PC está desligado, ou a rede falhou. A aplicação volta sozinha quando o primeiro PC responde.
-- **A aplicação mostra «O certificado do servidor mudou».** O primeiro PC tem um novo nome ou endereço de rede. Compare a nova impressão digital antes de selecionar **Corresponde**.
+- **A aplicação mostra «Não é possível alcançar o servidor» ao arrancar.** O primeiro PC está desligado, ou a rede falhou. A aplicação volta sozinha quando o primeiro PC responde.
+- **A aplicação mostra «O certificado do servidor mudou».** O certificado não é o que este PC aceitou. Compare a nova impressão digital com a do primeiro PC, e selecione **Corresponde** só quando forem iguais. Se ninguém souber explicar a mudança, selecione **Cancelar**.
 
 ## Guias relacionados
 

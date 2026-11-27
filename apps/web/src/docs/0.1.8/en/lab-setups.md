@@ -1,6 +1,6 @@
 # Choose a lab setup
 
-One rule covers every lab. Each site has one full OpenLDR install, and every other PC at that site is a screen onto it. The install holds the data and the users. The other PCs hold nothing.
+One rule covers every lab. Each site has one full OpenLDR install, and every other PC at that site is a screen onto it. The install holds the data and the users. The other PCs run no lab database of their own.
 
 This page describes four setups. Pick the one that matches your site, then follow the links for the steps.
 
@@ -21,9 +21,9 @@ One PC holds the data and the second PC shows it.
 - **What to install on PC 1.** The desktop app, set to **This PC holds the lab's data**, with **Share on the lab network** ticked in its tray menu.
 - **What to install on PC 2.** The desktop app, set to **Connect to the lab's server**, with PC 1's address. A browser on PC 2 works too.
 - **Where the users are made.** Once, on PC 1. PC 2 signs in to the same users.
-- **When the network is down.** PC 1 works as before. PC 2 shows **Cannot reach the server** and comes back by itself when it can reach PC 1.
+- **When the network is down.** PC 1 works as before. On PC 2, an app that is starting shows **Cannot reach the server** and comes back by itself when it can reach PC 1. A Studio page that is already open stays on screen, and what it sends fails until PC 1 answers. A browser shows its own error page instead.
 
-PC 1 must be on, with OpenLDR running, whenever PC 2 is used. Back up PC 1 only. PC 2 holds no data.
+PC 1 must be on, with OpenLDR running, whenever PC 2 is used. Back up PC 1 only. PC 2 runs no lab database.
 
 ## Bigger lab with many PCs
 
@@ -32,7 +32,7 @@ A lab with a reception and several benches. Other sites may send it samples.
 - **What to install on the server.** The server edition, with Docker. See [Install](/docs/install). It has HTTPS and is built to face a network.
 - **What to install on every other PC.** The desktop app, set to **Connect to the lab's server**, or a browser.
 - **Where the users are made.** On the server. It is one site with one set of users.
-- **When the network is down.** A PC that cannot reach the server shows **Cannot reach the server**. The server keeps its data. Keep the server on a power supply that rides out short cuts.
+- **When the network is down.** An app that is starting shows **Cannot reach the server** and comes back by itself. A Studio page that is already open stays on screen, and what it sends fails until the server answers. The server keeps its data. Keep the server on a power supply that rides out short cuts.
 
 ## PC beside an analyser
 

@@ -1,6 +1,6 @@
 # Escolher uma instalação para o laboratório
 
-Uma regra serve para todos os laboratórios. Cada local tem uma única instalação completa do OpenLDR, e cada outro PC do local é um ecrã para essa instalação. A instalação guarda os dados e os utilizadores. Os outros PC não guardam nada.
+Uma regra serve para todos os laboratórios. Cada local tem uma única instalação completa do OpenLDR, e cada outro PC do local é um ecrã para essa instalação. A instalação guarda os dados e os utilizadores. Os outros PC não executam nenhuma base de dados do laboratório.
 
 Esta página descreve quatro instalações. Escolha a que corresponde ao seu local e siga as ligações para os passos.
 
@@ -21,9 +21,9 @@ Um PC guarda os dados e o segundo mostra-os.
 - **O que instalar no PC 1.** A aplicação de computador, definida para **Este PC guarda os dados do laboratório**, com **Partilhar na rede do laboratório** marcado no menu da área de notificação.
 - **O que instalar no PC 2.** A aplicação de computador, definida para **Ligar ao servidor do laboratório**, com o endereço do PC 1. Um navegador no PC 2 também serve.
 - **Onde criar os utilizadores.** Uma vez, no PC 1. O PC 2 inicia sessão com os mesmos utilizadores.
-- **Quando a rede falha.** O PC 1 funciona como antes. O PC 2 mostra **Não é possível alcançar o servidor** e volta sozinho quando consegue alcançar o PC 1.
+- **Quando a rede falha.** O PC 1 funciona como antes. No PC 2, uma aplicação que está a arrancar mostra **Não é possível alcançar o servidor** e volta sozinha quando consegue alcançar o PC 1. Uma página do Studio já aberta fica no ecrã, e o que ela envia falha até o PC 1 responder. Um navegador mostra em vez disso a sua própria página de erro.
 
-O PC 1 tem de estar ligado, com o OpenLDR a funcionar, sempre que o PC 2 é usado. Faça cópias de segurança só do PC 1. O PC 2 não guarda dados.
+O PC 1 tem de estar ligado, com o OpenLDR a funcionar, sempre que o PC 2 é usado. Faça cópias de segurança só do PC 1. O PC 2 não executa nenhuma base de dados do laboratório.
 
 ## Laboratório maior com vários PC
 
@@ -32,7 +32,7 @@ Um laboratório com receção e várias bancadas. Outros locais podem enviar-lhe
 - **O que instalar no servidor.** A edição de servidor, com Docker. Veja [Instalar](/docs/install). Tem HTTPS e foi feita para estar exposta a uma rede.
 - **O que instalar em cada outro PC.** A aplicação de computador, definida para **Ligar ao servidor do laboratório**, ou um navegador.
 - **Onde criar os utilizadores.** No servidor. É um único local com um único conjunto de utilizadores.
-- **Quando a rede falha.** Um PC que não alcança o servidor mostra **Não é possível alcançar o servidor**. O servidor mantém os seus dados. Ligue o servidor a uma alimentação que aguente cortes curtos.
+- **Quando a rede falha.** Uma aplicação que está a arrancar mostra **Não é possível alcançar o servidor** e volta sozinha. Uma página do Studio já aberta fica no ecrã, e o que ela envia falha até o servidor responder. O servidor mantém os seus dados. Ligue o servidor a uma alimentação que aguente cortes curtos.
 
 ## PC ao lado de um analisador
 

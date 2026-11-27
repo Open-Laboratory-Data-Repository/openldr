@@ -48,14 +48,14 @@ Le premier PC crée son propre certificat, donc un navigateur ne le connaît pas
 
 ## Utiliser l'application OpenLDR sur un autre PC
 
-Faites ceci sur l'autre PC quand vous y voulez l'application OpenLDR plutôt qu'un navigateur. L'application affiche alors l'OpenLDR de ce laboratoire et ne contient aucune donnée.
+Faites ceci sur l'autre PC quand vous y voulez l'application OpenLDR plutôt qu'un navigateur. L'application affiche alors l'OpenLDR de ce laboratoire et n'exécute aucune base de données de laboratoire.
 
 1. Installez l'application de bureau OpenLDR sur l'autre PC et démarrez-la.
 2. Sur le premier écran, sélectionnez **Se connecter au serveur du laboratoire**.
 3. Dans **Adresse du serveur**, saisissez l'adresse du premier PC, par exemple `https://labpc:3443/studio/`.
 4. Sélectionnez **Se connecter**.
-5. Comparez l'empreinte affichée par l'application avec celle du premier PC. Voir **Vérifier le certificat** plus haut.
-6. Sélectionnez **Elle correspond**.
+5. Si l'application affiche **Vérifiez le certificat du serveur**, comparez son empreinte avec celle du premier PC. Voir **Vérifier le certificat** plus haut.
+6. Sélectionnez **Elle correspond** seulement si les deux sont identiques.
 7. Connectez-vous avec votre nom d'utilisateur et votre mot de passe OpenLDR.
 
 **Résultat attendu :** Studio s'ouvre dans l'application, avec les mêmes données que sur le premier PC. L'application y va directement au démarrage suivant.
@@ -86,8 +86,8 @@ Pour déverrouiller, appuyez sur `Ctrl+Maj+L`, saisissez le code PIN et sélecti
 - **Le menu affiche « Aucune adresse réseau n'a été trouvée ».** Le PC n'est sur aucun réseau. Rejoignez-en un, quittez OpenLDR et rouvrez-le.
 - **L'application dit que le port 3443 est déjà utilisé.** Un autre programme l'utilise. Le guide web de l'application de bureau montre comment choisir un autre port.
 - **L'autre PC ne peut pas ouvrir l'adresse.** Vérifiez que les deux PC sont sur le même réseau, et que le pare-feu du premier PC autorise le port 3443.
-- **L'application affiche « Impossible de joindre le serveur ».** Le premier PC est éteint, ou le réseau est coupé. L'application revient d'elle-même quand le premier PC répond.
-- **L'application affiche « Le certificat du serveur a changé ».** Le premier PC a un nouveau nom ou une nouvelle adresse réseau. Comparez la nouvelle empreinte avant de sélectionner **Elle correspond**.
+- **L'application affiche « Impossible de joindre le serveur » au démarrage.** Le premier PC est éteint, ou le réseau est coupé. L'application revient d'elle-même quand le premier PC répond.
+- **L'application affiche « Le certificat du serveur a changé ».** Le certificat n'est pas celui que ce PC avait accepté. Comparez la nouvelle empreinte avec celle du premier PC, et sélectionnez **Elle correspond** seulement si elles sont identiques. Si personne ne peut expliquer le changement, sélectionnez **Annuler**.
 
 ## Guides associés
 

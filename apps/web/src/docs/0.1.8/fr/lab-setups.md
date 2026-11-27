@@ -1,6 +1,6 @@
 # Choisir une installation pour le laboratoire
 
-Une règle couvre tous les laboratoires. Chaque site a une seule installation complète d'OpenLDR, et chaque autre PC du site est un écran sur cette installation. L'installation contient les données et les utilisateurs. Les autres PC ne contiennent rien.
+Une règle couvre tous les laboratoires. Chaque site a une seule installation complète d'OpenLDR, et chaque autre PC du site est un écran sur cette installation. L'installation contient les données et les utilisateurs. Les autres PC n'exécutent aucune base de données de laboratoire.
 
 Cette page décrit quatre installations. Choisissez celle qui correspond à votre site, puis suivez les liens pour les étapes.
 
@@ -21,9 +21,9 @@ Un PC contient les données et le second les affiche.
 - **Quoi installer sur le PC 1.** L'application de bureau, réglée sur **Ce PC contient les données du laboratoire**, avec **Partager sur le réseau du laboratoire** coché dans son menu de la zone de notification.
 - **Quoi installer sur le PC 2.** L'application de bureau, réglée sur **Se connecter au serveur du laboratoire**, avec l'adresse du PC 1. Un navigateur sur le PC 2 convient aussi.
 - **Où créer les utilisateurs.** Une fois, sur le PC 1. Le PC 2 se connecte aux mêmes utilisateurs.
-- **Quand le réseau est coupé.** Le PC 1 fonctionne comme avant. Le PC 2 affiche **Impossible de joindre le serveur** et revient de lui-même quand il peut joindre le PC 1.
+- **Quand le réseau est coupé.** Le PC 1 fonctionne comme avant. Sur le PC 2, une application qui démarre affiche **Impossible de joindre le serveur** et revient d'elle-même quand elle peut joindre le PC 1. Une page de Studio déjà ouverte reste à l'écran, et ce qu'elle envoie échoue jusqu'à ce que le PC 1 réponde. Un navigateur affiche à la place sa propre page d'erreur.
 
-Le PC 1 doit être allumé, avec OpenLDR en marche, chaque fois que le PC 2 est utilisé. Sauvegardez seulement le PC 1. Le PC 2 ne contient aucune donnée.
+Le PC 1 doit être allumé, avec OpenLDR en marche, chaque fois que le PC 2 est utilisé. Sauvegardez seulement le PC 1. Le PC 2 n'exécute aucune base de données de laboratoire.
 
 ## Laboratoire plus grand avec plusieurs PC
 
@@ -32,7 +32,7 @@ Un laboratoire avec une réception et plusieurs paillasses. D'autres sites peuve
 - **Quoi installer sur le serveur.** L'édition serveur, avec Docker. Voir [Installation](/docs/install). Elle a HTTPS et elle est faite pour être exposée à un réseau.
 - **Quoi installer sur chaque autre PC.** L'application de bureau, réglée sur **Se connecter au serveur du laboratoire**, ou un navigateur.
 - **Où créer les utilisateurs.** Sur le serveur. C'est un seul site avec un seul ensemble d'utilisateurs.
-- **Quand le réseau est coupé.** Un PC qui ne peut pas joindre le serveur affiche **Impossible de joindre le serveur**. Le serveur garde ses données. Branchez le serveur sur une alimentation qui tient pendant les courtes coupures.
+- **Quand le réseau est coupé.** Une application qui démarre affiche **Impossible de joindre le serveur** et revient d'elle-même. Une page de Studio déjà ouverte reste à l'écran, et ce qu'elle envoie échoue jusqu'à ce que le serveur réponde. Le serveur garde ses données. Branchez le serveur sur une alimentation qui tient pendant les courtes coupures.
 
 ## PC à côté d'un automate
 
