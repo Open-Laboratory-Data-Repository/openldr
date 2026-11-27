@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "6c904cfed",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "Open only the connector list, not every admin page call"
+        },
+        {
+          "hash": "102d2f497",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "An administrator makes the admin page calls on a plugin opened by a permission"
+        },
+        {
           "hash": "3f572dc2a",
           "type": "feat",
           "scope": "plugins",
