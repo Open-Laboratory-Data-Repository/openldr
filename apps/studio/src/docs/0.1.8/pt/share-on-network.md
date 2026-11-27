@@ -46,6 +46,35 @@ O primeiro PC cria o seu próprio certificado, por isso um navegador não o conh
 
 **Resultado esperado:** as duas impressões digitais são iguais. Aceite então o certificado. Se forem diferentes, pare e não inicie sessão.
 
+## Usar a aplicação OpenLDR noutro PC
+
+Faça isto no outro PC quando quiser lá a aplicação OpenLDR em vez de um navegador. A aplicação mostra então o OpenLDR deste laboratório e não guarda dados.
+
+1. Instale a aplicação de computador OpenLDR no outro PC e inicie-a.
+2. No primeiro ecrã, selecione **Ligar ao servidor do laboratório**.
+3. Em **Endereço do servidor**, escreva o endereço do primeiro PC, por exemplo `https://labpc:3443/studio/`.
+4. Selecione **Ligar**.
+5. Compare a impressão digital que a aplicação mostra com a do primeiro PC. Veja **Verificar o certificado** acima.
+6. Selecione **Corresponde**.
+7. Inicie sessão com o seu nome de utilizador e a sua palavra-passe do OpenLDR.
+
+**Resultado esperado:** o Studio abre na aplicação, com os mesmos dados do primeiro PC. A aplicação vai direta a ele no arranque seguinte.
+
+Um PC que já guarda dados do OpenLDR não mostra o primeiro ecrã. Use **Ligar a um servidor de laboratório...** no menu da área de notificação.
+
+## Bloquear um PC no OpenLDR
+
+Faça isto num PC de uma sala partilhada que deve mostrar o OpenLDR e mais nada.
+
+1. Abra o ícone do OpenLDR na área de notificação.
+2. Selecione **Bloquear este PC no OpenLDR...**.
+3. Escreva um PIN com pelo menos 4 caracteres.
+4. Selecione **Bloquear**.
+
+**Resultado esperado:** a janela ocupa o ecrã inteiro, fechá-la não faz nada, e as ligações para outros sítios não abrem.
+
+Para desbloquear, prima `Ctrl+Shift+L`, escreva o PIN e selecione **Desbloquear**. Sair da aplicação também pede o PIN. O guia web da aplicação de computador diz o que o bloqueio não impede, e o que fazer com um PIN esquecido.
+
 ## Limites
 
 - O primeiro PC tem de estar ligado, com o OpenLDR a correr, sempre que os outros o usam.
@@ -57,6 +86,8 @@ O primeiro PC cria o seu próprio certificado, por isso um navegador não o conh
 - **O menu mostra «Não foi encontrado nenhum endereço de rede».** O PC não está em nenhuma rede. Ligue-o a uma, saia do OpenLDR e volte a abri-lo.
 - **A aplicação diz que a porta 3443 já está em uso.** Outro programa usa-a. O guia web da aplicação de ambiente de trabalho mostra como escolher outra porta.
 - **O outro PC não consegue abrir o endereço.** Confirme que os dois PC estão na mesma rede, e que a firewall do primeiro PC permite a porta 3443.
+- **A aplicação mostra «Não é possível alcançar o servidor».** O primeiro PC está desligado, ou a rede falhou. A aplicação volta sozinha quando o primeiro PC responde.
+- **A aplicação mostra «O certificado do servidor mudou».** O primeiro PC tem um novo nome ou endereço de rede. Compare a nova impressão digital antes de selecionar **Corresponde**.
 
 ## Guias relacionados
 

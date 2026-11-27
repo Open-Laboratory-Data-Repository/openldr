@@ -82,13 +82,15 @@ Le plus simple est de sélectionner **Quitter** dans le menu de la zone de notif
 
 Fermer la fenêtre laisse OpenLDR tourner. Pour arrêter OpenLDR, utilisez **Quitter**.
 
-L'application a une icône dans la zone de notification, la partie de la barre des tâches ou de la barre du haut qui contient les petites icônes des programmes en cours. Son menu a cinq éléments, et davantage pendant le partage :
+L'application a une icône dans la zone de notification, la partie de la barre des tâches ou de la barre du haut qui contient les petites icônes des programmes en cours. Son menu a sept éléments, et davantage pendant le partage :
 
 | Élément | Effet |
 | --- | --- |
 | **Ouvrir OpenLDR** | Affiche de nouveau la fenêtre. |
 | **Démarrer à la connexion** | Une case, décochée au départ. Cochée, l'application démarre quand vous vous connectez à l'ordinateur, sans ouvrir de fenêtre. |
 | **Partager sur le réseau du laboratoire** | Une coche, décochée au départ. Voir **Partager sur le réseau du laboratoire** plus bas. |
+| **Se connecter à un serveur de laboratoire...** | Demande, puis redémarre l'application comme écran sur un autre PC. Voir **Se connecter au serveur du laboratoire** plus bas. |
+| **Verrouiller ce PC sur OpenLDR...** | Demande un code PIN et verrouille ce PC sur OpenLDR. Voir **Verrouiller ce PC sur OpenLDR** plus bas. |
 | **Ouvrir le dossier des journaux** | Ouvre `logs` dans le dossier de données. |
 | **Quitter** | Affiche **Arrêt d'OpenLDR**, arrête le serveur et la base de données, puis ferme l'application. |
 
@@ -117,6 +119,102 @@ Si OpenLDR a été démarré en dehors de l'application, la coche est enregistr�
 ### Quand aucune icône n'apparaît
 
 Certains bureaux Linux n'affichent aucune icône de notification. Dans ce cas, relancez l'application depuis le menu des applications pour faire revenir sa fenêtre. Pour arrêter OpenLDR, appuyez sur Alt dans la fenêtre pour afficher sa barre de menus, et utilisez l'élément pour quitter dans son menu File. Ou lancez `openldr-standalone stop` dans un terminal.
+
+## Se connecter au serveur du laboratoire
+
+Un laboratoire a besoin d'un seul OpenLDR. Sur chaque autre PC, l'application peut afficher cet OpenLDR au lieu d'exécuter le sien. Le PC n'exécute alors ni serveur ni base de données, et ne contient aucune donnée. [Choisir une installation pour le laboratoire](/docs/lab-setups) explique quand l'utiliser.
+
+### Le choisir au premier démarrage
+
+Sur un PC sans données OpenLDR, l'application demande **Comment ce PC utilisera-t-il OpenLDR ?** avant de démarrer quoi que ce soit.
+
+1. Sélectionnez **Se connecter au serveur du laboratoire**.
+2. Dans **Adresse du serveur**, saisissez l'adresse de l'OpenLDR du laboratoire, par exemple `https://labpc:3443/studio/`. Pour une application de bureau partagée, c'est l'adresse affichée dans son menu de la zone de notification.
+3. Sélectionnez **Se connecter**.
+4. Si l'application affiche **Vérifiez le certificat du serveur**, comparez l'empreinte. Voir la section suivante.
+
+Studio s'ouvre alors depuis le serveur. Connectez-vous avec votre nom d'utilisateur et votre mot de passe OpenLDR. L'application retient l'adresse et y va directement au démarrage suivant.
+
+L'adresse doit commencer par `https`. Un PC qui contient déjà des données OpenLDR ne reçoit pas la question. Il reste comme il est.
+
+Dans ce mode, l'application ne saisit aucun code de configuration. Créez le premier administrateur sur le serveur lui-même.
+
+### Vérifier le certificat du serveur
+
+Une application de bureau partagée fabrique son propre certificat, donc le système de votre PC ne le connaît pas. L'application affiche alors l'empreinte SHA-256 du certificat et pose la question.
+
+1. Sur le serveur, ouvrez le menu de la zone de notification et sélectionnez **Copier l'empreinte du certificat**. Avec le lanceur, lisez la ligne `Certificate fingerprint (SHA-256):` dans son terminal.
+2. Comparez-la avec l'empreinte affichée dans l'application, paire par paire.
+3. Sélectionnez **Elle correspond** seulement si elles sont identiques. Sinon sélectionnez **Annuler**.
+
+L'application retient ce certificat pour cette adresse seulement. Un serveur dont le certificat est déjà reconnu par votre système ne donne lieu à aucune question.
+
+Si l'application affiche plus tard **Le certificat du serveur a changé**, arrêtez-vous et cherchez pourquoi. Un nouveau nom ou une nouvelle adresse réseau du serveur produit un nouveau certificat. Si personne n'a changé le serveur, sélectionnez **Annuler**. Après **Elle correspond**, l'application se ferme et se rouvre d'elle-même.
+
+### Quand le serveur ne répond pas
+
+Au démarrage, l'application affiche **Impossible de joindre le serveur** quand le serveur est arrêté ou le réseau coupé. Elle réessaie toutes les 10 secondes et affiche Studio d'elle-même dès que le serveur répond. **Réessayer** essaie tout de suite.
+
+Pendant que vous travaillez, l'application ne remplace jamais Studio d'elle-même. Si le serveur s'arrête, Studio reste à l'écran avec ce que vous avez saisi, et ses requêtes échouent jusqu'au retour du serveur.
+
+### Changer de serveur ou de mode
+
+Dans ce mode, le menu de la zone de notification a ces éléments :
+
+| Élément | Ce qu'il fait |
+| --- | --- |
+| **Ouvrir OpenLDR** | Affiche de nouveau la fenêtre. |
+| **Démarrer à la connexion** | Démarre l'application quand vous vous connectez à l'ordinateur. |
+| L'adresse du serveur | Une ligne sur laquelle on ne peut pas appuyer. |
+| **Changer de serveur...** | Oublie le serveur et demande une autre adresse. |
+| **Utiliser ce PC pour les données du laboratoire...** | Demande, puis redémarre l'application pour qu'OpenLDR et sa base de données fonctionnent sur ce PC. |
+| **Verrouiller ce PC sur OpenLDR...** | Voir **Verrouiller ce PC sur OpenLDR** plus bas. |
+| **Ouvrir le dossier des journaux** | Ouvre le dossier de l'application, qui contient `desktop.log`. |
+| **Quitter** | Ferme l'application. Le serveur continue de fonctionner. |
+
+**Changer de serveur** est aussi un bouton de l'écran **Impossible de joindre le serveur**. Après la connexion à un autre serveur, l'application peut se fermer et se rouvrir d'elle-même.
+
+Un PC qui contient les données du laboratoire a **Se connecter à un serveur de laboratoire...** dans son menu. L'élément demande, arrête OpenLDR sur ce PC, puis redémarre l'application comme écran sur un autre PC. Les données de ce PC restent où elles sont et ne sont pas utilisées.
+
+## Verrouiller ce PC sur OpenLDR
+
+Dans une salle partagée, un PC peut être réglé pour afficher OpenLDR et rien d'autre. Le verrou fonctionne dans les deux modes.
+
+### Activer le verrou
+
+1. Ouvrez le menu de la zone de notification et sélectionnez **Verrouiller ce PC sur OpenLDR...**.
+2. Saisissez un code PIN d'au moins 4 caractères.
+3. Sélectionnez **Verrouiller**.
+
+La fenêtre occupe alors tout l'écran. Tant que le PC est verrouillé :
+
+- Fermer la fenêtre ne fait rien.
+- Les liens vers d'autres sites ne s'ouvrent pas.
+- L'application démarre quand vous vous connectez à l'ordinateur.
+- Le menu de la zone de notification a trois éléments : **Ouvrir OpenLDR**, **Déverrouiller ce PC...** et **Quitter**.
+- **Quitter** demande le code PIN, depuis la zone de notification, le menu et le clavier.
+
+### Déverrouiller
+
+Appuyez sur `Ctrl+Maj+L` dans la fenêtre, ou sélectionnez **Déverrouiller ce PC...** dans le menu de la zone de notification. Saisissez le code PIN et sélectionnez **Déverrouiller**. Une petite fenêtre au-dessus demande le code PIN, donc ce que vous avez saisi dans Studio reste. Un mauvais code PIN est refusé après deux secondes.
+
+### Ce que le verrou n'empêche pas
+
+Le verrou arrête un utilisateur occasionnel. Il n'empêche pas ceci :
+
+- Les touches du système, comme Alt+Tab ou la touche Windows. Les bloquer revient au système.
+- Éteindre le PC ou fermer la session. L'application quitte alors sans code PIN, pour qu'OpenLDR s'arrête proprement.
+- Une personne qui peut modifier des fichiers avec le compte du PC. Elle peut retirer le verrou du fichier de réglages.
+
+Pour fermer ces brèches sous Windows, exécutez l'application comme programme kiosque d'un compte Windows séparé. Pour un programme de bureau, c'est la fonction Shell Launcher de Windows Entreprise et Éducation, ou un profil kiosque qui liste `%LOCALAPPDATA%\Programs\OpenLDR\OpenLDR.exe`. Le guide de Microsoft « Configure kiosks and digital signs on Windows » donne les étapes. Nous ne l'avons pas testé.
+
+### Un code PIN oublié
+
+1. Ouvrez `settings.json` dans le dossier de l'application avec un éditeur de texte. **Emplacement des données** plus bas indique où il se trouve.
+2. Retirez toute l'entrée `"lock"` et enregistrez le fichier.
+3. Dans la fenêtre de l'application, appuyez sur `Ctrl+Maj+L`.
+
+L'application se déverrouille sans code PIN une fois l'entrée retirée. Pour atteindre le fichier depuis un PC verrouillé, utilisez les touches du système pour ouvrir une fenêtre de fichiers, ou fermez la session et connectez-vous avec un autre compte qui y a accès.
 
 ## Mettre à jour
 
@@ -170,7 +268,7 @@ Le dossier de données reste. La dernière ligne dit où il se trouve, par exemp
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-Le dossier de données contient la base de données, les fichiers stockés, les journaux et la clé des secrets. [Exécuter sans Docker](/docs/standalone) détaille son contenu. Le dossier propre à l'application contient ses réglages, son journal `desktop.log` et les données de navigateur de la fenêtre. Les réglages sont le port, le démarrage à la connexion, la taille de la fenêtre, le partage d'OpenLDR sur le réseau du laboratoire, et le port du partage quand vous en fixez un. Ils ne contiennent aucun secret.
+Le dossier de données contient la base de données, les fichiers stockés, les journaux et la clé des secrets. [Exécuter sans Docker](/docs/standalone) détaille son contenu. Le dossier propre à l'application contient ses réglages, son journal `desktop.log` et les données de navigateur de la fenêtre. Les réglages sont le port, le démarrage à la connexion, la taille de la fenêtre, le partage d'OpenLDR sur le réseau du laboratoire, et le port du partage quand vous en fixez un. En mode connexion, ils contiennent aussi l'adresse du serveur et l'empreinte du certificat que vous avez accepté. Un PC verrouillé ajoute le verrou, conservé sous forme d'empreinte salée du code PIN. Ils ne contiennent ni mot de passe ni clé.
 
 Le dossier de données est le même que celui de `openldr-standalone`. L'application fournit cette commande :
 
@@ -236,6 +334,7 @@ Pas encore signalé :
 
 ## Guides associés
 
+- [Choisir une installation pour le laboratoire](/docs/lab-setups)
 - [Utiliser Studio](/docs/using-studio)
 - [Exécuter sans Docker](/docs/standalone)
 - [Installation](/docs/install)

@@ -57,7 +57,7 @@ export const NAV_SECTIONS: Array<{ id: string; label: Record<DocLocale, string>;
   {
     id: 'desktop',
     label: { en: 'On your computer', fr: 'Sur votre ordinateur', pt: 'No seu computador' },
-    items: [{ slug: 'desktop-app' }],
+    items: [{ slug: 'desktop-app' }, { slug: 'lab-setups' }],
   },
   {
     id: 'studio',

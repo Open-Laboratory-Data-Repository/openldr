@@ -82,13 +82,15 @@ O mais simples é selecionar **Sair** no menu da área de notificação e abrir 
 
 Fechar a janela deixa o OpenLDR a funcionar. Para parar o OpenLDR, use **Sair**.
 
-A aplicação tem um ícone na área de notificação, a parte da barra de tarefas ou da barra superior com os pequenos ícones dos programas em execução. O menu dele tem cinco itens, e mais enquanto o OpenLDR está partilhado:
+A aplicação tem um ícone na área de notificação, a parte da barra de tarefas ou da barra superior com os pequenos ícones dos programas em execução. O menu dele tem sete itens, e mais enquanto o OpenLDR está partilhado:
 
 | Item | O que faz |
 | --- | --- |
 | **Abrir o OpenLDR** | Mostra de novo a janela. |
 | **Iniciar ao entrar na sessão** | Uma caixa, desmarcada de início. Marcada, a aplicação arranca quando entra na sessão do computador, sem abrir a janela. |
 | **Partilhar na rede do laboratório** | Um visto, desligado no início. Veja **Partilhar na rede do laboratório** mais abaixo. |
+| **Ligar a um servidor de laboratório...** | Pergunta e reinicia a aplicação como ecrã para outro PC. Veja **Ligar ao servidor do laboratório** mais abaixo. |
+| **Bloquear este PC no OpenLDR...** | Pede um PIN e bloqueia este PC no OpenLDR. Veja **Bloquear este PC no OpenLDR** mais abaixo. |
 | **Abrir a pasta de registos** | Abre `logs` na pasta de dados. |
 | **Sair** | Mostra **A parar o OpenLDR**, para o servidor e a base de dados, e fecha a aplicação. |
 
@@ -117,6 +119,102 @@ Se o OpenLDR foi iniciado fora da aplicação, o visto fica guardado e aplica-se
 ### Quando não aparece nenhum ícone
 
 Alguns ambientes de trabalho Linux não mostram ícones de notificação. Aí, abra a aplicação de novo a partir do menu de aplicações para trazer a janela de volta. Para parar o OpenLDR, prima Alt na janela para mostrar a barra de menus, e use o item para sair no menu File. Ou execute `openldr-standalone stop` num terminal.
+
+## Ligar ao servidor do laboratório
+
+Um laboratório precisa de um só OpenLDR. Em cada outro PC, a aplicação pode mostrar esse OpenLDR em vez de executar o seu. O PC não executa então nem servidor nem base de dados, e não guarda dados. [Escolher uma instalação para o laboratório](/docs/lab-setups) diz quando usar isto.
+
+### Escolher no primeiro arranque
+
+Num PC sem dados do OpenLDR, a aplicação pergunta **Como é que este PC vai usar o OpenLDR?** antes de iniciar seja o que for.
+
+1. Selecione **Ligar ao servidor do laboratório**.
+2. Em **Endereço do servidor**, escreva o endereço do OpenLDR do laboratório, por exemplo `https://labpc:3443/studio/`. Numa aplicação de computador partilhada, é o endereço que o menu da área de notificação mostra.
+3. Selecione **Ligar**.
+4. Se a aplicação mostrar **Verifique o certificado do servidor**, compare a impressão digital. Veja a secção seguinte.
+
+O Studio abre então a partir do servidor. Inicie sessão com o seu nome de utilizador e a sua palavra-passe do OpenLDR. A aplicação lembra-se do endereço e vai direta a ele no arranque seguinte.
+
+O endereço tem de começar por `https`. Um PC que já guarda dados do OpenLDR não recebe a pergunta. Fica como está.
+
+Neste modo, a aplicação não introduz nenhum código de configuração. Crie o primeiro administrador no próprio servidor.
+
+### Verificar o certificado do servidor
+
+Uma aplicação de computador partilhada cria o seu próprio certificado, por isso o sistema do seu PC não o conhece. A aplicação mostra então a impressão digital SHA-256 do certificado e pergunta.
+
+1. No servidor, abra o menu da área de notificação e selecione **Copiar a impressão digital do certificado**. Com o lançador, leia a linha `Certificate fingerprint (SHA-256):` no terminal.
+2. Compare-a com a impressão digital na aplicação, par a par.
+3. Selecione **Corresponde** só quando forem iguais. Caso contrário, selecione **Cancelar**.
+
+A aplicação lembra-se desse certificado só para esse endereço. Um servidor cujo certificado o seu sistema já reconhece não dá origem a pergunta.
+
+Se a aplicação mostrar mais tarde **O certificado do servidor mudou**, pare e descubra porquê. Um novo nome ou um novo endereço de rede do servidor cria um novo certificado. Se ninguém mudou o servidor, selecione **Cancelar**. Depois de **Corresponde**, a aplicação fecha-se e volta a abrir sozinha.
+
+### Quando o servidor não responde
+
+No arranque, a aplicação mostra **Não é possível alcançar o servidor** quando o servidor está desligado ou a rede falha. Tenta de novo a cada 10 segundos e mostra o Studio sozinha assim que o servidor responde. **Tentar novamente** tenta de imediato.
+
+Enquanto trabalha, a aplicação nunca substitui o Studio por si. Se o servidor se desligar, o Studio fica no ecrã com o que escreveu, e os pedidos dele falham até o servidor voltar.
+
+### Mudar de servidor ou de modo
+
+Neste modo, o menu da área de notificação tem estes itens:
+
+| Item | O que faz |
+| --- | --- |
+| **Abrir o OpenLDR** | Mostra de novo a janela. |
+| **Iniciar ao entrar na sessão** | Inicia a aplicação quando entra na sessão do computador. |
+| O endereço do servidor | Uma linha que não se pode premir. |
+| **Mudar de servidor...** | Esquece o servidor e pede outro endereço. |
+| **Usar este PC para os dados do laboratório...** | Pergunta e reinicia a aplicação para que o OpenLDR e a sua base de dados funcionem neste PC. |
+| **Bloquear este PC no OpenLDR...** | Veja **Bloquear este PC no OpenLDR** mais abaixo. |
+| **Abrir a pasta de registos** | Abre a pasta da própria aplicação, que contém `desktop.log`. |
+| **Sair** | Fecha a aplicação. O servidor continua a funcionar. |
+
+**Mudar de servidor** é também um botão no ecrã **Não é possível alcançar o servidor**. Depois de ligar a outro servidor, a aplicação pode fechar-se e voltar a abrir sozinha.
+
+Um PC que guarda os dados do laboratório tem **Ligar a um servidor de laboratório...** no menu. O item pergunta, para o OpenLDR neste PC e reinicia a aplicação como ecrã para outro PC. Os dados deste PC ficam onde estão e não são usados.
+
+## Bloquear este PC no OpenLDR
+
+Numa sala partilhada, um PC pode ficar definido para mostrar o OpenLDR e mais nada. O bloqueio funciona nos dois modos.
+
+### Ativar o bloqueio
+
+1. Abra o menu da área de notificação e selecione **Bloquear este PC no OpenLDR...**.
+2. Escreva um PIN com pelo menos 4 caracteres.
+3. Selecione **Bloquear**.
+
+A janela ocupa então o ecrã inteiro. Enquanto o PC está bloqueado:
+
+- Fechar a janela não faz nada.
+- As ligações para outros sítios não abrem.
+- A aplicação arranca quando entra na sessão do computador.
+- O menu da área de notificação tem três itens: **Abrir o OpenLDR**, **Desbloquear este PC...** e **Sair**.
+- **Sair** pede o PIN, a partir da área de notificação, do menu e do teclado.
+
+### Desbloquear
+
+Prima `Ctrl+Shift+L` na janela, ou selecione **Desbloquear este PC...** no menu da área de notificação. Escreva o PIN e selecione **Desbloquear**. Uma janela pequena por cima pede o PIN, por isso o que escreveu no Studio mantém-se. Um PIN errado é recusado ao fim de dois segundos.
+
+### O que o bloqueio não impede
+
+O bloqueio trava um utilizador ocasional. Não impede isto:
+
+- As teclas do próprio sistema, como Alt+Tab ou a tecla Windows. Bloqueá-las cabe ao sistema.
+- Desligar o PC ou terminar a sessão. A aplicação sai então sem PIN, para que o OpenLDR pare de forma limpa.
+- Alguém que possa editar ficheiros com a conta do PC. Pode retirar o bloqueio do ficheiro de definições.
+
+Para fechar estas falhas no Windows, execute a aplicação como programa de quiosque de uma conta Windows separada. Para um programa de ambiente de trabalho, é a funcionalidade Shell Launcher do Windows Enterprise e Education, ou um perfil de quiosque que liste `%LOCALAPPDATA%\Programs\OpenLDR\OpenLDR.exe`. O guia da Microsoft "Configure kiosks and digital signs on Windows" tem os passos. Não testámos isto.
+
+### Um PIN esquecido
+
+1. Abra `settings.json` na pasta da própria aplicação com um editor de texto. **Onde ficam os dados** mais abaixo indica onde está.
+2. Retire toda a entrada `"lock"` e guarde o ficheiro.
+3. Na janela da aplicação, prima `Ctrl+Shift+L`.
+
+A aplicação desbloqueia sem PIN quando a entrada já não existe. Para chegar ao ficheiro a partir de um PC bloqueado, use as teclas do próprio sistema para abrir uma janela de ficheiros, ou termine a sessão e entre com outra conta que chegue a ele.
 
 ## Atualizar
 
@@ -170,7 +268,7 @@ A pasta de dados fica. A última linha diz onde está, por exemplo `Your data wa
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-A pasta de dados guarda a base de dados, os ficheiros armazenados, os registos e a chave dos segredos. [Executar sem Docker](/docs/standalone) descreve o que contém. A pasta da própria aplicação guarda as definições dela, o registo `desktop.log` e os dados de navegador da janela. As definições são a porta, o arranque ao entrar na sessão, o tamanho da janela, a partilha do OpenLDR na rede do laboratório, e a porta da partilha quando define uma. Não guardam nenhum segredo.
+A pasta de dados guarda a base de dados, os ficheiros armazenados, os registos e a chave dos segredos. [Executar sem Docker](/docs/standalone) descreve o que contém. A pasta da própria aplicação guarda as definições dela, o registo `desktop.log` e os dados de navegador da janela. As definições são a porta, o arranque ao entrar na sessão, o tamanho da janela, a partilha do OpenLDR na rede do laboratório, e a porta da partilha quando define uma. Em modo de ligação guardam também o endereço do servidor e a impressão digital do certificado que aceitou. Um PC bloqueado junta o bloqueio, guardado como um hash com sal do PIN. Não guardam nenhuma palavra-passe nem chave.
 
 A pasta de dados é a mesma que o `openldr-standalone` usa. A aplicação traz esse comando:
 
@@ -236,6 +334,7 @@ Ainda sem relato:
 
 ## Guias relacionados
 
+- [Escolher uma instalação para o laboratório](/docs/lab-setups)
 - [Usar o Studio](/docs/using-studio)
 - [Executar sem Docker](/docs/standalone)
 - [Instalar](/docs/install)
