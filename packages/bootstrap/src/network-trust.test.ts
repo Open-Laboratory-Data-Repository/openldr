@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
 import { once } from 'node:events';
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import net from 'node:net';
 import https from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -15,6 +16,8 @@ import {
   readLoadedTrust,
   readPeerCertificate,
   recordLoadedTrust,
+  TRUST_BUSY,
+  TrustAuditFailed,
   TrustRefused,
   type LoadedTrust,
   type TrustActor,
@@ -32,7 +35,19 @@ interface Made {
   audits: Array<{ action: string; actor: TrustActor; fingerprint: string; subject: string }>;
 }
 
-function make(o: { content?: string | null; file?: string | null; extra?: string | null; loaded?: LoadedTrust; peer?: string | undefined; auditFails?: boolean } = {}): Made {
+type Exclusive = <T>(work: () => Promise<T>) => Promise<T>;
+
+/** One thing at a time, in this process. It stands for the database lock, which the db package proves on real PostgreSQL. */
+function mutex(): Exclusive {
+  let tail: Promise<unknown> = Promise.resolve();
+  return (work) => {
+    const run = tail.then(work, work);
+    tail = run.catch(() => {});
+    return run;
+  };
+}
+
+function make(o: { content?: string | null; file?: string | null; extra?: string | null; loaded?: LoadedTrust; peer?: string | undefined; auditFails?: boolean; exclusive?: Exclusive } = {}): Made {
   const dir = mkdtempSync(join(tmpdir(), 'trust-'));
   const file = join(dir, 'ca.pem');
   if (o.content !== null) writeFileSync(file, o.content ?? '');
@@ -42,6 +57,7 @@ function make(o: { content?: string | null; file?: string | null; extra?: string
     nodeExtraCaFile: o.extra === null ? undefined : (o.extra ?? file),
     loaded: async () => o.loaded ?? { known: true, pems: [], since: '2026-11-30T00:00:00.000Z' },
     readPeer: async () => o.peer,
+    exclusive: o.exclusive ?? mutex(),
     audit: async (action, actor, fingerprint, subject) => {
       if (o.auditFails) throw new Error('audit down');
       audits.push({ action, actor, fingerprint, subject });
@@ -138,6 +154,7 @@ describe('status', () => {
       nodeExtraCaFile: relative(process.cwd(), m.file),
       loaded: async () => ({ known: false }),
       readPeer: async () => undefined,
+      exclusive: mutex(),
       audit: async () => {},
       now: () => NOW,
     });
@@ -310,13 +327,15 @@ describe('add and remove', () => {
   });
 
   it('keeps both certificates when two services add at once', async () => {
-    // The CLI and the server are two processes on one file.
-    const m = make();
+    // The CLI and the server are two processes on one file. They share the database lock.
+    const shared = mutex();
+    const m = make({ exclusive: shared });
     const other = createTrustService({
       file: m.file,
       nodeExtraCaFile: m.file,
       loaded: async () => ({ known: false }),
       readPeer: async () => undefined,
+      exclusive: shared,
       audit: async () => {},
       now: () => NOW,
     });
@@ -324,24 +343,63 @@ describe('add and remove', () => {
     expect(m.svc.read(readFileSync(m.file, 'utf8')).map((c) => c.fingerprint).sort()).toEqual([FP_A, FP_B].sort());
   });
 
-  it('removes a lock file left behind by a stopped process', async () => {
-    const m = make();
-    const lock = `${m.file}.lock`;
-    writeFileSync(lock, '');
-    const past = new Date(Date.now() - 60_000);
-    utimesSync(lock, past, past);
+  it('reads the file only once it holds the lock, so a change made just before is kept', async () => {
+    // Another process finishes its change while this one waits for the lock.
+    let file = '';
+    const m = make({
+      exclusive: async (work) => {
+        writeFileSync(file, CERT_B);
+        return work();
+      },
+    });
+    file = m.file;
     await m.svc.add(CERT_A, ACTOR);
-    expect(readdirSync(m.dir).sort()).toEqual(['ca.pem']);
+    expect(m.svc.read(readFileSync(m.file, 'utf8')).map((c) => c.fingerprint).sort()).toEqual([FP_A, FP_B].sort());
+    // The same for a removal: B is not in the file until the other process has written it.
+    writeFileSync(file, '');
+    expect(await code(m.svc.remove(FP_B, ACTOR))).toBe('no error');
+    expect(readFileSync(m.file, 'utf8')).toBe('');
   });
 
-  it('leaves no temp file and no lock behind', async () => {
+  it('changes nothing and audits nothing when the lock is busy', async () => {
+    const m = make({ content: CERT_A, exclusive: async () => { throw new Error(TRUST_BUSY); } });
+    await expect(m.svc.add(CERT_B, ACTOR)).rejects.toThrow(TRUST_BUSY);
+    await expect(m.svc.remove(FP_A, ACTOR)).rejects.toThrow(TRUST_BUSY);
+    expect(readFileSync(m.file, 'utf8')).toBe(CERT_A);
+    expect(m.audits).toEqual([]);
+    expect(readdirSync(m.dir)).toEqual(['ca.pem']);
+  });
+
+  it('does not write over a file another process left under a temp name', async () => {
+    // The temp name is made new each time and opened so that an existing file is never reused.
+    const m = make();
+    writeFileSync(`${m.file}.${process.pid}.tmp`, 'someone else');
+    await m.svc.add(CERT_A, ACTOR);
+    expect(readFileSync(`${m.file}.${process.pid}.tmp`, 'utf8')).toBe('someone else');
+    expect(readdirSync(m.dir).sort()).toEqual(['ca.pem', `ca.pem.${process.pid}.tmp`]);
+  });
+
+  it('says in-use for a certificate the server loaded, that was removed and is added again', async () => {
+    const m = make({ loaded: { known: true, pems: [CERT_A], since: '2026-11-30T00:00:00.000Z' } });
+    expect(await m.svc.add(CERT_A, ACTOR)).toMatchObject({ fingerprint: FP_A, state: 'in-use' });
+    expect(await m.svc.add(CERT_B, ACTOR)).toMatchObject({ fingerprint: FP_B, state: 'added' });
+  });
+
+  it('says unknown for an added certificate when nobody can say what the server loaded', async () => {
+    const m = make({ loaded: { known: false } });
+    const added = await m.svc.add(CERT_A, ACTOR);
+    expect(added.state).toBe('unknown');
+    expect(await m.svc.list()).toEqual([added]);
+  });
+
+  it('leaves no temp file behind', async () => {
     const m = make();
     await m.svc.add(CERT_A, ACTOR);
     await m.svc.remove(FP_A, ACTOR);
     expect(readdirSync(m.dir)).toEqual(['ca.pem']);
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('writes no audit row when the write fails, and frees the lock', async () => {
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('writes no audit row when the write fails', async () => {
     const m = make();
     chmodSync(m.dir, 0o500);
     try {
@@ -360,10 +418,24 @@ describe('add and remove', () => {
     expect(await m.svc.list()).toHaveLength(1);
   });
 
-  it('keeps the certificate in the file when the audit row cannot be written, and says so', async () => {
+  it('says the change is made and the audit row is not, when the audit row cannot be written', async () => {
     const m = make({ auditFails: true });
-    await expect(m.svc.add(CERT_A, ACTOR)).rejects.toThrow('audit down');
-    expect(readFileSync(m.file, 'utf8')).toContain('BEGIN CERTIFICATE');
+    const err = await m.svc.add(CERT_A, ACTOR).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TrustAuditFailed);
+    expect(err).toMatchObject({ action: 'network.trust.add', fingerprint: FP_A, subject: 'test-a.example', actor: ACTOR });
+    expect((err as TrustAuditFailed).cause).toMatchObject({ message: 'audit down' });
+    expect(readFileSync(m.file, 'utf8')).toBe(CERT_A);
+
+    const gone = await m.svc.remove(FP_A, ACTOR).catch((e: unknown) => e);
+    expect(gone).toBeInstanceOf(TrustAuditFailed);
+    expect(gone).toMatchObject({ action: 'network.trust.remove', fingerprint: FP_A, subject: 'test-a.example', actor: ACTOR });
+    expect(readFileSync(m.file, 'utf8')).toBe('');
+  });
+
+  it('a refusal is never reported as an audit failure', async () => {
+    const m = make({ content: CERT_A, auditFails: true });
+    expect(await code(m.svc.add(CERT_A, ACTOR))).toBe('duplicate');
+    expect(await code(m.svc.remove(FP_B, ACTOR))).toBe('not-found');
   });
 });
 
@@ -383,6 +455,7 @@ describe('preview', () => {
         asked.push([host, port]);
         return CERT_A;
       },
+      exclusive: mutex(),
       audit: async () => {},
       now: () => NOW,
     });
@@ -518,5 +591,33 @@ describe('what the server loaded', () => {
     expect(loaded.known).toBe(true);
     const m = make({ content: CERT_A, loaded });
     expect((await m.svc.list()).map((c) => [c.fingerprint, c.state])).toEqual([[FP_A, 'in-use'], [FP_B, 'removed']]);
+  });
+});
+
+describe('the 10 second limit of readPeerCertificate', () => {
+  it('counts from the start, also when the other side keeps sending a little', async () => {
+    // Not a TLS server: it opens one long handshake record, then sends a byte of it every 20 ms and
+    // never finishes. A limit that only counts silence would never end.
+    const sockets = new Set<net.Socket>();
+    const timers = new Set<NodeJS.Timeout>();
+    const server = net.createServer((socket) => {
+      sockets.add(socket);
+      socket.on('error', () => {});
+      socket.write(Buffer.from([0x16, 0x03, 0x03, 0x40, 0x00]));
+      const t = setInterval(() => socket.write(Buffer.from([0x00])), 20);
+      timers.add(t);
+      socket.on('close', () => clearInterval(t));
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    try {
+      const started = Date.now();
+      expect(await readPeerCertificate('127.0.0.1', (server.address() as AddressInfo).port, 200)).toBeUndefined();
+      expect(Date.now() - started).toBeLessThan(1500);
+    } finally {
+      for (const t of timers) clearInterval(t);
+      for (const sk of sockets) sk.destroy();
+      server.close();
+    }
   });
 });

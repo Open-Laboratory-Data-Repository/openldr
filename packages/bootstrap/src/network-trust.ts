@@ -5,11 +5,10 @@
 //
 // Design: docs/superpowers/specs/2026-11-27-trusted-certificates-and-workflow-hosts-design.md
 
-import { X509Certificate } from 'node:crypto';
-import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
+import { randomBytes, X509Certificate } from 'node:crypto';
+import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 import tls from 'node:tls';
 import type { AuditActor } from './record-audit';
 
@@ -35,6 +34,24 @@ export class TrustRefused extends Error {
 
 export const BAD_ADDRESS = 'Type a host name, or a host name and a port.';
 export const TRUST_BUSY = 'The trust file is busy. Try again.';
+
+/**
+ * The file is changed, and the audit row for the change could not be written. The change stands:
+ * trying again would answer `duplicate` or `not-found`. The caller must say both things, and must
+ * keep a durable line of who changed what, which the audit row would have held.
+ */
+export class TrustAuditFailed extends Error {
+  constructor(
+    readonly action: 'network.trust.add' | 'network.trust.remove',
+    readonly fingerprint: string,
+    readonly subject: string,
+    readonly actor: TrustActor,
+    cause: unknown,
+  ) {
+    super('The change was made, but its audit record could not be written.', { cause });
+    this.name = 'TrustAuditFailed';
+  }
+}
 
 export interface CertPreview {
   pem: string;
@@ -98,6 +115,12 @@ export interface TrustDeps {
   loaded(): Promise<LoadedTrust>;
   /** The certificate a host presents, as PEM, or undefined when nothing answers. */
   readPeer(host: string, port: number): Promise<string | undefined>;
+  /**
+   * Runs one change while no other process changes the file: the server and a CLI command are two
+   * of them. It throws Error(TRUST_BUSY) when it cannot start within 10 seconds. The app context
+   * gives a database lock (`runExclusive`), so a stopped process leaves nothing to clean up.
+   */
+  exclusive<T>(work: () => Promise<T>): Promise<T>;
   audit(action: 'network.trust.add' | 'network.trust.remove', actor: TrustActor, fingerprint: string, subject: string): Promise<void>;
   now(): Date;
 }
@@ -175,55 +198,18 @@ export function readPeerCertificate(host: string, port: number, timeoutMs = 10_0
     const finish = (pem: string | undefined): void => {
       if (settled) return;
       settled = true;
+      clearTimeout(deadline);
       socket.destroy();
       done(pem);
     };
+    // From the start, whatever the other side sends in the meantime.
+    const deadline = setTimeout(() => finish(undefined), timeoutMs);
     const socket = tls.connect({ host, port, rejectUnauthorized: false, ...(isIP(host) === 0 ? { servername: host } : {}) }, () => {
       const x = socket.getPeerX509Certificate();
       finish(x ? `${x.toString().trim()}\n` : undefined);
     });
-    socket.setTimeout(timeoutMs, () => finish(undefined));
     socket.on('error', () => finish(undefined));
   });
-}
-
-const LOCK_STALE_MS = 30_000;
-const LOCK_WAIT_MS = 10_000;
-const LOCK_STEP_MS = 50;
-
-/**
- * Runs `work` while holding a lock file beside the trust file. The lock works across processes:
- * a CLI command and the server are two of them. A lock older than 30 seconds was left by a
- * process that stopped, and is removed.
- */
-async function withLock<T>(file: string, work: () => Promise<T>): Promise<T> {
-  const lock = `${file}.lock`;
-  await mkdir(dirname(file), { recursive: true });
-  const deadline = Date.now() + LOCK_WAIT_MS;
-  for (;;) {
-    try {
-      const handle = await open(lock, 'wx');
-      await handle.close();
-      break;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
-      const age = await stat(lock).then(
-        (s) => Date.now() - s.mtimeMs,
-        () => 0,
-      );
-      if (age > LOCK_STALE_MS) {
-        await rm(lock, { force: true });
-        continue;
-      }
-      if (Date.now() >= deadline) throw new Error(TRUST_BUSY);
-      await sleep(LOCK_STEP_MS);
-    }
-  }
-  try {
-    return await work();
-  } finally {
-    await rm(lock, { force: true });
-  }
 }
 
 export function createTrustService(deps: TrustDeps): TrustService {
@@ -267,17 +253,22 @@ export function createTrustService(deps: TrustDeps): TrustService {
   /** Writes the file whole: a temp name in the same folder, then a rename. */
   async function write(certs: CertPreview[]): Promise<void> {
     const file = deps.file as string;
-    const temp = `${file}.${process.pid}.tmp`;
+    await mkdir(dirname(file), { recursive: true });
+    // A new name each time, opened so that a file already there is never reused or followed.
+    const temp = `${file}.${randomBytes(8).toString('hex')}.tmp`;
+    let made = false;
     try {
-      const handle = await open(temp, 'w', 0o644);
+      const handle = await open(temp, 'wx', 0o644);
+      made = true;
       try {
         await handle.writeFile(certs.map((c) => c.pem).join(''));
       } finally {
         await handle.close();
       }
       await rename(temp, file);
+      made = false;
     } finally {
-      await rm(temp, { force: true });
+      if (made) await rm(temp, { force: true });
     }
   }
 
@@ -295,6 +286,21 @@ export function createTrustService(deps: TrustDeps): TrustService {
   }
 
   const strip = ({ pem: _pem, ...rest }: CertPreview): Omit<CertPreview, 'pem'> => rest;
+
+  const printsOf = (loaded: LoadedTrust): Set<string> =>
+    new Set(loaded.known ? loaded.pems.flatMap((pem) => parse(pem, deps.now()).certs).map((c) => c.fingerprint) : []);
+
+  /** The state of a certificate that is in the managed file. One rule, for `list` and for `add`. */
+  const stateInFile = (loaded: LoadedTrust, ran: Set<string>, fingerprint: string): TrustedCert['state'] =>
+    !loaded.known ? 'unknown' : ran.has(fingerprint) ? 'in-use' : 'added';
+
+  async function audited(action: 'network.trust.add' | 'network.trust.remove', actor: TrustActor, cert: CertPreview): Promise<void> {
+    try {
+      await deps.audit(action, actor, cert.fingerprint, cert.subject);
+    } catch (err) {
+      throw new TrustAuditFailed(action, cert.fingerprint, cert.subject, actor, err);
+    }
+  }
 
   return {
     async status() {
@@ -315,7 +321,7 @@ export function createTrustService(deps: TrustDeps): TrustService {
         const ranPrints = new Set(ran.map((c) => c.fingerprint));
         const filePrints = new Set(inFile.map((c) => c.fingerprint));
         for (const c of inFile) {
-          rows.push({ ...strip(c), state: !loaded.known ? 'unknown' : ranPrints.has(c.fingerprint) ? 'in-use' : 'added' });
+          rows.push({ ...strip(c), state: stateInFile(loaded, ranPrints, c.fingerprint) });
         }
         for (const c of ran) if (!filePrints.has(c.fingerprint)) rows.push({ ...strip(c), state: 'removed' });
       }
@@ -333,27 +339,28 @@ export function createTrustService(deps: TrustDeps): TrustService {
       const cert = one(pem);
       // Before the lock: with no managed file there is nothing to lock, and no folder to make.
       if (!managed) refuse('read-only');
-      await withLock(deps.file as string, async () => {
+      await deps.exclusive(async () => {
         const now = await editable();
         if (now.some((c) => c.fingerprint === cert.fingerprint)) refuse('duplicate');
         await write([...now, cert]);
       });
       // Only once the file is in place. A failed write leaves no row.
-      await deps.audit('network.trust.add', actor, cert.fingerprint, cert.subject);
-      return { ...strip(cert), state: 'added' };
+      await audited('network.trust.add', actor, cert);
+      const loaded = await deps.loaded();
+      return { ...strip(cert), state: stateInFile(loaded, printsOf(loaded), cert.fingerprint) };
     },
 
     async remove(fingerprint, actor) {
       let gone: CertPreview | undefined;
       if (!managed) refuse('read-only');
-      await withLock(deps.file as string, async () => {
+      await deps.exclusive(async () => {
         const now = await editable();
         gone = now.find((c) => c.fingerprint === fingerprint);
         if (gone === undefined) refuse('not-found');
         await write(now.filter((c) => c.fingerprint !== fingerprint));
       });
       const cert = gone as CertPreview;
-      await deps.audit('network.trust.remove', actor, cert.fingerprint, cert.subject);
+      await audited('network.trust.remove', actor, cert);
     },
   };
 }

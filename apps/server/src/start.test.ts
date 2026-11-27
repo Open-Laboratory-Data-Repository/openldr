@@ -124,15 +124,15 @@ describe('startServer', () => {
     await server.close();
   });
 
-  it('still starts when the record cannot be written', async () => {
+  it('does not start when the record cannot be written, and closes what it opened', async () => {
+    // The record of an earlier start would stay, and a certificate that start had loaded would
+    // show as in use on this one.
     fakes.state.recordError = new Error('settings table is not there');
-    const warn = vi.spyOn(fakes.ctx.logger, 'warn');
     const { startServer } = await import('./start');
-    const server = await startServer(cfg, logger);
-    expect(server.address).toBe('http://127.0.0.1:3991');
-    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ err: fakes.state.recordError }), expect.stringContaining('trusted certificates'));
-    await server.close();
-    warn.mockRestore();
+    await expect(startServer(cfg, logger)).rejects.toThrow('settings table is not there');
+    expect(fakes.calls).not.toContain('listen');
+    const after = fakes.calls.slice(fakes.calls.indexOf('trust recorded') + 1);
+    expect([...after].sort()).toEqual(['app closed', 'context closed', 'ingest closed', 'update check stopped', 'worker stopped'].sort());
   });
 
   it('asks for the three queue workers, the sync start and the import driver only the server runs', async () => {

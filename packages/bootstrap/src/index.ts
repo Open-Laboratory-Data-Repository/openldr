@@ -13,6 +13,7 @@ import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appEr
 import { codeSystemProjection } from './code-system-projection';
 import { createInternalDb, createFhirStore, createRelationalWriter, createWarehouseDatasetStore, createExplorerGroupStore, type ExplorerGroupStore, persistResources, persistRequests, createTerminologyStore, createTerminologyAdminStore, LOCAL_MAP_URL, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createPackItemStore, type PackItemStore, createFacilityRegistryStore, createLocalAuthStore, createAccessKeyStore, type AccessKeyStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
+import { runExclusive, ExclusiveBusy } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
@@ -100,7 +101,7 @@ import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { brokerAccessDetails } from './check-read-audit';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 import { createPluginConnectorAccess, type PluginConnectorAccess } from './plugin-connector-access';
-import { createTrustService, readLoadedTrust, readPeerCertificate, type TrustService } from './network-trust';
+import { createTrustService, readLoadedTrust, readPeerCertificate, TRUST_BUSY, type TrustService } from './network-trust';
 import { createResultsRead, type ResultsQuery } from './results-read';
 import { createPluginRemoval, type PluginRemoval } from './plugin-removal';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
@@ -2103,12 +2104,26 @@ const reporting: ReportingApi = {
     nodeExtraCaFile: process.env.NODE_EXTRA_CA_CERTS,
     loaded: () => readLoadedTrust(appSettings),
     readPeer: (host, port) => readPeerCertificate(host, port),
+    // A database lock, not a lock file: the server and a CLI command share this database, and a
+    // process that stops loses the lock with its connection.
+    exclusive: async (work) => {
+      try {
+        return await runExclusive(internal.db, 'openldr:network-trust', 10_000, work);
+      } catch (err) {
+        if (err instanceof ExclusiveBusy) throw new Error(TRUST_BUSY);
+        throw err;
+      }
+    },
     // Not safeRecord: the file is already changed, so the caller must learn that the row failed.
     audit: async (action, actor, fingerprint, subject) => {
       try {
         await audit.record({ ...actor, action, entityType: 'trusted_certificate', entityId: fingerprint, metadata: { subject } });
       } catch (err) {
-        logger.error({ action, error: err instanceof Error ? err.message : String(err) }, 'audit record failed');
+        // The file is already changed. This line is the durable record of who changed what.
+        logger.error(
+          { action, fingerprint, subject, actorType: actor.actorType, actorId: actor.actorId, actorName: actor.actorName, error: err instanceof Error ? err.message : String(err) },
+          'trusted certificate changed, but the audit record failed',
+        );
         throw err;
       }
     },
