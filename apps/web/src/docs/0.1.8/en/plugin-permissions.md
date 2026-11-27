@@ -115,3 +115,17 @@ Through `ce_read`, a caller with `patients.find` and without `patients.view`:
 - Identifiers stay masked unless the caller holds `patients.view_identifiers`.
 
 A caller with `patients.view` may also search by identifier, or by name with birth date, but not in the same call as `search`.
+
+## A serial port for a plugin page
+
+A plugin whose page talks to an instrument over a cable asks for the `host:serial` capability in its manifest:
+
+```json
+{ "kind": "host:serial" }
+```
+
+It takes no parameters. On the install screen the administrator sees the line **Use a serial port on the PC, when a person chooses one (host:serial)**, and approves it with the plugin's other capabilities.
+
+This capability is not one of the plugin's own permission keys, and no role holds it. It belongs to the plugin's installed version. Any person who may open the plugin's page may then be asked to choose a port. Studio asks each time, naming the plugin, and the person may cancel.
+
+Studio enforces it, not the server: serial bytes never go to the server. Turning the plugin off, removing it, or making another version active closes any open port. [Plugin tables and host functions](/docs/plugin-host-functions) lists the calls.

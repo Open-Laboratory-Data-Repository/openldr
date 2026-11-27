@@ -231,3 +231,104 @@ host::fhir_emit(&[json!({ "resourceType": "Observation", "id": "obs-1", "status"
 ```
 
 `HostError` has CE's `code` and `message`. The test plugin in `wasm/test-sink`, built with the `host` feature, calls each function.
+
+## Serial ports for a plugin page
+
+A plugin's page can read and write a serial port on the PC it runs on, as raw bytes. This is for a page that talks to an instrument over a cable. The calls are on `window.openldr.serial`, in the page, not in the plugin's server code. Studio holds the port and does every check. The bytes never go to the server.
+
+The plugin needs the `host:serial` capability. [Plugin permissions](/docs/plugin-permissions) says what the administrator sees.
+
+It works where the browser has the serial feature: Chrome and Edge, on an `https` address or on this PC's own address, and the OpenLDR desktop app. Firefox and Safari do not have it. There every call is refused with `serial-unavailable`.
+
+### The six calls
+
+| Call | What it does |
+|---|---|
+| `ports()` | The ports this page was given since it loaded, as `{ port, label }`. Empty until a person chooses one. |
+| `choose()` | Studio asks the person, naming the plugin, then shows the list of ports. Gives `{ port, label }`, or `null` when the person cancelled. |
+| `open(port, settings)` | Opens a chosen port. |
+| `read(port, waitMs)` | Gives `{ bytes, lost }`. `bytes` is a `Uint8Array` of what arrived, at most 65,536 bytes. With `waitMs` it waits up to that long for a first byte. Without it, it answers at once. |
+| `write(port, bytes)` | Sends a `Uint8Array` of 1 to 65,536 bytes. Resolves when the port has taken them. |
+| `close(port)` | Closes the port. The same `port` can be opened again until the page reloads. |
+
+`port` is a handle Studio makes up for this one page. It is not the port's name, and it is no use to another page.
+
+A person chooses the port every time. Nothing picks one by itself, and a port is not remembered across a reload.
+
+### Settings
+
+| Field | Values | Default |
+|---|---|---|
+| `baudRate` | a whole number from 300 to 921600 | none, it is required |
+| `dataBits` | 7 or 8 | 8 |
+| `stopBits` | 1 or 2 | 1 |
+| `parity` | `none`, `even`, `odd` | `none` |
+| `flowControl` | `none`, `hardware` | `none` |
+
+Any other field is refused. There are no control lines: no DTR, no RTS, no break.
+
+### Limits
+
+| Limit | Value |
+|---|---|
+| Open ports for one plugin page | 2 |
+| Bytes one read returns | 65,536 |
+| Bytes waiting to be read, per port | 1,048,576 |
+| Bytes one write takes | 65,536 |
+| Bytes waiting to be sent, per port | 1,048,576 |
+| Longest wait for one read | 30,000 ms |
+
+### Refusals
+
+A refused call rejects with an `Error` whose message is one of these codes. `choose()` is the one exception: a cancel gives `null`.
+
+| Code | Meaning |
+|---|---|
+| `serial-not-granted` | The plugin does not hold `host:serial`, or Studio does not know yet, or the grant was taken away. |
+| `serial-unavailable` | The browser has no serial feature here, or refused for security. |
+| `serial-cancelled` | The person cancelled. Only seen as `null` from `choose()`. |
+| `serial-unknown-port` | The handle is not one of this page's, or the port is not open. |
+| `serial-busy` | The port is already open or opening, here or in another page. Or a read is already waiting on it. Or another port question is open. |
+| `serial-too-many` | Two ports are already open. |
+| `serial-too-large` | The bytes are not a `Uint8Array`, are empty, are over 65,536, or the send queue is full. |
+| `serial-bad-settings` | The settings are not as the table above. |
+| `serial-closed` | The port was closed, or the cable was pulled, while the call waited. |
+| `serial-failed` | The device or the system refused: an open that fails, an I/O error. |
+
+### What your page must handle
+
+- **A cancelled choice.** `choose()` gives `null`. Leave the person where they were.
+- **A dropped link.** A pulled cable ends a waiting read with `serial-closed`. The handle is then dead: later calls give `serial-unknown-port`. Ask the person to choose the port again.
+- **Lost bytes.** When 1,048,576 bytes wait unread, Studio drops everything unread. The next read gives no bytes and `lost: true`, once. Bytes after that arrive as usual. Start your framing again: the bytes before and after the gap are never joined.
+- **A reload.** Every load of the page starts with no port. The person chooses again.
+- **Only finished writes count.** A write is sent once its promise has resolved. `close()` does not wait for writes that have not finished, so wait for them first.
+- **The grant going away.** While a port is open, Studio asks the server once a minute. If the plugin was turned off, upgraded or lost the capability, the port closes and calls give `serial-not-granted`.
+
+### Example
+
+```js
+await window.openldr.ready;
+const serial = window.openldr.serial;
+
+const chosen = await serial.choose();      // null when the person cancelled
+if (!chosen) return;
+await serial.open(chosen.port, { baudRate: 9600 });
+
+let buffer = [];
+for (;;) {
+  let read;
+  try {
+    read = await serial.read(chosen.port, 5000);   // waits up to 5 seconds for a first byte
+  } catch (err) {
+    // 'serial-closed': the cable was pulled or the port was closed. Ask the person to choose again.
+    break;
+  }
+  if (read.lost) buffer = [];                      // bytes were dropped: start the framing again
+  buffer.push(...read.bytes);
+  // ...cut whole messages out of buffer here...
+}
+```
+
+### Not proven
+
+These calls were run in Chrome 158 and in the desktop app on Linux, up to the choice of a port. No port was opened: the test PC had no serial device. A real cable, a real analyser, Edge, Windows and macOS have not been tried.

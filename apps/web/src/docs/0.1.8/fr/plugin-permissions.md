@@ -115,3 +115,17 @@ Par `ce_read`, un appelant qui a `patients.find` sans `patients.view` :
 - Les identifiants restent masqués sauf si l'appelant a `patients.view_identifiers`.
 
 Un appelant qui a `patients.view` peut aussi chercher par identifiant, ou par nom avec date de naissance, mais pas dans le même appel que `search`.
+
+## Un port série pour la page d'un plugin
+
+Un plugin dont la page dialogue avec un instrument par un câble demande la capacité `host:serial` dans son manifeste :
+
+```json
+{ "kind": "host:serial" }
+```
+
+Elle ne prend aucun paramètre. Sur l'écran d'installation, l'administrateur voit la ligne **Utiliser un port série du PC, quand une personne en choisit un (host:serial)**, et l'approuve avec les autres capacités du plugin.
+
+Cette capacité n'est pas l'une des clés de permission du plugin, et aucun rôle ne la détient. Elle appartient à la version installée du plugin. Toute personne qui peut ouvrir la page du plugin peut alors se voir demander de choisir un port. Studio pose la question à chaque fois, en nommant le plugin, et la personne peut annuler.
+
+C'est Studio qui l'applique, pas le serveur : les octets série ne vont jamais au serveur. Désactiver le plugin, le retirer ou activer une autre version ferme tout port ouvert. [Tables et fonctions hôtes des plugins](/docs/plugin-host-functions) donne la liste des appels.
