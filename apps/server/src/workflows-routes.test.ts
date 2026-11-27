@@ -116,6 +116,8 @@ function fakeWorkflowExtras() {
       },
       registerRunner: async () => {},
       reconcile: async () => {},
+      armSavedCalls: 0,
+      async armSaved() { (this as { armSavedCalls: number }).armSavedCalls++; },
     },
     datasets: {
       list: async () => [],
@@ -1759,6 +1761,39 @@ describe('workflow on/off and stale saves (follow-up C7-1)', () => {
     registerWorkflowRoutes(app, ctx);
     return { app, ctx };
   };
+
+  // A schedule that is saved must start without a restart: every save route arms what it stored.
+  describe('arming a saved schedule', () => {
+    const timed = (id: string, cron = '*/5 * * * *') => ({
+      id, name: 'Timed', description: null, enabled: true, createdBy: null,
+      definition: { nodes: [{ id: 'tick', type: 'trigger', position: { x: 0, y: 0 }, data: { triggerType: 'schedule', cron, tz: 'UTC' } }], edges: [] },
+    });
+    const armedCalls = (ctx: any) => ctx.workflows.runner.armSavedCalls as number;
+
+    it('creating a scheduled workflow arms it', async () => {
+      const { app, ctx } = setup();
+      const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t1') });
+      expect(res.statusCode).toBeLessThan(300);
+      expect(armedCalls(ctx)).toBe(1);
+    });
+
+    it('editing it arms it again, and so does switching it on', async () => {
+      const { app, ctx } = setup();
+      await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t2') });
+      await app.inject({ method: 'PUT', url: '/api/workflows/wf-t2', payload: timed('wf-t2', '0 * * * *') });
+      expect(armedCalls(ctx)).toBe(2);
+      await app.inject({ method: 'PUT', url: '/api/workflows/wf-t2/enabled', payload: { enabled: false } });
+      await app.inject({ method: 'PUT', url: '/api/workflows/wf-t2/enabled', payload: { enabled: true } });
+      expect(armedCalls(ctx)).toBe(4);
+    });
+
+    it('a save still succeeds when arming fails', async () => {
+      const { app, ctx } = setup();
+      (ctx as any).workflows.runner.armSaved = async () => { throw new Error('bus is away'); };
+      const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t3') });
+      expect(res.statusCode).toBeLessThan(300);
+    });
+  });
 
   it('PUT enabled changes only enabled, so a toggle never brings back an older graph or name', async () => {
     const { app } = setup();

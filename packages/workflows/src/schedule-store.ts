@@ -16,6 +16,14 @@ export interface WorkflowScheduleStore {
   list(opts: { enabledOnly?: boolean }): Promise<WorkflowSchedule[]>;
   get(workflowId: string, nodeId: string): Promise<WorkflowSchedule | undefined>;
   setNextDue(workflowId: string, nodeId: string, nextDueAt: string): Promise<void>;
+  /**
+   * Takes the armed time off a schedule, once. True for the caller that took it, false for every
+   * other. `dueAt` is the time the queued run names: it must be the time the schedule is armed
+   * for. A run queued by an older version names none (null): it takes a row that is due at `now`.
+   * A queued run claims before it starts the workflow, so two runs queued for one time, or a run
+   * left from before an edit, cannot both start it.
+   */
+  claimDue(workflowId: string, nodeId: string, dueAt: string | null, now: string): Promise<boolean>;
 }
 
 export function createWorkflowScheduleStore(db: Kysely<InternalSchema>): WorkflowScheduleStore {
@@ -44,6 +52,13 @@ export function createWorkflowScheduleStore(db: Kysely<InternalSchema>): Workflo
     },
     async setNextDue(workflowId, nodeId, nextDueAt) {
       await db.updateTable(T).set({ next_due_at: nextDueAt } as never).where('workflow_id', '=', workflowId).where('node_id', '=', nodeId).execute();
+    },
+    async claimDue(workflowId, nodeId, dueAt, now) {
+      // One UPDATE, so the database decides which caller wins.
+      let q = db.updateTable(T).set({ next_due_at: null } as never).where('workflow_id', '=', workflowId).where('node_id', '=', nodeId);
+      q = dueAt === null ? q.where('next_due_at', '<=', now as never) : q.where('next_due_at', '=', dueAt as never);
+      const taken = await q.returning('workflow_id').execute();
+      return taken.length > 0;
     },
   };
 }

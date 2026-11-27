@@ -43,6 +43,7 @@ describe('workflow trigger runner', () => {
         }),
         list: async () => [],
         setNextDue: async () => {},
+        claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
       runWorkflow,
@@ -72,6 +73,7 @@ describe('workflow trigger runner', () => {
         }),
         list: async () => [],
         setNextDue: async () => {},
+        claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
       runWorkflow,
@@ -100,6 +102,7 @@ describe('workflow trigger runner', () => {
         list: async () => [],
         get: async () => undefined,
         setNextDue: async () => {},
+        claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
       runWorkflow,
@@ -157,6 +160,7 @@ describe('workflow trigger runner', () => {
         ],
         get: async () => undefined,
         setNextDue: async (...args: unknown[]) => { setNextDueCalls.push(args); },
+        claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
       runWorkflow,
@@ -180,6 +184,7 @@ describe('workflow trigger runner', () => {
         ],
         get: async () => undefined,
         setNextDue: async () => {},
+        claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
       runWorkflow,
@@ -207,6 +212,7 @@ describe('workflow trigger runner', () => {
         list: async () => [],
         get: async () => undefined,
         setNextDue: async () => {},
+        claimDue: async () => true,
       } as never,
       webhooks: { resolve: () => undefined } as never,
       runWorkflow: runWorkflowSpy as never,
@@ -247,6 +253,99 @@ const eventRunner = (nodes: unknown[], recorded: unknown[]) =>
 
 const fireDataPersisted = async (ev: ReturnType<typeof fakeEventing>, payload: unknown) =>
   ev.handlers.get('data.persisted')!({ type: 'data.persisted', payload });
+
+describe('a schedule that is saved while the server runs', () => {
+  function build(rows: Array<{ workflowId: string; nodeId: string; cron: string; tz: string; enabled: boolean; nextDueAt: string | null }>, claim: (dueAt: string | null) => boolean = () => true) {
+    const ev = fakeEventing();
+    const recorded: unknown[] = [];
+    const claims: Array<string | null> = [];
+    const runner = createWorkflowTriggerRunner({
+      store: { get: async () => wfWith([{ id: 't', type: 'trigger', data: {} }]) } as never,
+      runs: { record: async (r: unknown) => { recorded.push(r); } } as never,
+      schedules: {
+        get: async (w: string, n: string) => rows.find((r) => r.workflowId === w && r.nodeId === n),
+        list: async () => rows,
+        setNextDue: async (w: string, n: string, at: string) => { const r = rows.find((x) => x.workflowId === w && x.nodeId === n); if (r) r.nextDueAt = at; },
+        claimDue: async (_w: string, _n: string, dueAt: string | null) => { claims.push(dueAt); return claim(dueAt); },
+      } as never,
+      webhooks: { resolve: () => undefined } as never,
+      runWorkflow,
+      logger: { error: () => {}, warn: () => {} },
+    });
+    return { ev, recorded, claims, runner, rows };
+  }
+  const row = () => ({ workflowId: 'w1', nodeId: 's', cron: '*/5 * * * *', tz: 'UTC', enabled: true, nextDueAt: null as string | null });
+
+  it('armSaved arms it at once, with no restart, and the queued run names its time', async () => {
+    const { ev, runner, rows } = build([row()]);
+    await runner.registerRunner(ev.port as never);
+    await runner.armSaved();
+    expect(rows[0].nextDueAt).not.toBeNull();
+    const queued = ev.published.filter((p) => p.type === 'workflow.schedule.due');
+    expect(queued).toHaveLength(1);
+    expect(queued[0].payload).toEqual({ workflowId: 'w1', nodeId: 's', dueAt: rows[0].nextDueAt });
+    expect(queued[0].availableAt?.toISOString()).toBe(rows[0].nextDueAt);
+  });
+
+  it('armSaved leaves a schedule that is already armed alone', async () => {
+    const { ev, runner } = build([{ ...row(), nextDueAt: new Date(Date.now() + 60_000).toISOString() }]);
+    await runner.registerRunner(ev.port as never);
+    await runner.armSaved();
+    expect(ev.published).toHaveLength(0);
+  });
+
+  it('armSaved does nothing in a process that runs no schedules', async () => {
+    const { ev, runner } = build([row()]);
+    await expect(runner.armSaved()).resolves.toBeUndefined();
+    expect(ev.published).toHaveLength(0);
+  });
+
+  it('a queued run claims its time before it starts the workflow', async () => {
+    const { ev, runner, recorded, claims } = build([{ ...row(), nextDueAt: '2026-01-01T10:00:00.000Z' }]);
+    await runner.registerRunner(ev.port as never);
+    await ev.handlers.get('workflow.schedule.due')!({ type: 'workflow.schedule.due', payload: { workflowId: 'w1', nodeId: 's', dueAt: '2026-01-01T10:00:00.000Z' } });
+    expect(claims).toEqual(['2026-01-01T10:00:00.000Z']);
+    expect(recorded).toHaveLength(1);
+  });
+
+  it('a queued run that loses the claim neither runs nor queues another', async () => {
+    const { ev, runner, recorded } = build([{ ...row(), nextDueAt: '2026-01-01T10:05:00.000Z' }], () => false);
+    await runner.registerRunner(ev.port as never);
+    // Left over from before an edit: it names a time the schedule is no longer armed for.
+    await ev.handlers.get('workflow.schedule.due')!({ type: 'workflow.schedule.due', payload: { workflowId: 'w1', nodeId: 's', dueAt: '2026-01-01T10:00:00.000Z' } });
+    expect(recorded).toHaveLength(0);
+    expect(ev.published).toHaveLength(0);
+  });
+
+  it('a run that throws still queues the next one: the claimed time is gone, so nothing else would', async () => {
+    const ev = fakeEventing();
+    const rows = [{ ...row(), nextDueAt: '2026-01-01T10:00:00.000Z' as string | null }];
+    const runner = createWorkflowTriggerRunner({
+      store: { get: async () => { throw new Error('database is away'); } } as never,
+      runs: { record: async () => {} } as never,
+      schedules: {
+        get: async () => rows[0], list: async () => rows,
+        setNextDue: async (_w: string, _n: string, at: string) => { rows[0].nextDueAt = at; },
+        claimDue: async () => { rows[0].nextDueAt = null; return true; },
+      } as never,
+      webhooks: { resolve: () => undefined } as never,
+      runWorkflow,
+      logger: { error: () => {}, warn: () => {} },
+    });
+    await runner.registerRunner(ev.port as never);
+    await ev.handlers.get('workflow.schedule.due')!({ type: 'workflow.schedule.due', payload: { workflowId: 'w1', nodeId: 's', dueAt: '2026-01-01T10:00:00.000Z' } }).catch(() => {});
+    expect(ev.published.filter((p) => p.type === 'workflow.schedule.due')).toHaveLength(1);
+    expect(rows[0].nextDueAt).not.toBeNull();
+  });
+
+  it('a run queued by an older version names no time, and claims with none', async () => {
+    const { ev, runner, recorded, claims } = build([{ ...row(), nextDueAt: '2026-01-01T10:00:00.000Z' }]);
+    await runner.registerRunner(ev.port as never);
+    await ev.handlers.get('workflow.schedule.due')!({ type: 'workflow.schedule.due', payload: { workflowId: 'w1', nodeId: 's' } });
+    expect(claims).toEqual([null]);
+    expect(recorded).toHaveLength(1);
+  });
+});
 
 describe('event trigger (data.persisted)', () => {
   it('runs an event-trigger workflow when source + resourceType filters match', async () => {

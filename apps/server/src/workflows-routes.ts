@@ -16,7 +16,7 @@ import { waitForWebhookReceipt } from './webhook-receipt-wait';
 import { resolveNodeOptions, resolveNodeDetail } from './workflows-node-options';
 import { isProtectedWorkflowId, rebuildSystemWorkflow } from './system-workflows';
 
-/** Sync schedule rows after a workflow save. Webhook paths are stored with the definition. */
+/** Sync schedule rows after a workflow save, and arm them. Webhook paths are stored with the definition. */
 async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; definition: unknown }): Promise<void> {
   const def = WorkflowDefinitionSchema.parse(workflow.definition);
   // schedules (derived table) — replace this workflow's rows with current schedule nodes
@@ -29,6 +29,14 @@ async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; def
         workflowId: workflow.id, nodeId: n.id, cron, tz: (n.data?.tz as string) ?? null, enabled: true, nextDueAt: null,
       });
     }
+  }
+  // The rows above have no next run time. Arm them now: until this, only a server start did, so a
+  // schedule that was created, edited or switched on did not run before the next restart. The
+  // save itself has succeeded, so a failure here is logged and the next start arms the schedule.
+  try {
+    await ctx.workflows.runner.armSaved();
+  } catch (err) {
+    ctx.logger.warn({ err, workflowId: workflow.id }, 'arming the saved workflow schedule failed');
   }
 }
 

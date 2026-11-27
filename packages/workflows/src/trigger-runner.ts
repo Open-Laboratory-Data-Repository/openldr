@@ -16,7 +16,7 @@ import { extractCorrelationId } from './correlation';
 interface RunnerDeps {
   store: Pick<WorkflowStore, 'get'>;
   runs: WorkflowRunStore;
-  schedules: Pick<WorkflowScheduleStore, 'get' | 'list' | 'setNextDue'>;
+  schedules: Pick<WorkflowScheduleStore, 'get' | 'list' | 'setNextDue' | 'claimDue'>;
   webhooks: Pick<WebhookRegistry, 'resolve'> | SharedWebhookResolver;
   runWorkflow: typeof RunWorkflowFn;
   logger: { error(o: unknown, m?: string): void; warn(o: unknown, m?: string): void };
@@ -69,6 +69,10 @@ export function heldSummary(metas: unknown[], maxReasons = 5): HeldSummary | und
 export interface WorkflowTriggerRunner {
   registerRunner(eventing: EventingPort): Promise<void>;
   reconcile(eventing: EventingPort): Promise<void>;
+  /** Arms every saved schedule that is not armed yet, on the bus given to registerRunner. The
+   *  save routes call it, so a schedule that is created, edited or switched on starts without a
+   *  restart. Does nothing in a process that runs no schedules (registerRunner never called). */
+  armSaved(): Promise<void>;
   setIngestWorkflowIds(ids: string[]): void;
   setEventWorkflowIds(ids: string[]): void;
   runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<RunOutcome | null>;
@@ -192,8 +196,29 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     tz: string | null,
   ): Promise<void> {
     const due = nextCronDate(cron, tz, new Date());
-    await deps.schedules.setNextDue(workflowId, nodeId, due.toISOString());
-    await eventing.publish({ type: SCHEDULE_DUE, payload: { workflowId, nodeId } }, { availableAt: due });
+    const dueAt = due.toISOString();
+    await deps.schedules.setNextDue(workflowId, nodeId, dueAt);
+    // The queued run names the time it was armed for. It must claim that time before it runs.
+    await eventing.publish({ type: SCHEDULE_DUE, payload: { workflowId, nodeId, dueAt } }, { availableAt: due });
+  }
+
+  /** The bus this process runs schedules on, once registerRunner has been called. */
+  let bus: EventingPort | undefined;
+
+  async function armUnarmed(eventing: EventingPort): Promise<void> {
+    const now = Date.now();
+    for (const s of await deps.schedules.list({ enabledOnly: true })) {
+      // Skip schedules already armed for a future time — avoids duplicate runs on restart.
+      if (s.nextDueAt && new Date(s.nextDueAt).getTime() > now) continue;
+      try {
+        await arm(eventing, s.workflowId, s.nodeId, s.cron, s.tz);
+      } catch (err) {
+        deps.logger.error(
+          { err, workflowId: s.workflowId, nodeId: s.nodeId },
+          'workflow schedule arm failed',
+        );
+      }
+    }
   }
 
   return {
@@ -208,18 +233,28 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     runAndRecord,
 
     async registerRunner(eventing) {
+      bus = eventing;
       await eventing.subscribe(SCHEDULE_DUE, async (event) => {
-        const { workflowId, nodeId } = event.payload as { workflowId: string; nodeId: string };
+        const { workflowId, nodeId, dueAt } = event.payload as { workflowId: string; nodeId: string; dueAt?: string };
         const s = await deps.schedules.get(workflowId, nodeId);
         if (!s || !s.enabled) return;
-        await runAndRecord(workflowId, 'schedule', { scheduledAt: new Date().toISOString() });
-        // Re-fetch after the run so a mid-run disable/edit is honored when re-arming.
-        const after = await deps.schedules.get(workflowId, nodeId);
-        if (!after || !after.enabled) return;
+        // Only one queued run may take a due time. A save arms the schedule again while a run
+        // queued before the save is still waiting; without the claim both would start the
+        // workflow, and each would queue the next, for ever.
+        if (!(await deps.schedules.claimDue(workflowId, nodeId, dueAt ?? null, new Date().toISOString()))) return;
         try {
-          await arm(eventing, workflowId, nodeId, after.cron, after.tz);
-        } catch (err) {
-          deps.logger.error({ err, workflowId, nodeId }, 'workflow schedule re-arm failed');
+          await runAndRecord(workflowId, 'schedule', { scheduledAt: new Date().toISOString() });
+        } finally {
+          // Also when the run threw: the claim took the armed time, so nothing else queues the next.
+          try {
+            // Re-fetch after the run so a mid-run disable/edit is honored when re-arming.
+            const after = await deps.schedules.get(workflowId, nodeId);
+            // A save during the run has armed it again already.
+            const armedAgain = !!after?.nextDueAt && new Date(after.nextDueAt).getTime() > Date.now();
+            if (after && after.enabled && !armedAgain) await arm(eventing, workflowId, nodeId, after.cron, after.tz);
+          } catch (err) {
+            deps.logger.error({ err, workflowId, nodeId }, 'workflow schedule re-arm failed');
+          }
         }
       });
 
@@ -253,19 +288,11 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     },
 
     async reconcile(eventing) {
-      const now = Date.now();
-      for (const s of await deps.schedules.list({ enabledOnly: true })) {
-        // Skip schedules already armed for a future time — avoids duplicate runs on restart.
-        if (s.nextDueAt && new Date(s.nextDueAt).getTime() > now) continue;
-        try {
-          await arm(eventing, s.workflowId, s.nodeId, s.cron, s.tz);
-        } catch (err) {
-          deps.logger.error(
-            { err, workflowId: s.workflowId, nodeId: s.nodeId },
-            'workflow schedule arm failed',
-          );
-        }
-      }
+      await armUnarmed(eventing);
+    },
+
+    async armSaved() {
+      if (bus) await armUnarmed(bus);
     },
   };
 }
