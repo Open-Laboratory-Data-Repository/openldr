@@ -100,6 +100,7 @@ import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { brokerAccessDetails } from './check-read-audit';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 import { createPluginConnectorAccess, type PluginConnectorAccess } from './plugin-connector-access';
+import { createWorkflowHosts, type WorkflowHosts } from './workflow-hosts';
 import { createTrustService, readLoadedTrust, readPeerCertificate, type TrustService } from './network-trust';
 import { createResultsRead, type ResultsQuery } from './results-read';
 import { createPluginRemoval, type PluginRemoval } from './plugin-removal';
@@ -606,6 +607,8 @@ export interface AppContext {
   connectorAccess: PluginConnectorAccess;
   /** Trusted certificates for this install's outgoing HTTPS calls (network-trust.ts). */
   trust: TrustService;
+  /** The hosts a workflow HTTP step may call (workflow-hosts.ts). */
+  workflowHosts: WorkflowHosts;
   /** Copies of a source database's rows to CE's own disk (import-copy.ts). Only a context built
    *  with `runImportDriver` drives them. Any context may start, stop or delete one. */
   importCopies: ImportCopyService;
@@ -1485,6 +1488,24 @@ const reporting: ReportingApi = {
   });
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
+  const workflowHosts = createWorkflowHosts({
+    appSettings,
+    serverList: cfg.WORKFLOW_HTTP_ALLOWLIST,
+    listenHost: cfg.LISTEN_HOST,
+    port: cfg.PORT,
+    audit: async (action, actor, detail) => {
+      try {
+        await audit.record({ ...actor, action, entityType: 'workflow_http_host', entityId: detail, metadata: {} });
+      } catch (err) {
+        // The setting is already changed. This line is the durable record of who changed what.
+        logger.error(
+          { action, detail, actorType: actor.actorType, actorId: actor.actorId, actorName: actor.actorName, error: err instanceof Error ? err.message : String(err) },
+          'workflow hosts changed, but the audit record failed',
+        );
+        throw err;
+      }
+    },
+  });
   const numberSettings = createNumberSettings(appSettings);
   const validationStrictness: ValidationStrictness = createValidationStrictness(appSettings);
   // The country list is read on each save that sets a country, so a list loaded later counts.
@@ -1517,7 +1538,8 @@ const reporting: ReportingApi = {
     fhirQuery: async (resourceType, limit) => ({
       resources: (await termFhirStore.listByType(resourceType, limit)).map((x) => x.resource),
     }),
-    httpFetch: (req) => guardedFetch(req, cfg.WORKFLOW_HTTP_ALLOWLIST),
+    // The rule is read on every call, so a host an administrator removes is refused at once.
+    httpFetch: async (req) => guardedFetch(req, await workflowHosts.rule()),
     materializeDataset: async (name, columns, rows, workflowId) => {
       await workflowDatasets.upsertByName({ name, columns, rows, rowCount: rows.length, workflowId });
       if ((await featureFlags.get('workflow.dataset_publish_enabled')) && cfg.TARGET_STORE_ADAPTER === 'pg') {
@@ -2364,6 +2386,7 @@ const reporting: ReportingApi = {
     imports,
     connectorAccess,
     trust,
+    workflowHosts,
     importCopies,
     importChecks,
     pluginRemoval,
@@ -2425,6 +2448,7 @@ const reporting: ReportingApi = {
 export { createFeatureFlags } from './feature-flags';
 export { createPluginConnectorAccess, declaresConnectors, type PluginConnectorAccess, type ConnectorPluginCandidate } from './plugin-connector-access';
 export * from './network-trust';
+export * from './workflow-hosts';
 export { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog, type CatalogGroup, type PluginCapabilityMeta } from './capability-catalog';
 export { createConnectorDialectLookup, dialectFor } from './connector-sql-service';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';

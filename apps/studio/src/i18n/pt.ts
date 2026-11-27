@@ -565,6 +565,9 @@ export const pt: EnShape = {
       imports: {
         correct_held: { label: 'Corrigir pedidos retidos', description: 'Abrir os pedidos retidos de uma verificação de fonte, corrigir os seus campos e verificá-los de novo. Vê dados dos pacientes.' },
       },
+      network: {
+        manage: { label: 'Gerir a confiança de rede', description: 'Adicionar certificados de confiança e indicar os anfitriões que um fluxo de trabalho pode contactar.' },
+      },
     },
   },
   forms: {
@@ -2782,6 +2785,7 @@ export const pt: EnShape = {
     replaceSecret: 'Substituir segredo',
     headersSecretHidden: 'Os cabeçalhos contêm um segredo e estão ocultos — substitua todos os cabeçalhos para editar.',
     replaceHeaders: 'Substituir cabeçalhos',
+    httpUrlHint: "Aceita modelos: {{example}}. Só é possível contactar os anfitriões permitidos. Um administrador adiciona-os em Definições > Rede, ou o servidor define WORKFLOW_HTTP_ALLOWLIST.",
     secretWriteOnlyHelp: 'Por segurança, um segredo guardado não pode ser visualizado, apenas substituído.',
     mapToFhir: {
       webhookHint: "O nó anterior é um webhook, por isso as linhas estão em body. Defina body como caminho de origem.",

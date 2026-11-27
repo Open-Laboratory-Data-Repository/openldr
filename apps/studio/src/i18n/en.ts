@@ -569,6 +569,9 @@ export const en = {
       imports: {
         correct_held: { label: 'Correct held requests', description: 'Open the held requests of a source check, correct their fields and check them again. Sees patient details.' },
       },
+      network: {
+        manage: { label: 'Manage network trust', description: 'Add trusted certificates and name the hosts a workflow may call.' },
+      },
     },
   },
   forms: {
@@ -2900,6 +2903,7 @@ export const en = {
     replaceSecret: 'Replace secret',
     headersSecretHidden: 'Headers contain a secret and are hidden — replace all headers to edit.',
     replaceHeaders: 'Replace headers',
+    httpUrlHint: "Supports templates: {{example}}. Only allowed hosts can be reached. An administrator adds them in Settings > Network, or the server sets WORKFLOW_HTTP_ALLOWLIST.",
     secretWriteOnlyHelp: "For security, a saved secret can't be viewed — only replaced.",
     mapToFhir: {
       webhookHint: "The node before this one is a webhook, so the rows are under body. Set the source path to body.",

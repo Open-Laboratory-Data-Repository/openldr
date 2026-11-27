@@ -565,6 +565,9 @@ export const fr: EnShape = {
       imports: {
         correct_held: { label: 'Corriger les demandes retenues', description: 'Ouvrir les demandes retenues d’une vérification de source, corriger leurs champs et les vérifier à nouveau. Voit les données des patients.' },
       },
+      network: {
+        manage: { label: 'Gérer la confiance réseau', description: 'Ajouter des certificats de confiance et nommer les hôtes qu’un workflow peut appeler.' },
+      },
     },
   },
   forms: {
@@ -2782,6 +2785,7 @@ export const fr: EnShape = {
     replaceSecret: 'Remplacer le secret',
     headersSecretHidden: 'Les en-têtes contiennent un secret et sont masqués — remplacez tous les en-têtes pour les modifier.',
     replaceHeaders: 'Remplacer les en-têtes',
+    httpUrlHint: "Accepte les modèles : {{example}}. Seuls les hôtes autorisés sont joignables. Un administrateur les ajoute dans Paramètres > Réseau, ou le serveur définit WORKFLOW_HTTP_ALLOWLIST.",
     secretWriteOnlyHelp: 'Pour des raisons de sécurité, un secret enregistré ne peut pas être affiché, seulement remplacé.',
     mapToFhir: {
       webhookHint: "Le nœud précédent est un webhook : les lignes sont sous body. Mettez body comme chemin source.",
