@@ -3,9 +3,9 @@
 // can reach it; main.ts only wires Electron to it. The app never signals or kills the launcher.
 
 import { join } from 'node:path';
-import type { LauncherEvent, RunningLauncher, Status } from './launcher';
+import type { LauncherEvent, RunningLauncher, ShareInfo, Status } from './launcher';
 import { windowAddress } from './locality';
-import type { Settings } from './settings';
+import { DEFAULT_SHARE_PORT, type Settings } from './settings';
 import type { AppStrings } from './strings';
 
 export type Screen =
@@ -50,7 +50,12 @@ export function pageState(screen: Exclude<Screen, { screen: 'studio' }>, strings
 
 export interface ControllerDeps {
   readStatus(): Promise<Status>;
-  startLauncher(port: number, on: { event(e: LauncherEvent): void; stderrLine(line: string): void }): RunningLauncher;
+  /** `share` is set when OpenLDR is to be shared on the lab network, with the port other PCs use. */
+  startLauncher(
+    port: number,
+    on: { event(e: LauncherEvent): void; stderrLine(line: string): void },
+    share: { port: number } | undefined,
+  ): RunningLauncher;
   requestStop(): Promise<number>;
   /** True once an HTTP request to the address gets any answer. */
   answers(address: string): Promise<boolean>;
@@ -106,6 +111,10 @@ export class DesktopController {
   private addr: string | undefined;
   private dir: string | undefined;
   private quitting: Promise<void> | undefined;
+  /** How the launcher shown now is shared, as it reported it. */
+  private shared: ShareInfo | undefined;
+  /** Set while a restart runs. A second one is refused. */
+  private restarting = false;
   /** A `status` child that has not answered yet. The next read waits on it instead of starting another. */
   private pendingStatus: Promise<Status> | undefined;
 
@@ -126,6 +135,45 @@ export class DesktopController {
   /** The data folder, as `status --json` reported it. */
   dataDir(): string | undefined {
     return this.dir;
+  }
+
+  /** How OpenLDR is shared on the lab network, as the launcher reported it. Undefined when it is not. */
+  share(): ShareInfo | undefined {
+    return this.shared;
+  }
+
+  /**
+   * Stops the app's own launcher and starts it again with the settings as they are now. For a
+   * setting the launcher only reads at start, such as sharing. Gives false, and does nothing,
+   * unless this app started the launcher and it is ready: a launcher started elsewhere is not the
+   * app's to restart. Also false while another restart or a quit runs. Never exits the app.
+   */
+  async restart(): Promise<boolean> {
+    const child = this.child;
+    if (this.quitting || this.restarting || this.phase !== 'own' || child === undefined || !child.ready || child.exited) return false;
+    this.restarting = true;
+    try {
+      // The start number goes up first. The old launcher's exit and its last events then count as
+      // stale, so a stop the app asked for is never shown as "OpenLDR is no longer running".
+      this.run += 1;
+      this.addr = undefined;
+      this.shared = undefined;
+      this.show({ screen: 'stopping' });
+      const code = await this.stopOwn(child);
+      if (this.quitting) return true;
+      if (!child.exited || code !== 0) {
+        // The old launcher may still hold the data folder. A second one must not be started.
+        this.deps.log('The launcher did not stop for a restart.');
+        this.fail(this.deps.strings.shareRestartFailed);
+        return true;
+      }
+      this.child = undefined;
+      this.phase = 'idle';
+      void this.start();
+      return true;
+    } finally {
+      this.restarting = false;
+    }
   }
 
   /** True when this app did not start the launcher it shows. */
@@ -150,6 +198,7 @@ export class DesktopController {
     this.phase = 'checking';
     this.child = undefined;
     this.addr = undefined;
+    this.shared = undefined;
     this.show({ screen: 'starting', note: 'checking' });
     try {
       const status = await this.boundedStatus();
@@ -229,6 +278,7 @@ export class DesktopController {
   private fail(message: string, withLogs = true): void {
     this.phase = 'error';
     this.addr = undefined;
+    this.shared = undefined;
     const dataLogs =
       withLogs && this.dir !== undefined
         ? { serverLog: join(this.dir, 'logs', 'server.log'), postgresLog: join(this.dir, 'logs', 'postgres.log') }
@@ -242,6 +292,7 @@ export class DesktopController {
     const address = windowAddress(status.address, status.host);
     this.phase = 'attached';
     this.addr = address;
+    this.shared = status.share;
     this.dir = status.dataDir;
     this.deps.log(`Attached to a launcher that was already running at ${address}.`);
     this.show({ screen: 'starting', note: 'server' });
@@ -298,17 +349,25 @@ export class DesktopController {
       if (chosen.remember) this.saveSettings({ ...settings, port });
     }
 
+    // Read at each start, so a restart picks up a setting that changed.
+    const now = this.deps.loadSettings();
+    const share = now.shareOnNetwork === true ? { port: now.sharePort ?? DEFAULT_SHARE_PORT } : undefined;
+
     this.phase = 'own';
-    this.deps.log(`Starting the launcher on port ${port}.`);
+    this.deps.log(`Starting the launcher on port ${port}${share ? `, shared on port ${share.port}` : ''}.`);
     let child!: Child;
-    const running = this.deps.startLauncher(port, {
-      event: (e) => this.onEvent(run, child, e),
-      stderrLine: (line) => {
-        const kept = this.clean(line);
-        child.lastStderr = kept;
-        this.deps.log(`launcher: ${kept}`);
+    const running = this.deps.startLauncher(
+      port,
+      {
+        event: (e) => this.onEvent(run, child, e),
+        stderrLine: (line) => {
+          const kept = this.clean(line);
+          child.lastStderr = kept;
+          this.deps.log(`launcher: ${kept}`);
+        },
       },
-    });
+      share,
+    );
     child = { running, exited: false, done: Promise.resolve(), ready: false, sawStopping: false, sawStopped: false };
     child.done = running.exited.then((code) => this.onExit(run, child, code));
     this.child = child;
@@ -343,6 +402,7 @@ export class DesktopController {
         child.ready = true;
         const address = windowAddress(logged.address, OWN_HOST);
         this.addr = address;
+        this.shared = logged.share;
         this.show({ screen: 'studio', address });
         return;
       }

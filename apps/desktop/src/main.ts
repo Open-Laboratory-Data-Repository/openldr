@@ -1,11 +1,11 @@
 // The Electron main process. It only wires Electron to the controller and the other modules; the
 // decisions live in controller.ts, autostart.ts, locality.ts and selfcheck.ts.
 
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, powerMonitor, session, shell, Tray } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, powerMonitor, session, shell, Tray } from 'electron';
 import { setAutostart, startedHidden, type AutostartDeps } from './autostart';
 import { bridgeHandlers } from './bridge';
 import { RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
@@ -16,6 +16,7 @@ import { choosePort } from './ports';
 import { Selfcheck, selfcheckConfig } from './selfcheck';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import { pickLang, STRINGS } from './strings';
+import { trayTemplate } from './tray-menu';
 
 export type MainWindow = BrowserWindow;
 
@@ -69,6 +70,8 @@ function main(): void {
 
   let win: BrowserWindow | undefined;
   let tray: Tray | undefined;
+  /** Builds the tray menu again from the settings and the launcher's share. Set once the tray exists. */
+  let rebuildTray = (): void => {};
   let controller: DesktopController | undefined;
   let selfcheck: Selfcheck | undefined;
   let current: Screen = { screen: 'starting', note: 'checking' };
@@ -136,6 +139,8 @@ function main(): void {
 
   const show = (screen: Screen): void => {
     current = screen;
+    // The share the launcher reports changes with the screen: set at ready, gone at a stop.
+    rebuildTray();
     if (screen.screen === 'error') selfcheck?.onError(pageState(screen, strings()).title);
     render();
   };
@@ -288,38 +293,81 @@ function main(): void {
     };
     tray = new Tray(nativeImage.createFromPath(join(here, '..', 'assets', 'tray.png')));
     tray.setToolTip(s.trayTooltip);
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: s.trayOpen, click: showWindow },
-        {
-          label: s.trayStartAtSignIn,
-          type: 'checkbox',
-          checked: settings.startAtSignIn,
-          click: (item) => {
-            try {
-              setAutostart(autostart, item.checked);
-              save({ ...loadSettings(settingsFile), startAtSignIn: item.checked });
-            } catch (err) {
-              log(`Start at sign-in was not changed: ${err instanceof Error ? err.message : String(err)}`);
-            }
-          },
-        },
-        {
-          label: s.trayOpenLogs,
-          click: () => {
-            const dir = controller?.dataDir();
-            if (dir !== undefined) void shell.openPath(join(dir, 'logs'));
-          },
-        },
-        { type: 'separator' },
-        { label: s.trayQuit, click: () => requestQuit('tray') },
-      ]),
-    );
+    // The tray menu is rebuilt whenever what it shows changes: a setting, or the launcher's share.
+    let shareBusy = false;
+    const setShare = async (on: boolean): Promise<void> => {
+      if (shareBusy) return;
+      if (on) {
+        // A yes or no question outside Studio, so a native box. Cancel is the default.
+        const options = {
+          type: 'question' as const,
+          buttons: [s.shareConfirmYes, s.shareConfirmNo],
+          defaultId: 1,
+          cancelId: 1,
+          title: s.shareConfirmTitle,
+          message: s.shareConfirmTitle,
+          detail: s.shareConfirmBody,
+        };
+        const answer = w.isDestroyed() ? await dialog.showMessageBox(options) : await dialog.showMessageBox(w, options);
+        if (answer.response !== 0) return rebuildTray();
+      }
+      const { shareOnNetwork: _was, ...rest } = loadSettings(settingsFile);
+      save(on ? { ...rest, shareOnNetwork: true } : rest);
+      shareBusy = true;
+      rebuildTray();
+      let applied = false;
+      try {
+        applied = (await controller?.restart()) ?? false;
+      } finally {
+        shareBusy = false;
+        rebuildTray();
+      }
+      // The launcher was started outside this app, or is not ready. The setting waits for the next start.
+      if (!applied) void dialog.showMessageBox({ type: 'info', message: s.shareNextStart, buttons: ['OK'] });
+    };
+    const saveCertificate = async (certFile: string): Promise<void> => {
+      try {
+        const picked = await dialog.showSaveDialog({ defaultPath: 'openldr-certificate.pem' });
+        if (picked.canceled || picked.filePath === undefined || picked.filePath === '') return;
+        copyFileSync(certFile, picked.filePath);
+      } catch (err) {
+        log(`The certificate was not saved: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+    rebuildTray = (): void => {
+      if (tray === undefined || tray.isDestroyed()) return;
+      const now = loadSettings(settingsFile);
+      tray.setContextMenu(
+        Menu.buildFromTemplate(
+          trayTemplate({ startAtSignIn: now.startAtSignIn, shareOnNetwork: now.shareOnNetwork === true, share: controller?.share(), busy: shareBusy }, s, {
+            open: showWindow,
+            setStartAtSignIn: (on) => {
+              try {
+                setAutostart(autostart, on);
+                save({ ...loadSettings(settingsFile), startAtSignIn: on });
+              } catch (err) {
+                log(`Start at sign-in was not changed: ${err instanceof Error ? err.message : String(err)}`);
+              }
+              rebuildTray();
+            },
+            setShare: (on) => void setShare(on),
+            copy: (text) => clipboard.writeText(text),
+            saveCertificate: (certFile) => void saveCertificate(certFile),
+            openLogs: () => {
+              const dir = controller?.dataDir();
+              if (dir !== undefined) void shell.openPath(join(dir, 'logs'));
+            },
+            quit: () => requestQuit('tray'),
+          }),
+        ),
+      );
+    };
+    rebuildTray();
     tray.on('click', showWindow);
 
     controller = new DesktopController({
       readStatus: () => launcher.readStatus(target),
-      startLauncher: (port, on) => launcher.startLauncher(target, port, on),
+      startLauncher: (port, on, share) => launcher.startLauncher(target, port, on, undefined, share),
       requestStop: () => launcher.requestStop(target),
       answers: async (address) => {
         try {

@@ -5,7 +5,10 @@ The OpenLDR desktop app. It is an Electron app that wraps the standalone launche
 stops OpenLDR through the launcher's `stop` command when you quit.
 
 The app starts its launcher with `--host 127.0.0.1`, and the window loads Studio at
-`http://127.0.0.1:<port>/studio/`. The app's own log is `desktop.log` in its own folder. `OPENLDR_DESKTOP_USER_DIR`
+`http://127.0.0.1:<port>/studio/`. The tray's **Share on the lab network** box makes the app start
+its launcher with `--share` as well. The launcher then opens an HTTPS front on port 3443 for other
+PCs, and the server itself still listens on `127.0.0.1` only. The app asks before it turns sharing
+on, saves the choice in its settings file, and restarts its launcher to apply it. The app's own log is `desktop.log` in its own folder. `OPENLDR_DESKTOP_USER_DIR`
 below names that folder. The web docs page `apps/web/src/docs/0.1.8/en/desktop-app.md`
 is the guide for people who install the app.
 

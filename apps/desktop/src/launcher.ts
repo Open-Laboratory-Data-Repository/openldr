@@ -12,10 +12,29 @@ import type { Readable } from 'node:stream';
 export type LauncherEvent =
   | { event: 'starting'; step: 'postgres' | 'server' }
   | { event: 'recovering' }
-  | { event: 'ready'; address: string }
+  | { event: 'ready'; address: string; share?: ShareInfo }
   | { event: 'stopping' }
   | { event: 'stopped'; result: 'clean' | 'forced' }
   | { event: 'error'; message: string };
+
+/**
+ * How a shared launcher says it is shared, in `status --json` and in the `ready` event. A copy of
+ * the type in apps/standalone/src/state.ts. `addresses` is empty when the PC has no network address.
+ */
+export interface ShareInfo {
+  addresses: string[];
+  fingerprint: string;
+  certFile: string;
+}
+
+/** A share as the launcher wrote it, or undefined when it is missing or malformed. */
+function parseShare(value: unknown): ShareInfo | undefined {
+  if (!isRecord(value)) return undefined;
+  if (!Array.isArray(value.addresses) || !value.addresses.every((a) => typeof a === 'string' && a !== '')) return undefined;
+  if (typeof value.fingerprint !== 'string' || value.fingerprint === '') return undefined;
+  if (typeof value.certFile !== 'string' || value.certFile === '') return undefined;
+  return { addresses: value.addresses as string[], fingerprint: value.fingerprint, certFile: value.certFile };
+}
 
 /** How to run the launcher: this program, the launcher's entry file, and a data folder when one is set. */
 export interface LauncherTarget {
@@ -38,6 +57,12 @@ function parseJson(text: string): unknown {
   }
 }
 
+/** `{ share }` for a well formed share, and nothing for any other value. */
+function shareField(value: unknown): { share?: ShareInfo } {
+  const share = parseShare(value);
+  return share ? { share } : {};
+}
+
 /** One event line, or undefined for a line that is not JSON or not one of the six shapes. */
 export function parseEventLine(line: string): LauncherEvent | undefined {
   const v = parseJson(line);
@@ -48,7 +73,8 @@ export function parseEventLine(line: string): LauncherEvent | undefined {
     case 'recovering':
       return { event: 'recovering' };
     case 'ready':
-      return typeof v.address === 'string' ? { event: 'ready', address: v.address } : undefined;
+      if (typeof v.address !== 'string') return undefined;
+      return { event: 'ready', address: v.address, ...shareField(v.share) };
     case 'stopping':
       return { event: 'stopping' };
     case 'stopped':
@@ -83,9 +109,16 @@ function dataDirArgs(t: LauncherTarget): string[] {
   return t.dataDir !== undefined ? ['--data-dir', t.dataDir] : [];
 }
 
-/** Always on 127.0.0.1, with events on descriptor 3. */
-export function startArgs(t: LauncherTarget, port: number): string[] {
-  return [t.entry, 'start', '--host', '127.0.0.1', '--port', String(port), '--events-fd', '3', ...dataDirArgs(t)];
+/**
+ * Always on 127.0.0.1, with events on descriptor 3. With `share`, the launcher also opens its
+ * HTTPS front to the lab network. The server itself still listens on 127.0.0.1 only.
+ */
+export function startArgs(t: LauncherTarget, port: number, share?: { port: number }): string[] {
+  return [
+    t.entry, 'start', '--host', '127.0.0.1', '--port', String(port), '--events-fd', '3',
+    ...dataDirArgs(t),
+    ...(share ? ['--share', '--share-port', String(share.port)] : []),
+  ];
 }
 
 /** Runs one short launcher command and collects its output. Rejects only when it cannot be run. */
@@ -121,7 +154,7 @@ export function runLauncher(
 }
 
 export type Status =
-  | { running: true; address: string; dataDir: string; host?: string }
+  | { running: true; address: string; dataDir: string; host?: string; share?: ShareInfo }
   | { running: false; dataDir?: string; busy?: string };
 
 /** Reads `status --json`. Output it cannot read, or a launcher it cannot run, gives `{ running: false }`. */
@@ -141,6 +174,7 @@ export async function readStatus(t: LauncherTarget, spawn: Spawn = nodeSpawn): P
       address: v.address,
       dataDir: v.dataDir,
       ...(typeof v.host === 'string' ? { host: v.host } : {}),
+      ...shareField(v.share),
     };
   }
   if (v.running === false) {
@@ -206,8 +240,9 @@ export function startLauncher(
   port: number,
   on: { event(e: LauncherEvent): void; stderrLine(line: string): void },
   spawn: Spawn = nodeSpawn,
+  share?: { port: number },
 ): RunningLauncher {
-  const child = spawn(t.execPath, startArgs(t, port), {
+  const child = spawn(t.execPath, startArgs(t, port, share), {
     env: launcherEnv(process.env),
     stdio: ['ignore', 'ignore', 'pipe', 'pipe'],
     windowsHide: true,
