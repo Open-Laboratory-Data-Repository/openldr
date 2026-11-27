@@ -91,6 +91,16 @@ describe('loadOrCreateShareCert', () => {
     expect((await loadOrCreateShareCert(dir, names, before)).created).toBe(false);
   });
 
+  it('makes a new one after the clock was set back before its start', async () => {
+    const dir = newDir();
+    const first = await loadOrCreateShareCert(dir, names, NOW);
+    const earlier = new Date(NOW.getTime() - 48 * 3_600_000);
+    const second = await loadOrCreateShareCert(dir, names, earlier);
+    expect(second.created).toBe(true);
+    expect(second.fingerprint).not.toBe(first.fingerprint);
+    expect(Date.parse(new X509Certificate(second.certPem).validFrom)).toBeLessThanOrEqual(earlier.getTime());
+  });
+
   it('makes a new one when a file is damaged', async () => {
     const dir = newDir();
     await loadOrCreateShareCert(dir, names, NOW);
@@ -131,6 +141,13 @@ describe('certCovers', () => {
     const n = { dns: ['localhost'], ips: ['127.0.0.1'] };
     const { certPem } = await makeCert(n, NOW, SHARE_CERT_DAYS);
     expect(certCovers(certPem, n, NOW)).toBe(true);
+  });
+
+  it('is false before the certificate starts to be valid', async () => {
+    // A PC whose clock was set back. Another PC would refuse this certificate.
+    const n = { dns: ['localhost'], ips: ['127.0.0.1'] };
+    const { certPem } = await makeCert(n, NOW, SHARE_CERT_DAYS);
+    expect(certCovers(certPem, n, new Date(NOW.getTime() - 48 * 3_600_000))).toBe(false);
   });
 
   it('is false when a name or an address is missing', async () => {

@@ -73,10 +73,12 @@ function parse(certPem: string): X509Certificate | undefined {
   }
 }
 
-/** False when the certificate expires within SHARE_RENEW_DAYS of `now`, or lacks one of the names. */
+/** False when the certificate is not valid yet, expires within SHARE_RENEW_DAYS of `now`, or lacks one of the names. */
 export function certCovers(certPem: string, names: ShareNames, now: Date): boolean {
   const x = parse(certPem);
   if (x === undefined) return false;
+  // Not valid yet: the clock was set back since it was made. Another PC would refuse it.
+  if (Date.parse(x.validFrom) > now.getTime()) return false;
   if (Date.parse(x.validTo) - now.getTime() < SHARE_RENEW_DAYS * DAY_MS) return false;
   // subject: 'never' reads the names from subjectAltName only, as a browser does.
   if (!names.dns.every((n) => x.checkHost(n, { subject: 'never' }) !== undefined)) return false;
