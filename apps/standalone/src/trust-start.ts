@@ -9,7 +9,7 @@
 // Only Linux is tested. Signals and descriptor passing are unproven on Windows and macOS.
 
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { accessSync, constants as fsConstants, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { constants as osConstants } from 'node:os';
 import { dirname, resolve } from 'node:path';
 
@@ -35,10 +35,23 @@ export function ensureTrustFile(trustFile: string): void {
   try {
     // Certificates are public, and the file is read by Node whoever started it.
     writeFileSync(trustFile, '', { flag: 'wx', mode: 0o644 });
+    return;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
   }
+  // Something is there already. It must be a file Node can read, not a folder of that name.
+  let usable = false;
+  try {
+    usable = statSync(trustFile).isFile();
+    if (usable) accessSync(trustFile, fsConstants.R_OK);
+  } catch {
+    usable = false;
+  }
+  if (!usable) throw new Error(`${trustFile} is not a file that can be read. OpenLDR keeps its trusted certificates there.`);
 }
+
+/** The highest events descriptor the launcher passes on. One slot is made for each number up to it. */
+export const MAX_EVENTS_FD = 1023;
 
 type SignalSource = { on(signal: string, listener: () => void): unknown; off(signal: string, listener: () => void): unknown };
 
@@ -46,8 +59,10 @@ type SignalSource = { on(signal: string, listener: () => void): unknown; off(sig
  * Starts this program again with the same arguments, NODE_EXTRA_CA_CERTS set, and
  * OPENLDR_TRUST_RESTARTED=1. Standard input, output and error go straight through, and so does the
  * events descriptor, at the same number. SIGINT and SIGTERM are passed on to the child, which owns
- * the stop: this process starts nothing else and only waits. Resolves with the child's exit code,
- * 128 plus the signal number when a signal ended it, and 1 when it could not be run.
+ * the stop: this process starts nothing else and only waits. So is SIGHUP, which the launcher
+ * takes as a stop when its terminal closes. Resolves with the child's exit code, 128 plus the
+ * signal number when a signal ended it, and 1 when it could not be run. Rejects, before anything
+ * is started, for an events descriptor it cannot pass on.
  */
 export function startAgain(input: {
   trustFile: string;
@@ -61,6 +76,10 @@ export function startAgain(input: {
   /** Tests: do not show the child's standard error. */
   quiet?: boolean;
 }): Promise<number> {
+  const { eventsFd } = input;
+  if (eventsFd !== undefined && (!Number.isInteger(eventsFd) || eventsFd < 3 || eventsFd > MAX_EVENTS_FD)) {
+    return Promise.reject(new Error(`--events-fd must be a whole number from 3 to ${MAX_EVENTS_FD}.`));
+  }
   const signals = input.signals ?? (process as unknown as SignalSource);
   // Descriptors 0 to 2, then nothing up to the events descriptor, which the child gets as it is.
   const stdio: Array<'inherit' | 'ignore' | number> = ['inherit', 'inherit', input.quiet ? 'ignore' : 'inherit'];
@@ -74,15 +93,17 @@ export function startAgain(input: {
       stdio,
       windowsHide: true,
     });
-    const pass = { SIGINT: () => void child.kill('SIGINT'), SIGTERM: () => void child.kill('SIGTERM') };
-    signals.on('SIGINT', pass.SIGINT);
-    signals.on('SIGTERM', pass.SIGTERM);
+    // The three signals the launcher itself takes as a stop (STOP_SIGNALS in commands.ts).
+    const passed = (['SIGINT', 'SIGTERM', 'SIGHUP'] as const).map((signal) => {
+      const listener = (): void => void child.kill(signal);
+      signals.on(signal, listener);
+      return { signal, listener };
+    });
     let settled = false;
     const finish = (code: number): void => {
       if (settled) return;
       settled = true;
-      signals.off('SIGINT', pass.SIGINT);
-      signals.off('SIGTERM', pass.SIGTERM);
+      for (const p of passed) signals.off(p.signal, p.listener);
       done(code);
     };
     child.on('error', () => finish(1));

@@ -3,7 +3,7 @@
 // or kills a child: it stops OpenLDR by running `stop` and waiting.
 
 import { spawn as nodeSpawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { accessSync, constants as fsConstants, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Readable } from 'node:stream';
 
@@ -132,7 +132,15 @@ function ensureTrustFile(trustFile: string): boolean {
     writeFileSync(trustFile, '', { flag: 'wx', mode: 0o644 });
     return true;
   } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EEXIST';
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return false;
+  }
+  // Something is there already. It must be a file Node can read, not a folder of that name.
+  try {
+    if (!statSync(trustFile).isFile()) return false;
+    accessSync(trustFile, fsConstants.R_OK);
+    return true;
+  } catch {
+    return false;
   }
 }
 

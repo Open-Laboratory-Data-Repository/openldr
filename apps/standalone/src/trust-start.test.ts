@@ -1,9 +1,9 @@
 import { EventEmitter } from 'node:events';
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ensureTrustFile, startAgain, trustStart, TRUST_RESTARTED } from './trust-start.js';
+import { ensureTrustFile, MAX_EVENTS_FD, startAgain, trustStart, TRUST_RESTARTED } from './trust-start.js';
 
 const dir = (): string => mkdtempSync(join(tmpdir(), 'trust-start-'));
 
@@ -51,6 +51,25 @@ describe('ensureTrustFile', () => {
     ensureTrustFile(file);
     ensureTrustFile(file);
     expect(readFileSync(file, 'utf8')).toBe('kept');
+  });
+});
+
+describe('ensureTrustFile, when something else is in the way', () => {
+  it('refuses a folder where the file should be', () => {
+    const file = join(dir(), 'trust', 'ca.pem');
+    mkdirSync(file, { recursive: true });
+    expect(() => ensureTrustFile(file)).toThrow('is not a file that can be read');
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('refuses a file that cannot be read', () => {
+    const file = join(dir(), 'ca.pem');
+    writeFileSync(file, 'x');
+    chmodSync(file, 0o000);
+    try {
+      expect(() => ensureTrustFile(file)).toThrow('is not a file that can be read');
+    } finally {
+      chmodSync(file, 0o644);
+    }
   });
 });
 
@@ -106,6 +125,18 @@ describe('startAgain', () => {
     }
   });
 
+  it('refuses an events descriptor it cannot pass on, at once and without starting anything', async () => {
+    const d = dir();
+    const ran = join(d, 'ran');
+    const child = script(`require('node:fs').writeFileSync(${JSON.stringify(ran)}, '');`);
+    for (const fd of [MAX_EVENTS_FD + 1, Number.MAX_SAFE_INTEGER, 2, 3.5]) {
+      const started = Date.now();
+      await expect(startAgain({ trustFile: join(d, 'ca.pem'), argv: [child], eventsFd: fd })).rejects.toThrow('--events-fd');
+      expect(Date.now() - started).toBeLessThan(500);
+    }
+    expect(existsSync(ran)).toBe(false);
+  });
+
   it('gives the child no events descriptor when there is none', async () => {
     const child = script(`try { require('node:fs').writeSync(3, 'x'); process.exit(4); } catch { process.exit(0); }`);
     expect(await startAgain({ trustFile: join(dir(), 'ca.pem'), argv: [child], eventsFd: undefined })).toBe(0);
@@ -121,8 +152,8 @@ describe('startAgain', () => {
     expect(await startAgain({ trustFile: join(dir(), 'ca.pem'), argv: [script('')], eventsFd: undefined, execPath: join(dir(), 'no-such-node') })).toBe(1);
   });
 
-  it.skipIf(process.platform === 'win32')('passes SIGTERM and SIGINT to the child, which owns the stop', async () => {
-    for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  it.skipIf(process.platform === 'win32')('passes SIGTERM, SIGINT and SIGHUP to the child, which owns the stop', async () => {
+    for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const) {
       const d = dir();
       const ready = join(d, 'ready');
       const child = script(
@@ -136,7 +167,7 @@ describe('startAgain', () => {
       signals.emit(signal);
       expect(await done).toBe(9);
       // Its listeners are gone once the child has ended.
-      expect(signals.listenerCount('SIGTERM') + signals.listenerCount('SIGINT')).toBe(0);
+      expect(signals.listenerCount('SIGTERM') + signals.listenerCount('SIGINT') + signals.listenerCount('SIGHUP')).toBe(0);
     }
   });
 

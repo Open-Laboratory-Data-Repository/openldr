@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -349,6 +349,12 @@ describe('the trust file', () => {
     startLauncher(target, 3990, { event: () => {}, stderrLine: () => {} }, spawn as unknown as Spawn, undefined, join(dir, 'trust', 'ca.pem'));
     const options = (spawn.mock.calls[0] as unknown as [string, string[], { env: NodeJS.ProcessEnv }])[2];
     expect(options.env).toEqual(launcherEnv(process.env));
+    // A folder where the file itself should be is not a trust file either.
+    const other = mkdtempSync(join(tmpdir(), 'desktop-trust-'));
+    mkdirSync(join(other, 'trust', 'ca.pem'), { recursive: true });
+    startLauncher(target, 3990, { event: () => {}, stderrLine: () => {} }, spawn as unknown as Spawn, undefined, join(other, 'trust', 'ca.pem'));
+    expect((spawn.mock.calls[1] as unknown as [string, string[], { env: NodeJS.ProcessEnv }])[2].env).toEqual(launcherEnv(process.env));
+    rmSync(other, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
   });
 });

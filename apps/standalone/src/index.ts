@@ -64,7 +64,14 @@ async function start(opts: { dataDir?: string; port: number; host: string; event
   }
   if (trust === 'again') {
     // Nothing has been started here. The second process is the launcher, and owns the stop.
-    process.exit(await startAgain({ trustFile, argv: process.argv.slice(1), eventsFd: opts.eventsFd }));
+    let code: number;
+    try {
+      code = await startAgain({ trustFile, argv: process.argv.slice(1), eventsFd: opts.eventsFd });
+    } catch (err) {
+      printError(messageOf(err));
+      code = 2;
+    }
+    process.exit(code);
   }
 
   const signals = handleSignals({ source: process, print, exit: (code) => process.exit(code) });
