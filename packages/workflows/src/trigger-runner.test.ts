@@ -460,45 +460,50 @@ describe('heldSummary', () => {
 });
 
 describe('armWorkflowSchedule', () => {
-  const row = { workflowId: 'w1', nodeId: 's', cron: '*/5 * * * *', tz: 'UTC' };
-  function store() {
-    const state = { nextDueAt: null as string | null, cleared: [] as string[] };
+  const row = { workflowId: 'w1', nodeId: 's', cron: '* * * * *', tz: 'UTC' };
+  /** Records the order of the two steps, and the stored time. */
+  function world(publish?: () => Promise<void>) {
+    const steps: string[] = [];
+    const state = { nextDueAt: null as string | null };
+    const published: Array<{ payload: { dueAt: string }; availableAt?: Date }> = [];
     return {
-      state,
-      api: {
-        setNextDue: async (_w: string, _n: string, at: string | null) => { state.nextDueAt = at; },
-        // As the real store: takes the time off only when it is still the one named.
-        claimDue: async (_w: string, _n: string, dueAt: string | null) => {
-          if (dueAt === null || state.nextDueAt !== dueAt) return false;
-          state.cleared.push(dueAt); state.nextDueAt = null; return true;
-        },
-      },
+      steps, state, published,
+      schedules: { setNextDue: async (_w: string, _n: string, at: string | null) => { steps.push('store'); state.nextDueAt = at; } },
+      bus: { publish: async (e: { payload: { dueAt: string } }, o?: { availableAt?: Date }) => { steps.push('queue'); if (publish) await publish(); published.push({ payload: e.payload, availableAt: o?.availableAt }); } },
     };
   }
 
-  it('stores the next time and queues a run that names it', async () => {
-    const ev = fakeEventing();
-    const s = store();
-    await armWorkflowSchedule(s.api, ev.port as never, row);
-    expect(s.state.nextDueAt).not.toBeNull();
-    expect(ev.published).toHaveLength(1);
-    expect(ev.published[0].payload).toEqual({ workflowId: 'w1', nodeId: 's', dueAt: s.state.nextDueAt });
-    expect(ev.published[0].availableAt?.toISOString()).toBe(s.state.nextDueAt);
+  it('queues a run that names its time, then stores that time', async () => {
+    const w = world();
+    await armWorkflowSchedule(w.schedules, w.bus as never, row);
+    expect(w.steps).toEqual(['queue', 'store']);
+    expect(w.state.nextDueAt).not.toBeNull();
+    expect(w.published[0].payload).toEqual({ workflowId: 'w1', nodeId: 's', dueAt: w.state.nextDueAt });
+    expect(w.published[0].availableAt?.toISOString()).toBe(w.state.nextDueAt);
   });
 
-  it('when the run cannot be queued, takes the time off again and says so', async () => {
-    const s = store();
-    const bus = { publish: async () => { throw new Error('queue is away'); } };
-    await expect(armWorkflowSchedule(s.api, bus as never, row)).rejects.toThrow('queue is away');
-    // A stored time with no queued run would look armed, and a start before that time would skip it.
-    expect(s.state.nextDueAt).toBeNull();
-    expect(s.state.cleared).toHaveLength(1);
+  it('when the run cannot be queued, stores nothing and says so', async () => {
+    const w = world(async () => { throw new Error('queue is away'); });
+    await expect(armWorkflowSchedule(w.schedules, w.bus as never, row)).rejects.toThrow('queue is away');
+    // Nothing looks armed that has no queued run.
+    expect(w.steps).toEqual(['queue']);
+    expect(w.state.nextDueAt).toBeNull();
   });
 
-  it('takes off only its own time: one armed by another save meanwhile stays', async () => {
-    const s = store();
-    const bus = { publish: async () => { s.state.nextDueAt = '2099-01-01T00:00:00.000Z'; throw new Error('queue is away'); } };
-    await expect(armWorkflowSchedule(s.api, bus as never, row)).rejects.toThrow('queue is away');
-    expect(s.state.nextDueAt).toBe('2099-01-01T00:00:00.000Z');
+  it('a failed arm leaves alone a time that another arm stored, the same time included', async () => {
+    // Two arms overlap and pick the same minute. The other one queued its run and stored the time.
+    const w = world(async () => { throw new Error('queue is away'); });
+    w.state.nextDueAt = '2026-01-01T10:01:00.000Z';
+    await expect(armWorkflowSchedule(w.schedules, w.bus as never, row, () => new Date('2026-01-01T10:00:10.000Z'))).rejects.toThrow('queue is away');
+    expect(w.state.nextDueAt).toBe('2026-01-01T10:01:00.000Z');
+  });
+
+  it('never arms for a time under 2 seconds away, so the time is stored before the run can start', async () => {
+    const far = world();
+    await armWorkflowSchedule(far.schedules, far.bus as never, row, () => new Date('2026-01-01T10:00:57.000Z'));
+    expect(far.state.nextDueAt).toBe('2026-01-01T10:01:00.000Z');
+    const near = world();
+    await armWorkflowSchedule(near.schedules, near.bus as never, row, () => new Date('2026-01-01T10:00:58.500Z'));
+    expect(near.state.nextDueAt).toBe('2026-01-01T10:02:00.000Z');
   });
 });

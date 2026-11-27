@@ -11,11 +11,11 @@ import type { EventingPort } from '@openldr/ports';
  * - Only this workflow's rows are touched. Another workflow that is due keeps its stored time, so
  *   its queued run can still claim it.
  * - The workflow itself is already saved. When a run cannot be queued, this warns and returns;
- *   the row is left with no time, and the next start or save arms it.
+ *   the row keeps no time, and the next start or save arms it.
  */
 export async function syncWorkflowSchedules(
   deps: {
-    schedules: Pick<WorkflowScheduleStore, 'upsert' | 'removeForWorkflow' | 'setNextDue' | 'claimDue'>;
+    schedules: Pick<WorkflowScheduleStore, 'upsert' | 'removeForWorkflow' | 'setNextDue'>;
     eventing: Pick<EventingPort, 'publish'>;
     logger: { warn(obj: unknown, msg: string): void };
   },

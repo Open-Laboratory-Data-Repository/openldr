@@ -74,31 +74,33 @@ export interface WorkflowTriggerRunner {
   runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<RunOutcome | null>;
 }
 
+/** A run is never armed for a time closer than this. See armWorkflowSchedule. */
+const ARM_LEAD_MS = 2_000;
+
 /**
- * Arms one schedule: stores its next time and queues the run for then. The queued run names that
- * time, and must claim it before it starts the workflow (claimDue). The runner calls this after
- * each run and at start; a save calls it for the schedule it just stored (bootstrap
+ * Arms one schedule: queues the run for its next time, then stores that time. The queued run
+ * names the time, and must claim it before it starts the workflow (claimDue). The runner calls
+ * this after each run and at start; a save calls it for the schedule it just stored (bootstrap
  * syncWorkflowSchedules), so that schedule needs no restart.
  *
- * When the run cannot be queued, the time stored here is taken off again (only that one) and the
- * error is thrown. A stored time with no queued run would look armed, and a start before that
- * time would skip it.
+ * Queue first, store second. When the run cannot be queued, nothing is stored and the error is
+ * thrown, so a row never looks armed without a queued run, and nothing has to be undone. Undoing
+ * would be unsafe: another arm of the same schedule may have stored the same time for a run it
+ * did queue. A run that is queued but whose time is then not stored claims nothing and is dropped.
+ *
+ * The time is at least 2 seconds away, so it is stored before the queued run can start. A time
+ * closer than that is passed over for the one after it.
  */
 export async function armWorkflowSchedule(
-  schedules: Pick<WorkflowScheduleStore, 'setNextDue' | 'claimDue'>,
+  schedules: Pick<WorkflowScheduleStore, 'setNextDue'>,
   eventing: Pick<EventingPort, 'publish'>,
   s: { workflowId: string; nodeId: string; cron: string; tz: string | null },
+  now: () => Date = () => new Date(),
 ): Promise<void> {
-  const due = nextCronDate(s.cron, s.tz, new Date());
+  const due = nextCronDate(s.cron, s.tz, new Date(now().getTime() + ARM_LEAD_MS));
   const dueAt = due.toISOString();
+  await eventing.publish({ type: SCHEDULE_DUE, payload: { workflowId: s.workflowId, nodeId: s.nodeId, dueAt } }, { availableAt: due });
   await schedules.setNextDue(s.workflowId, s.nodeId, dueAt);
-  try {
-    await eventing.publish({ type: SCHEDULE_DUE, payload: { workflowId: s.workflowId, nodeId: s.nodeId, dueAt } }, { availableAt: due });
-  } catch (err) {
-    // Only the time stored above. One a concurrent save armed meanwhile has its own queued run.
-    await schedules.claimDue(s.workflowId, s.nodeId, dueAt, dueAt).catch(() => {});
-    throw err;
-  }
 }
 
 export async function executeWorkflowRun(
