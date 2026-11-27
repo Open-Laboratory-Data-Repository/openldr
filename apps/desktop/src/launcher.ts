@@ -3,6 +3,8 @@
 // or kills a child: it stops OpenLDR by running `stop` and waiting.
 
 import { spawn as nodeSpawn } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { Readable } from 'node:stream';
 
 /**
@@ -100,9 +102,38 @@ export function lineSplitter(onLine: (line: string) => void): (chunk: string) =>
   };
 }
 
-/** The base environment plus ELECTRON_RUN_AS_NODE=1. The base is not changed. */
-export function launcherEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return { ...base, ELECTRON_RUN_AS_NODE: '1' };
+/**
+ * The base environment plus ELECTRON_RUN_AS_NODE=1. The base is not changed.
+ *
+ * With `trustFile`, the launcher's Node is started reading that file of extra trusted
+ * certificates, so the launcher does not have to start itself a second time for it. A
+ * NODE_EXTRA_CA_CERTS the person set is kept: the list is then theirs, and read-only in the app.
+ */
+export function launcherEnv(base: NodeJS.ProcessEnv, trustFile?: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...base, ELECTRON_RUN_AS_NODE: '1' };
+  if (trustFile !== undefined && !base.NODE_EXTRA_CA_CERTS) env.NODE_EXTRA_CA_CERTS = trustFile;
+  return env;
+}
+
+/** The launcher's trust file in a data folder. A copy of `pathsFor(...).trustFile` in apps/standalone/src/state.ts. */
+export function trustFileIn(dataDir: string): string {
+  return join(dataDir, 'trust', 'ca.pem');
+}
+
+/** Makes the folder and an empty file when missing, and never changes a file that is there. False when it cannot. */
+function ensureTrustFile(trustFile: string): boolean {
+  try {
+    mkdirSync(dirname(trustFile), { recursive: true });
+  } catch {
+    // Something that is not a folder is in the way.
+    return false;
+  }
+  try {
+    writeFileSync(trustFile, '', { flag: 'wx', mode: 0o644 });
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EEXIST';
+  }
 }
 
 function dataDirArgs(t: LauncherTarget): string[] {
@@ -241,9 +272,15 @@ export function startLauncher(
   on: { event(e: LauncherEvent): void; stderrLine(line: string): void },
   spawn: Spawn = nodeSpawn,
   share?: { port: number },
+  /**
+   * The trust file in the data folder, when the app knows the folder. The launcher's Node is then
+   * started reading it. Without it, or when the file cannot be made here, the launcher sets it up
+   * itself by starting a second time (apps/standalone/src/trust-start.ts).
+   */
+  trustFile?: string,
 ): RunningLauncher {
   const child = spawn(t.execPath, startArgs(t, port, share), {
-    env: launcherEnv(process.env),
+    env: launcherEnv(process.env, trustFile !== undefined && ensureTrustFile(trustFile) ? trustFile : undefined),
     stdio: ['ignore', 'ignore', 'pipe', 'pipe'],
     windowsHide: true,
     // Detached, so the launcher outlives the app on every system: on Windows a child that is not

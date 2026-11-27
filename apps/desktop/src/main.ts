@@ -362,7 +362,11 @@ function main(): void {
 
     controller = new DesktopController({
       readStatus: () => launcher.readStatus(target),
-      startLauncher: (port, on, share) => launcher.startLauncher(target, port, on, undefined, share),
+      startLauncher: (port, on, share) => {
+        // Known once the launcher's status has been read, which happens before any start.
+        const dir = controller?.dataDir() ?? target.dataDir;
+        return launcher.startLauncher(target, port, on, undefined, share, dir !== undefined ? launcher.trustFileIn(dir) : undefined);
+      },
       requestStop: () => launcher.requestStop(target),
       answers: async (address) => {
         try {

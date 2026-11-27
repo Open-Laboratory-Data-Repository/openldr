@@ -7,6 +7,7 @@ import {
   USAGE,
   UsageError,
   cliEntryFile,
+  dataPaths,
   handleSignals,
   launcherFiles,
   parseCommandLine,
@@ -18,6 +19,7 @@ import {
 } from './commands.js';
 import { eventSink } from './events.js';
 import { startPostgres, stopLeftoverPostgres } from './postgres.js';
+import { ensureTrustFile, startAgain, trustStart, TRUST_RESTARTED } from './trust-start.js';
 
 // After a hangup (the terminal was closed) writes to the terminal fail. A failed write must not
 // end the process before the stop has finished: the stop closes the server, waits for Postgres
@@ -48,8 +50,27 @@ function messageOf(err: unknown): string {
 }
 
 async function start(opts: { dataDir?: string; port: number; host: string; eventsFd?: number; share?: { port: number } }): Promise<void> {
+  // First of all, before the control socket, the lock and Postgres: is this process's Node reading
+  // the trust file? Node reads it only when a process starts (trust-start.ts).
+  const { trustFile } = dataPaths(opts.dataDir);
+  const trust = trustStart({ trustFile, envValue: process.env.NODE_EXTRA_CA_CERTS, alreadyRestarted: process.env[TRUST_RESTARTED] === '1' });
+  if (trust !== 'outside') {
+    try {
+      ensureTrustFile(trustFile);
+    } catch (err) {
+      printError(messageOf(err));
+      process.exit(1);
+    }
+  }
+  if (trust === 'again') {
+    // Nothing has been started here. The second process is the launcher, and owns the stop.
+    process.exit(await startAgain({ trustFile, argv: process.argv.slice(1), eventsFd: opts.eventsFd }));
+  }
+
   const signals = handleSignals({ source: process, print, exit: (code) => process.exit(code) });
-  const { eventsFd, ...startOpts } = opts;
+  const { eventsFd, ...rest } = opts;
+  // With 'outside', the person named a file of their own, and the list is read-only.
+  const startOpts = trust === 'go' ? { ...rest, trustFile } : rest;
   // A program that runs the launcher reads these. A failed write is ignored, so a reader that has
   // gone cannot end the launcher.
   const emit = eventsFd === undefined ? undefined : eventSink(eventsFd);

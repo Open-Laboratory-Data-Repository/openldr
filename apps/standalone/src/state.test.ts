@@ -119,6 +119,7 @@ describe('folders and state file', () => {
       stateFile: '/d/standalone.json',
       lockFile: '/d/standalone.lock',
       shareDir: '/d/share',
+      trustFile: '/d/trust/ca.pem',
       versionFile: '/d/last-version.json',
       serverLog: '/d/logs/server.log',
       postgresLog: '/d/logs/postgres.log',

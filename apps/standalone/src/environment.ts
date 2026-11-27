@@ -24,6 +24,12 @@ export interface EnvironmentInput {
    * nowhere else, and serves this certificate to whoever may download it.
    */
   share?: { certFile: string };
+  /**
+   * Set when this launcher's Node was started with NODE_EXTRA_CA_CERTS naming this file
+   * (trust-start.ts). The server then manages the list of trusted certificates in it. Left out
+   * when the person set that variable to a file of their own: the list is then read-only.
+   */
+  trustFile?: string;
 }
 
 /**
@@ -75,6 +81,7 @@ export function buildEnvironment(input: EnvironmentInput): Record<string, string
     // the default registry whenever the registry list is empty, so a list someone changed stays theirs.
     MARKETPLACE_REGISTRY_URL: PUBLIC_MARKETPLACE_URL,
     ...(input.share ? { TRUST_PROXY: '127.0.0.1', TLS_CERT_PATH: input.share.certFile } : {}),
+    ...(input.trustFile !== undefined ? { TRUSTED_CA_FILE: input.trustFile } : {}),
   };
 }
 
@@ -101,6 +108,7 @@ function check(input: EnvironmentInput): void {
     ['studioDist', input.studioDist],
     ['cliEntry', input.cliEntry],
     ...(input.share ? [['share.certFile', input.share.certFile] as [string, string]] : []),
+    ...(input.trustFile !== undefined ? [['trustFile', input.trustFile] as [string, string]] : []),
   ];
   for (const [field, value] of absolute) {
     if (!isAbsolute(value)) refuse(field, 'must be an absolute path');
