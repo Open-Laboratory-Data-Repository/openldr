@@ -75,11 +75,15 @@ export const TRANSPORT_STATUS = 599;
 /** Why a plugin's network call got no answer. */
 export type TransportReason = 'timeout' | 'certificate' | 'unreachable';
 
-/** How long one network call of a plugin may take: 10 seconds, or 2 seconds less than the whole
- *  call may take when that is lower, and never under 1 second. The plugin must get its answer
- *  while it still has time to act on it. */
-export function egressLimitMs(callLimitMs: number): number {
-  return Math.max(1_000, Math.min(10_000, callLimitMs - 2_000));
+/**
+ * How long the next network call of one plugin call may take: 10 seconds, or what is left of the
+ * whole call less 2 seconds, when that is lower. Zero when nothing is left. All the network calls
+ * of one plugin call share this, so however many it makes, the plugin has its last answer 2
+ * seconds before CE would stop it, and can still record what happened.
+ */
+export function egressBudget(callLimitMs: number, now: () => number = Date.now): () => number {
+  const end = now() + callLimitMs - 2_000;
+  return () => Math.max(0, Math.min(10_000, end - now()));
 }
 
 const CERTIFICATE_CODES = /CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ERR_TLS/;
@@ -105,9 +109,14 @@ function transportReason(err: unknown, timedOut: boolean): TransportReason {
  * could never record why, and a server that did not answer held the call until CE stopped it.
  * A real answer is handed on as it is, a server's own 5xx included.
  */
-export function withTransportAnswer(base: typeof fetch, limitMs: number): typeof fetch {
+export function withTransportAnswer(base: typeof fetch, limitMs: () => number): typeof fetch {
+  const answer = (reason: TransportReason): Response =>
+    new Response(JSON.stringify({ openldr: { transport: reason } }), { status: TRANSPORT_STATUS, headers: { 'content-type': 'application/json' } });
   return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-    const limit = AbortSignal.timeout(limitMs);
+    const ms = limitMs();
+    // Nothing left of the call's time: do not start a request that cannot finish.
+    if (ms <= 0) return answer('timeout');
+    const limit = AbortSignal.timeout(ms);
     try {
       const res = await base(input, { ...init, signal: limit });
       // The body is read here, under the same limit. Read later, a stalled body would throw in
@@ -116,8 +125,7 @@ export function withTransportAnswer(base: typeof fetch, limitMs: number): typeof
       const empty = res.status === 204 || res.status === 205 || res.status === 304;
       return new Response(empty ? null : body, { status: res.status, statusText: res.statusText, headers: res.headers });
     } catch (err) {
-      const reason = transportReason(err, limit.aborted);
-      return new Response(JSON.stringify({ openldr: { transport: reason } }), { status: TRANSPORT_STATUS, headers: { 'content-type': 'application/json' } });
+      return answer(transportReason(err, limit.aborted));
     }
   }) as typeof fetch;
 }
@@ -231,7 +239,7 @@ export function createExtismRunner(runnerOpts: { execArgv?: readonly string[] } 
           config: opts.config ?? {},
           allowedHosts: opts.allowedHosts ?? [],
           // Every HTTP call a plugin makes goes through this. See withoutRedirects.
-          fetch: withTransportAnswer(withoutRedirects(fetch), egressLimitMs(opts.timeoutMs)),
+          fetch: withTransportAnswer(withoutRedirects(fetch), egressBudget(opts.timeoutMs)),
           functions: {
             'extism:host/env': {
               // On the worker path the SDK's HttpContext overrides http_request +

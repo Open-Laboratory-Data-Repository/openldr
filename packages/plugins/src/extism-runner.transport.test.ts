@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { createServer as createTlsServer } from 'node:https';
 import { createServer as createTcpServer } from 'node:net';
-import { TRANSPORT_STATUS, withTransportAnswer, withoutRedirects, egressLimitMs } from './extism-runner';
+import { TRANSPORT_STATUS, withTransportAnswer, withoutRedirects, egressBudget } from './extism-runner';
 import { TEST_CERT, TEST_KEY } from './egress-test-cert.fixtures';
 
 const port = (s: { address(): unknown }) => (s.address() as { port: number }).port;
@@ -19,7 +19,7 @@ describe('withTransportAnswer', () => {
     await listening(server);
     try {
       const started = Date.now();
-      const res = await withTransportAnswer(fetch, 300)(`http://127.0.0.1:${port(server)}/x`, { method: 'POST', body: 'x' });
+      const res = await withTransportAnswer(fetch, () => 300)(`http://127.0.0.1:${port(server)}/x`, { method: 'POST', body: 'x' });
       expect(await read(res)).toEqual(said('timeout'));
       expect(Date.now() - started).toBeLessThan(2000);
     } finally { await closed(server); }
@@ -29,14 +29,14 @@ describe('withTransportAnswer', () => {
     const server: Server = createServer((_req, res) => { res.writeHead(200, { 'content-type': 'text/plain' }); res.write('part'); /* never ends */ });
     await listening(server);
     try {
-      const res = await withTransportAnswer(fetch, 300)(`http://127.0.0.1:${port(server)}/x`, {});
+      const res = await withTransportAnswer(fetch, () => 300)(`http://127.0.0.1:${port(server)}/x`, {});
       expect(await read(res)).toEqual(said('timeout'));
     } finally { await closed(server); }
   });
 
   it('nothing listening: unreachable', async () => {
     const tcp = createTcpServer(); await listening(tcp); const free = port(tcp); await closed(tcp);
-    const res = await withTransportAnswer(fetch, 2000)(`http://127.0.0.1:${free}/x`, {});
+    const res = await withTransportAnswer(fetch, () => 2000)(`http://127.0.0.1:${free}/x`, {});
     expect(await read(res)).toEqual(said('unreachable'));
   });
 
@@ -44,14 +44,14 @@ describe('withTransportAnswer', () => {
     const server = createTlsServer({ cert: TEST_CERT, key: TEST_KEY }, (_req, res) => { res.writeHead(200); res.end('never read'); });
     await listening(server);
     try {
-      const res = await withTransportAnswer(fetch, 2000)(`https://127.0.0.1:${port(server)}/x`, {});
+      const res = await withTransportAnswer(fetch, () => 2000)(`https://127.0.0.1:${port(server)}/x`, {});
       expect(await read(res)).toEqual(said('certificate'));
     } finally { await closed(server); }
   });
 
   it('says nothing but the reason: no address, no error text', async () => {
     const tcp = createTcpServer(); await listening(tcp); const free = port(tcp); await closed(tcp);
-    const res = await withTransportAnswer(fetch, 2000)(`http://127.0.0.1:${free}/secret-path?token=abc`, { headers: { authorization: 'Bearer secret' } });
+    const res = await withTransportAnswer(fetch, () => 2000)(`http://127.0.0.1:${free}/secret-path?token=abc`, { headers: { authorization: 'Bearer secret' } });
     const body = await res.text();
     expect(body).toBe('{"openldr":{"transport":"unreachable"}}');
     expect([...res.headers.keys()].sort()).toEqual(['content-type']);
@@ -61,7 +61,7 @@ describe('withTransportAnswer', () => {
     const server: Server = createServer((_req, res) => { res.writeHead(503, { 'content-type': 'application/json', 'x-kept': 'yes' }); res.end('{"down":true}'); });
     await listening(server);
     try {
-      const res = await withTransportAnswer(fetch, 2000)(`http://127.0.0.1:${port(server)}/x`, {});
+      const res = await withTransportAnswer(fetch, () => 2000)(`http://127.0.0.1:${port(server)}/x`, {});
       expect(res.headers.get('x-kept')).toBe('yes');
       expect(await read(res)).toEqual({ status: 503, body: '{"down":true}' });
     } finally { await closed(server); }
@@ -71,21 +71,37 @@ describe('withTransportAnswer', () => {
     const server: Server = createServer((_req, res) => { res.writeHead(302, { location: 'http://127.0.0.1:9/elsewhere' }); res.end(); });
     await listening(server);
     try {
-      const res = await withTransportAnswer(withoutRedirects(fetch), 2000)(`http://127.0.0.1:${port(server)}/x`, {});
+      const res = await withTransportAnswer(withoutRedirects(fetch), () => 2000)(`http://127.0.0.1:${port(server)}/x`, {});
       expect(res.status).toBe(302);
     } finally { await closed(server); }
   });
 });
 
-describe('egressLimitMs', () => {
-  it('is 10 seconds for a long call, and 2 seconds under the limit of a short one', () => {
-    expect(egressLimitMs(60_000)).toBe(10_000);
-    expect(egressLimitMs(15_000)).toBe(10_000);
-    expect(egressLimitMs(8_000)).toBe(6_000);
+describe('egressBudget', () => {
+  it('gives each call 10 seconds while the whole call has that much left, less 2 seconds', () => {
+    let now = 0;
+    const left = egressBudget(60_000, () => now);
+    expect(left()).toBe(10_000);
+    now = 50_000;
+    expect(left()).toBe(8_000);
   });
-  it('never goes under 1 second', () => {
-    expect(egressLimitMs(2_500)).toBe(1_000);
-    expect(egressLimitMs(500)).toBe(1_000);
+
+  it('a second call gets only what the first left, so the plugin is back in time to record it', () => {
+    let now = 0;
+    const left = egressBudget(15_000, () => now);
+    expect(left()).toBe(10_000);
+    now = 10_000; // the first call used its whole limit
+    expect(left()).toBe(3_000);
+    now = 13_500;
+    expect(left()).toBe(0);
+  });
+
+  it('with nothing left the call is not made, and the plugin gets a timeout answer at once', async () => {
+    let called = 0;
+    const base = (async () => { called++; return new Response('x'); }) as typeof fetch;
+    const res = await withTransportAnswer(base, () => 0)('http://127.0.0.1:9/x', {});
+    expect(await read(res)).toEqual(said('timeout'));
+    expect(called).toBe(0);
   });
 });
 
