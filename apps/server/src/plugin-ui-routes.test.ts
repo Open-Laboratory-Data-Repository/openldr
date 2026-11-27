@@ -256,4 +256,41 @@ describe('plugin-ui routes: sites', () => {
     const body = await list(ctxWith([sited({ version: '2.0.0' }), sited({ version: '1.0.0', active: false })]));
     expect(body.map((p: any) => `${p.id}@${p.version}`)).toEqual(['sited@2.0.0']);
   });
+
+  describe('devices.serial', () => {
+    const ui = { entry: 'ui.html', sha256: 'x', nav: { label: 'Analyzer', icon: 'plug', section: 'apps' }, uiSdkVersion: '1' };
+    const row = (over: Record<string, unknown>) => ({ id: 'analyzer', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui } }, ...over });
+    const list = async (rows: unknown[]) => (await build(fakeCtx({ plugins: { list: async () => rows } })).inject({ method: 'GET', url: '/api/plugins/ui' })).json();
+
+    it('says serial is true for a plugin granted host:serial', async () => {
+      const body = await list([row({ manifest: { capabilities: [{ kind: 'host:db' }, { kind: 'host:serial' }], payload: { kind: 'plugin', ui } } })]);
+      expect(body[0].devices).toEqual({ serial: true });
+    });
+
+    it('says serial is false for a plugin without it', async () => {
+      const body = await list([row({ manifest: { capabilities: [{ kind: 'host:db' }], payload: { kind: 'plugin', ui } } })]);
+      expect(body[0].devices).toEqual({ serial: false });
+    });
+
+    it('reads the active version, not an older one that had the grant', async () => {
+      const body = await list([
+        row({ version: '1.0.0', active: false, manifest: { capabilities: [{ kind: 'host:serial' }], payload: { kind: 'plugin', ui } } }),
+        row({ version: '2.0.0', active: true, manifest: { capabilities: [], payload: { kind: 'plugin', ui } } }),
+      ]);
+      expect(body).toHaveLength(1);
+      expect(body[0].version).toBe('2.0.0');
+      expect(body[0].devices).toEqual({ serial: false });
+    });
+
+    it('says serial is false for a legacy plugin with no capabilities list', async () => {
+      const body = await list([row({})]);
+      expect(body[0].devices).toEqual({ serial: false });
+    });
+
+    it('says serial is false, and still lists the plugin, when its capabilities cannot be read', async () => {
+      const body = await list([row({ manifest: { capabilities: 'host:serial', payload: { kind: 'plugin', ui } } })]);
+      expect(body).toHaveLength(1);
+      expect(body[0].devices).toEqual({ serial: false });
+    });
+  });
 });

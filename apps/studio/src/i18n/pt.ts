@@ -1164,6 +1164,7 @@ export const pt: EnShape = {
         hostImport: 'Ler os conectores de base de dados que um administrador autoriza, e guardar o que importa',
         hostDb: 'Guardar as suas próprias tabelas na base de dados do CE, separadas das tabelas do CE',
         hostCeRead: 'Ler os registos do CE, como doentes, pedidos e resultados',
+        hostSerial: 'Usar uma porta série do PC, quando uma pessoa escolhe uma',
         none: 'nenhum',
       },
       heading: 'Marketplace',

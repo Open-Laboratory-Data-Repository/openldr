@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { declaredSites, getSitesOff, uiAllows, visibleSites, type AppContext } from '@openldr/bootstrap';
+import { readGrant } from '@openldr/marketplace';
 import type { DataScope } from '@openldr/rbac';
 
 // A missing data limit fails closed: no facilities, never everything (operator, 2026-11-23).
@@ -26,6 +27,20 @@ interface UiPluginRow {
       permissions?: Array<{ key: string }>;
     };
   };
+}
+
+/**
+ * True only when this stored row was granted host:serial. A row from before capabilities existed
+ * has no list and gets no device. A list that cannot be read gets none either: a device is never
+ * handed out on a row the server cannot check.
+ */
+function serialGranted(manifest: unknown): boolean {
+  try {
+    const grant = readGrant(manifest as Record<string, unknown>);
+    return !grant.legacy && grant.capabilities.some((c) => c.kind === 'host:serial');
+  } catch {
+    return false;
+  }
 }
 
 export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
@@ -71,6 +86,10 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
           // The plugin's own permission keys. The studio passes the page only these and CE's own
           // capabilities, never another plugin's keys.
           permissionKeys: (r.manifest.payload!.permissions ?? []).map((p) => p.key),
+          // Devices on the PC the page may ask the studio for. Read from the active version's own
+          // grant, the row this entry is built from. The studio enforces it: serial bytes never
+          // come to the server.
+          devices: { serial: serialGranted(r.manifest) },
         };
       });
   });

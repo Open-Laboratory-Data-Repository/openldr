@@ -14,8 +14,19 @@ describe('capabilityLine', () => {
     expect(capabilityLine({ kind: 'net-egress', allowedHosts: [] }, t)).toBe('Connect to these servers: none (net-egress)');
   });
 
+  it('shows a name for host:serial on the install screen, in each language', () => {
+    expect(capabilityLine({ kind: 'host:serial' }, t)).toBe('Use a serial port on the PC, when a person chooses one (host:serial)');
+    for (const lng of ['fr', 'pt']) {
+      const line = capabilityLine({ kind: 'host:serial' }, i18n.getFixedT(lng));
+      expect(line, lng).not.toMatch(/^settings\.|\{\{/);
+      expect(line.startsWith('host:serial'), lng).toBe(false);
+      expect(line.endsWith('(host:serial)'), lng).toBe(true);
+      expect(line, lng).not.toBe('Use a serial port on the PC, when a person chooses one (host:serial)');
+    }
+  });
+
   it('every capability the marketplace knows has a plain name in en, fr and pt', () => {
-    const kinds = ['read-input', 'emit-fhir', 'net-egress', 'data-scope', 'host:reports', 'host:connectors', 'host:schedule', 'host:fhir', 'host:import', 'host:db', 'host:ce-read'];
+    const kinds = ['read-input', 'emit-fhir', 'net-egress', 'data-scope', 'host:reports', 'host:connectors', 'host:schedule', 'host:fhir', 'host:import', 'host:db', 'host:ce-read', 'host:serial'];
     for (const lng of ['en', 'fr', 'pt']) {
       const tl = i18n.getFixedT(lng);
       for (const kind of kinds) {
