@@ -68,6 +68,11 @@ export class RemoteController {
   private shown: string | undefined;
   private question: Question | undefined;
   private failedLoads = 0;
+  /**
+   * The certificate the window has shown Studio with, accepted beyond what the system trusts.
+   * Electron keeps that yes until the app ends, whatever the pin is set to later.
+   */
+  private accepted: PinnedServer | undefined;
 
   constructor(private readonly deps: RemoteDeps) {}
 
@@ -290,7 +295,18 @@ export class RemoteController {
 
   /** Sets the window's own pin to the saved server's, then shows Studio from it. */
   private showStudio(address: string): void {
-    this.pinSaved();
+    const pin = this.savedPin();
+    if (this.accepted !== undefined && (pin === undefined || pin.host.toLowerCase() !== this.accepted.host.toLowerCase() || pin.fingerprint !== this.accepted.fingerprint)) {
+      // The window still accepts a certificate that the person has since left or replaced. Only a
+      // new process forgets it. The server to show is already saved, so that process goes to it.
+      this.shown = undefined;
+      this.deps.log('an accepted certificate was withdrawn or replaced: starting again');
+      this.deps.show({ screen: 'starting', note: 'checking' });
+      this.deps.relaunch();
+      return;
+    }
+    this.deps.pin(pin);
+    if (pin !== undefined) this.accepted = pin;
     this.shown = address;
     this.deps.show({ screen: 'studio', address });
   }
@@ -315,10 +331,10 @@ export class RemoteController {
     }
   }
 
-  /** Puts the pin back to the server on disk: its accepted certificate, or none. */
-  private pinSaved(): void {
+  /** The certificate accepted for the server on disk, or none. */
+  private savedPin(): PinnedServer | undefined {
     const server = this.deps.loadSettings().server;
     const parsed = server === undefined ? undefined : parseServerAddress(server.address);
-    this.deps.pin(server?.fingerprint !== undefined && parsed?.ok ? { host: parsed.host, fingerprint: server.fingerprint } : undefined);
+    return server?.fingerprint !== undefined && parsed?.ok ? { host: parsed.host, fingerprint: server.fingerprint } : undefined;
   }
 }

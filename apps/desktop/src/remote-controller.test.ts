@@ -515,3 +515,68 @@ describe('RemoteController, with a saved server', () => {
     expect(h.probed).toHaveLength(1);
   });
 });
+
+// Electron keeps a yes as well as a no. Once the window has shown Studio with a certificate
+// accepted, that certificate stays accepted in the window until the app ends, whatever the pin is
+// set to afterwards. So an acceptance that is withdrawn or replaced needs a new process before
+// Studio is shown again.
+describe('RemoteController, an accepted certificate that is withdrawn or replaced', () => {
+  it('starts the app again before Studio is shown from another server', async () => {
+    const h = harness({ settings: saved(FP_A), probes: ['ok'] });
+    await h.controller.start();
+    expect(h.last()).toEqual({ screen: 'studio', address: ADDRESS });
+    h.controller.changeServer();
+    expect(h.relaunches()).toBe(0);
+    await h.controller.connect('https://other:3443');
+    // The new server is saved, so the new process goes straight to it.
+    expect(h.settings().server).toEqual({ address: 'https://other:3443/studio/' });
+    expect(h.relaunches()).toBe(1);
+    expect(h.screens.filter((x) => x.screen === 'studio')).toEqual([{ screen: 'studio', address: ADDRESS }]);
+    expect(h.controller.address()).toBeUndefined();
+  });
+
+  it('starts the app again when a changed certificate is accepted while the app runs', async () => {
+    const h = harness({ settings: saved(FP_A), probes: ['ok', 'untrusted', 'untrusted', 'ok'], certificate: { ok: true, fingerprint: FP_B } });
+    await h.controller.start();
+    void h.controller.studioFailed('certificate');
+    await settle();
+    await h.tick();
+    expect(h.last()).toEqual({ screen: 'certificate', address: ADDRESS, fingerprint: FP_B, changed: true });
+    await h.controller.trust(true);
+    expect(h.settings().server).toEqual({ address: ADDRESS, fingerprint: FP_B });
+    expect(h.relaunches()).toBe(1);
+    expect(h.screens.filter((x) => x.screen === 'studio')).toHaveLength(1);
+  });
+
+  it('needs no new start to come back to the same server with the same certificate', async () => {
+    // The system does not trust this server: only a check with the accepted certificate passes.
+    const h = harness({ settings: saved(FP_A), probe: async (_address, pin) => (pin === undefined ? 'untrusted' : 'ok') });
+    await h.controller.start();
+    void h.controller.studioFailed();
+    await settle();
+    await h.tick();
+    expect(h.screens.filter((x) => x.screen === 'studio')).toHaveLength(2);
+    h.controller.changeServer();
+    await h.controller.connect(ADDRESS);
+    await h.controller.trust(true);
+    expect(h.screens.filter((x) => x.screen === 'studio')).toHaveLength(3);
+    expect(h.relaunches()).toBe(0);
+  });
+
+  it('needs no new start when no certificate was accepted in this run', async () => {
+    const h = harness({ settings: saved(), probes: ['ok'] });
+    await h.controller.start();
+    h.controller.changeServer();
+    await h.controller.connect('https://other:3443');
+    expect(h.relaunches()).toBe(0);
+    expect(h.last()).toEqual({ screen: 'studio', address: 'https://other:3443/studio/' });
+  });
+
+  it('starts again even in a process the app already started again', async () => {
+    const h = harness({ settings: saved(FP_A), probes: ['ok'], relaunched: true });
+    await h.controller.start();
+    h.controller.changeServer();
+    await h.controller.connect('https://other:3443');
+    expect(h.relaunches()).toBe(1);
+  });
+});
