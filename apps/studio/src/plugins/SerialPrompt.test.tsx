@@ -157,6 +157,50 @@ describe('the serial prompt', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel' })); });
   });
 
+  it('answers a cancel at once while the browser list is up, and keeps the old list\'s answer away from a later question', async () => {
+    const s = fakeSerial();
+    const port = fakePort();
+    render(<Host label="Analyzer" serial={s.serial} />);
+    await ask();
+    const first = result();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Choose port' })); });
+    // The frame goes away, or reloads: the caller is told at once.
+    await act(async () => { picker!.cancel(); });
+    expect(await first).toEqual({ refused: 'serial-cancelled' });
+    // The browser's list is still up. No second one may open over it.
+    await ask();
+    expect(await result()).toEqual({ refused: 'serial-busy' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(s.log).toEqual(['requestPort']);
+    // The old list now answers. Nobody is waiting for it, and it frees the page.
+    await act(async () => { s.give(port); });
+    await ask();
+    const second = result();
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Choose port' })); });
+    const other = fakePort();
+    await act(async () => { s.give(other); });
+    // The second question gets its own port, never the first list's.
+    expect(await second).toEqual({ port: other });
+  });
+
+  it('keeps the page taken after the frame goes away, until the browser list closes', async () => {
+    const s = fakeSerial();
+    const { unmount } = render(<><Host label="First" serial={s.serial} /></>);
+    await ask();
+    const first = result();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Choose port' })); });
+    unmount();
+    expect(await first).toEqual({ refused: 'serial-cancelled' });
+    render(<Host label="Second" serial={s.serial} name="two" />);
+    await ask('two');
+    expect(await result('two')).toEqual({ refused: 'serial-busy' });
+    await act(async () => { s.refuse('NotFoundError'); });
+    await ask('two');
+    expect(screen.getByText('Second wants to use a serial port')).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel' })); });
+  });
+
   it('returns focus to where it was', async () => {
     const s = fakeSerial();
     render(<Host label="Analyzer" serial={s.serial} />);

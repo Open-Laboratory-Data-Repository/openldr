@@ -67,6 +67,8 @@ export function PluginFrame({ pluginId, context, serialGranted, pluginLabel, plu
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [srcdoc, setSrcdoc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Goes up at every load of a document, so each one gets a frame element of its own. */
+  const [load, setLoad] = useState(0);
   const { t } = useTranslation();
   // The reason goes in a toast; the frame keeps only muted words in its place.
   useLoadErrorToast(error, t('plugins.loadFailed'));
@@ -116,15 +118,16 @@ export function PluginFrame({ pluginId, context, serialGranted, pluginLabel, plu
     };
   }, [heldPorts, retire]);
 
-  // The grant was taken away, or another version of the plugin is active now: the ports close.
-  const seen = useRef({ granted: serialGranted, version: pluginVersion });
+  // The grant was taken away: the ports close. A change of plugin or of version is handled
+  // where the page is loaded, below: the whole page goes.
+  const grantSeen = useRef(serialGranted);
   useEffect(() => {
-    const before = seen.current;
-    seen.current = { granted: serialGranted, version: pluginVersion };
+    const before = grantSeen.current;
+    grantSeen.current = serialGranted;
     // What the listing says now replaces what the check found.
     lostRef.current = false;
-    if ((before.granted === true && serialGranted !== true) || before.version !== pluginVersion) void serialRef.current?.closeAll();
-  }, [serialGranted, pluginVersion]);
+    if (before === true && serialGranted !== true) void serialRef.current?.closeAll();
+  }, [serialGranted]);
 
   // The studio reads the listing once. While a port is open, ask the server once a minute.
   useEffect(() => watchGrant({
@@ -143,15 +146,25 @@ export function PluginFrame({ pluginId, context, serialGranted, pluginLabel, plu
     printRef.current?.dispose(); printRef.current = null;
   }, []);
 
+  // The page, its channel and its gate belong to one plugin at one version. When either changes,
+  // the old page goes at once: its channel is closed, its ports close, and a fresh document is
+  // loaded, also when the two versions have the same HTML. An old document must never get to ask
+  // with the new version's grant.
   useEffect(() => {
     let cancelled = false;
+    portRef.current?.close(); portRef.current = null;
+    retire();
+    lostRef.current = false;
+    setSrcdoc(null);
+    setError(null);
+    setLoad((n) => n + 1);
     authFetch(pluginUiAssetUrl(pluginId))
       .then(async (r) => { if (!r.ok) throw new Error(`asset ${r.status}`); return r.text(); })
       // Stamp the host theme at mount; later changes are pushed via postMessage below.
       .then((html) => { if (!cancelled) setSrcdoc(buildSrcdoc(html, hostTheme(), hostThemeTokens())); })
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); });
     return () => { cancelled = true; };
-  }, [pluginId]);
+  }, [pluginId, pluginVersion, retire]);
 
   // The sandboxed iframe can't see host CSS, so push host theme changes into it. The studio
   // switches light and dark with data-theme on <html>. A change to the root's style or class
@@ -211,6 +224,7 @@ export function PluginFrame({ pluginId, context, serialGranted, pluginLabel, plu
   return (
     <>
       <iframe
+        key={load}
         ref={iframeRef}
         title={`plugin-${pluginId}`}
         sandbox="allow-scripts"

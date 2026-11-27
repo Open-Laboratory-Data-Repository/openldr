@@ -13,8 +13,20 @@ export type SerialPickResult =
   | { refused: 'serial-cancelled' | 'serial-unavailable' | 'serial-busy' | 'serial-failed' };
 
 /** One question at a time on a studio page, whichever frame asks. It stays taken while the
- *  browser's own list is up. */
+ *  browser's own list is up, also when the frame that asked has gone: a second list must never
+ *  open over the first. */
 let taken = false;
+
+/** One asking, from the studio's question to the end of the browser's list. Every callback is
+ *  bound to its own request, so an answer that comes late never reaches a later question. */
+interface Request {
+  /** Gives the caller its answer. Null once it was given. */
+  give: ((result: SerialPickResult) => void) | null;
+  /** True once the browser was asked: the page stays taken until the browser answers. */
+  asked: boolean;
+  /** What had the focus when the question opened: the plugin's frame, as a rule. */
+  focusBefore: HTMLElement | null;
+}
 
 export interface SerialPrompt {
   /** Shows the question, then the browser's list. Resolves with the port, or with why there is none. */
@@ -29,25 +41,24 @@ export interface SerialPrompt {
 export function useSerialPrompt(pluginLabel: string, serial: SerialLike | undefined): SerialPrompt {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  /** The answer the open question is waiting to give. */
-  const waiting = useRef<((result: SerialPickResult) => void) | null>(null);
-  /** True once Choose port was pressed: the dialog then closes without that being a Cancel. */
-  const chosen = useRef(false);
+  /** The request whose question is on screen, or whose list is up. */
+  const current = useRef<Request | null>(null);
   const serialRef = useRef(serial);
   serialRef.current = serial;
-  /** What had the focus when the question opened: the plugin's frame, as a rule. */
-  const focusBefore = useRef<HTMLElement | null>(null);
 
-  const finish = useCallback((result: SerialPickResult): void => {
-    const give = waiting.current;
+  /** Answers the caller of `req`, once. With `free`, the page may ask again. */
+  const settle = useCallback((req: Request, result: SerialPickResult, free: boolean): void => {
+    if (free) taken = false;
+    const give = req.give;
     if (give === null) return;
-    waiting.current = null;
-    taken = false;
-    setOpen(false);
+    req.give = null;
+    if (current.current === req) {
+      current.current = null;
+      setOpen(false);
+    }
     // The dialog has no trigger to give the focus back to, so it is put back by hand, once the
     // dialog has gone.
-    const before = focusBefore.current;
-    focusBefore.current = null;
+    const before = req.focusBefore;
     if (before !== null) setTimeout(() => { if (before.isConnected) before.focus(); }, 0);
     give(result);
   }, []);
@@ -56,48 +67,59 @@ export function useSerialPrompt(pluginLabel: string, serial: SerialLike | undefi
     if (serialRef.current === undefined) return Promise.resolve({ refused: 'serial-unavailable' });
     if (taken) return Promise.resolve({ refused: 'serial-busy' });
     taken = true;
-    chosen.current = false;
-    focusBefore.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    const active = document.activeElement;
+    const req: Request = { give: null, asked: false, focusBefore: active instanceof HTMLElement && active !== document.body ? active : null };
+    current.current = req;
     setOpen(true);
-    return new Promise<SerialPickResult>((resolve) => { waiting.current = resolve; });
+    return new Promise<SerialPickResult>((resolve) => { req.give = resolve; });
   }, []);
 
   const cancel = useCallback((): void => {
-    // Once the browser's list is up it cannot be closed from here. Its answer is then dropped.
-    finish({ refused: 'serial-cancelled' });
-  }, [finish]);
+    const req = current.current;
+    if (req === null) return;
+    // The caller is told at once. If the browser's list is up it cannot be closed from here, so
+    // the page stays taken until the browser answers, and that answer is dropped.
+    settle(req, { refused: 'serial-cancelled' }, !req.asked);
+  }, [settle]);
 
   // The frame going away is a Cancel.
-  useEffect(() => () => { finish({ refused: 'serial-cancelled' }); }, [finish]);
+  useEffect(() => () => {
+    const req = current.current;
+    if (req !== null) settle(req, { refused: 'serial-cancelled' }, !req.asked);
+  }, [settle]);
 
   const element = useMemo(() => (
     <ConfirmDialog
       open={open}
       onOpenChange={(next) => {
-        if (next || chosen.current) return;
-        finish({ refused: 'serial-cancelled' });
+        const req = current.current;
+        if (next || req === null || req.asked) return;
+        settle(req, { refused: 'serial-cancelled' }, true);
       }}
       title={t('plugins.serial.title', { plugin: pluginLabel })}
       description={t('plugins.serial.body', { plugin: pluginLabel })}
       confirmLabel={t('plugins.serial.choose')}
       cancelLabel={t('plugins.serial.cancel')}
       onConfirm={() => {
+        const req = current.current;
+        if (req === null || req.asked) return;
         const api = serialRef.current;
-        if (api === undefined) return finish({ refused: 'serial-unavailable' });
+        if (api === undefined) return settle(req, { refused: 'serial-unavailable' }, true);
         // Asked for inside the press itself, with nothing awaited before it: the browser shows
         // its list only for a call made during a press.
         let asked: Promise<SerialPortLike>;
         try {
           asked = api.requestPort();
         } catch (err) {
-          return finish({ refused: refusalOf(err) });
+          return settle(req, { refused: refusalOf(err) }, true);
         }
-        chosen.current = true;
+        req.asked = true;
         setOpen(false);
-        asked.then((port) => finish({ port }), (err: unknown) => finish({ refused: refusalOf(err) }));
+        // Bound to this request. If its caller was already answered, the port is dropped as it is.
+        asked.then((port) => settle(req, { port }, true), (err: unknown) => settle(req, { refused: refusalOf(err) }, true));
       }}
     />
-  ), [open, pluginLabel, t, finish]);
+  ), [open, pluginLabel, t, settle]);
 
   return useMemo(() => ({ pick, cancel, element }), [pick, cancel, element]);
 }

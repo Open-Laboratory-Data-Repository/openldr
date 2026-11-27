@@ -325,11 +325,56 @@ describe('PluginFrame, serial ports', () => {
   it('closes the ports when the plugin version changes, though serial stays true', async () => {
     const f = await mount({ serialGranted: true });
     const port = next;
-    const handle = await f.openPort();
+    await f.openPort();
     f.rerender({ serialGranted: true, pluginVersion: '1.1.0' });
     await settle();
     expect(port.events).toContain('port.closed');
-    expect(await f.call({ kind: 'host.serial.read', port: handle, waitMs: 0 })).toEqual({ ok: false, error: 'serial-unknown-port' });
+    f.closePorts();
+  });
+
+  it('gives the new version a fresh page, and the old page nothing', async () => {
+    // The page's HTML is the same in both versions. The old document must still go.
+    let release: () => void = () => {};
+    const f = await mount({ serialGranted: true });
+    const oldFrame = f.container.querySelector('iframe');
+    const handle = await f.openPort();
+    const fetches = (globalThis.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+    // The new version's page is slow to arrive.
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { release = () => resolve({ ok: true, text: async () => '<div id="panel">hi</div>' }); })));
+    f.rerender({ serialGranted: true, pluginVersion: '1.1.0' });
+    await settle();
+    expect(fetches).toBeGreaterThan(0);
+    // While it loads there is no page, and the old page's channel is dead: no answer at all.
+    expect(f.container.querySelector('iframe')).toBeNull();
+    let answered = false;
+    void f.call({ kind: 'host.serial.choose' }).then(() => { answered = true; });
+    void f.call({ kind: 'host.serial.read', port: handle, waitMs: 0 }).then(() => { answered = true; });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(answered).toBe(false);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await act(async () => { release(); });
+    const fresh = await waitFor(() => {
+      const el = f.container.querySelector('iframe');
+      if (!el) throw new Error('not ready');
+      return el;
+    });
+    expect(fresh).not.toBe(oldFrame);
+    f.closePorts();
+  });
+
+  it('shows no page when the new version\'s page cannot be loaded, and leaves the old one dead', async () => {
+    const f = await mount({ serialGranted: true });
+    const port = next;
+    await f.openPort();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, text: async () => '' })));
+    f.rerender({ serialGranted: true, pluginVersion: '1.1.0' });
+    await settle();
+    expect(f.container.querySelector('iframe')).toBeNull();
+    expect(port.events).toContain('port.closed');
+    let answered = false;
+    void f.call({ kind: 'host.serial.choose' }).then(() => { answered = true; });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(answered).toBe(false);
     f.closePorts();
   });
 
