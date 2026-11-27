@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, X509Certificate } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer, type AddressInfo, type Server, type Socket } from 'node:net';
@@ -15,6 +15,7 @@ import {
   RECOVERY_NOTICE,
   STOP_WAIT_MS,
   StopError,
+  USAGE,
   UsageError,
   cliEntryFile,
   handleSignals,
@@ -33,7 +34,9 @@ import { newControlToken, requestStop, startControl, type ControlServer } from '
 import { newerDataMessage } from './data-version.js';
 import type { LauncherEvent } from './events.js';
 import { postgresUrls, type PostgresSettings } from './postgres.js';
-import { acquireLock, isLockLive, pathsFor, readLock, type StandalonePaths } from './state.js';
+import { acquireLock, isLockLive, pathsFor, readLock, readShareStatus, writeShareStatus, type StandalonePaths } from './state.js';
+import { makeCert, type MakeCert } from './share-cert.js';
+import type { ShareProxy } from './share-proxy.js';
 
 // The CLI program is replaced, so a test can see what a CLI command would load without a database.
 // commandKindOf is the real one: it reads the real command table, so `doctor` is a recovery command
@@ -2237,5 +2240,275 @@ describe('parseCommandLine', () => {
     expect(parseCommandLine(['status'])).not.toHaveProperty('json');
     expect(() => parseCommandLine(['stop', '--json'])).toThrow(UsageError);
     expect(() => parseCommandLine(['start', '--json'])).toThrow(UsageError);
+  });
+});
+
+describe('runStart with --share', () => {
+  const NAMES = { dns: ['labpc', 'localhost'], ips: ['127.0.0.1', '192.168.1.20'] };
+  let fixed: { certPem: string; keyPem: string };
+  beforeAll(async () => {
+    fixed = await makeCert(NAMES, new Date(STARTED_AT.getTime() - 60_000), 825);
+  });
+
+  interface ShareFakes extends Fakes {
+    proxyCalls: Array<{ host: string; port: number; upstreamPort: number; certPem: string; keyPem: string }>;
+    made: number;
+  }
+
+  /** Fakes plus a PC named labpc at 192.168.1.20, a front that binds nothing, and one fixed certificate. */
+  function shareFakes(o: Parameters<typeof fakes>[0] & { noNetwork?: boolean; proxyFails?: NodeJS.ErrnoException | Error; proxyCloseFails?: boolean } = {}): ShareFakes {
+    const f = Object.assign(fakes(o), { proxyCalls: [], made: 0 }) as ShareFakes;
+    f.deps.network = () => ({
+      hostname: 'LabPC',
+      interfaces: o.noNetwork
+        ? { lo: [{ address: '127.0.0.1', internal: true, family: 'IPv4' } as never] }
+        : { eth0: [{ address: '192.168.1.20', internal: false, family: 'IPv4' } as never] },
+    });
+    const make: MakeCert = async () => {
+      f.made += 1;
+      return fixed;
+    };
+    f.deps.makeCert = make;
+    f.deps.startShareProxy = async (opts) => {
+      f.order.push('front.start');
+      if (o.proxyFails) throw o.proxyFails;
+      f.proxyCalls.push(opts);
+      const proxy: ShareProxy = {
+        port: opts.port,
+        close: async () => {
+          f.order.push('front.close');
+          if (o.proxyCloseFails) throw new Error('front would not close');
+        },
+      };
+      return proxy;
+    };
+    return f;
+  }
+
+  async function startShared(f: ShareFakes, sharePort: number): Promise<Launcher> {
+    const l = await runStart({ dataDir: root, port: PORT, host: '127.0.0.1', share: { port: sharePort } }, f.deps);
+    launchers.push(l);
+    return l;
+  }
+
+  it('starts the front after the server and prints the addresses and the fingerprint', async () => {
+    const sharePort = await freeLowPort([PORT]);
+    const f = shareFakes();
+    const l = await startShared(f, sharePort);
+
+    expect(f.order).toEqual(['pg.leftover', 'pg.start', 'server.start', 'front.start']);
+    expect(f.proxyCalls).toEqual([{ host: '0.0.0.0', port: sharePort, upstreamPort: PORT, certPem: fixed.certPem, keyPem: fixed.keyPem }]);
+    const fingerprint = new X509Certificate(fixed.certPem).fingerprint256;
+    expect(f.printed).toEqual([
+      `OpenLDR is running at ${ADDRESS}`,
+      `Shared on the lab network at https://labpc:${sharePort}/studio/`,
+      `Also at https://192.168.1.20:${sharePort}/studio/`,
+      `Certificate fingerprint (SHA-256): ${fingerprint}`,
+      `Certificate file: ${join(paths.shareDir, 'cert.pem')}`,
+      'Another PC warns about the certificate the first time. Compare the fingerprint before you accept it.',
+      `Server log: ${paths.serverLog}`,
+    ]);
+    expect(l.share).toEqual({
+      addresses: [`https://labpc:${sharePort}/studio/`, `https://192.168.1.20:${sharePort}/studio/`],
+      fingerprint,
+      certFile: join(paths.shareDir, 'cert.pem'),
+    });
+  });
+
+  it('gives the server TRUST_PROXY 127.0.0.1 and the certificate path, and binds it to 127.0.0.1', async () => {
+    const f = shareFakes();
+    await startShared(f, await freeLowPort([PORT]));
+    expect(f.server.cfg).toMatchObject({ TRUST_PROXY: '127.0.0.1', TLS_CERT_PATH: join(paths.shareDir, 'cert.pem'), LISTEN_HOST: '127.0.0.1' });
+  });
+
+  it('without --share, starts no front and sets neither value', async () => {
+    const f = shareFakes();
+    const l = await start(f.deps);
+    expect(f.order).not.toContain('front.start');
+    expect(f.made).toBe(0);
+    expect(f.server.cfg?.TRUST_PROXY).toBeUndefined();
+    expect(f.server.cfg?.TLS_CERT_PATH).toBeUndefined();
+    expect(l.share).toBeUndefined();
+  });
+
+  it('reports a taken share port before starting Postgres', async () => {
+    const sharePort = await freeLowPort([PORT]);
+    await hold(sharePort);
+    const f = shareFakes();
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1', share: { port: sharePort } }, f.deps)).rejects.toThrow(
+      `Port ${sharePort} is already in use. Choose another with --share-port.`,
+    );
+    expect(f.pg.started).toBe(false);
+    await expectNothingLeft(f);
+  });
+
+  it('gives the share port message when the front itself finds the port taken', async () => {
+    const sharePort = await freeLowPort([PORT]);
+    const f = shareFakes({ proxyFails: Object.assign(new Error('listen EADDRINUSE'), { code: 'EADDRINUSE' }) });
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1', share: { port: sharePort } }, f.deps)).rejects.toThrow(
+      `Port ${sharePort} is already in use. Choose another with --share-port.`,
+    );
+    await expectNothingLeft(f);
+  });
+
+  it('stops Postgres and releases the lock when the front fails to start', async () => {
+    const f = shareFakes({ proxyFails: new Error('front boom') });
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1', share: { port: await freeLowPort([PORT]) } }, f.deps)).rejects.toThrow('front boom');
+    expect(f.server.closed).toBe(true);
+    await expectNothingLeft(f);
+  });
+
+  it('closes the front before the server on stop', async () => {
+    const f = shareFakes();
+    const l = await startShared(f, await freeLowPort([PORT]));
+    await stopped(l);
+    expect(f.order.slice(-3)).toEqual(['front.close', 'server.close', 'pg.stop']);
+  });
+
+  it('still stops the server and Postgres when closing the front fails', async () => {
+    const f = shareFakes({ proxyCloseFails: true });
+    const l = await startShared(f, await freeLowPort([PORT]));
+    launchers.splice(launchers.indexOf(l), 1);
+    await expect(l.stop()).rejects.toThrow('The front did not close cleanly: front would not close');
+    expect(f.server.closed).toBe(true);
+    expect(f.pg.stopped).toBe(true);
+    expect(await readLock(paths)).toBeNull();
+  });
+
+  it('says so when the PC has no network address', async () => {
+    const sharePort = await freeLowPort([PORT]);
+    const f = shareFakes({ noNetwork: true });
+    const l = await startShared(f, sharePort);
+    expect(f.printed).toContain('No network address was found. Join a network, then start OpenLDR again.');
+    expect(f.printed.some((line) => line.startsWith('Also at') || line.startsWith('Shared'))).toBe(false);
+    // A name alone reaches nobody: with no address, no address is published anywhere.
+    expect(l.share?.addresses).toEqual([]);
+    expect(l.share?.fingerprint).toBe(new X509Certificate(fixed.certPem).fingerprint256);
+    void sharePort;
+  });
+
+  it('publishes no address in the ready event or in status when the PC has no network address', async () => {
+    const f = shareFakes({ noNetwork: true });
+    const events: LauncherEvent[] = [];
+    f.deps.emit = (e) => events.push(e);
+    const l = await startShared(f, await freeLowPort([PORT]));
+    expect(events.at(-1)).toMatchObject({ event: 'ready', share: { addresses: [] } });
+    const json: string[] = [];
+    await runStatus({ dataDir: root, json: true }, (line) => json.push(line));
+    expect(JSON.parse(json[0]!).share).toEqual(l.share);
+    const text: string[] = [];
+    await runStatus({ dataDir: root }, (line) => text.push(line));
+    expect(text).toEqual([`Data folder: ${root}`, `OpenLDR is running at ${ADDRESS}`]);
+  });
+
+  it('puts the share in the ready event and in status --json', async () => {
+    const sharePort = await freeLowPort([PORT]);
+    const f = shareFakes();
+    const events: LauncherEvent[] = [];
+    f.deps.emit = (e) => events.push(e);
+    const l = await startShared(f, sharePort);
+    expect(events.at(-1)).toEqual({ event: 'ready', address: ADDRESS, share: l.share });
+
+    const printed: string[] = [];
+    expect(await runStatus({ dataDir: root, json: true }, (line) => printed.push(line))).toBe(0);
+    expect(JSON.parse(printed[0]!)).toEqual({ dataDir: root, running: true, address: ADDRESS, host: '127.0.0.1', share: l.share });
+
+    printed.length = 0;
+    await runStatus({ dataDir: root }, (line) => printed.push(line));
+    expect(printed).toEqual([`Data folder: ${root}`, `OpenLDR is running at ${ADDRESS}`, `Shared at https://labpc:${sharePort}/studio/`]);
+  });
+
+  it('never rewrites the lock: the share is published beside it', async () => {
+    const f = shareFakes();
+    let before: Awaited<ReturnType<typeof readLock>> = null;
+    const startProxy = f.deps.startShareProxy!;
+    f.deps.startShareProxy = async (opts) => {
+      before = await readLock(paths);
+      return startProxy(opts);
+    };
+    const l = await startShared(f, await freeLowPort([PORT]));
+    expect(before).not.toBeNull();
+    expect(await readLock(paths)).toEqual(before);
+    expect(await readShareStatus(paths, before!.token)).toEqual(l.share);
+    // A stop still reaches this launcher through the lock.
+    expect(await runStop({ dataDir: root }, () => {})).toBe(0);
+    launchers.splice(launchers.indexOf(l), 1);
+    await l.done;
+    expect(await readShareStatus(paths, before!.token)).toBeUndefined();
+  });
+
+  it('a share status left by an earlier launcher is cleared at the next start, shared or not', async () => {
+    await writeShareStatus(paths, 'a-launcher-that-was-killed', { addresses: ['https://old:1/studio/'], fingerprint: 'OLD', certFile: '/c' });
+    await start(fakes().deps);
+    expect(await readShareStatus(paths, 'a-launcher-that-was-killed')).toBeUndefined();
+    const printed: string[] = [];
+    await runStatus({ dataDir: root, json: true }, (line) => printed.push(line));
+    expect(JSON.parse(printed[0]!)).not.toHaveProperty('share');
+  });
+
+  it('closes the front and undoes the start when the share cannot be published', async () => {
+    const f = shareFakes();
+    // A file where the share folder's status file must go makes the publication fail after the front is up.
+    const startProxy = f.deps.startShareProxy!;
+    f.deps.startShareProxy = async (opts) => {
+      const proxy = await startProxy(opts);
+      await rm(paths.shareDir, { recursive: true, force: true });
+      await writeFile(paths.shareDir, 'not a folder');
+      return proxy;
+    };
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1', share: { port: await freeLowPort([PORT]) } }, f.deps)).rejects.toThrow();
+    expect(f.order).toContain('front.close');
+    expect(f.order.indexOf('front.close')).toBeLessThan(f.order.indexOf('server.close'));
+    await expectNothingLeft(f);
+  });
+
+  it('reuses the certificate on the next start', async () => {
+    const f = shareFakes();
+    const sharePort = await freeLowPort([PORT]);
+    await stopped(await startShared(f, sharePort));
+    const again = shareFakes();
+    await startShared(again, sharePort);
+    expect(f.made).toBe(1);
+    expect(again.made).toBe(0);
+  });
+
+  it('prints no plain HTTP warning', async () => {
+    const f = shareFakes();
+    await startShared(f, await freeLowPort([PORT]));
+    expect(f.printed.some((line) => line.includes('plain HTTP'))).toBe(false);
+  });
+});
+
+describe('parseCommandLine with --share', () => {
+  it('turns sharing on at port 3443', () => {
+    expect(parseCommandLine(['start', '--share'])).toEqual({ command: 'start', port: 3000, host: '127.0.0.1', share: { port: 3443 } });
+  });
+  it('takes another share port', () => {
+    expect(parseCommandLine(['start', '--share', '--share-port', '8443'])).toMatchObject({ share: { port: 8443 } });
+  });
+  it('leaves share out without the flag', () => {
+    expect(parseCommandLine(['start'])).not.toHaveProperty('share');
+  });
+  it('allows --host 127.0.0.1 with --share', () => {
+    expect(parseCommandLine(['start', '--share', '--host', '127.0.0.1'])).toMatchObject({ host: '127.0.0.1', share: { port: 3443 } });
+  });
+  it.each(['192.168.1.20', '0.0.0.0', 'localhost', '::1', '::'])('refuses --share with --host %s', (host) => {
+    expect(() => parseCommandLine(['start', '--share', '--host', host])).toThrow(UsageError);
+    expect(() => parseCommandLine(['start', '--share', '--host', host])).toThrow(
+      '--share already opens OpenLDR to the network over HTTPS. Leave --host out.',
+    );
+  });
+  it('refuses --share-port without --share', () => {
+    expect(() => parseCommandLine(['start', '--share-port', '8443'])).toThrow('--share-port needs --share.');
+  });
+  it('refuses a share port equal to the port', () => {
+    expect(() => parseCommandLine(['start', '--share', '--port', '3443'])).toThrow('--share-port must differ from --port.');
+    expect(() => parseCommandLine(['start', '--share', '--port', '9000', '--share-port', '9000'])).toThrow('--share-port must differ from --port.');
+  });
+  it.each(['0', '65536', 'x', '1.5'])('refuses the share port %s', (port) => {
+    expect(() => parseCommandLine(['start', '--share', '--share-port', port])).toThrow('--share-port must be a whole number from 1 to 65535.');
+  });
+  it('names the two flags in the usage text', () => {
+    expect(USAGE).toContain('--share (open to the lab network over HTTPS)  --share-port <port> (default 3443)');
   });
 });

@@ -3,9 +3,9 @@
 // can reach it; main.ts only wires Electron to it. The app never signals or kills the launcher.
 
 import { join } from 'node:path';
-import type { LauncherEvent, RunningLauncher, Status } from './launcher';
+import type { LauncherEvent, RunningLauncher, ShareInfo, Status } from './launcher';
 import { windowAddress } from './locality';
-import type { Settings } from './settings';
+import { DEFAULT_SHARE_PORT, type Settings } from './settings';
 import type { AppStrings } from './strings';
 
 export type Screen =
@@ -50,7 +50,12 @@ export function pageState(screen: Exclude<Screen, { screen: 'studio' }>, strings
 
 export interface ControllerDeps {
   readStatus(): Promise<Status>;
-  startLauncher(port: number, on: { event(e: LauncherEvent): void; stderrLine(line: string): void }): RunningLauncher;
+  /** `share` is set when OpenLDR is to be shared on the lab network, with the port other PCs use. */
+  startLauncher(
+    port: number,
+    on: { event(e: LauncherEvent): void; stderrLine(line: string): void },
+    share: { port: number } | undefined,
+  ): RunningLauncher;
   requestStop(): Promise<number>;
   /** True once an HTTP request to the address gets any answer. */
   answers(address: string): Promise<boolean>;
@@ -65,6 +70,8 @@ export interface ControllerDeps {
   show(screen: Screen): void;
   exit(code: number): void;
   log(line: string): void;
+  /** Called when `share()` has changed. */
+  shareChanged?(): void;
   /** The app's own log file, named on the error screen. */
   desktopLog: string;
   strings: AppStrings;
@@ -84,7 +91,12 @@ interface Child {
   sawStopped: boolean;
   lastError?: string;
   lastStderr?: string;
+  /** A stop of this launcher that is in flight. A quit and a restart share it. */
+  stopping?: Promise<number>;
 }
+
+/** An attached launcher's status is read on every this-many polls, to see its share. With the default poll, every 30 seconds. */
+const STATUS_REFRESH_POLLS = 6;
 
 /** How long to wait between asks while waiting for an attached launcher to answer, and between `stop` asks. */
 const STEP_MS = 1000;
@@ -106,6 +118,10 @@ export class DesktopController {
   private addr: string | undefined;
   private dir: string | undefined;
   private quitting: Promise<void> | undefined;
+  /** How the launcher shown now is shared, as it reported it. */
+  private shared: ShareInfo | undefined;
+  /** Set while a restart runs. A second one is refused. */
+  private restarting = false;
   /** A `status` child that has not answered yet. The next read waits on it instead of starting another. */
   private pendingStatus: Promise<Status> | undefined;
 
@@ -126,6 +142,52 @@ export class DesktopController {
   /** The data folder, as `status --json` reported it. */
   dataDir(): string | undefined {
     return this.dir;
+  }
+
+  /** How OpenLDR is shared on the lab network, as the launcher reported it. Undefined when it is not. */
+  share(): ShareInfo | undefined {
+    return this.shared;
+  }
+
+  /** Keeps the share and tells the app when it really changed, so the tray can be drawn again. */
+  private setShared(next: ShareInfo | undefined): void {
+    if (JSON.stringify(next) === JSON.stringify(this.shared)) return;
+    this.shared = next;
+    this.deps.shareChanged?.();
+  }
+
+  /**
+   * Stops the app's own launcher and starts it again with the settings as they are now. For a
+   * setting the launcher only reads at start, such as sharing. Gives false, and does nothing,
+   * unless this app started the launcher and it is ready: a launcher started elsewhere is not the
+   * app's to restart. Also false while another restart or a quit runs. Never exits the app.
+   */
+  async restart(): Promise<boolean> {
+    const child = this.child;
+    if (this.quitting || this.restarting || this.phase !== 'own' || child === undefined || !child.ready || child.exited) return false;
+    this.restarting = true;
+    try {
+      // The start number goes up first. The old launcher's exit and its last events then count as
+      // stale, so a stop the app asked for is never shown as "OpenLDR is no longer running".
+      this.run += 1;
+      this.addr = undefined;
+      this.setShared(undefined);
+      this.show({ screen: 'stopping' });
+      const code = await this.stopOwn(child);
+      if (this.quitting) return true;
+      if (!child.exited || code !== 0) {
+        // The old launcher may still hold the data folder. A second one must not be started.
+        this.deps.log('The launcher did not stop for a restart.');
+        this.fail(this.deps.strings.shareRestartFailed);
+        return true;
+      }
+      this.child = undefined;
+      this.phase = 'idle';
+      void this.start();
+      return true;
+    } finally {
+      this.restarting = false;
+    }
   }
 
   /** True when this app did not start the launcher it shows. */
@@ -150,6 +212,7 @@ export class DesktopController {
     this.phase = 'checking';
     this.child = undefined;
     this.addr = undefined;
+    this.setShared(undefined);
     this.show({ screen: 'starting', note: 'checking' });
     try {
       const status = await this.boundedStatus();
@@ -229,6 +292,7 @@ export class DesktopController {
   private fail(message: string, withLogs = true): void {
     this.phase = 'error';
     this.addr = undefined;
+    this.setShared(undefined);
     const dataLogs =
       withLogs && this.dir !== undefined
         ? { serverLog: join(this.dir, 'logs', 'server.log'), postgresLog: join(this.dir, 'logs', 'postgres.log') }
@@ -242,6 +306,7 @@ export class DesktopController {
     const address = windowAddress(status.address, status.host);
     this.phase = 'attached';
     this.addr = address;
+    this.setShared(status.share);
     this.dir = status.dataDir;
     this.deps.log(`Attached to a launcher that was already running at ${address}.`);
     this.show({ screen: 'starting', note: 'server' });
@@ -249,7 +314,9 @@ export class DesktopController {
     // Its lock is live before its server listens, so it may still be starting. Ask once a second,
     // and read its status every pollMs in case it ends before it ever answers.
     let waited = 0;
+    let waitedForIt = false;
     while (!(await this.deps.answers(address))) {
+      waitedForIt = true;
       if (this.stale(run)) return;
       await this.deps.sleep(STEP_MS);
       if (this.stale(run)) return;
@@ -260,13 +327,36 @@ export class DesktopController {
       }
     }
     if (this.stale(run)) return;
+    // A launcher that was still starting when this app attached had not published its share yet:
+    // the lock is live before the HTTPS front is. So its status is read once more, now it answers.
+    if (waitedForIt) {
+      const fresh = await this.boundedStatus();
+      if (this.stale(run)) return;
+      if (fresh?.running) this.setShared(fresh.share);
+    }
     this.show({ screen: 'studio', address });
 
-    // An address that answers needs no `status` child. Only when it stops answering is the status read.
+    // While the address answers, the launcher is alive and no `status` child is needed for that.
+    // Only when it stops answering is the status read to learn whether the launcher has gone.
+    let polls = 0;
     for (;;) {
       await this.deps.sleep(this.pollMs);
       if (this.stale(run)) return;
-      if (await this.deps.answers(address)) continue;
+      polls += 1;
+      if (await this.deps.answers(address)) {
+        if (this.stale(run)) return;
+        // An address that answers says nothing about the share. The launcher publishes it a
+        // moment after its server answers, and another launcher may take the same address later.
+        // So on a slow timer the status is read for the share alone. It is best effort: a read
+        // that gives no answer, or an odd one, changes nothing and is tried again next time.
+        // It never takes a person out of a Studio that works.
+        if (polls % STATUS_REFRESH_POLLS === 0) {
+          const s = await this.boundedStatus();
+          if (this.stale(run)) return;
+          if (s?.running) this.setShared(s.share);
+        }
+        continue;
+      }
       if (this.stale(run)) return;
       if (!(await this.stillRunning(run))) return;
     }
@@ -276,7 +366,11 @@ export class DesktopController {
   private async stillRunning(run: number): Promise<boolean> {
     const s = await this.boundedStatus();
     if (this.stale(run)) return false;
-    if (s?.running) return true;
+    if (s?.running) {
+      // Its share may have started, stopped or changed since the last read.
+      this.setShared(s.share);
+      return true;
+    }
     if (s === undefined) {
       this.fail(this.deps.strings.statusNoAnswer);
       return false;
@@ -298,17 +392,25 @@ export class DesktopController {
       if (chosen.remember) this.saveSettings({ ...settings, port });
     }
 
+    // Read at each start, so a restart picks up a setting that changed.
+    const now = this.deps.loadSettings();
+    const share = now.shareOnNetwork === true ? { port: now.sharePort ?? DEFAULT_SHARE_PORT } : undefined;
+
     this.phase = 'own';
-    this.deps.log(`Starting the launcher on port ${port}.`);
+    this.deps.log(`Starting the launcher on port ${port}${share ? `, shared on port ${share.port}` : ''}.`);
     let child!: Child;
-    const running = this.deps.startLauncher(port, {
-      event: (e) => this.onEvent(run, child, e),
-      stderrLine: (line) => {
-        const kept = this.clean(line);
-        child.lastStderr = kept;
-        this.deps.log(`launcher: ${kept}`);
+    const running = this.deps.startLauncher(
+      port,
+      {
+        event: (e) => this.onEvent(run, child, e),
+        stderrLine: (line) => {
+          const kept = this.clean(line);
+          child.lastStderr = kept;
+          this.deps.log(`launcher: ${kept}`);
+        },
       },
-    });
+      share,
+    );
     child = { running, exited: false, done: Promise.resolve(), ready: false, sawStopping: false, sawStopped: false };
     child.done = running.exited.then((code) => this.onExit(run, child, code));
     this.child = child;
@@ -343,6 +445,7 @@ export class DesktopController {
         child.ready = true;
         const address = windowAddress(logged.address, OWN_HOST);
         this.addr = address;
+        this.setShared(logged.share);
         this.show({ screen: 'studio', address });
         return;
       }
@@ -359,7 +462,9 @@ export class DesktopController {
   }
 
   private async stopAndExit(): Promise<void> {
-    const child = this.phase === 'own' ? this.child : undefined;
+    // Whatever the phase: after a restart that could not stop it, the launcher this app started
+    // is on the error screen and is still this app's to stop.
+    const child = this.child;
     if (child !== undefined && !child.exited) {
       this.show({ screen: 'stopping' });
       return this.deps.exit(await this.stopOwn(child));
@@ -378,7 +483,16 @@ export class DesktopController {
    * taken its lock, `stop` says "not running" with code 0, so until the launcher is ready or says
    * it is stopping, the stop is asked for again each second.
    */
-  private async stopOwn(child: Child): Promise<number> {
+  private stopOwn(child: Child): Promise<number> {
+    // One stop at a time for one launcher. A quit that comes during a restart waits for the
+    // restart's stop and takes its result, where a second `stop` could fail and end the app early.
+    child.stopping ??= this.askToStop(child).finally(() => {
+      child.stopping = undefined;
+    });
+    return child.stopping;
+  }
+
+  private async askToStop(child: Child): Promise<number> {
     let waited = 0;
     for (;;) {
       const code = await this.deps.requestStop();

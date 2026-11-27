@@ -87,6 +87,8 @@ O código de configuração só aparece no terminal. O lançador nunca o escreve
 | `--data-dir <folder>` | Veja a secção seguinte | A pasta que guarda todos os dados desta instalação. |
 | `--port <port>` | `3000` | A porta web. Se outro programa a estiver a usar, `start` para com `Port 3000 is already in use. Choose another with --port.` Nunca escolhe outra porta por si. |
 | `--host <address>` | `127.0.0.1` | O endereço em que o OpenLDR escuta. A predefinição só deixa entrar este computador. Veja **Abrir o acesso a um telemóvel ou a outro computador** mais abaixo. |
+| `--share` | Desligado | Abre o OpenLDR à rede do laboratório por HTTPS, numa segunda porta. Veja **Partilhá-lo na rede do laboratório** mais abaixo. Omita `--host`, ou dê exatamente `--host 127.0.0.1`. |
+| `--share-port <port>` | `3443` | A porta que os outros PC usam com `--share`. |
 | `--events-fd <n>` | Nenhum | Escreve uma linha JSON por evento no descritor n (3 ou mais). Nenhum código de configuração é criado nem mostrado. É para um programa que executa o lançador, como a aplicação de computador. |
 | `--json`, com `status` | Desligado | `status` mostra uma só linha JSON em vez disso. Veja **Verificar se está a funcionar** mais abaixo. |
 
@@ -263,6 +265,35 @@ Uma definição indicada assim só vale para esse comando. Se um comando da CLI 
 
 O lançador remove as definições de componentes que uma instalação autónoma não tem. Ignora `OIDC_*`, `KEYCLOAK_*`, `S3_*`, `MSSQL_*`, `MYSQL_*`, `IDENTITY_ADMIN_ADAPTER`, `AUTH_DEV_USERNAME` e `AUTH_DEV_ROLES`.
 
+## Partilhá-lo na rede do laboratório
+
+Para que outros PC do laboratório abram este OpenLDR, arranque com `--share`:
+
+```sh
+pnpm openldr-standalone start --share
+```
+
+```text
+OpenLDR is running at http://localhost:3000/studio/
+Shared on the lab network at https://labpc:3443/studio/
+Also at https://192.168.1.20:3443/studio/
+Certificate fingerprint (SHA-256): 3F:A1:9C:...:7E
+Certificate file: /home/you/.local/share/openldr/share/cert.pem
+Another PC warns about the certificate the first time. Compare the fingerprint before you accept it.
+Server log: /home/you/.local/share/openldr/logs/server.log
+```
+
+O próprio OpenLDR continua a escutar só neste computador. Uma segunda porta, cifrada, abre-se na porta 3443 para a rede. `--share-port` escolhe outra porta.
+
+Noutro PC, abra um dos endereços `https`. O navegador avisa que não conhece o certificado. É o esperado: o OpenLDR criou o certificado. Abra os detalhes do certificado no navegador e compare a impressão digital SHA-256 com a que o lançador mostrou. Aceite-o só se forem iguais. Depois inicie sessão como habitualmente.
+
+- O certificado dura 825 dias. O lançador verifica-o cada vez que arranca com `--share`, e não enquanto corre. Cria um novo quando faltam menos de 30 dias, ou quando o nome ou o endereço de rede deste computador não consta dele. Um certificado novo tem uma impressão digital nova, e os outros PC têm de o aceitar outra vez. Um endereço fixo evita a segunda causa. Nada evita a primeira.
+- Sem endereço de rede, o lançador mostra `No network address was found. Join a network, then start OpenLDR again.`
+- A firewall pode ter de permitir a porta 3443.
+- Um programa que não é um navegador precisa do ficheiro do certificado. Para um programa Node, defina `NODE_EXTRA_CA_CERTS` com o caminho de uma cópia de `cert.pem`. Depois de um certificado novo, copie o ficheiro outra vez e reinicie esse programa.
+- `status` mostra `Shared at` com o primeiro endereço. `status --json` tem um campo `share`.
+- Nunca abra esta porta à Internet.
+
 ## Abrir o acesso a um telemóvel ou a outro computador
 
 Por predefinição, só este computador consegue abrir o OpenLDR. Para deixar entrar um telemóvel da mesma rede ou do Tailscale, arranque com o endereço deste computador nessa rede:
@@ -279,9 +310,9 @@ Listening on 100.64.0.10. Sign-in travels over plain HTTP on this network.
 
 Substitua `100.64.0.10` pelo endereço privado ou Tailscale do seu computador. Abra no telemóvel o endereço mostrado. `--host 0.0.0.0` escuta em todos os endereços deste computador. O lançador mostra então `http://localhost:3000/studio/`, que só funciona neste computador. No telemóvel, use antes o endereço do computador.
 
-Em HTTP sem cifra, o navegador desativa uma funcionalidade que o Studio usa. Alguns ecrãs podem então falhar, entre eles as páginas de plugins e a edição de painéis. Isto acontece no telemóvel, e também neste computador quando abre o endereço dado a `--host`. Estes ecrãs funcionam quando abre o Studio em `http://localhost:3000/studio/` no computador que executa o OpenLDR. Esse endereço responde quando arranca sem `--host`, ou com `--host localhost`, `0.0.0.0`, `::1` ou `::`.
+Desta forma, tudo circula sem cifra. Para deixar entrar outros PC, prefira `--share` acima.
 
-A última linha é um aviso. Uma instalação autónoma não tem TLS. Os nomes de utilizador, as palavras-passe e os dados dos doentes atravessam a rede sem cifra. Qualquer pessoa que consiga observar essa rede pode lê-los. Faça-o só numa rede de confiança. O Tailscale cifra o tráfego entre os seus próprios dispositivos. Nunca abra esta porta à Internet. Pode ter de autorizar a porta na firewall.
+A última linha é um aviso. Iniciado desta forma, o OpenLDR não tem TLS. Os nomes de utilizador, as palavras-passe e os dados dos doentes atravessam a rede sem cifra. Qualquer pessoa que consiga observar essa rede pode lê-los. Faça-o só numa rede de confiança. O Tailscale cifra o tráfego entre os seus próprios dispositivos. Nunca abra esta porta à Internet. Pode ter de autorizar a porta na firewall.
 
 ## Fazer e repor uma cópia de segurança
 
@@ -300,13 +331,12 @@ Para repor, pare o OpenLDR, volte a colocar a pasta copiada no sítio original e
 
 ## Limites
 
-- Sem TLS. O OpenLDR serve HTTP sem cifra.
+- Sem TLS, exceto se arrancar com `--share`. Sem isso, o OpenLDR serve HTTP sem cifra.
 - Esta página executa-o a partir de uma cópia compilada do repositório. A [aplicação de computador](/docs/desktop-app) instala-o com uma linha.
 - Só Postgres. O Postgres incluído guarda as duas bases de dados. O SQL Server e o MySQL não podem ser a base de dados de análise.
 - Um só lançador por pasta de dados.
 - Só o Linux foi testado. O Windows e o macOS não foram testados.
 - A sincronização com um servidor central que use um certificado autoassinado não é suportada.
-- Em HTTP sem cifra, alguns ecrãs do Studio precisam de um endereço que o navegador considere local: `localhost` ou `127.0.0.1`. As páginas de plugins e a edição de painéis estão entre eles. Noutro endereço, podem falhar. `http://localhost:3000/studio/` responde quando arranca sem `--host`, ou com `--host localhost`, `0.0.0.0`, `::1` ou `::`.
 - O Postgres incluído não pode passar para uma nova versão principal. A pasta de dados só funciona com o Postgres 16.
 - Fazer uma cópia de segurança é parar e depois copiar a pasta. Não existe ferramenta de cópia de segurança.
 - Os registos do servidor e do Postgres não têm rotação. Crescem até os apagar com o OpenLDR parado.

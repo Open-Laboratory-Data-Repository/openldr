@@ -295,7 +295,7 @@ The server edition for a two-PC lab was not chosen: nobody there looks after Doc
 |---|---|---|---|
 | G1 | The desktop app cannot be shared. It is fixed to `127.0.0.1`. | `apps/desktop/src/controller.ts:94`, `launcher.ts:88` | core |
 | G2 | The standalone has no HTTPS. | `apps/standalone/src/commands.ts:681` | core |
-| G3 | Plugin pages can fail from another PC over plain HTTP. | `apps/web/src/docs/0.1.8/en/standalone.md:282` | closed by G2 |
+| G3 | Plugin pages can fail from another PC over plain HTTP. Did not reproduce on 2026-11-27 for the three actions listed below. | `apps/web/src/docs/0.1.8/en/standalone.md:282` | the docs line is corrected in plan 1, Task 6 |
 | G4 | The companion refuses a desktop app on another PC. | `companion/receiver.mjs:72` | closed by G2 |
 | G5 | The desktop app has no connect mode. No setting holds a server address. | `apps/desktop/src/settings.ts:7`, `main.ts:149` | core |
 | G6 | The desktop app cannot be locked. | no kiosk or full-screen code in `apps/desktop/src/main.ts` | core |
@@ -313,12 +313,26 @@ The server edition for a two-PC lab was not chosen: nobody there looks after Doc
 | G19 | A workflow's HTTP step may call only hosts named in `WORKFLOW_HTTP_ALLOWLIST`. It is empty by default, and the desktop app has no way to set it. So a desktop spoke cannot run the workflow that fetches results. | `packages/workflows/src/engine/services.ts:171`, `packages/config/src/schema.ts:148`, `apps/standalone/src/environment.ts:40-72` | core. Designed in `2026-11-27-trusted-certificates-and-workflow-hosts-design.md` |
 | G18 | Withdrawn. lab-bench declares `pluginKind: "sink"`, so Studio's connector form already offers it. | `openldr-ce-plugin-lab-bench/manifest.template.json:31`, `apps/server/src/connectors-routes.ts:78` | none |
 
-**HONEST NON-PROOF.** G3 comes from the docs. Nobody reproduced it in this session. The
-first build step is to open a lab-bench page from a second PC over plain HTTP and see what
-breaks. G2 is needed either way, because of G4 and the plain-text passwords. The plugin
-frame already copes with one plain HTTP limit (`apps/studio/src/plugins/PluginFrame.tsx:34`),
-so G3 may be out of date. Assign no plugin work for it until a named screen fails.
+**G3 was checked on 2026-11-27 and did not reproduce.** The check ran in the browser pane at
+`http://100.107.125.94:4173/studio/`, a built Studio over plain HTTP at a non-loopback address. The page was not a secure context: `isSecureContext` was false, and
+`crypto.randomUUID`, `crypto.subtle` and `navigator.clipboard` were all missing. With no
+console error in any step:
 
+- **A plugin page.** The Laboratory (lab-bench) page loaded with live rows. In its Settings,
+  "Allow self-authorisation" was turned on and saved. Four broker calls answered 200. The
+  setting was still on when the sheet was opened again. It was then turned off and saved.
+- **The dashboard editor.** A new dashboard was made. The widget editor opened and showed a
+  live count. The widget was saved and drawn on the dashboard. The dashboard was then deleted.
+- **The access keys sheet.** With the operator's yes, a key named `http-check-delete-me` was
+  made for the test user `bench1`. "Copy key" was pressed. The sheet said "Copied." and the
+  whole 48-character key was selected in its field. That is the fallback for a missing
+  clipboard (`apps/studio/src/users/AccessKeysSheet.tsx:126`). What landed on the clipboard
+  was not read back. The key was then revoked. Its row stays in the list as "Revoked".
+
+What this does not show: other plugin pages, other dashboard actions, and a standalone
+launcher started with `--host`. The address above is a preview server in front of the dev API.
+It serves the same built Studio. G2 is needed whatever G3 says, because of G4 and the
+plain-text passwords.
 G8 was read from one line. Whether the analyser sends the result again after an error
 depends on the analyser. Check it on a real one before building a queue.
 

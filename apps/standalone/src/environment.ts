@@ -18,6 +18,12 @@ export interface EnvironmentInput {
   appVersion: string;
   /** The bundle's plain CLI entry, dist/cli.js. The server starts it for a command sent through the app. */
   cliEntry: string;
+  /**
+   * Set when OpenLDR is shared on the lab network. The HTTPS front then stands in front of the
+   * server on this same machine, so the server trusts forwarded headers from 127.0.0.1 and from
+   * nowhere else, and serves this certificate to whoever may download it.
+   */
+  share?: { certFile: string };
 }
 
 /**
@@ -68,6 +74,7 @@ export function buildEnvironment(input: EnvironmentInput): Record<string, string
     // The public marketplace, as the Docker installer sets it (install/install.sh). It is added as
     // the default registry whenever the registry list is empty, so a list someone changed stays theirs.
     MARKETPLACE_REGISTRY_URL: PUBLIC_MARKETPLACE_URL,
+    ...(input.share ? { TRUST_PROXY: '127.0.0.1', TLS_CERT_PATH: input.share.certFile } : {}),
   };
 }
 
@@ -93,6 +100,7 @@ function check(input: EnvironmentInput): void {
     ['paths.serverLog', input.paths.serverLog],
     ['studioDist', input.studioDist],
     ['cliEntry', input.cliEntry],
+    ...(input.share ? [['share.certFile', input.share.certFile] as [string, string]] : []),
   ];
   for (const [field, value] of absolute) {
     if (!isAbsolute(value)) refuse(field, 'must be an absolute path');

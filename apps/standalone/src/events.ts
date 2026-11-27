@@ -3,11 +3,12 @@
 // An event never holds a password, a key, a token or a setup code.
 
 import { writeSync } from 'node:fs';
+import type { ShareInfo } from './state.js';
 
 export type LauncherEvent =
   | { event: 'starting'; step: 'postgres' | 'server' }
   | { event: 'recovering' }
-  | { event: 'ready'; address: string }
+  | { event: 'ready'; address: string; share?: ShareInfo }
   | { event: 'stopping' }
   | { event: 'stopped'; result: 'clean' | 'forced' }
   | { event: 'error'; message: string };

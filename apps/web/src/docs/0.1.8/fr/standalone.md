@@ -87,6 +87,8 @@ Le code de configuration ne s'affiche que dans le terminal. Le lanceur ne l'écr
 | `--data-dir <folder>` | Voir la section suivante | Le dossier qui contient toutes les données de cette installation. |
 | `--port <port>` | `3000` | Le port web. Si un autre programme l'occupe, `start` s'arrête avec `Port 3000 is already in use. Choose another with --port.` Il ne choisit jamais un autre port de lui-même. |
 | `--host <address>` | `127.0.0.1` | L'adresse d'écoute d'OpenLDR. Par défaut, seul cet ordinateur y a accès. Voir **Ouvrir l'accès à un téléphone ou à un autre ordinateur** plus bas. |
+| `--share` | Désactivé | Ouvre OpenLDR au réseau du laboratoire en HTTPS, sur un second port. Voir **Le partager sur le réseau du laboratoire** plus bas. Omettez `--host`, ou donnez exactement `--host 127.0.0.1`. |
+| `--share-port <port>` | `3443` | Le port qu'utilisent les autres PC avec `--share`. |
 | `--events-fd <n>` | Aucun | Écrit une ligne JSON par événement sur le descripteur n (3 ou plus). Aucun code de configuration n'est créé ni affiché. C'est pour un programme qui lance le lanceur, comme l'application de bureau. |
 | `--json`, avec `status` | Désactivé | `status` affiche une seule ligne JSON à la place. Voir **Vérifier qu'il tourne** plus bas. |
 
@@ -263,6 +265,35 @@ Un réglage donné ainsi ne vaut que pour cette commande. Si une commande CLI en
 
 Le lanceur retire les réglages des composants qu'une installation autonome n'a pas. Il ignore `OIDC_*`, `KEYCLOAK_*`, `S3_*`, `MSSQL_*`, `MYSQL_*`, `IDENTITY_ADMIN_ADAPTER`, `AUTH_DEV_USERNAME` et `AUTH_DEV_ROLES`.
 
+## Le partager sur le réseau du laboratoire
+
+Pour que d'autres PC du laboratoire ouvrent cet OpenLDR, démarrez avec `--share` :
+
+```sh
+pnpm openldr-standalone start --share
+```
+
+```text
+OpenLDR is running at http://localhost:3000/studio/
+Shared on the lab network at https://labpc:3443/studio/
+Also at https://192.168.1.20:3443/studio/
+Certificate fingerprint (SHA-256): 3F:A1:9C:...:7E
+Certificate file: /home/you/.local/share/openldr/share/cert.pem
+Another PC warns about the certificate the first time. Compare the fingerprint before you accept it.
+Server log: /home/you/.local/share/openldr/logs/server.log
+```
+
+OpenLDR lui-même n'écoute toujours que sur cet ordinateur. Une seconde porte, chiffrée, s'ouvre sur le port 3443 pour le réseau. `--share-port` choisit un autre port.
+
+Sur un autre PC, ouvrez l'une des adresses `https`. Le navigateur avertit qu'il ne connaît pas le certificat. C'est normal : OpenLDR a créé le certificat lui-même. Ouvrez les détails du certificat dans le navigateur et comparez son empreinte SHA-256 à celle affichée par le lanceur. Ne l'acceptez que si elles sont identiques. Connectez-vous ensuite comme d'habitude.
+
+- Le certificat dure 825 jours. Le lanceur le vérifie à chaque démarrage avec `--share`, pas pendant qu'il tourne. Il en crée un nouveau quand il reste moins de 30 jours, ou quand le nom ou l'adresse réseau de cet ordinateur n'y figure pas. Un nouveau certificat a une nouvelle empreinte, et les autres PC doivent l'accepter de nouveau. Une adresse fixe évite la seconde cause. Rien n'évite la première.
+- Sans adresse réseau, le lanceur affiche `No network address was found. Join a network, then start OpenLDR again.`
+- Votre pare-feu doit peut-être autoriser le port 3443.
+- Un programme qui n'est pas un navigateur a besoin du fichier du certificat. Pour un programme Node, donnez à `NODE_EXTRA_CA_CERTS` le chemin d'une copie de `cert.pem`. Après un nouveau certificat, copiez de nouveau le fichier et relancez ce programme.
+- `status` affiche `Shared at` avec la première adresse. `status --json` a un champ `share`.
+- N'ouvrez jamais ce port sur Internet.
+
 ## Ouvrir l'accès à un téléphone ou à un autre ordinateur
 
 Par défaut, seul cet ordinateur peut ouvrir OpenLDR. Pour laisser entrer un téléphone du même réseau ou de Tailscale, démarrez avec l'adresse de cet ordinateur sur ce réseau :
@@ -279,9 +310,9 @@ Listening on 100.64.0.10. Sign-in travels over plain HTTP on this network.
 
 Remplacez `100.64.0.10` par l'adresse privée ou Tailscale de votre ordinateur. Ouvrez l'adresse affichée sur le téléphone. `--host 0.0.0.0` écoute sur toutes les adresses de cet ordinateur. Le lanceur affiche alors `http://localhost:3000/studio/`, qui ne fonctionne que sur cet ordinateur. Sur le téléphone, utilisez plutôt l'adresse de l'ordinateur.
 
-En HTTP sans chiffrement, le navigateur désactive une fonctionnalité qu'utilise Studio. Certains écrans peuvent alors échouer, notamment les pages de plugins et la modification des tableaux de bord. Cela se produit sur le téléphone, et aussi sur cet ordinateur quand vous ouvrez l'adresse donnée à `--host`. Ces écrans fonctionnent quand vous ouvrez Studio à l'adresse `http://localhost:3000/studio/` sur l'ordinateur qui exécute OpenLDR. Cette adresse répond quand vous démarrez sans `--host`, ou avec `--host localhost`, `0.0.0.0`, `::1` ou `::`.
+De cette façon, tout circule sans chiffrement. Pour laisser entrer d'autres PC, préférez `--share` ci-dessus.
 
-La dernière ligne est un avertissement. Une installation autonome n'a pas de TLS. Les noms d'utilisateur, les mots de passe et les données des patients circulent en clair sur le réseau. Toute personne qui peut observer ce réseau peut les lire. Ne le faites que sur un réseau de confiance. Tailscale chiffre le trafic entre vos propres appareils. N'ouvrez jamais ce port sur Internet. Votre pare-feu devra peut-être autoriser le port.
+La dernière ligne est un avertissement. Démarré de cette façon, OpenLDR n'a pas de TLS. Les noms d'utilisateur, les mots de passe et les données des patients circulent en clair sur le réseau. Toute personne qui peut observer ce réseau peut les lire. Ne le faites que sur un réseau de confiance. Tailscale chiffre le trafic entre vos propres appareils. N'ouvrez jamais ce port sur Internet. Votre pare-feu devra peut-être autoriser le port.
 
 ## Sauvegarder et restaurer
 
@@ -300,13 +331,12 @@ Pour restaurer, arrêtez OpenLDR, remettez le dossier copié à son emplacement 
 
 ## Limites
 
-- Pas de TLS. OpenLDR sert du HTTP en clair.
+- Pas de TLS, sauf si vous démarrez avec `--share`. Sans cela, OpenLDR sert du HTTP en clair.
 - Cette page l'exécute depuis une copie compilée du dépôt. L'[application de bureau](/docs/desktop-app) l'installe en une ligne.
 - Postgres seulement. Le Postgres fourni contient les deux bases. SQL Server et MySQL ne peuvent pas servir de base d'analyse.
 - Un seul lanceur par dossier de données.
 - Seul Linux a été testé. Windows et macOS ne sont pas testés.
 - La synchronisation avec un serveur central qui utilise un certificat auto-signé n'est pas prise en charge.
-- En HTTP sans chiffrement, certains écrans de Studio ont besoin d'une adresse que le navigateur considère comme locale : `localhost` ou `127.0.0.1`. Les pages de plugins et la modification des tableaux de bord en font partie. À toute autre adresse, ils peuvent échouer. `http://localhost:3000/studio/` répond quand vous démarrez sans `--host`, ou avec `--host localhost`, `0.0.0.0`, `::1` ou `::`.
 - Le Postgres fourni ne peut pas passer à une nouvelle version majeure. Le dossier de données ne fonctionne qu'avec Postgres 16.
 - Sauvegarder veut dire arrêter, puis copier le dossier. Il n'existe pas d'outil de sauvegarde.
 - Le journal du serveur et celui de Postgres ne font l'objet d'aucune rotation. Ils grossissent jusqu'à ce que vous les supprimiez pendant qu'OpenLDR est arrêté.

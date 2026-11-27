@@ -1,5 +1,5 @@
-// The app's settings file. It holds the port, start at sign-in and the window size, and nothing
-// else. It never holds a secret.
+// The app's settings file. It holds the port, start at sign-in, the window size and whether
+// OpenLDR is shared on the lab network, and nothing else. It never holds a secret.
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -8,7 +8,14 @@ export interface Settings {
   port?: number;
   startAtSignIn: boolean;
   window?: { width: number; height: number };
+  /** Present, and true, only while OpenLDR is shared on the lab network. */
+  shareOnNetwork?: true;
+  /** The port other PCs use. Without it, the launcher's own default. */
+  sharePort?: number;
 }
+
+/** The share port the launcher uses when the settings name none. The launcher's own default. */
+export const DEFAULT_SHARE_PORT = 3443;
 
 export const DEFAULT_SETTINGS: Settings = Object.freeze({ startAtSignIn: false });
 
@@ -24,7 +31,7 @@ function isSize(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) > 0;
 }
 
-/** Keeps the three known fields when each has the right type. Anything else is dropped. */
+/** Keeps the known fields when each has the right type. Anything else is dropped. */
 function known(value: unknown): Settings {
   const s: Settings = { startAtSignIn: false };
   if (!isRecord(value)) return s;
@@ -32,6 +39,8 @@ function known(value: unknown): Settings {
   if (typeof value.startAtSignIn === 'boolean') s.startAtSignIn = value.startAtSignIn;
   const w = value.window;
   if (isRecord(w) && isSize(w.width) && isSize(w.height)) s.window = { width: w.width, height: w.height };
+  if (value.shareOnNetwork === true) s.shareOnNetwork = true;
+  if (isPort(value.sharePort)) s.sharePort = value.sharePort;
   return s;
 }
 
@@ -44,7 +53,7 @@ export function loadSettings(file: string): Settings {
   }
 }
 
-/** Writes the three known fields to a temp file next to it, then renames it into place. */
+/** Writes the known fields to a temp file next to it, then renames it into place. */
 export function saveSettings(file: string, s: Settings): void {
   mkdirSync(dirname(file), { recursive: true });
   const temp = `${file}.${process.pid}.tmp`;

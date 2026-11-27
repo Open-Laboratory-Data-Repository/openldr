@@ -132,6 +132,46 @@ describe('startArgs', () => {
   });
 });
 
+describe('startArgs with sharing', () => {
+  it('adds --share and --share-port after the usual arguments, and keeps --host 127.0.0.1', () => {
+    expect(startArgs(withData, 3991, { port: 3443 })).toEqual([
+      target.entry, 'start', '--host', '127.0.0.1', '--port', '3991', '--events-fd', '3', '--data-dir', withData.dataDir, '--share', '--share-port', '3443',
+    ]);
+  });
+});
+
+describe('share in the status and the ready event', () => {
+  const share = { addresses: ['https://labpc:3443/studio/', 'https://192.168.1.20:3443/studio/'], fingerprint: 'AB:CD', certFile: '/d/share/cert.pem' };
+  const running = { dataDir: '/d', running: true, address: 'http://localhost:3990/studio/', host: '127.0.0.1' };
+
+  it('reads share from status --json', async () => {
+    const s = scriptedSpawn({ stdout: `${JSON.stringify({ ...running, share })}\n`, code: 0 });
+    expect(await readStatus(target, s.spawn)).toEqual({ ...running, share });
+  });
+
+  it('reads a share with no address', async () => {
+    const s = scriptedSpawn({ stdout: `${JSON.stringify({ ...running, share: { ...share, addresses: [] } })}\n`, code: 0 });
+    expect(await readStatus(target, s.spawn)).toMatchObject({ share: { addresses: [] } });
+  });
+
+  it.each([{ ...share, addresses: 'x' }, { ...share, addresses: [1] }, { ...share, fingerprint: 1 }, { addresses: [] }, 'x', null])(
+    'drops a malformed share %j and keeps the rest',
+    async (bad) => {
+      const s = scriptedSpawn({ stdout: `${JSON.stringify({ ...running, share: bad })}\n`, code: 0 });
+      expect(await readStatus(target, s.spawn)).toEqual(running);
+    },
+  );
+
+  it('reads share from a ready event, and drops a malformed one', () => {
+    expect(parseEventLine(JSON.stringify({ event: 'ready', address: 'http://localhost:3990/studio/', share }))).toEqual({
+      event: 'ready', address: 'http://localhost:3990/studio/', share,
+    });
+    expect(parseEventLine(JSON.stringify({ event: 'ready', address: 'http://localhost:3990/studio/', share: 'x' }))).toEqual({
+      event: 'ready', address: 'http://localhost:3990/studio/',
+    });
+  });
+});
+
 describe('runLauncher', () => {
   it('runs execPath with the args and the launcher env, and collects the output', async () => {
     const s = scriptedSpawn({ stdout: 'out\n', stderr: 'err\n', code: 3 });

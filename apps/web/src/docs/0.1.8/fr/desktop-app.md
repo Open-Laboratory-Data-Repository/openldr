@@ -82,18 +82,37 @@ Le plus simple est de sélectionner **Quitter** dans le menu de la zone de notif
 
 Fermer la fenêtre laisse OpenLDR tourner. Pour arrêter OpenLDR, utilisez **Quitter**.
 
-L'application a une icône dans la zone de notification, la partie de la barre des tâches ou de la barre du haut qui contient les petites icônes des programmes en cours. Son menu a quatre éléments :
+L'application a une icône dans la zone de notification, la partie de la barre des tâches ou de la barre du haut qui contient les petites icônes des programmes en cours. Son menu a cinq éléments, et davantage pendant le partage :
 
 | Élément | Effet |
 | --- | --- |
 | **Ouvrir OpenLDR** | Affiche de nouveau la fenêtre. |
 | **Démarrer à la connexion** | Une case, décochée au départ. Cochée, l'application démarre quand vous vous connectez à l'ordinateur, sans ouvrir de fenêtre. |
+| **Partager sur le réseau du laboratoire** | Une coche, décochée au départ. Voir **Partager sur le réseau du laboratoire** plus bas. |
 | **Ouvrir le dossier des journaux** | Ouvre `logs` dans le dossier de données. |
 | **Quitter** | Affiche **Arrêt d'OpenLDR**, arrête le serveur et la base de données, puis ferme l'application. |
 
 **Quitter** arrête OpenLDR même quand l'application affichait un OpenLDR qu'elle n'avait pas démarré elle-même.
 
 Relancer l'application pendant qu'elle tourne fait revenir sa fenêtre. Les liens qui sortent d'OpenLDR s'ouvrent dans votre navigateur. Les pages propres à l'application suivent la langue du système : anglais, français ou portugais.
+
+### Partager sur le réseau du laboratoire
+
+Cochez **Partager sur le réseau du laboratoire** pour que d'autres PC du laboratoire ouvrent cet OpenLDR. L'application demande d'abord. OpenLDR redémarre ensuite, et les personnes qui l'utilisent attendent un instant.
+
+Pendant le partage, le menu affiche aussi l'adresse qu'utilisent les autres PC, et trois éléments de plus. Le menu affiche une seule adresse. Si elle ne s'ouvre pas sur un autre PC, lancez `openldr-standalone status --json` dans un terminal et essayez les autres adresses sous `share.addresses`. **Emplacement des données** plus bas donne le chemin complet de la commande, nécessaire sous Windows.
+
+| Élément | Effet |
+| --- | --- |
+| **Copier l'adresse réseau** | Copie l'adresse `https` à donner aux autres PC. |
+| **Copier l'empreinte du certificat** | Copie l'empreinte à comparer sur l'autre PC. |
+| **Enregistrer le certificat...** | Enregistre le certificat dans un fichier, pour un programme qui en a besoin. |
+
+Sur un autre PC, ouvrez l'adresse dans un navigateur. Le navigateur avertit au sujet du certificat la première fois. Comparez son empreinte SHA-256 à celle de la zone de notification, et ne l'acceptez que si elles sont identiques.
+
+Les autres PC utilisent le port 3443. Si un autre programme utilise ce port, l'application affiche `Port 3443 is already in use. Choose another with --share-port.` Pour un autre port, quittez l'application, ajoutez `"sharePort": 8443` à `settings.json`, puis relancez-la. Le fichier se trouve dans le dossier de l'application, `OpenLDR Desktop`. **Emplacement des données** plus bas donne son emplacement sur chaque système.
+
+Si OpenLDR a été démarré en dehors de l'application, la coche est enregistrée et s'applique au prochain démarrage par l'application. [Exécuter sans Docker](/docs/standalone) en dit plus sur le certificat.
 
 ### Quand aucune icône n'apparaît
 
@@ -151,7 +170,7 @@ Le dossier de données reste. La dernière ligne dit où il se trouve, par exemp
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-Le dossier de données contient la base de données, les fichiers stockés, les journaux et la clé des secrets. [Exécuter sans Docker](/docs/standalone) détaille son contenu. Le dossier propre à l'application contient ses réglages, son journal `desktop.log` et les données de navigateur de la fenêtre. Les réglages sont le port, le démarrage à la connexion et la taille de la fenêtre. Ils ne contiennent aucun secret.
+Le dossier de données contient la base de données, les fichiers stockés, les journaux et la clé des secrets. [Exécuter sans Docker](/docs/standalone) détaille son contenu. Le dossier propre à l'application contient ses réglages, son journal `desktop.log` et les données de navigateur de la fenêtre. Les réglages sont le port, le démarrage à la connexion, la taille de la fenêtre, le partage d'OpenLDR sur le réseau du laboratoire, et le port du partage quand vous en fixez un. Ils ne contiennent aucun secret.
 
 Le dossier de données est le même que celui de `openldr-standalone`. L'application fournit cette commande :
 
@@ -208,12 +227,12 @@ Pas encore signalé :
 
 ## Limites
 
-- Cet ordinateur seulement. L'application démarre OpenLDR sur `127.0.0.1`, donc un téléphone ou un autre ordinateur ne peut pas l'atteindre. [Exécuter sans Docker](/docs/standalone) montre comment ouvrir OpenLDR à d'autres appareils.
+- Cet ordinateur seulement, sauf si **Partager sur le réseau du laboratoire** est coché. L'application démarre OpenLDR sur `127.0.0.1`. Le partage ouvre un second port, chiffré, pour les autres PC du réseau du laboratoire.
 - L'application ne se met pas à jour elle-même. Relancez la ligne d'installation.
 - L'application ne porte la signature d'aucun éditeur sous macOS ni sous Windows.
 - Sous macOS, la fenêtre peut s'ouvrir quand l'application démarre à la connexion. Ce n'est pas prouvé.
 - `desktop.log` grossit sans limite, comme `server.log` et `postgres.log`. Supprimez-le après avoir sélectionné **Quitter**.
-- Les limites de la page [Exécuter sans Docker](/docs/standalone) s'appliquent aussi, comme l'absence de TLS et la sauvegarde par copie du dossier de données arrêté.
+- Les limites de la page [Exécuter sans Docker](/docs/standalone) s'appliquent aussi, comme la sauvegarde par copie du dossier de données arrêté.
 
 ## Guides associés
 

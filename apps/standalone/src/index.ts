@@ -47,7 +47,7 @@ function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function start(opts: { dataDir?: string; port: number; host: string; eventsFd?: number }): Promise<void> {
+async function start(opts: { dataDir?: string; port: number; host: string; eventsFd?: number; share?: { port: number } }): Promise<void> {
   const signals = handleSignals({ source: process, print, exit: (code) => process.exit(code) });
   const { eventsFd, ...startOpts } = opts;
   // A program that runs the launcher reads these. A failed write is ignored, so a reader that has

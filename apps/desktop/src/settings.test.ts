@@ -108,3 +108,27 @@ describe('saveSettings', () => {
     expect(loadSettings(file)).toEqual(s);
   });
 });
+
+describe('sharing settings', () => {
+  it('keeps shareOnNetwork when it is true, and a valid sharePort', () => {
+    writeFileSync(file, JSON.stringify({ startAtSignIn: false, shareOnNetwork: true, sharePort: 8443 }));
+    expect(loadSettings(file)).toEqual({ startAtSignIn: false, shareOnNetwork: true, sharePort: 8443 });
+  });
+
+  it('leaves shareOnNetwork out when it is false, missing or not a boolean', () => {
+    for (const value of [false, undefined, 'yes', 1]) {
+      writeFileSync(file, JSON.stringify({ startAtSignIn: false, shareOnNetwork: value }));
+      expect(loadSettings(file)).toEqual({ startAtSignIn: false });
+    }
+  });
+
+  it.each([0, 65536, 1.5, '8443', null])('drops the share port %j', (sharePort) => {
+    writeFileSync(file, JSON.stringify({ startAtSignIn: false, shareOnNetwork: true, sharePort }));
+    expect(loadSettings(file)).toEqual({ startAtSignIn: false, shareOnNetwork: true });
+  });
+
+  it('writes both back', () => {
+    saveSettings(file, { startAtSignIn: false, shareOnNetwork: true, sharePort: 8443 });
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ startAtSignIn: false, shareOnNetwork: true, sharePort: 8443 });
+  });
+});

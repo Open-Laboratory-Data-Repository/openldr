@@ -113,6 +113,18 @@ describe('buildEnvironment', () => {
     expect(Object.keys(buildEnvironment(input)).sort()).toEqual([...EXPECTED_KEYS].sort());
   });
 
+  it('adds TRUST_PROXY and TLS_CERT_PATH only when sharing', () => {
+    const certFile = join(input.paths.root, 'share', 'cert.pem');
+    expect(buildEnvironment({ ...input, share: { certFile } })).toMatchObject({ TRUST_PROXY: '127.0.0.1', TLS_CERT_PATH: certFile });
+    const plain = buildEnvironment(input);
+    expect(plain.TRUST_PROXY).toBeUndefined();
+    expect(plain.TLS_CERT_PATH).toBeUndefined();
+  });
+
+  it('refuses a share certificate that is not an absolute path', () => {
+    expect(() => buildEnvironment({ ...input, share: { certFile: 'cert.pem' } })).toThrow(/share/);
+  });
+
   it('sets nothing for Keycloak, OIDC or S3', () => {
     expect(Object.keys(buildEnvironment(input)).filter((k) => /^(OIDC_|KEYCLOAK_|S3_|IDENTITY_ADMIN)/.test(k))).toEqual([]);
   });

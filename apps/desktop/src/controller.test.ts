@@ -18,6 +18,7 @@ const DESKTOP_LOG = '/home/someone/.config/OpenLDR Desktop/desktop.log';
 /** A launcher the fake startLauncher made. Tests drive its events and its exit. */
 interface FakeLauncher {
   port: number;
+  share: { port: number } | undefined;
   on: { event(e: LauncherEvent): void; stderrLine(line: string): void };
   exited: Promise<number | null>;
   exit(code: number | null): void;
@@ -89,10 +90,11 @@ function harness(o: Options = {}): Harness {
       if (o.readStatus) return o.readStatus();
       return statuses.length > 1 ? statuses.shift()! : statuses[0]!;
     },
-    startLauncher: (port, on) => {
+    startLauncher: (port, on, share) => {
       let resolveExit!: (code: number | null) => void;
       const l: FakeLauncher = {
         port,
+        share,
         on,
         exited: new Promise((r) => (resolveExit = r)),
         exit: (code) => resolveExit(code),
@@ -814,5 +816,305 @@ describe('DesktopController', () => {
     await settle();
     expect(h.last()).toMatchObject({ screen: 'error', message: 'The system gave no port.' });
     expect(h.launchers).toHaveLength(0);
+  });
+});
+
+describe('sharing on the lab network', () => {
+  const share = { addresses: ['https://labpc:3443/studio/'], fingerprint: 'AB:CD', certFile: '/d/share/cert.pem' };
+  /** A stop that the launcher obeys: it says it is stopping, then stopped, then exits. */
+  const obeys = async (h: Harness): Promise<number> => {
+    const l = h.launchers[h.launchers.length - 1]!;
+    l.on.event({ event: 'stopping' });
+    l.on.event({ event: 'stopped', result: 'clean' });
+    l.exit(0);
+    return 0;
+  };
+
+  it('starts the launcher with the default share port when the setting is on', async () => {
+    const h = harness({ settings: { startAtSignIn: false, shareOnNetwork: true } });
+    expect((await started(h)).share).toEqual({ port: 3443 });
+  });
+
+  it('uses the share port from the settings', async () => {
+    const h = harness({ settings: { startAtSignIn: false, shareOnNetwork: true, sharePort: 8443 } });
+    expect((await started(h)).share).toEqual({ port: 8443 });
+  });
+
+  it('passes no share when the setting is off, whatever the share port', async () => {
+    const h = harness({ settings: { startAtSignIn: false, sharePort: 8443 } });
+    expect((await started(h)).share).toBeUndefined();
+  });
+
+  it('reports the share from the ready event, and none before it', async () => {
+    const h = harness({ settings: { startAtSignIn: false, shareOnNetwork: true } });
+    const l = await started(h);
+    expect(h.controller.share()).toBeUndefined();
+    l.on.event({ event: 'ready', address: OWN, share });
+    await settle();
+    expect(h.controller.share()).toEqual(share);
+  });
+
+  it('reports the share of a launcher it attached to', async () => {
+    const h = harness({ statuses: [{ ...runningStatus('127.0.0.1'), share } as Status] });
+    void h.controller.start();
+    await settle();
+    expect(h.controller.share()).toEqual(share);
+  });
+
+  it('forgets the share when the launcher ends', async () => {
+    const h = harness({ settings: { startAtSignIn: false, shareOnNetwork: true } });
+    const l = await started(h);
+    l.on.event({ event: 'ready', address: OWN, share });
+    l.exit(null);
+    await settle();
+    expect(h.controller.share()).toBeUndefined();
+  });
+
+  it('restart stops its own launcher and starts again, with no error screen', async () => {
+    const h = harness({ requestStop: obeys });
+    await ready(h);
+    h.shown.length = 0;
+    const done = h.controller.restart();
+    await settle();
+    expect(await done).toBe(true);
+    await settle();
+    expect(h.stops()).toBe(1);
+    expect(h.launchers).toHaveLength(2);
+    expect(h.shown.map((x) => x.screen)).not.toContain('error');
+    expect(h.shown[0]).toEqual({ screen: 'stopping' });
+    expect(h.exits).toEqual([]);
+    h.launchers[1]!.on.event({ event: 'ready', address: OWN_WINDOW });
+    await settle();
+    expect(h.last()).toEqual({ screen: 'studio', address: OWN_WINDOW });
+  });
+
+  it('restart reads the settings again, so the new launcher gets the new share', async () => {
+    let settings: Settings = { startAtSignIn: false };
+    const h = harness({ requestStop: obeys });
+    h.deps.loadSettings = () => settings;
+    await ready(h);
+    expect(h.launchers[0]!.share).toBeUndefined();
+    settings = { startAtSignIn: false, shareOnNetwork: true };
+    await h.controller.restart();
+    await settle();
+    expect(h.launchers[1]!.share).toEqual({ port: 3443 });
+  });
+
+  it('restart returns false when attached to a launcher it did not start', async () => {
+    const h = harness({ statuses: [runningStatus('127.0.0.1')] });
+    void h.controller.start();
+    await settle();
+    expect(await h.controller.restart()).toBe(false);
+    expect(h.stops()).toBe(0);
+  });
+
+  it('restart returns false while starting', async () => {
+    const h = harness();
+    await started(h);
+    expect(await h.controller.restart()).toBe(false);
+    expect(h.stops()).toBe(0);
+  });
+
+  it('a second restart during a restart returns false', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const h = harness({
+      requestStop: async (hh) => {
+        await held;
+        return obeys(hh);
+      },
+    });
+    await ready(h);
+    const first = h.controller.restart();
+    await settle();
+    expect(await h.controller.restart()).toBe(false);
+    release();
+    expect(await first).toBe(true);
+    await settle();
+    expect(h.stops()).toBe(1);
+    expect(h.launchers).toHaveLength(2);
+  });
+
+  it('restart starts no second launcher when the first did not stop, and shows the error', async () => {
+    const h = harness({ requestStop: async () => 1, stopWaitMs: 2000 });
+    await ready(h);
+    const done = h.controller.restart();
+    await settle();
+    expect(await done).toBe(true);
+    await settle();
+    expect(h.launchers).toHaveLength(1);
+    expect(h.last()).toMatchObject({ screen: 'error', message: strings.shareRestartFailed });
+  });
+
+  it('restart does nothing once a quit has begun', async () => {
+    const h = harness({ requestStop: obeys });
+    await ready(h);
+    void h.controller.quit();
+    expect(await h.controller.restart()).toBe(false);
+    await settle();
+    expect(h.launchers).toHaveLength(1);
+    expect(h.exits).toEqual([0]);
+  });
+
+  it('refreshes the share of an attached launcher once it answers', async () => {
+    // The launcher's lock is live before its HTTPS front is up, so the first status has no share.
+    let up = false;
+    const h = harness({
+      statuses: [runningStatus('127.0.0.1'), { ...runningStatus('127.0.0.1'), share } as Status],
+      answers: async () => up,
+    });
+    void h.controller.start();
+    await settle();
+    expect(h.controller.share()).toBeUndefined();
+    up = true;
+    await h.tick();
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    expect(h.controller.share()).toEqual(share);
+  });
+
+  it('takes the share from a later status read of an attached launcher', async () => {
+    let up = true;
+    const h = harness({
+      statuses: [runningStatus('127.0.0.1'), { ...runningStatus('127.0.0.1'), share } as Status],
+      answers: async () => up,
+      pollMs: 1000,
+    });
+    void h.controller.start();
+    await settle();
+    expect(h.controller.share()).toBeUndefined();
+    // The address stops answering for one poll, so the status is read again.
+    up = false;
+    await h.tick();
+    expect(h.controller.share()).toEqual(share);
+  });
+
+  it('a quit during a restart shares the one stop, and exits by its result', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const h = harness({
+      requestStop: async (hh) => {
+        await held;
+        return obeys(hh);
+      },
+    });
+    await ready(h);
+    const restarting = h.controller.restart();
+    await settle();
+    const quitting = h.controller.quit();
+    await settle();
+    // One stop was asked for, not two. The quit waits for it.
+    expect(h.stops()).toBe(1);
+    expect(h.exits).toEqual([]);
+    release();
+    await restarting;
+    await quitting;
+    await settle();
+    expect(h.stops()).toBe(1);
+    expect(h.exits).toEqual([0]);
+    expect(h.launchers).toHaveLength(1);
+  });
+
+  it('after a restart that could not stop the launcher, a quit still stops that launcher', async () => {
+    let obey = false;
+    const h = harness({ requestStop: async (hh) => (obey ? obeys(hh) : 1), stopWaitMs: 2000 });
+    await ready(h);
+    await h.controller.restart();
+    await settle();
+    expect(h.last()).toMatchObject({ screen: 'error', message: strings.shareRestartFailed });
+    obey = true;
+    await h.controller.quit();
+    await settle();
+    // The launcher this app started is still its to stop: it asks again and waits for the exit.
+    expect(h.stops()).toBe(2);
+    expect(h.exits).toEqual([0]);
+  });
+
+  it('picks up a share that an attached launcher publishes after it already answers', async () => {
+    // The server answers before the launcher has published its share. Nothing fails, so only a
+    // status read on a slow timer can see it.
+    const later = { ...share, fingerprint: 'EF:01' };
+    const h = harness({
+      statuses: [runningStatus('127.0.0.1'), { ...runningStatus('127.0.0.1'), share } as Status, { ...runningStatus('127.0.0.1'), share: later } as Status],
+      pollMs: 1000,
+    });
+    const changes: Array<unknown> = [];
+    h.deps.shareChanged = () => changes.push(h.controller.share());
+    void h.controller.start();
+    await settle();
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    expect(h.controller.share()).toBeUndefined();
+    for (let i = 0; i < 5; i++) await h.tick();
+    expect(h.controller.share()).toBeUndefined();
+    expect(h.statusReads()).toBe(1);
+    await h.tick();
+    expect(h.statusReads()).toBe(2);
+    expect(h.controller.share()).toEqual(share);
+    expect(changes).toEqual([share]);
+    // A launcher that replaced it on the same address, with another certificate.
+    for (let i = 0; i < 6; i++) await h.tick();
+    expect(h.controller.share()).toEqual(later);
+    expect(changes).toEqual([share, later]);
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+  });
+
+  it('says so when the share of its own launcher comes and goes', async () => {
+    const h = harness({ settings: { startAtSignIn: false, shareOnNetwork: true } });
+    const changes: Array<unknown> = [];
+    h.deps.shareChanged = () => changes.push(h.controller.share());
+    const l = await started(h);
+    l.on.event({ event: 'ready', address: OWN, share });
+    await settle();
+    l.exit(null);
+    await settle();
+    expect(changes).toEqual([share, undefined]);
+  });
+
+  it('does not say so when a status read gives the same share again', async () => {
+    const withShare = { ...runningStatus('127.0.0.1'), share } as Status;
+    const h = harness({ statuses: [withShare], pollMs: 1000 });
+    const changes: Array<unknown> = [];
+    h.deps.shareChanged = () => changes.push(h.controller.share());
+    void h.controller.start();
+    await settle();
+    for (let i = 0; i < 12; i++) await h.tick();
+    expect(changes).toEqual([share]);
+  });
+
+  it('keeps Studio when the slow status read for the share gets no answer, and tries again later', async () => {
+    let reads = 0;
+    let finish!: (s: Status) => void;
+    const slow = new Promise<Status>((r) => (finish = r));
+    const h = harness({
+      pollMs: 1000,
+      readStatus: () => {
+        reads += 1;
+        if (reads === 1) return Promise.resolve(runningStatus('127.0.0.1'));
+        // The second read is slow: it outlasts its time limit. The third answers, with the share.
+        if (reads === 2) return slow;
+        return Promise.resolve({ ...runningStatus('127.0.0.1'), share } as Status);
+      },
+    });
+    void h.controller.start();
+    await settle();
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    // Six polls bring the first refresh, which hangs. More ticks let its time limit pass.
+    for (let i = 0; i < 9; i++) await h.tick();
+    expect(h.shown.map((x) => x.screen)).not.toContain('error');
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    // The slow status child ends at last. A read still in flight is reused, never stacked.
+    finish(runningStatus('127.0.0.1'));
+    for (let i = 0; i < 8; i++) await h.tick();
+    expect(h.controller.share()).toEqual(share);
+    expect(h.shown.map((x) => x.screen)).not.toContain('error');
+  });
+
+  it('still shows the error when the address stops answering and the launcher has gone', async () => {
+    let up = true;
+    const h = harness({ statuses: [runningStatus('127.0.0.1'), { running: false, dataDir: DATA }], answers: async () => up, pollMs: 1000 });
+    void h.controller.start();
+    await settle();
+    up = false;
+    await h.tick();
+    expect(h.last()).toMatchObject({ screen: 'error', message: strings.launcherGone });
   });
 });

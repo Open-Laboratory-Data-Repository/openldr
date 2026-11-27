@@ -82,18 +82,37 @@ The simple way out is to select **Quit** in the tray menu and start the app agai
 
 Closing the window keeps OpenLDR running. To stop OpenLDR, use **Quit**.
 
-The app has an icon in the system tray, the area of the taskbar or top bar that holds small icons for running programs. Its menu has four items:
+The app has an icon in the system tray, the area of the taskbar or top bar that holds small icons for running programs. Its menu has five items, and more while OpenLDR is shared:
 
 | Item | What it does |
 | --- | --- |
 | **Open OpenLDR** | Shows the window again. |
 | **Start when I sign in** | A tick, off at first. When it is on, the app starts when you sign in to the computer, with no window open. |
+| **Share on the lab network** | A tick, off at first. See **Share on the lab network** below. |
 | **Open the log folder** | Opens `logs` in the data folder. |
 | **Quit** | Shows **Stopping OpenLDR**, stops the server and the database, then closes the app. |
 
 **Quit** stops OpenLDR even when the app showed an OpenLDR that it did not start itself.
 
 Starting the app again while it runs brings its window back. Links that leave OpenLDR open in your browser. The app's own pages follow the system language: English, French or Portuguese.
+
+### Share on the lab network
+
+Tick **Share on the lab network** to let other PCs in the lab open this OpenLDR. The app asks first. OpenLDR then restarts, and anyone using it waits a moment.
+
+While it is shared, the tray menu also shows the address other PCs use, and three more items. The menu shows one address. If it does not open on another PC, run `openldr-standalone status --json` in a terminal and try the other addresses under `share.addresses`. **Where the data is** below gives the command's full path, which Windows needs.
+
+| Item | What it does |
+| --- | --- |
+| **Copy network address** | Copies the `https` address to give to the other PCs. |
+| **Copy certificate fingerprint** | Copies the fingerprint to compare on the other PC. |
+| **Save certificate...** | Saves the certificate as a file, for a program that needs it. |
+
+On another PC, open the address in a browser. The browser warns about the certificate the first time. Compare its SHA-256 fingerprint with the one from the tray, and accept it only when they match.
+
+Other PCs use port 3443. If another program uses that port, the app shows `Port 3443 is already in use. Choose another with --share-port.` To use another port, quit the app, add `"sharePort": 8443` to `settings.json`, and start it again. The file is in the app's own folder, `OpenLDR Desktop`. **Where the data is** below gives its place on each system.
+
+If OpenLDR was started outside the app, the tick is saved and applies the next time the app starts it. [Run without Docker](/docs/standalone) has more on the certificate.
 
 ### When no tray icon shows
 
@@ -151,7 +170,7 @@ The data folder stays. The last line says where it is, such as `Your data was le
 | macOS | `~/Library/Application Support/OpenLDR` | `~/Library/Application Support/OpenLDR Desktop` |
 | Windows | `%LOCALAPPDATA%\OpenLDR` | `%APPDATA%\OpenLDR Desktop` |
 
-The data folder holds the database, stored files, the logs and the secrets key. [Run without Docker](/docs/standalone) lists what is in it. The app's own folder holds its settings, its log `desktop.log`, and the window's browser data. The settings are the port, start at sign-in and the window size. They hold no secret.
+The data folder holds the database, stored files, the logs and the secrets key. [Run without Docker](/docs/standalone) lists what is in it. The app's own folder holds its settings, its log `desktop.log`, and the window's browser data. The settings are the port, start at sign-in, the window size, whether OpenLDR is shared on the lab network, and the port for sharing when you set one. They hold no secret.
 
 The data folder is the same one `openldr-standalone` uses. The app brings that command with it:
 
@@ -208,12 +227,12 @@ Still unreported:
 
 ## Limits
 
-- This computer only. The app starts OpenLDR on `127.0.0.1`, so a phone or another computer cannot reach it. [Run without Docker](/docs/standalone) shows how to open OpenLDR to other devices.
+- This computer only, unless **Share on the lab network** is ticked. The app starts OpenLDR on `127.0.0.1`. Sharing opens a second, encrypted port for other PCs on the lab network.
 - The app does not update itself. Run the install line again.
 - The app carries no publisher's signature on macOS or Windows.
 - On macOS, the window may open when the app starts at sign-in. That is not proven.
 - `desktop.log` grows without limit, like `server.log` and `postgres.log`. Delete it after you select **Quit**.
-- The limits of [Run without Docker](/docs/standalone) apply too, such as no TLS and backup by copying the stopped data folder.
+- The limits of [Run without Docker](/docs/standalone) apply too, such as backup by copying the stopped data folder.
 
 ## Related guides
 
