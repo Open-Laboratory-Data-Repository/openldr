@@ -260,6 +260,8 @@ this machine has only the one that reports.
 Made by the operator on 2026-11-27:
 - "This PC" means this OpenLDR only, by a switch. Not the whole PC.
 - The page has its own permission, `network.manage`.
+- A user limited to certain facilities may hold that permission. It is not dropped for them,
+  unlike the connectors and sync permissions.
 
 Made by the designer:
 - One page, Network, with two tabs.

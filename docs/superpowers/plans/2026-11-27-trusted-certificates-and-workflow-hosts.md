@@ -22,8 +22,12 @@ This plan stands alone. It does not need plans 1 to 3. The lab-bench direct refe
 - A private key is never stored, never logged and never echoed back.
 - The certificate that is saved is the one that was shown. It is not fetched a second time.
 - Both lists start empty. The switch starts off.
+- A user limited to certain facilities may hold `network.manage`. The operator decided this on 2026-11-27. Do not add it to `LIMITED_SCOPE_DROPS` (`packages/rbac/src/data-scope.ts:18`).
+- "Who did it" is the existing `AuditActor` type, with `actorType`, `actorId` and `actorName`, as `cliActor()` returns it (`packages/cli/src/cli-actor.ts:24`). No new actor type.
+- Every change to the trust file or the host list is safe across processes. A CLI command runs in its own process beside the server.
+- A separate process never reports its own trusted list as the server's. Only the server knows what the server loaded.
 - Stored settings: `workflows.http_hosts` (a JSON array of host names) and `workflows.http_self` (`true` or `false`). Neither is in `CENTER_OWNED_SETTING_KEYS`. They never sync.
-- "This OpenLDR" is exactly `http://127.0.0.1:<PORT>`, where PORT is the server's own.
+- "This OpenLDR" is one exact origin, worked out from how the server listens. On a default install it is `http://127.0.0.1:<PORT>`.
 - Fingerprints are SHA-256, 32 upper case hex pairs joined by colons.
 - Studio follows AGENTS.md §5. Copy `apps/studio/src/pages/settings/Connectors.tsx`.
 - Every route returns or awaits `reply.send`. `apps/server` lint enforces it.
@@ -48,8 +52,8 @@ This plan stands alone. It does not need plans 1 to 3. The lab-bench direct refe
 
 **Files:**
 - Modify: `packages/rbac/src/catalog.ts` (after the Connectors entry at line 65)
-- Test: `packages/rbac/src/catalog.test.ts` or the test file that lists every key (`packages/rbac/src/data-scope.test.ts:13` holds one such list)
-- Test: the server test that covers role seeding at boot
+- Test: the catalog's own test in `packages/rbac/src`
+- Test: `packages/db/src/role-store.test.ts` (the upgrade repair test at line 168)
 
 **Interfaces:**
 - Produces: the capability key `'network.manage'`.
@@ -66,29 +70,27 @@ it('lists network.manage in its own group', ...);
 it('gives the Administrator preset network.manage', ...);
 // The 'lab_admin' preset at packages/rbac/src/presets.ts:51 spreads CAPABILITY_KEYS, so this should pass once the key exists.
 it('gives an existing Administrator role network.manage after a start', ...);
-// Seed a database whose lab_admin role was written before this key existed. Run the boot seeding.
-// Expect the role to hold 'network.manage'. Find how locked presets are re-synced at boot and test through that.
+// Extend the upgrade repair test at role-store.test.ts:168. The locked role already gains every
+// preset capability it lacks at boot (packages/db/src/role-store.ts:413, :423). No new seeding code.
+it('leaves network.manage with a facility-limited user', ...);
+// In data-scope.test.ts: LIMITED_SCOPE_DROPS does not contain 'network.manage'.
 ```
-
-Update any test that holds the full list of keys, such as `data-scope.test.ts:13`.
 
 - [ ] **Step 2: Run them and see them fail**
 
-Run: `pnpm --filter @openldr/rbac test`
-Expected: the first test FAILS.
+Run: `pnpm --filter @openldr/rbac test` and `pnpm --filter @openldr/db exec vitest run src/role-store.test.ts`
+Expected: the first and third tests FAIL.
 
 - [ ] **Step 3: Add the catalog entry**
 
-If the third test shows that an existing Administrator role is not updated at boot, stop and report. That is a wider fault than this plan, and the operator decides how to fix it.
-
 - [ ] **Step 4: Run them and see them pass**
 
-Run: `pnpm --filter @openldr/rbac test` and the server test from Step 1.
+Run the two commands from Step 2.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/rbac apps/server
+git add packages/rbac packages/db
 git commit -m "feat(rbac): a permission for network trust"
 ```
 
@@ -118,24 +120,30 @@ export interface TrustedCert {
   subject: string;              // the certificate's common name, or its first DNS or IP name
   validTo: string;              // ISO date
   expired: boolean;
-  /** in-use: Node loaded it and it is in the file.
-   *  added: in the file, not loaded. Used after a restart.
-   *  removed: loaded, no longer in the file. Dropped after a restart.
-   *  outside: loaded from a file OpenLDR does not manage. */
-  state: 'in-use' | 'added' | 'removed' | 'outside';
+  /** in-use: the server loaded it and it is in the file.
+   *  added: in the file, the server did not load it. Used after a restart.
+   *  removed: the server loaded it, it is no longer in the file. Dropped after a restart.
+   *  outside: loaded from a file OpenLDR does not manage.
+   *  unknown: in the file, and nobody can say what the server loaded. */
+  state: 'in-use' | 'added' | 'removed' | 'outside' | 'unknown';
 }
 
+/** What the running server loaded when it started. `known: false` when no server has recorded
+ *  it, or when its Node cannot report it. Never an empty list standing in for "cannot tell". */
+export type LoadedTrust = { known: true; pems: string[]; since: string } | { known: false };
+
 export interface TrustStatus {
-  /** editable: TRUSTED_CA_FILE is set and NODE_EXTRA_CA_CERTS names the same file.
-   *  not-configured: TRUSTED_CA_FILE is not set.
-   *  set-outside: NODE_EXTRA_CA_CERTS names another file.
-   *  damaged: the file holds text that is not a certificate. */
+  /** Checked in this order:
+   *  set-outside: NODE_EXTRA_CA_CERTS is set and TRUSTED_CA_FILE is not, or they name different files.
+   *  not-configured: neither is set.
+   *  damaged: both name the same file, and it holds text that is not a certificate.
+   *  editable: both name the same file, and it is sound. */
   mode: 'editable' | 'not-configured' | 'set-outside' | 'damaged';
 }
 
 export interface CertPreview { pem: string; fingerprint: string; subject: string; validTo: string; expired: boolean }
 
-export interface TrustActor { type: 'user' | 'cli'; id: string | null; name: string }
+export type TrustActor = AuditActor;   // the existing type: actorType, actorId, actorName
 
 export interface TrustService {
   status(): Promise<TrustStatus>;
@@ -151,7 +159,7 @@ export interface TrustService {
 export function createTrustService(deps: {
   file: string | undefined;                 // cfg.TRUSTED_CA_FILE
   nodeExtraCaFile: string | undefined;      // process.env.NODE_EXTRA_CA_CERTS
-  loaded(): string[];                       // PEMs Node loaded: tls.getCACertificates('extra')
+  loaded(): Promise<LoadedTrust>;           // what the running server loaded. See the wiring in Step 3.
   readPeer(host: string, port: number): Promise<string | undefined>;   // the peer certificate as PEM
   audit(action: 'network.trust.add' | 'network.trust.remove', actor: TrustActor, fingerprint: string, subject: string): Promise<void>;
   now(): Date;
@@ -162,7 +170,9 @@ Rules:
 - `read` splits the text into PEM blocks. Any block that is not a certificate gives `not-a-certificate`. Any `PRIVATE KEY` block anywhere gives `private-key`, whatever else is there. The text of a refused input goes into no log and no error message.
 - `preview` takes `host` or `host:port`. No scheme. The port defaults to 443.
 - `add` takes exactly one certificate. It is the PEM the caller got from `preview` or `read`.
-- The file is written to a temp name in the same folder, then renamed into place. Writes run one at a time, through one promise chain inside the service.
+- The file is written to a temp name in the same folder, then renamed into place.
+- Every change holds a lock that works across processes: a lock file beside the trust file, made with the exclusive flag, removed in a `finally`. The lock covers the read, the check and the replacement. A lock older than 30 seconds is taken as left behind and removed. A change that cannot get the lock in 10 seconds throws `Error('The trust file is busy. Try again.')`.
+- The audit row is written only after the file is in place. A failed write leaves no audit row.
 - Paths are compared after `path.resolve`.
 - `mode: 'set-outside'` and `'not-configured'` make `add` and `remove` throw `read-only`. `list` still returns what Node loaded, with state `outside`.
 - `mode: 'damaged'` makes `add` and `remove` throw `damaged`. `list` returns the certificates it can read.
@@ -193,6 +203,9 @@ describe('list', () => {
   it('shows one in the file that Node did not load as added', ...);
   it('shows one Node loaded that left the file as removed', ...);
   it('shows what Node loaded as outside when the file is not managed', ...);
+  it('shows unknown when nobody can say what the server loaded', ...);
+  // loaded() gives { known: false }. A certificate in the file is 'unknown', not 'added'.
+  it('is set-outside when only NODE_EXTRA_CA_CERTS is set', ...);
   it('still lists the good certificates of a damaged file', ...);
 });
 describe('add and remove', () => {
@@ -205,6 +218,13 @@ describe('add and remove', () => {
   it('refuses both when the file is damaged, and leaves it untouched', ...);       // damaged, bytes unchanged
   it('keeps both certificates when two adds run at once', ...);
   // Promise.all([add(A), add(B)]). Expect the file to hold both.
+  it('keeps both certificates when two services add at once', ...);
+  // Two createTrustService instances on the same file, as the CLI and the server are. Expect both.
+  it('removes a lock file left behind by a stopped process', ...);
+  // Write a lock file dated 60 seconds ago. Expect the add to go through.
+  it('writes no audit row when the write fails', ...);
+  // Make the folder read-only. Expect the add to throw and the audit fake to hold nothing.
+  it('adds a valid certificate after a refused one', ...);
   it('leaves no temp file behind', ...);
 });
 describe('preview', () => {
@@ -224,7 +244,15 @@ Expected: FAIL, the module does not exist.
 
 - [ ] **Step 3: Write the service and wire it into the context**
 
-In `index.ts`, `loaded` is `() => tls.getCACertificates('extra')` when that function exists, and `() => []` when it does not. `readPeer` uses `tls.connect` with `rejectUnauthorized: false`, as plan 2's `readServerCertificate` does. `audit` writes through the same audit path the connector access service uses.
+`loaded` must tell the truth about the running server, from any process.
+
+- When the server process starts (`apps/server/src/start.ts`, before `app.listen` at line 174), it asks its own Node: `tls.getCACertificates('extra')`. It stores the answer in the app setting `network.trust_loaded`, as JSON: `{ "since": <ISO time>, "fingerprints": [...] }`. When that function does not exist, it stores `{ "since": <ISO time>, "unknown": true }`.
+- `loaded` reads that setting, in every process. The CLI never asks its own Node. A missing setting gives `{ known: false }`.
+- `network.trust_loaded` never syncs. It is not in `CENTER_OWNED_SETTING_KEYS`.
+
+`readPeer` uses `tls.connect` with `rejectUnauthorized: false`, as plan 2's `readServerCertificate` does. `audit` writes through the same audit path the connector access service uses.
+
+Add two tests for this wiring, in the server's start tests: the setting is written at start with the fingerprints Node reports, and it is written as unknown when Node has no such function.
 
 - [ ] **Step 4: Run them and see them pass**
 
@@ -244,7 +272,9 @@ git commit -m "feat(bootstrap): a service that manages trusted certificates"
 **Files:**
 - Create: `packages/bootstrap/src/workflow-hosts.ts`
 - Modify: `packages/workflows/src/engine/services.ts:145-260` (`parseAllowlist`, `validateHop`, `guardedFetch`)
-- Modify: `packages/bootstrap/src/index.ts:1517` (the `httpFetch` line), and add the service to `AppContext` as `workflowHosts`
+- Modify: `packages/bootstrap/src/index.ts:1517` (the `httpFetch` line, the only caller of `guardedFetch`), and add the service to `AppContext` as `workflowHosts`
+- Modify: `packages/db/src/app-settings-store.ts` (one new method)
+- Modify: `apps/studio/src/workflows/components/node-forms/http-request-form.tsx:54` (the hint)
 - Test: `packages/bootstrap/src/workflow-hosts.test.ts`, `packages/workflows/src/engine/services.test.ts`
 
 **Interfaces:**
@@ -278,6 +308,7 @@ export interface WorkflowHosts {
 export function createWorkflowHosts(deps: {
   appSettings: AppSettingStore;
   serverList: string;            // cfg.WORKFLOW_HTTP_ALLOWLIST
+  listenHost: string;            // cfg.LISTEN_HOST
   port: number;                  // cfg.PORT
   audit(action: 'network.workflow_host.add' | 'network.workflow_host.remove' | 'network.workflow_self.set', actor: TrustActor, detail: string): Promise<void>;
 }): WorkflowHosts;
@@ -287,7 +318,20 @@ Rules:
 - A host is lower-cased and trimmed. It is a host name of up to 253 characters, or an IPv4 or IPv6 address. A scheme, a port, a path, a space or an empty value throws `Error('Type a host name or an IP address, with no port and no path.')`.
 - Adding a host that is already there, from either source, does nothing and writes no audit row.
 - Removing a host that comes from the server setting throws `Error('This host comes from the server setting WORKFLOW_HTTP_ALLOWLIST.')`.
-- `self().origin` is `http://127.0.0.1:<port>`. `rule().origins` holds it only when the switch is on.
+- `self().origin` comes from `selfOrigin(listenHost, port)`:
+
+  ```ts
+  /** The one address this server answers on from its own machine.
+   *  '0.0.0.0', '127.0.0.1', 'localhost' and '::' give http://127.0.0.1:<port>.
+   *  '::1' gives http://[::1]:<port>. Any other address gives http://<that address>:<port>,
+   *  with an IPv6 address in brackets. */
+  export function selfOrigin(listenHost: string, port: number): string;
+  ```
+
+  The server listens on `cfg.LISTEN_HOST` (`apps/server/src/start.ts:174`), which is not always `127.0.0.1`.
+- `rule().origins` holds that origin only when the switch is on.
+- The host list is changed inside one database transaction that locks its row, so two processes cannot lose each other's host. Add `update(key, change: (old: string | null) => string, updatedBy)` to `AppSettingStore` (`packages/db/src/app-settings-store.ts:13`) for this, with its own test.
+- The HTTP step's hint still says only "set WORKFLOW_HTTP_ALLOWLIST on the server" (`apps/studio/src/workflows/components/node-forms/http-request-form.tsx:54`). Change it to name Settings, Network as well. If the hint is not yet in the language files, move it there, in en, fr and pt.
 - In `guardedFetch`, a hop passes when its host is in `hosts` or its origin is in `origins`. Every redirect hop is checked the same way, as today.
 - The header fix: today the sign-in headers are dropped only when the host name changes (`services.ts:250`). Drop them when the origin changes: scheme, host or port.
 - `index.ts:1517` becomes `httpFetch: async (req) => guardedFetch(req, await workflowHosts.rule())`.
@@ -308,6 +352,8 @@ it('drops the sign-in headers on a redirect to another port of the same host', .
 it('drops them on a redirect from http to https on the same host', ...);
 it('keeps them on a redirect within the same origin', ...);
 it('refuses a redirect from an allowed origin to a host that is not allowed', ...);
+it('drops the sign-in headers whatever their letter case', ...);            // 'AUTHORIZATION', 'cookie', 'X-Api-Token'
+it('matches an IPv6 origin written with brackets', ...);                    // origins ['http://[::1]:3000'], url 'http://[::1]:3000/health'
 
 // workflow-hosts.test.ts
 it('starts empty with the switch off', ...);                               // rule() is { hosts: [], origins: [] }
@@ -319,6 +365,14 @@ it.each(['http://x', 'x:8080', 'x/y', 'a b', ''])('refuses %j as a host', ...);
 it('refuses to remove a host that comes from the server setting', ...);
 it('a removed host is gone from the very next rule', ...);
 it('the switch adds exactly this OpenLDR origin', ...);                    // port 3000, setSelf(true) -> origins ['http://127.0.0.1:3000']
+it.each([
+  ['0.0.0.0', 'http://127.0.0.1:3000'], ['127.0.0.1', 'http://127.0.0.1:3000'], ['localhost', 'http://127.0.0.1:3000'],
+  ['::', 'http://127.0.0.1:3000'], ['::1', 'http://[::1]:3000'], ['192.168.1.20', 'http://192.168.1.20:3000'],
+])('works out this OpenLDR from a server listening on %s', (host, origin) => {
+  expect(selfOrigin(host, 3000)).toBe(origin);
+});
+it('keeps both hosts when two services add at once', ...);
+// Two createWorkflowHosts instances on one database. Promise.all of two adds. Expect both hosts.
 it('reads the database on every rule call', ...);
 // Change the stored value behind the service's back. Expect the next rule() to show it.
 ```
@@ -336,7 +390,7 @@ Run the two commands from Step 2, then `pnpm --filter @openldr/workflows test`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/workflows/src/engine packages/bootstrap/src
+git add packages/workflows/src/engine packages/bootstrap/src packages/db/src apps/studio/src
 git commit -m "feat(workflows): an administrator names the hosts an HTTP step may call"
 ```
 
@@ -446,6 +500,7 @@ openldr workflows hosts self <on|off>
 
 Behaviour:
 - `trust list` prints one line per certificate: the state, the fingerprint, the end date, the subject. The first line names the mode when it is not `editable`.
+- The state is the running server's, read from what the server recorded at start (Task 2). The command never reports its own process. With no record, it prints `unknown` and one line: `No running server has reported what it loaded.`
 - `trust add <file>` prints the fingerprint and the subject, then asks `Trust this certificate? (y/N)`. With `--fingerprint`, it does not ask: it saves when the value matches and exits 1 with `The fingerprint does not match.` when it does not. When nothing can answer the question (no terminal) and no `--fingerprint` is given, it exits 1 with `Give --fingerprint to add a certificate without a prompt.`
 - `trust add --from` needs `--fingerprint`. It saves only when the certificate at the address has that fingerprint.
 - After a save it prints `Saved. Restart OpenLDR to use it.`
@@ -457,6 +512,12 @@ Behaviour:
 ```ts
 it('formats the list with state, fingerprint, end date and subject', ...);
 it('names the mode on the first line when the file is not managed', ...);
+it('reports the server\'s state, not its own', ...);
+// The server's record holds A only. The file holds A and B. Expect A 'in use' and B waiting,
+// even though this process would load both if it asked its own Node.
+it('prints unknown when no server has reported', ...);
+it('records the key\'s name as the actor in served mode', ...);
+// cliActor() gives actorType 'user' with the key's name. Expect the audit row to carry it.
 it('adds a certificate when the fingerprint matches, without asking', ...);
 it('refuses when the fingerprint does not match and saves nothing', ...);
 it('refuses to add without a prompt when it cannot ask', ...);
@@ -532,6 +593,8 @@ export function launcherEnv(base: NodeJS.ProcessEnv, trustFile?: string): NodeJS
 
 Rules:
 - `trustStart` with `alreadyRestarted` true never returns `'again'`. It returns `'go'` or `'outside'`. This stops a loop.
+- The first process does nothing but wait. It installs no handler of its own beyond passing SIGINT and SIGTERM to the child. The child owns the stop, as `index.ts:51` sets it up. One signal owner per process.
+- `--events-fd` takes any number from 3 up (`commands.ts:1063`). The child gets the same descriptor at the same number.
 - In `index.ts`, the decision runs first in `start`: before the control socket (`commands.ts:514`), the lock (`:520`) and Postgres. Only `start` does this. No other command.
 - `'again'` runs `startAgain` and exits with its code. Nothing else has been started.
 - `'go'` passes `trustFile` to `runStart`, which passes it to `buildEnvironment`.
@@ -553,7 +616,10 @@ it('starts again with the same arguments and the variable set, and returns the e
 // Run a tiny script through startAgain that prints its NODE_EXTRA_CA_CERTS and OPENLDR_TRUST_RESTARTED and exits 7.
 // Expect both values and the code 7.
 it('passes the events descriptor through', ...);
-// The child writes one line to descriptor 3. Expect the parent's reader to get it.
+// A real child writes one line to descriptor 3. Expect the reader to get it. Repeat with descriptor 5.
+it('returns the exit code of a child that fails to start', ...);            // the script exits 2 at once -> 2
+it('stops the child when it is sent SIGTERM', ...);
+// POSIX only. Skip on win32 and say so in the hand-over.
 
 // environment.test.ts
 it('sets TRUSTED_CA_FILE only when a trust file is given', ...);
@@ -588,27 +654,47 @@ git commit -m "feat(standalone): the launcher starts Node with a managed trust f
 - Modify: `deploy/install/docker-compose.yml:13-18`
 - Modify: `install/install.sh:846-856` (the scaffold) and `:1023` (the variable)
 - Modify: `install/install.ps1`, the matching lines
-- Test: the installer's existing tests, if `install/lib` has any. Otherwise the live check in Task 10.
+- Test: `packages/release/src/shell.test.ts`. It runs `install.sh` with fake tools (line 267), covers the generated settings (line 434) and reads the PowerShell installer (line 1762).
 
 What changes:
 - The API container mounts a folder, `./config/trust`, at `/etc/openldr/trust`, read and write. Not a single file. A single-file mount breaks when a new file is renamed over it.
 - The environment gets `TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem` and `NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem`.
 - The installer makes `./config/trust/ca.pem` when missing. The folder must be writable by the container's user, uid `10001` (`apps/server/Dockerfile:50`).
-- **Upgrade.** When `./config/nginx/certs/central/fullchain.pem` exists and is not empty, and `./config/trust/ca.pem` is missing or empty, the installer copies the first into the second. A lab that already trusts a central keeps trusting it. The old file is left where it is.
-- An install that is not upgraded keeps working as before. Its Network page says "not configured".
+- **Upgrade, once only.** When `./config/nginx/certs/central/fullchain.pem` exists and is not empty, and the marker `./config/trust/.migrated` does not exist, the installer copies the old file into `./config/trust/ca.pem` and then writes the marker. With the marker there, it never copies again. An empty trust file is a real state: the administrator may have removed the last certificate.
+- The copy is written to a temp name and renamed, and the marker is written last. A run that stops half way copies again next time.
+- **The settings file.** The installer writes `.env` only when it is missing (`install/install.sh:928`) and reuses it otherwise (`:1032`). An upgraded install therefore still has `NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem`. So:
+  - When `.env` holds exactly that old default, the installer changes it to the new path and adds `TRUSTED_CA_FILE`.
+  - When `.env` holds any other value, the installer leaves it alone and adds nothing. The person chose that path. The Network page then shows "set outside OpenLDR".
+  - The compose file keeps the old single-file mount as well as the new folder, so an install with a custom setting still finds its file.
+- An install upgraded with the wrapper alone, without the installer (`apps/web/src/docs/0.1.8/en/upgrading.md:237`), changes neither file. It keeps working as before, and its Network page says "set outside OpenLDR" or "not configured". The docs in Task 9 say how to turn it on.
 
-- [ ] **Step 1: Read how the installer is tested**
+- [ ] **Step 1: Write the failing installer tests**
 
-Look in `install/lib` and for any `*.test.*` or `bats` file that covers `install.sh`. If there are tests, write the failing ones first: the folder is made, the variables are set, and an existing central certificate is copied. If there are none, say so in the hand-over and rely on Task 10.
+In `packages/release/src/shell.test.ts`, in the style of the tests near line 434:
 
-- [ ] **Step 2: Make the changes in `install.sh`, `install.ps1` and the compose file**
+```ts
+it('a fresh install gets the trust folder, an empty file and both settings', ...);
+it('an upgrade copies an old central certificate once and writes the marker', ...);
+it('a second run after the last certificate was removed copies nothing', ...);
+// Run the installer, empty ca.pem by hand, run it again. Expect ca.pem still empty.
+it('a run that stopped before the marker copies again', ...);
+it('moves the old default path in an existing .env to the new one', ...);
+it('leaves a custom NODE_EXTRA_CA_CERTS in an existing .env alone and adds no TRUSTED_CA_FILE', ...);
+it('the compose file mounts the trust folder and keeps the old file mount', ...);
+it('the PowerShell installer holds the same paths, marker and migration', ...);
+// A static check of install.ps1, as the test at line 1762 does. It does not run on Windows.
+```
 
-- [ ] **Step 3: Run the installer's tests, if any**
+- [ ] **Step 2: Run them and see them fail**
+
+Run: `pnpm --filter @openldr/release exec vitest run src/shell.test.ts`
+
+- [ ] **Step 3: Make the changes in `install.sh`, `install.ps1` and the compose file, and run the tests again**
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add deploy/install/docker-compose.yml install
+git add deploy/install/docker-compose.yml install packages/release/src/shell.test.ts
 git commit -m "feat(install): the server edition gets a managed trust folder"
 ```
 
@@ -637,10 +723,15 @@ Open `Connectors.tsx` and `forms-builder/FieldEditorSheet.tsx` first and copy th
 - Empty uses `StripedEmpty`. Loading uses `LoadingState`. Never stripes while loading.
 - The result of a save or a remove goes in a sonner toast. No banner in the form.
 - shadcn components only.
+- Rules read edge to edge. Use `<Divider>` and `<Bleed>` from `components/ui/bleed.tsx` for the tab bar's bottom border and the table borders. A bleeding element is a direct child of the padded container.
+- Render each `<Table>` only when it has rows. With none, the empty state fills the pane. An empty table's header forces a sideways scroll on a phone.
+- The table's scroll wrapper needs `wrapperClassName="min-h-0 flex-1"`, inside a flex column, and only when there are rows.
+- Guard each tab panel with `data-[state=inactive]:hidden`. A flex class on a hidden panel still takes space.
+- "Read certificate" and the copy control follow the sibling page: look at how `Connectors.tsx` places an action that belongs to one field, and do the same. No free-standing primary button.
 
 The first tab, Trusted certificates:
 - Columns: Name, Fingerprint with a copy control, Valid until, State.
-- State words: "In use", "After restart" (added), "Removed after restart", "Set outside OpenLDR". An expired certificate shows "Expired" beside its date.
+- State words: "In use", "After restart" (added), "Removed after restart", "Set outside OpenLDR", "Not known" (unknown). An expired certificate shows "Expired" beside its date.
 - When the mode is not `editable`, one line above the table says why, and the Add and Remove actions are off:
   - `not-configured`: "This install was set up before trusted certificates could be managed here. See the guide to turn it on."
   - `set-outside`: "Trusted certificates are set outside OpenLDR, in NODE_EXTRA_CA_CERTS. They are shown here and cannot be changed here."
@@ -671,6 +762,9 @@ it('turns the switch on and shows the origin', ...);
 it('adds a host and shows it as Set here', ...);
 it('gives a server host no Remove action', ...);
 it('paginates both tables', ...);
+it('renders no table element when a tab has no rows', ...);
+it('hides the inactive tab panel', ...);
+it('shows Not known for a certificate whose state is unknown', ...);
 ```
 
 `apps/studio/src/i18n/parity.test.ts` already fails when a key is missing in fr or pt. Run it.
@@ -687,7 +781,7 @@ Run the command from Step 2, then `pnpm --filter @openldr/studio typecheck > /tm
 
 - [ ] **Step 5: Look at the page**
 
-Start the preview for the worktree's Studio. Open `/settings/network` at desktop width and at 375 by 812. Check both tabs, both sheets, the empty state and a long fingerprint. Take a screenshot of each and publish them on the screenshot Artifact page for the operator. The page has nothing pinned to the bottom edge, so a headless browser is a fair check of this layout.
+Start the preview for the worktree's Studio. Open `/settings/network` at desktop width and at 375 by 812. At phone width, check each tab in three states: loading, empty and with rows. Check both sheets and a long fingerprint. Nothing may scroll sideways. Take a screenshot of each and publish them on the screenshot Artifact page for the operator. The page has nothing pinned to the bottom edge, so a headless browser is a fair check of this layout.
 
 - [ ] **Step 6: Commit**
 
@@ -789,7 +883,9 @@ In the hand-over, write **HONEST NON-PROOF** for each of these:
 - The server edition. The installer change was not run on a Docker host here. A native Linux host and Docker Desktop own files differently.
 - An upgrade of a server install that already trusts a central.
 - The packaged desktop app, and Windows and macOS. Only a development build on Linux was run.
-- Two sites end to end: a spoke's scheduled workflow, its own OpenLDR, and a hub with a self-signed certificate.
+- Two sites end to end: a spoke's scheduled workflow, its own OpenLDR, and a hub with a self-signed certificate. That includes lab-bench's own broker call with a restricted key, which belongs to plan 3.
+- The launcher starting itself again on Windows. Signals and descriptors differ there, and the tests for them are skipped on Windows.
+- The PowerShell installer. Its test reads the file. It does not run it.
 
 - [ ] **Step 8: After the merge to `main`, update the changelog**
 
