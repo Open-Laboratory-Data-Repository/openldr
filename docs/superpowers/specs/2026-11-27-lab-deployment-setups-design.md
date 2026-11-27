@@ -295,7 +295,7 @@ The server edition for a two-PC lab was not chosen: nobody there looks after Doc
 |---|---|---|---|
 | G1 | The desktop app cannot be shared. It is fixed to `127.0.0.1`. | `apps/desktop/src/controller.ts:94`, `launcher.ts:88` | core |
 | G2 | The standalone has no HTTPS. | `apps/standalone/src/commands.ts:681` | core |
-| G3 | Plugin pages can fail from another PC over plain HTTP. REFUTED on 2026-11-27 for the three actions listed below. | `apps/web/src/docs/0.1.8/en/standalone.md:282` | the docs line is corrected in plan 1, Task 6 |
+| G3 | Plugin pages can fail from another PC over plain HTTP. Did not reproduce on 2026-11-27 for the plugin save and the dashboard edit listed below. The access key copy is not verified. | `apps/web/src/docs/0.1.8/en/standalone.md:282` | the docs line is corrected in plan 1, Task 6 |
 | G4 | The companion refuses a desktop app on another PC. | `companion/receiver.mjs:72` | closed by G2 |
 | G5 | The desktop app has no connect mode. No setting holds a server address. | `apps/desktop/src/settings.ts:7`, `main.ts:149` | core |
 | G6 | The desktop app cannot be locked. | no kiosk or full-screen code in `apps/desktop/src/main.ts` | core |
@@ -314,8 +314,7 @@ The server edition for a two-PC lab was not chosen: nobody there looks after Doc
 | G18 | Withdrawn. lab-bench declares `pluginKind: "sink"`, so Studio's connector form already offers it. | `openldr-ce-plugin-lab-bench/manifest.template.json:31`, `apps/server/src/connectors-routes.ts:78` | none |
 
 **G3 was checked on 2026-11-27 and did not reproduce.** The check ran in the browser pane at
-`http://100.107.125.94:4173/studio/`, a built Studio over plain HTTP at an address that is not
-this PC. The page was not a secure context: `isSecureContext` was false, and
+`http://100.107.125.94:4173/studio/`, a built Studio over plain HTTP at a non-loopback address. The page was not a secure context: `isSecureContext` was false, and
 `crypto.randomUUID`, `crypto.subtle` and `navigator.clipboard` were all missing. With no
 console error in any step:
 
