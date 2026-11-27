@@ -128,6 +128,7 @@ Use [Authentication providers](/docs/auth-providers) before changing an issuer. 
 | `OIDC_INTERNAL_ISSUER_URL` | Optional | Keycloak server-side realm address. Generic OIDC does not derive endpoints from it. |
 | `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET` | Private deployment values | Provider administration service account. |
 | `TLS_CERT_PATH` | Optional | Public server certificate offered for central certificate download. |
+| `TRUSTED_CA_FILE` | Optional | The file of extra trusted certificates that Settings > Network manages. Must be the same file as `NODE_EXTRA_CA_CERTS`. |
 | `SECRETS_ENCRYPTION_KEY` | Base64, 32 decoded bytes | Saved-credential encryption key. Preserve existing value. |
 | `AUTH_DEV_BYPASS` | false | Explicit development authentication bypass. Production rejects true. |
 | `AUTH_DEV_USERNAME`, `AUTH_DEV_ROLES` | dev-admin, lab_admin | Actor for an explicitly enabled development bypass. |

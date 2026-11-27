@@ -128,6 +128,7 @@ Consultez [Fournisseurs d'authentification](/docs/auth-providers) avant de chang
 | `OIDC_INTERNAL_ISSUER_URL` | Facultatif | Adresse du realm Keycloak côté serveur. OIDC générique n'en déduit pas les adresses. |
 | `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET` | Valeurs privées du déploiement | Compte de service pour administrer le fournisseur. |
 | `TLS_CERT_PATH` | Facultatif | Certificat public du serveur proposé au téléchargement du certificat central. |
+| `TRUSTED_CA_FILE` | Facultatif | Le fichier des certificats de confiance supplémentaires que gère Paramètres > Réseau. Doit être le même fichier que `NODE_EXTRA_CA_CERTS`. |
 | `SECRETS_ENCRYPTION_KEY` | Base64, 32 octets décodés | Clé de chiffrement des identifiants enregistrés. Conservez la valeur existante. |
 | `AUTH_DEV_BYPASS` | false | Contournement explicite de l'authentification en développement. Production refuse true. |
 | `AUTH_DEV_USERNAME`, `AUTH_DEV_ROLES` | dev-admin, lab_admin | Acteur du contournement de développement explicitement activé. |

@@ -74,6 +74,7 @@ function isInside(root: string, path: string): boolean {
  */
 const PATH_SETTINGS_LEFT_UNSET: Record<string, string> = {
   TLS_CERT_PATH: 'a certificate the operator mounts; only read, and the route answers 404 without it',
+  TRUSTED_CA_FILE: 'the launcher does not manage trusted certificates yet; Settings > Network is read-only without it',
   MARKETPLACE_REGISTRY_DIR: 'an operator-chosen registry folder; marketplace publish is off without it',
   WORKFLOW_FILE_ACCESS_ROOT: 'the file node sandbox; the node is off unless WORKFLOW_FILE_ACCESS_ENABLED is on',
   MARKETPLACE_LOCAL_REGISTRY_ROOT: 'a limit on local registries; empty keeps today\'s behaviour',

@@ -157,6 +157,7 @@ O Keycloak é o modo por omissão. O OIDC genérico usa descoberta e tokens de a
 | `OIDC_INTERNAL_ISSUER_URL` | URL interno base do realm, apenas para Keycloak. O OIDC genérico ignora este valor. |
 | `OIDC_INTERNAL_JWKS_URL` | Substitui explicitamente o endereço interno das chaves de assinatura. Não altera o emissor esperado. |
 | `TLS_CERT_PATH` | Caminho do certificado TLS público deste servidor (PEM). Quando definido, a página Sites permite transferi-lo, para que um laboratório remoto confie num servidor central autoassinado. O instalador monta o certificado e define esta variável automaticamente. |
+| `TRUSTED_CA_FILE` | Caminho do único ficheiro PEM de certificados de confiança adicionais gerido pelo OpenLDR. Tem de indicar o mesmo ficheiro que `NODE_EXTRA_CA_CERTS`, que o Node lê quando o servidor arranca. Se os dois forem diferentes, ou se esta variável não estiver definida, a lista é só de leitura. Um certificado acrescentado ao ficheiro é usado após o próximo reinício. |
 | `OIDC_AUDIENCE` | Audiência esperada do token. |
 | `OIDC_WEB_CLIENT_ID` | ID do cliente público com que o Studio se autentica. |
 | `OIDC_SCOPES` | Scopes pedidos pelo Studio. Usa `openid profile email` por omissão. Tem de incluir `openid`. |

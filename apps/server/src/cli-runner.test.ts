@@ -340,6 +340,14 @@ describe('childEnv', () => {
     expect(base.LOG_FILE).toBe('/var/log/x');
   });
 
+  it('gives the child both trust file settings as the same absolute path', () => {
+    // The trust service compares the two paths. The child runs in another folder, so a relative
+    // value left as it is would name another file there, and the list would turn read-only.
+    const env = childEnv({ NODE_EXTRA_CA_CERTS: 'data/trust.pem' }, { TRUSTED_CA_FILE: 'data/trust.pem' }, '/srv');
+    expect(env.TRUSTED_CA_FILE).toBe('/srv/data/trust.pem');
+    expect(env.NODE_EXTRA_CA_CERTS).toBe('/srv/data/trust.pem');
+  });
+
   it('lists every setting the schema names like a path', () => {
     let schema: z.ZodTypeAny = ConfigSchema;
     while (schema instanceof z.ZodEffects) schema = schema.innerType();

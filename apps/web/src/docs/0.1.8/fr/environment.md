@@ -147,6 +147,7 @@ Keycloak est le choix par défaut. L'OIDC générique utilise la découverte et 
 | `OIDC_INTERNAL_ISSUER_URL` | URL de base interne du realm, pour Keycloak uniquement. L'OIDC générique ignore cette valeur. |
 | `OIDC_INTERNAL_JWKS_URL` | Remplacement explicite du point de terminaison interne des clés de signature. Ne change pas l'émetteur attendu. |
 | `TLS_CERT_PATH` | Chemin du certificat TLS public de ce serveur (PEM). Quand elle est définie, la page Sites peut proposer le certificat au téléchargement, pour qu'un laboratoire distant fasse confiance à un serveur central auto-signé. L'installateur monte le certificat et définit cette variable automatiquement. |
+| `TRUSTED_CA_FILE` | Chemin du fichier PEM unique des certificats de confiance supplémentaires que gère OpenLDR. Il doit désigner le même fichier que `NODE_EXTRA_CA_CERTS`, que Node lit au démarrage du serveur. Si les deux diffèrent, ou si cette variable n'est pas définie, la liste est en lecture seule. Un certificat ajouté au fichier est utilisé après le prochain redémarrage. |
 | `OIDC_AUDIENCE` | Audience attendue du jeton. |
 | `OIDC_WEB_CLIENT_ID` | ID du client public avec lequel l'application studio s'authentifie. |
 | `OIDC_SCOPES` | Portées demandées par l'application studio. Vaut `openid profile email` par défaut. Doit inclure `openid`. |

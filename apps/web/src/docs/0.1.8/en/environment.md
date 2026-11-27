@@ -156,6 +156,7 @@ Keycloak is the default. Generic OIDC uses discovery and JWT access tokens. See 
 | `OIDC_INTERNAL_ISSUER_URL` | Keycloak-only internal realm base URL. Generic OIDC ignores this value. |
 | `OIDC_INTERNAL_JWKS_URL` | Explicit internal signing-key endpoint override. Does not change the expected issuer. |
 | `TLS_CERT_PATH` | Path to this server's public TLS certificate (PEM). When set, the Sites page can offer it for download so a remote lab can trust a self-signed central. The installer mounts the certificate and sets this automatically. |
+| `TRUSTED_CA_FILE` | Path to the one PEM file of extra trusted certificates that OpenLDR manages. It must name the same file as `NODE_EXTRA_CA_CERTS`, which is what Node reads when the server starts. When the two differ, or this one is unset, the list is read-only. A certificate added to the file is used after the next restart. |
 | `OIDC_AUDIENCE` | Expected token audience. |
 | `OIDC_WEB_CLIENT_ID` | Public client ID the studio app authenticates with. |
 | `OIDC_SCOPES` | Scopes the studio app requests. Defaults to `openid profile email`. Must include `openid`. |

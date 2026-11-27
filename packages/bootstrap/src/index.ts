@@ -100,6 +100,7 @@ import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { brokerAccessDetails } from './check-read-audit';
 import { createImportService, type ImportAuditEvent, type ImportRun, type ImportService } from './import-run';
 import { createPluginConnectorAccess, type PluginConnectorAccess } from './plugin-connector-access';
+import { createTrustService, readLoadedTrust, readPeerCertificate, type TrustService } from './network-trust';
 import { createResultsRead, type ResultsQuery } from './results-read';
 import { createPluginRemoval, type PluginRemoval } from './plugin-removal';
 import { createImportCopyService, type ImportCopyService } from './import-copy';
@@ -603,6 +604,8 @@ export interface AppContext {
   /** Which plugins may use which connector (plugin-connector-access.ts). The route and the CLI
    *  both switch a plugin on or off through it. */
   connectorAccess: PluginConnectorAccess;
+  /** Trusted certificates for this install's outgoing HTTPS calls (network-trust.ts). */
+  trust: TrustService;
   /** Copies of a source database's rows to CE's own disk (import-copy.ts). Only a context built
    *  with `runImportDriver` drives them. Any context may start, stop or delete one. */
   importCopies: ImportCopyService;
@@ -2095,6 +2098,22 @@ const reporting: ReportingApi = {
     logger,
   });
   const connectorAccess = createPluginConnectorAccess({ plugins, connectors: connectorStore, pluginData, imports, audit: importAudit });
+  const trust = createTrustService({
+    file: cfg.TRUSTED_CA_FILE,
+    nodeExtraCaFile: process.env.NODE_EXTRA_CA_CERTS,
+    loaded: () => readLoadedTrust(appSettings),
+    readPeer: (host, port) => readPeerCertificate(host, port),
+    // Not safeRecord: the file is already changed, so the caller must learn that the row failed.
+    audit: async (action, actor, fingerprint, subject) => {
+      try {
+        await audit.record({ ...actor, action, entityType: 'trusted_certificate', entityId: fingerprint, metadata: { subject } });
+      } catch (err) {
+        logger.error({ action, error: err instanceof Error ? err.message : String(err) }, 'audit record failed');
+        throw err;
+      }
+    },
+    now: () => new Date(),
+  });
   // Copies of a source's rows (import-copy.ts). Every context can start, stop and delete one. Only
   // the driver below drives them, and the id here is what each drive writes on the copy it holds.
   const importCopyStore = createImportCopyStore(internal.db);
@@ -2340,6 +2359,7 @@ const reporting: ReportingApi = {
     pluginHost,
     imports,
     connectorAccess,
+    trust,
     importCopies,
     importChecks,
     pluginRemoval,
@@ -2400,6 +2420,7 @@ const reporting: ReportingApi = {
 
 export { createFeatureFlags } from './feature-flags';
 export { createPluginConnectorAccess, declaresConnectors, type PluginConnectorAccess, type ConnectorPluginCandidate } from './plugin-connector-access';
+export * from './network-trust';
 export { createCapabilityCatalog, createPluginPermissionSync, warnPluginOwnedCeGroups, type CapabilityCatalog, type CatalogGroup, type PluginCapabilityMeta } from './capability-catalog';
 export { createConnectorDialectLookup, dialectFor } from './connector-sql-service';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
