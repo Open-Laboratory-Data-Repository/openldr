@@ -141,7 +141,7 @@ Enable host-level capabilities only for the users and installations that need th
 | --- | --- | --- |
 | `WORKFLOW_CODE_ENABLED` | false | Permit Code node execution with host access. |
 | `WORKFLOW_CODE_TIMEOUT_MS`, `WORKFLOW_CODE_MEMORY_MB` | 5000, 128 | Code node time and memory limits. |
-| `WORKFLOW_HTTP_ALLOWLIST` | Empty | Hostnames allowed for workflow HTTP requests. |
+| `WORKFLOW_HTTP_ALLOWLIST` | Empty | Hostnames allowed for workflow HTTP requests. Settings > Network adds its own list to this one. |
 | `WORKFLOW_FILE_MAX_BYTES` | 52428800 | Workflow upload or webhook file limit. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | 100000 | Maximum accumulated loop output items. |
 | `WORKFLOW_FILE_ACCESS_ENABLED`, `WORKFLOW_FILE_ACCESS_ROOT` | false, empty | Host file access and its required folder root. |

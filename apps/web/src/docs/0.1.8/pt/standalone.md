@@ -115,7 +115,10 @@ A pasta contém:
 | `work/` | Ficheiros temporários, como um descarregamento de terminologia enquanto é importado. |
 | `standalone.json` | A chave dos segredos, as duas palavras-passe da base de dados e a porta da base de dados. |
 | `standalone.lock` | Existe enquanto um lançador funciona. Indica o processo e o endereço desse lançador. Pode ficar para trás depois de uma falha ou de uma paragem à força. O `start` seguinte substitui-o. |
+| `trust/ca.pem` | Os certificados em que este OpenLDR confia nas suas próprias chamadas HTTPS para outros servidores. Um administrador altera a lista em Definições > Rede. |
 | `last-version.json` | A versão do OpenLDR que iniciou esta pasta pela última vez. |
+
+O lançador só lê `trust/ca.pem` quando arranca, porque é nesse momento que o Node lê os certificados de confiança. Iniciado a partir de um terminal, o lançador arranca-se mais uma vez com `NODE_EXTRA_CA_CERTS` a apontar para esse ficheiro, e o primeiro processo fica apenas à espera. Verá dois processos do lançador. `stop` e `status` funcionam como antes. Se definir `NODE_EXTRA_CA_CERTS` com um ficheiro seu, o lançador usa o seu e não arranca duas vezes. Definições > Rede mostra então a lista e não o deixa alterá-la.
 
 Uma versão mais recente pode alterar a base de dados de uma forma que uma mais antiga não sabe ler. Por isso, um lançador mais antigo recusa uma pasta que um mais recente iniciou, e não inicia nada. Mostra `This data folder was last used by OpenLDR <newer>. This is OpenLDR <older>, which is older and cannot open it. Install OpenLDR <newer> or newer.` [Aplicação de computador](/docs/desktop-app) diz quando é seguro apagar `last-version.json`.
 

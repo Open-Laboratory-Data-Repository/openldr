@@ -115,7 +115,10 @@ Le dossier contient :
 | `work/` | Les fichiers temporaires, comme un téléchargement de terminologie pendant son import. |
 | `standalone.json` | La clé des secrets, les deux mots de passe de la base et le port de la base. |
 | `standalone.lock` | Présent tant qu'un lanceur tourne. Il indique le processus et l'adresse de ce lanceur. Il peut rester après un plantage ou un arrêt brutal. Le `start` suivant le remplace. |
+| `trust/ca.pem` | Les certificats auxquels cet OpenLDR fait confiance pour ses propres appels HTTPS vers d'autres serveurs. Un administrateur modifie la liste dans Paramètres > Réseau. |
 | `last-version.json` | La version d'OpenLDR qui a démarré ce dossier en dernier. |
+
+Le lanceur ne lit `trust/ca.pem` qu'à son démarrage, car c'est à ce moment que Node lit ses certificats de confiance. Lancé depuis un terminal, le lanceur se relance une fois avec `NODE_EXTRA_CA_CERTS` pointant vers ce fichier, et le premier processus ne fait qu'attendre. Vous voyez deux processus du lanceur. `stop` et `status` fonctionnent comme avant. Si vous définissez `NODE_EXTRA_CA_CERTS` avec un fichier à vous, le lanceur utilise le vôtre et ne démarre pas deux fois. Paramètres > Réseau affiche alors la liste sans vous laisser la modifier.
 
 Une version plus récente peut modifier la base de données d'une façon qu'une plus ancienne ne sait pas lire. Un lanceur plus ancien refuse donc un dossier qu'un plus récent a démarré, et ne démarre rien. Il affiche `This data folder was last used by OpenLDR <newer>. This is OpenLDR <older>, which is older and cannot open it. Install OpenLDR <newer> or newer.` [Application de bureau](/docs/desktop-app) indique quand supprimer `last-version.json` est sûr.
 

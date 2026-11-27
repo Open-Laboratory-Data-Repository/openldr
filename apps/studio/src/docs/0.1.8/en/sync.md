@@ -184,11 +184,13 @@ The central service account needs manage-clients and view-clients in the Keycloa
 
 ## Trust central TLS on the lab server
 
-A browser accepting a self-signed certificate does not make the lab server trust it. Download central's public certificate from the Sites dots or enrollment result, then transfer it to the lab through your normal administration channel.
+A browser accepting a self-signed certificate does not make the lab server trust it. The lab server keeps its own list.
 
-Mount it read-only into the lab API container and set NODE_EXTRA_CA_CERTS to that container path. Recreate the lab API after changing its environment. The certificate must match the central hostname or IP address, including its Subject Alternative Name. Keep normal certificate validation enabled.
+On the lab, open **Settings**, then **Network**, and add central's certificate. Compare its fingerprint with the one central's administrator gives you, then save and restart OpenLDR. The [Network](/docs/network) guide has the steps.
 
-Use a trusted HTTPS central address in production. A localhost HTTP address is useful only for isolated tests like the illustrated setup. No certificate download or TLS trust change was exercised here.
+The certificate must match the central hostname or IP address, including its Subject Alternative Name. Keep normal certificate validation enabled.
+
+An install made before the Network page may show the list as set outside OpenLDR. It then still trusts the file its `NODE_EXTRA_CA_CERTS` setting names, as before. The website's environment guide explains how to move it.
 
 ## Use the CLI
 

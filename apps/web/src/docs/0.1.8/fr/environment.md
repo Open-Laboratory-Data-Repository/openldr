@@ -158,6 +158,14 @@ Keycloak est le choix par défaut. L'OIDC générique utilise la découverte et 
 | `KEYCLOAK_ADMIN_CLIENT_ID` | ID du client utilisé pour les appels à l'API d'administration. |
 | `KEYCLOAK_ADMIN_CLIENT_SECRET` | Secret du client pour les appels à l'API d'administration. |
 
+### Gérer les certificats de confiance sur une installation antérieure à Paramètres > Réseau
+
+Une nouvelle installation définit `TRUSTED_CA_FILE` et `NODE_EXTRA_CA_CERTS` sur `/etc/openldr/trust/ca.pem`, et Paramètres > Réseau gère ce fichier. Une installation plus ancienne désigne `/etc/ssl/central-ca.pem`, et la page affiche la liste sans vous laisser la modifier.
+
+Relancez l'installateur dans le dossier d'installation. Il garde votre `.env`, copie une seule fois l'ancien certificat central dans `config/trust/ca.pem`, et ne déplace le chemin que si `.env` contient encore l'ancienne valeur par défaut. Un chemin que vous avez choisi vous-même reste tel quel. Redémarrez ensuite la pile avec `docker compose up -d`.
+
+Sur une installation Docker, la commande `openldr` n'a pas de terminal, donc `openldr trust add` ne peut pas poser sa question. Donnez-lui `--fingerprint`. Sans cela, la commande affiche l'empreinte du certificat et n'enregistre rien.
+
 ## Réglages réservés au développement
 
 Ces variables existent pour que le développement local et les tests de bout en bout puissent tourner sans Keycloak configuré ni paquets signés. Ne les définissez jamais dans un déploiement.
@@ -230,7 +238,7 @@ Ces variables existent pour que le développement local et les tests de bout en 
 | `WORKFLOW_CODE_ENABLED` | `false` | Autorise l'exécution des nœuds Code. Si elle est désactivée, les nœuds Code refusent de s'exécuter. |
 | `WORKFLOW_CODE_TIMEOUT_MS` | `5000` | Durée maximale d'une exécution de nœud Code, en millisecondes. |
 | `WORKFLOW_CODE_MEMORY_MB` | `128` | Mémoire maximale d'une exécution de nœud Code, en Mo. |
-| `WORKFLOW_HTTP_ALLOWLIST` | vide | Noms d'hôte, séparés par des virgules, que le nœud HTTP Request peut appeler. Vide signifie que tous les hôtes sont refusés. |
+| `WORKFLOW_HTTP_ALLOWLIST` | vide | Noms d'hôte, séparés par des virgules, que le nœud HTTP Request peut appeler. Un administrateur en ajoute d'autres dans Paramètres > Réseau, et les deux listes s'utilisent ensemble. Si les deux sont vides, tous les hôtes sont refusés. Un hôte nommé ici ne peut pas être retiré dans l'application. |
 | `WORKFLOW_FILE_MAX_BYTES` | `52428800` (50 Mo) | Plus gros fichier accepté pour un envoi lors d'une exécution de flux, ou pour le corps d'un webhook. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | `100000` | Nombre maximal d'éléments qu'un seul nœud de boucle peut collecter. |
 | `WORKFLOW_FILE_ACCESS_ENABLED` | `false` | Autorise le nœud Read/Write File à toucher des fichiers sur le serveur. |

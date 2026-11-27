@@ -141,7 +141,7 @@ Activez les capacités de l'hôte uniquement pour les utilisateurs et installati
 | --- | --- | --- |
 | `WORKFLOW_CODE_ENABLED` | false | Autorise l'exécution du nœud Code avec accès à l'hôte. |
 | `WORKFLOW_CODE_TIMEOUT_MS`, `WORKFLOW_CODE_MEMORY_MB` | 5000, 128 | Limites de temps et de mémoire du nœud Code. |
-| `WORKFLOW_HTTP_ALLOWLIST` | Vide | Noms d'hôte autorisés pour les requêtes HTTP des workflows. |
+| `WORKFLOW_HTTP_ALLOWLIST` | Vide | Noms d'hôte autorisés pour les requêtes HTTP des workflows. Paramètres > Réseau y ajoute sa propre liste. |
 | `WORKFLOW_FILE_MAX_BYTES` | 52428800 | Limite de fichier envoyé au workflow ou au webhook. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | 100000 | Nombre maximal d'éléments accumulés en sortie de boucle. |
 | `WORKFLOW_FILE_ACCESS_ENABLED`, `WORKFLOW_FILE_ACCESS_ROOT` | false, vide | Accès aux fichiers de l'hôte et répertoire racine obligatoire. |

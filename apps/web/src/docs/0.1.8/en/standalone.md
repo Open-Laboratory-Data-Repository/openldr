@@ -115,7 +115,10 @@ The folder holds:
 | `work/` | Scratch files, such as a terminology download while it is imported. |
 | `standalone.json` | The secrets key, the two database passwords and the database port. |
 | `standalone.lock` | Exists while a launcher runs. It names that launcher's process and address. It can stay behind after a crash or a hard kill. The next `start` replaces it. |
+| `trust/ca.pem` | The certificates this OpenLDR trusts for its own HTTPS calls to other servers. An administrator changes the list in Settings > Network. |
 | `last-version.json` | The version of OpenLDR that last started this folder. |
+
+The launcher reads `trust/ca.pem` only when it starts, because that is when Node reads its trusted certificates. Started from a terminal, the launcher starts itself once more with `NODE_EXTRA_CA_CERTS` set to that file, and the first process only waits. You see two launcher processes. `stop` and `status` work as before. If you set `NODE_EXTRA_CA_CERTS` to a file of your own, the launcher uses yours and does not start twice. Settings > Network then shows the list and does not let you change it.
 
 A newer version may change the database in a way an older one cannot read. So an older launcher refuses a folder that a newer one started, and starts nothing. It says `This data folder was last used by OpenLDR <newer>. This is OpenLDR <older>, which is older and cannot open it. Install OpenLDR <newer> or newer.` [Desktop app](/docs/desktop-app) says when removing `last-version.json` is safe.
 

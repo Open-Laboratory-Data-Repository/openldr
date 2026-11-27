@@ -141,7 +141,7 @@ Ative as capacidades do anfitrião apenas para utilizadores e instalações que 
 | --- | --- | --- |
 | `WORKFLOW_CODE_ENABLED` | false | Permite executar o nó Code com acesso ao anfitrião. |
 | `WORKFLOW_CODE_TIMEOUT_MS`, `WORKFLOW_CODE_MEMORY_MB` | 5000, 128 | Limites de tempo e memória do nó Code. |
-| `WORKFLOW_HTTP_ALLOWLIST` | Vazio | Nomes de servidor permitidos para pedidos HTTP dos workflows. |
+| `WORKFLOW_HTTP_ALLOWLIST` | Vazio | Nomes de servidor permitidos para pedidos HTTP dos workflows. Definições > Rede acrescenta-lhe a sua própria lista. |
 | `WORKFLOW_FILE_MAX_BYTES` | 52428800 | Limite de ficheiro enviado ao workflow ou webhook. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | 100000 | Máximo de elementos acumulados na saída de um ciclo. |
 | `WORKFLOW_FILE_ACCESS_ENABLED`, `WORKFLOW_FILE_ACCESS_ROOT` | false, vazio | Acesso a ficheiros do anfitrião e pasta raiz obrigatória. |

@@ -167,6 +167,14 @@ Keycloak is the default. Generic OIDC uses discovery and JWT access tokens. See 
 | `KEYCLOAK_ADMIN_CLIENT_ID` | Client ID used for admin API calls. |
 | `KEYCLOAK_ADMIN_CLIENT_SECRET` | Client secret for admin API calls. |
 
+### Manage trusted certificates on an install made before Settings > Network
+
+A new install sets `TRUSTED_CA_FILE` and `NODE_EXTRA_CA_CERTS` to `/etc/openldr/trust/ca.pem`, and Settings > Network manages that file. An older install names `/etc/ssl/central-ca.pem`, and the page shows the list without letting you change it.
+
+Run the installer again in the install folder. It keeps your `.env`, copies the old central certificate into `config/trust/ca.pem` once, and moves the path only when `.env` still holds the old default. A path you chose yourself is left as it is. Then start the stack again with `docker compose up -d`.
+
+On a Docker install the `openldr` command has no terminal, so `openldr trust add` cannot ask its question. Give it `--fingerprint`. Without it, the command prints the certificate's fingerprint and saves nothing.
+
 ## Development-only settings
 
 These exist so local development and end-to-end tests can run without a configured
@@ -249,7 +257,7 @@ deployed stack the [installer](/docs/install) provisions this from its `--mysql-
 | `WORKFLOW_CODE_ENABLED` | `false` | Allow Code nodes to run. When off, Code nodes refuse to run. |
 | `WORKFLOW_CODE_TIMEOUT_MS` | `5000` | Time limit for one Code node run, in milliseconds. |
 | `WORKFLOW_CODE_MEMORY_MB` | `128` | Memory limit for one Code node run, in MB. |
-| `WORKFLOW_HTTP_ALLOWLIST` | empty | Comma-separated hostnames the HTTP Request node may call. Empty means every host is refused. |
+| `WORKFLOW_HTTP_ALLOWLIST` | empty | Comma-separated hostnames the HTTP Request node may call. An administrator adds more in Settings > Network, and the two lists are used together. With both empty, every host is refused. A host named here cannot be removed in the app. |
 | `WORKFLOW_FILE_MAX_BYTES` | `52428800` (50 MB) | Largest file accepted by a workflow run upload or webhook body. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | `100000` | Most items a single loop node may collect. |
 | `WORKFLOW_FILE_ACCESS_ENABLED` | `false` | Allow the Read/Write File node to touch files on the server. |
