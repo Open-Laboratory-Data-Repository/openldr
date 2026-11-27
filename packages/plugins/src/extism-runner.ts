@@ -70,6 +70,71 @@ export function withoutRedirects(base: typeof fetch): typeof fetch {
   return ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => base(input, { ...init, redirect: 'manual' })) as typeof fetch;
 }
 
+/** The status of the answer CE makes when a plugin's network call got no answer at all. */
+export const TRANSPORT_STATUS = 599;
+/** Why a plugin's network call got no answer. */
+export type TransportReason = 'timeout' | 'certificate' | 'unreachable';
+
+/**
+ * How long the next network call of one plugin call may take: 10 seconds, or what is left of the
+ * whole call less a reserve, when that is lower. Zero when nothing is left. The reserve is 2
+ * seconds, or a fifth of the call when the call is shorter than 10 seconds, so a short call still
+ * has time for a request. All the network calls of one plugin call share this, so however many it
+ * makes, the plugin has its last answer before CE would stop it, and can still record what
+ * happened.
+ */
+export function egressBudget(callLimitMs: number, now: () => number = Date.now): () => number {
+  const reserve = Math.min(2_000, Math.floor(callLimitMs / 5));
+  const end = now() + callLimitMs - reserve;
+  return () => Math.max(0, Math.min(10_000, end - now()));
+}
+
+const CERTIFICATE_CODES = /CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ERR_TLS/;
+
+function transportReason(err: unknown, timedOut: boolean): TransportReason {
+  if (timedOut) return 'timeout';
+  for (let e: unknown = err, depth = 0; e && depth < 5; e = (e as { cause?: unknown }).cause, depth++) {
+    const name = (e as { name?: unknown }).name;
+    if (name === 'TimeoutError' || name === 'AbortError') return 'timeout';
+    const code = (e as { code?: unknown }).code;
+    if (typeof code === 'string' && CERTIFICATE_CODES.test(code)) return 'certificate';
+  }
+  return 'unreachable';
+}
+
+/**
+ * A fetch with a time limit that always answers. When the server gives no answer (it is not
+ * there, its certificate is not trusted, or it takes too long, also part way through its body),
+ * the plugin gets an answer CE made: status 599 and the body `{"openldr":{"transport":"<reason>"}}`.
+ * The reason is one word. No address and no error text, which could carry either.
+ *
+ * Without this a failed call threw inside the SDK and ended the whole plugin call, so a plugin
+ * could never record why, and a server that did not answer held the call until CE stopped it.
+ * A real answer is handed on as it is, a server's own 5xx included.
+ */
+export function withTransportAnswer(base: typeof fetch, limitMs: () => number): typeof fetch {
+  const answer = (reason: TransportReason): Response =>
+    new Response(JSON.stringify({ openldr: { transport: reason } }), { status: TRANSPORT_STATUS, headers: { 'content-type': 'application/json' } });
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const ms = limitMs();
+    // Nothing left of the call's time: do not start a request that cannot finish.
+    if (ms <= 0) return answer('timeout');
+    const limit = AbortSignal.timeout(ms);
+    // A signal the caller gave still counts: whichever ends first stops the request.
+    const signal = init?.signal ? AbortSignal.any([init.signal, limit]) : limit;
+    try {
+      const res = await base(input, { ...init, signal });
+      // The body is read here, under the same limit. Read later, a stalled body would throw in
+      // the SDK and end the plugin call after all.
+      const body = await res.arrayBuffer();
+      const empty = res.status === 204 || res.status === 205 || res.status === 304;
+      return new Response(empty ? null : body, { status: res.status, statusText: res.statusText, headers: res.headers });
+    } catch (err) {
+      return answer(transportReason(err, limit.aborted));
+    }
+  }) as typeof fetch;
+}
+
 /** Whether this call takes the worker path: always for pinned hosts, as before; for `offThread`
  *  only where `canRunOffThread` allows it. */
 export function usesWorker(opts: Pick<RunOptions, 'allowedHosts' | 'offThread'>, execArgv: readonly string[] = process.execArgv): boolean {
@@ -179,7 +244,7 @@ export function createExtismRunner(runnerOpts: { execArgv?: readonly string[] } 
           config: opts.config ?? {},
           allowedHosts: opts.allowedHosts ?? [],
           // Every HTTP call a plugin makes goes through this. See withoutRedirects.
-          fetch: withoutRedirects(fetch),
+          fetch: withTransportAnswer(withoutRedirects(fetch), egressBudget(opts.timeoutMs)),
           functions: {
             'extism:host/env': {
               // On the worker path the SDK's HttpContext overrides http_request +
