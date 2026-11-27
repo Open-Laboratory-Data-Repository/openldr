@@ -1079,4 +1079,42 @@ describe('sharing on the lab network', () => {
     for (let i = 0; i < 12; i++) await h.tick();
     expect(changes).toEqual([share]);
   });
+
+  it('keeps Studio when the slow status read for the share gets no answer, and tries again later', async () => {
+    let reads = 0;
+    let finish!: (s: Status) => void;
+    const slow = new Promise<Status>((r) => (finish = r));
+    const h = harness({
+      pollMs: 1000,
+      readStatus: () => {
+        reads += 1;
+        if (reads === 1) return Promise.resolve(runningStatus('127.0.0.1'));
+        // The second read is slow: it outlasts its time limit. The third answers, with the share.
+        if (reads === 2) return slow;
+        return Promise.resolve({ ...runningStatus('127.0.0.1'), share } as Status);
+      },
+    });
+    void h.controller.start();
+    await settle();
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    // Six polls bring the first refresh, which hangs. More ticks let its time limit pass.
+    for (let i = 0; i < 9; i++) await h.tick();
+    expect(h.shown.map((x) => x.screen)).not.toContain('error');
+    expect(h.last()).toEqual({ screen: 'studio', address: OTHER_WINDOW });
+    // The slow status child ends at last. A read still in flight is reused, never stacked.
+    finish(runningStatus('127.0.0.1'));
+    for (let i = 0; i < 8; i++) await h.tick();
+    expect(h.controller.share()).toEqual(share);
+    expect(h.shown.map((x) => x.screen)).not.toContain('error');
+  });
+
+  it('still shows the error when the address stops answering and the launcher has gone', async () => {
+    let up = true;
+    const h = harness({ statuses: [runningStatus('127.0.0.1'), { running: false, dataDir: DATA }], answers: async () => up, pollMs: 1000 });
+    void h.controller.start();
+    await settle();
+    up = false;
+    await h.tick();
+    expect(h.last()).toMatchObject({ screen: 'error', message: strings.launcherGone });
+  });
 });

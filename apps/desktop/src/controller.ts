@@ -336,17 +336,27 @@ export class DesktopController {
     }
     this.show({ screen: 'studio', address });
 
-    // An address that answers needs no `status` child. Only when it stops answering is the status read.
+    // While the address answers, the launcher is alive and no `status` child is needed for that.
+    // Only when it stops answering is the status read to learn whether the launcher has gone.
     let polls = 0;
     for (;;) {
       await this.deps.sleep(this.pollMs);
       if (this.stale(run)) return;
       polls += 1;
-      // An address that answers says nothing about the share. The launcher publishes it a moment
-      // after its server answers, and another launcher may take the same address later. So the
-      // status is also read on a slow timer, which is the only place the share can be seen.
-      const refresh = polls % STATUS_REFRESH_POLLS === 0;
-      if (!refresh && (await this.deps.answers(address))) continue;
+      if (await this.deps.answers(address)) {
+        if (this.stale(run)) return;
+        // An address that answers says nothing about the share. The launcher publishes it a
+        // moment after its server answers, and another launcher may take the same address later.
+        // So on a slow timer the status is read for the share alone. It is best effort: a read
+        // that gives no answer, or an odd one, changes nothing and is tried again next time.
+        // It never takes a person out of a Studio that works.
+        if (polls % STATUS_REFRESH_POLLS === 0) {
+          const s = await this.boundedStatus();
+          if (this.stale(run)) return;
+          if (s?.running) this.setShared(s.share);
+        }
+        continue;
+      }
       if (this.stale(run)) return;
       if (!(await this.stillRunning(run))) return;
     }
