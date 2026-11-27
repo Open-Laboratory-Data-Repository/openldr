@@ -70,6 +70,58 @@ export function withoutRedirects(base: typeof fetch): typeof fetch {
   return ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => base(input, { ...init, redirect: 'manual' })) as typeof fetch;
 }
 
+/** The status of the answer CE makes when a plugin's network call got no answer at all. */
+export const TRANSPORT_STATUS = 599;
+/** Why a plugin's network call got no answer. */
+export type TransportReason = 'timeout' | 'certificate' | 'unreachable';
+
+/** How long one network call of a plugin may take: 10 seconds, or 2 seconds less than the whole
+ *  call may take when that is lower, and never under 1 second. The plugin must get its answer
+ *  while it still has time to act on it. */
+export function egressLimitMs(callLimitMs: number): number {
+  return Math.max(1_000, Math.min(10_000, callLimitMs - 2_000));
+}
+
+const CERTIFICATE_CODES = /CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ERR_TLS/;
+
+function transportReason(err: unknown, timedOut: boolean): TransportReason {
+  if (timedOut) return 'timeout';
+  for (let e: unknown = err, depth = 0; e && depth < 5; e = (e as { cause?: unknown }).cause, depth++) {
+    const name = (e as { name?: unknown }).name;
+    if (name === 'TimeoutError' || name === 'AbortError') return 'timeout';
+    const code = (e as { code?: unknown }).code;
+    if (typeof code === 'string' && CERTIFICATE_CODES.test(code)) return 'certificate';
+  }
+  return 'unreachable';
+}
+
+/**
+ * A fetch with a time limit that always answers. When the server gives no answer (it is not
+ * there, its certificate is not trusted, or it takes too long, also part way through its body),
+ * the plugin gets an answer CE made: status 599 and the body `{"openldr":{"transport":"<reason>"}}`.
+ * The reason is one word. No address and no error text, which could carry either.
+ *
+ * Without this a failed call threw inside the SDK and ended the whole plugin call, so a plugin
+ * could never record why, and a server that did not answer held the call until CE stopped it.
+ * A real answer is handed on as it is, a server's own 5xx included.
+ */
+export function withTransportAnswer(base: typeof fetch, limitMs: number): typeof fetch {
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const limit = AbortSignal.timeout(limitMs);
+    try {
+      const res = await base(input, { ...init, signal: limit });
+      // The body is read here, under the same limit. Read later, a stalled body would throw in
+      // the SDK and end the plugin call after all.
+      const body = await res.arrayBuffer();
+      const empty = res.status === 204 || res.status === 205 || res.status === 304;
+      return new Response(empty ? null : body, { status: res.status, statusText: res.statusText, headers: res.headers });
+    } catch (err) {
+      const reason = transportReason(err, limit.aborted);
+      return new Response(JSON.stringify({ openldr: { transport: reason } }), { status: TRANSPORT_STATUS, headers: { 'content-type': 'application/json' } });
+    }
+  }) as typeof fetch;
+}
+
 /** Whether this call takes the worker path: always for pinned hosts, as before; for `offThread`
  *  only where `canRunOffThread` allows it. */
 export function usesWorker(opts: Pick<RunOptions, 'allowedHosts' | 'offThread'>, execArgv: readonly string[] = process.execArgv): boolean {
@@ -179,7 +231,7 @@ export function createExtismRunner(runnerOpts: { execArgv?: readonly string[] } 
           config: opts.config ?? {},
           allowedHosts: opts.allowedHosts ?? [],
           // Every HTTP call a plugin makes goes through this. See withoutRedirects.
-          fetch: withoutRedirects(fetch),
+          fetch: withTransportAnswer(withoutRedirects(fetch), egressLimitMs(opts.timeoutMs)),
           functions: {
             'extism:host/env': {
               // On the worker path the SDK's HttpContext overrides http_request +

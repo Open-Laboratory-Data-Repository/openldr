@@ -196,6 +196,8 @@ CE adds one setting of its own to that config: `openldr.connectorId`, the id of 
 
 CE never follows a redirect for a plugin's network call. If the connector's address answers with a redirect, your code gets that answer itself, with its 3xx status, and nothing is sent on. Treat it as a failure, and tell the administrator to put the final address in the connector. An address that sends `http` on to `https`, or adds a path, is the usual cause.
 
+Each network call has a time limit: 10 seconds, or 2 seconds less than the whole call may take when that is lower. When the server gives no answer at all, your code still gets one, made by CE: status `599` and the body `{"openldr":{"transport":"timeout"}}`. The word is `timeout`, `certificate` (this OpenLDR does not trust the server's certificate) or `unreachable`. Read it, record what happened, and return your own result. A real answer from the server reaches your code unchanged, its own 5xx included.
+
 ## fhir_emit
 
 Sends finished FHIR records into CE. The request is `{ "resources": [ ... ] }`.

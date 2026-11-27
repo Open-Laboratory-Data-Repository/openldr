@@ -196,6 +196,8 @@ CE ajoute à cette config un réglage à lui : `openldr.connectorId`, l'id du co
 
 CE ne suit jamais une redirection pour l'appel réseau d'un plugin. Si l'adresse du connecteur répond par une redirection, votre code reçoit cette réponse elle-même, avec son statut 3xx, et rien n'est envoyé plus loin. Traitez-la comme un échec, et dites à l'administrateur de mettre l'adresse finale dans le connecteur. Une adresse qui renvoie `http` vers `https`, ou qui ajoute un chemin, en est la cause habituelle.
 
+Chaque appel réseau a une limite de temps : 10 secondes, ou 2 secondes de moins que la durée permise à l'appel entier si elle est plus courte. Quand le serveur ne donne aucune réponse, votre code en reçoit quand même une, faite par CE : le statut `599` et le corps `{"openldr":{"transport":"timeout"}}`. Le mot est `timeout`, `certificate` (cet OpenLDR ne fait pas confiance au certificat du serveur) ou `unreachable`. Lisez-le, notez ce qui s'est passé et renvoyez votre propre résultat. Une vraie réponse du serveur arrive à votre code sans changement, y compris son propre 5xx.
+
 ## fhir_emit
 
 Envoie des enregistrements FHIR terminés dans CE. La requête est `{ "resources": [ ... ] }`.
