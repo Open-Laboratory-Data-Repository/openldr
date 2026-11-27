@@ -97,6 +97,15 @@ describe('the Network settings page', () => {
     expect(host.querySelectorAll('td')).toHaveLength(3);
   });
 
+  it('counts one certificate and one host in the singular', async () => {
+    vi.mocked(api.getWorkflowHosts).mockResolvedValue({ self: { on: false, origin: 'http://127.0.0.1:3000' }, hosts: [{ host: 'a.example', source: 'setting' }] });
+    mount();
+    await screen.findByTestId(`trust-row-${FP}`);
+    expect(screen.getByTestId('trust-count')).toHaveTextContent(/^1 certificate$/);
+    await showHosts();
+    expect(await screen.findByTestId('hosts-count')).toHaveTextContent(/^1 host$/);
+  });
+
   it('shows Not known for a certificate whose state is unknown, and Expired beside its date', async () => {
     vi.mocked(api.getNetworkTrust).mockResolvedValue({ mode: 'editable', certificates: [cert({ state: 'unknown', expired: true })] });
     mount();
