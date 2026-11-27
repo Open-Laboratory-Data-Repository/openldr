@@ -244,7 +244,37 @@ receipts the same way, so a referral sent both ways lands once
 (`openldr-ce-plugin-lab-bench/src/referrals.rs:99`, `:110`).
 
 Left to the builder (lab-bench): how the hub matches the spoke's patient and test to its
-own, and how often the spoke asks for a finished result.
+own.
+
+### How a finished result comes back
+
+The operator decided on 2026-11-27: use a workflow. The workflows engine already has a
+schedule trigger (`packages/workflows/src/types.ts:72`, `:88`), and a plugin can already
+offer its own workflow step that gets a connector's settings and its one allowed host
+(`packages/bootstrap/src/plugin-node-service.ts:97`). So the spoke runs a workflow: every
+few minutes, ask the hub for finished results. A "Check now" button stays for the impatient.
+
+No second timer is built, in core or in the plugin.
+
+One limit to settle in plan 3. A plugin's workflow step runs without the plugin's own
+database access and without a signed-in caller (`plugin-node-service.ts:126` passes only the
+connector settings and the allowed host). lab-bench needs both to read its waiting referrals.
+Two ways round it: core gives a plugin's workflow step those two things (gap G17), or the
+workflow uses the existing HTTP step to call lab-bench on its own install with a restricted
+key. The second works today.
+
+### The hub's certificate
+
+The operator decided on 2026-11-27: a spoke must be able to trust a hub that has a
+self-signed certificate. A real certificate would be simpler, but it is hard to get in these
+settings.
+
+A plugin's network calls use Node's list of trusted issuers
+(`packages/plugins/src/extism-runner.ts:22`). The server edition already has a way to add to
+that list: a file named in `NODE_EXTRA_CA_CERTS` (`install/install.sh:1023`), read when the
+server starts. The desktop app and the standalone launcher have no such file. A spoke is a
+desktop app, so this is gap G16. It is generic core work and gets its own short design: where
+an administrator saves the hub's certificate, and how a running install picks it up.
 
 ## Approaches considered
 
@@ -278,6 +308,9 @@ The server edition for a two-PC lab was not chosen: nobody there looks after Doc
 | G13 | No guide says which setup a lab should pick. `lab-setup.md` covers lab features only. | `apps/web/src/docs/0.1.8/en/lab-setup.md:1` | docs, en, fr, pt |
 | G14 | The certificate route answers 404 on a standalone. `TLS_CERT_PATH` is never set there. | `apps/server/src/settings-routes.ts:346` | core, with G2 |
 | G15 | A referral key at the hub cannot be limited to referrals. | `apps/server/src/access-key-auth.ts:48` | a restricted account per spoke, no code |
+| G16 | A desktop or standalone install cannot be told to trust another install's self-signed certificate. | `apps/standalone/src/environment.ts:40-72` sets no `NODE_EXTRA_CA_CERTS` | core, own design |
+| G17 | A plugin's workflow step gets no database access and no caller. | `packages/bootstrap/src/plugin-node-service.ts:126` | core, only if plan 3 needs it |
+| G18 | Studio's connector form offers only "sink" plugins as owner. lab-bench is not one. | `apps/server/src/connectors-routes.ts:77` | core or lab-bench, settled in plan 3 |
 
 **HONEST NON-PROOF.** G3 comes from the docs. Nobody reproduced it in this session. The
 first build step is to open a lab-bench page from a second PC over plain HTTP and see what
@@ -320,6 +353,13 @@ outside identity server would be sent to the browser (`apps/desktop/src/main.ts:
   asked for this on 2026-11-27.
 - Serial ports come after connect mode, with their own design.
 - The analyser PC keeps the companion until serial ports land.
+
+## Follow-up seen, not part of this design
+
+Core's plugin scheduler is DHIS2 code. `packages/bootstrap/src/plugin-schedule.ts:2` imports
+`@openldr/dhis2`, and line 85 names the `dhis2-sink` plugin. AGENTS.md §8 lists the DHIS2
+debt in core but does not name this file. It belongs on that list. The workflows schedule
+trigger is the generic timer, so nothing new should use this scheduler.
 
 ## Review
 
