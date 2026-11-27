@@ -3,8 +3,8 @@
 //
 // Only Linux is tested. Every Windows and macOS path below is unproven.
 
-import { randomBytes } from 'node:crypto';
-import { chmod, link, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
+import { createHash, randomBytes } from 'node:crypto';
+import { chmod, link, mkdir, open, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import { join, posix, resolve, win32 } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pingControl } from './control.js';
@@ -54,12 +54,9 @@ export interface LockInfo {
   /** The `--host` value the launcher was started with. Missing from locks written before it was
    *  added. The address alone cannot say this: `0.0.0.0` is shown as `localhost`. */
   host?: string;
-  /** Set while OpenLDR is shared on the lab network (`start --share`). Written once the HTTPS
-   *  front is listening, so a lock without it means not shared, or not shared yet. */
-  share?: ShareInfo;
 }
 
-/** What a running share looks like. In the lock, in `status --json` and in the `ready` event. */
+/** What a running share looks like. In the share status file, `status --json` and the `ready` event. */
 export interface ShareInfo {
   /** https addresses ending in /studio/. The PC's name first when it has a valid one, then one per address. */
   addresses: string[];
@@ -359,12 +356,10 @@ function parseLock(text: string): LockInfo | null {
   if (d.httpPort !== undefined) info.httpPort = d.httpPort;
   if (d.holder === 'recovery') info.holder = 'recovery';
   if (isNonEmptyString(d.host)) info.host = d.host;
-  const share = parseShare(d.share);
-  if (share) info.share = share;
   return info;
 }
 
-/** The share of a lock, or undefined when it is missing or malformed. A bad share never spoils the lock. */
+/** A share as read from disk, or undefined when it is missing or malformed. */
 function parseShare(value: unknown): ShareInfo | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const v = value as Record<string, unknown>;
@@ -373,23 +368,65 @@ function parseShare(value: unknown): ShareInfo | undefined {
   return { addresses: v.addresses as string[], fingerprint: v.fingerprint, certFile: v.certFile };
 }
 
-export const LOCK_NOT_HELD = 'The lock is not held by this launcher.';
+// ---------------------------------------------------------------------------------------------
+// The share status
+//
+// Where a shared launcher says how it is shared. It is not in the lock: the lock is written once,
+// when it is taken, and never again. A launcher that was judged dead and replaced could otherwise
+// write over its successor's lock and send `stop` to the wrong process. Each launcher has its own
+// status file, named from its control token, so a stale launcher can only ever write its own.
 
-/**
- * Writes `share` into the lock this launcher holds. Every other field stays as it is: the pid,
- * the token, the control port and the start time, so `stop` and `status` still reach it. The new
- * lock is written whole to a temp file and renamed over the old one, so a reader sees the old
- * lock or the new one, never a part of either. Throws when the lock is not this launcher's.
- */
-export async function writeLockShare(paths: StandalonePaths, token: string, share: ShareInfo): Promise<void> {
-  const current = await readLock(paths);
-  if (current?.token !== token) throw new Error(LOCK_NOT_HELD);
-  const tmp = tempPath(paths, 'standalone.lock');
+/** The file for one launcher. The name is a hash of the token, never the token. */
+function shareStatusFile(paths: StandalonePaths, token: string): string {
+  return join(paths.shareDir, `status-${createHash('sha256').update(token).digest('hex').slice(0, 16)}.json`);
+}
+
+const SHARE_STATUS_NAME = /^status-[0-9a-f]{16}\.json$/;
+
+/** Writes this launcher's share status, whole, by a temp file and a rename. */
+export async function writeShareStatus(paths: StandalonePaths, token: string, share: ShareInfo): Promise<void> {
+  await mkdir(paths.shareDir, { recursive: true, mode: 0o700 });
+  const file = shareStatusFile(paths, token);
+  const tmp = `${file}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
   try {
-    await writeOwnerOnly(tmp, `${JSON.stringify({ ...current, share })}\n`);
-    await rename(tmp, paths.lockFile);
+    await writeOwnerOnly(tmp, `${JSON.stringify(share)}\n`);
+    await rename(tmp, file);
   } finally {
     await rm(tmp, { force: true });
+  }
+}
+
+/** The share the launcher with this token published, or undefined when it published none. */
+export async function readShareStatus(paths: StandalonePaths, token: string): Promise<ShareInfo | undefined> {
+  const text = await readIfThere(shareStatusFile(paths, token));
+  if (text === null) return undefined;
+  try {
+    return parseShare(JSON.parse(text));
+  } catch {
+    return undefined;
+  }
+}
+
+/** Removes this launcher's share status. Nothing happens when there is none. */
+export async function removeShareStatus(paths: StandalonePaths, token: string): Promise<void> {
+  await rm(shareStatusFile(paths, token), { force: true });
+}
+
+/**
+ * Removes the status files other launchers left behind, for example one that was killed. Call it
+ * while holding the lock. The certificate and its key are left alone.
+ */
+export async function clearOtherShareStatus(paths: StandalonePaths, token: string): Promise<void> {
+  let names: string[];
+  try {
+    names = await readdir(paths.shareDir);
+  } catch {
+    return;
+  }
+  const own = shareStatusFile(paths, token);
+  for (const name of names) {
+    const file = join(paths.shareDir, name);
+    if (SHARE_STATUS_NAME.test(name) && file !== own) await rm(file, { force: true });
   }
 }
 

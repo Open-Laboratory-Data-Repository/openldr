@@ -37,7 +37,10 @@ import {
   readLock,
   releaseLock,
   resolveDataDir,
-  writeLockShare,
+  clearOtherShareStatus,
+  readShareStatus,
+  removeShareStatus,
+  writeShareStatus,
   type LockInfo,
   type ShareInfo,
   type StandalonePaths,
@@ -503,6 +506,9 @@ export async function runStart(
       }
       pg = undefined;
     }
+    // While the lock is still held. Whether or not a front ever started: a failed start may
+    // have published already.
+    await removeShareStatus(paths, token).catch(() => {});
     if (lockTaken) {
       try {
         await releaseLock(paths, token);
@@ -581,6 +587,9 @@ export async function runStart(
     // two launchers cannot race on the version file.
     await checkDataVersion(paths, deps.appVersion);
 
+    // Under the lock: what an earlier launcher published about its share, if it was killed.
+    await clearOtherShareStatus(paths, token);
+
     // 4. The state file.
     const state = await loadOrCreateState(paths, () => findFreePort(PREFERRED_PG_PORT));
     secrets.push(state.secretsKey, state.pgSuperPassword, state.pgAppPassword);
@@ -643,7 +652,12 @@ export async function runStart(
       const names = shareNames(net.hostname, net.interfaces);
       onNetwork = names.ips.some((ip) => ip !== '127.0.0.1');
       shareCert = await loadOrCreateShareCert(paths.shareDir, names, deps.now(), deps.makeCert);
-      shareInfo = { addresses: shareAddresses(names, opts.share.port), fingerprint: shareCert.fingerprint, certFile: shareCert.certFile };
+      // A name alone reaches nobody. With no network address, no address is published anywhere.
+      shareInfo = {
+        addresses: onNetwork ? shareAddresses(names, opts.share.port) : [],
+        fingerprint: shareCert.fingerprint,
+        certFile: shareCert.certFile,
+      };
     }
 
     applyEnvironment(
@@ -744,14 +758,14 @@ export async function runStart(
         if (errorCode(err) === 'EADDRINUSE') throw new Error(sharePortTakenMessage(opts.share.port));
         throw err;
       }
-      await writeLockShare(paths, token, shareInfo);
+      // Beside the lock, never in it: the lock is written once and stays as it was taken.
+      await writeShareStatus(paths, token, shareInfo);
     }
 
     deps.print(`OpenLDR is running at ${address}`);
     if (shareInfo) {
       const [first, ...others] = shareInfo.addresses;
-      // The PC's own name alone is not a network address: with no address, nobody can reach it.
-      if (first === undefined || !onNetwork) {
+      if (first === undefined) {
         deps.print('No network address was found. Join a network, then start OpenLDR again.');
       } else {
         deps.print(`Shared on the lab network at ${first}`);
@@ -825,6 +839,8 @@ export async function runStatus(opts: { dataDir?: string; json?: boolean }, prin
     print(opts.json ? JSON.stringify({ dataDir, running: false, busy }) : busy);
     return 3;
   }
+  // The running launcher's own share status, found by its token. Another launcher's is never read.
+  const share = await readShareStatus(paths, lock.token);
   print(
     opts.json
       ? JSON.stringify({
@@ -832,11 +848,11 @@ export async function runStatus(opts: { dataDir?: string; json?: boolean }, prin
           running: true,
           address: lock.address,
           ...(lock.host !== undefined ? { host: lock.host } : {}),
-          ...(lock.share !== undefined ? { share: lock.share } : {}),
+          ...(share !== undefined ? { share } : {}),
         })
       : `OpenLDR is running at ${lock.address}`,
   );
-  if (!opts.json && lock.share?.addresses[0] !== undefined) print(`Shared at ${lock.share.addresses[0]}`);
+  if (!opts.json && share?.addresses[0] !== undefined) print(`Shared at ${share.addresses[0]}`);
   return 0;
 }
 

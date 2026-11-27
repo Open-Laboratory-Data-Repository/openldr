@@ -16,7 +16,10 @@ import {
   loadOrCreateState,
   pathsFor,
   readLock,
-  writeLockShare,
+  clearOtherShareStatus,
+  readShareStatus,
+  removeShareStatus,
+  writeShareStatus,
   releaseLock,
   resolveDataDir,
   type LockInfo,
@@ -228,33 +231,11 @@ describe('lock', () => {
     expect(await readLock(paths)).toBeNull();
   });
 
-  it('reads a well formed share and drops a malformed one', async () => {
+  it('reads no share from a lock: the lock is never rewritten after it is taken', async () => {
     const base = { pid: 1, address: 'http://localhost:80/studio/', startedAt: 's', controlPort: 40000, token: 't' };
     const share = { addresses: ['https://labpc:3443/studio/'], fingerprint: 'AB:CD', certFile: '/d/share/cert.pem' };
     await writeFile(paths.lockFile, JSON.stringify({ ...base, share }));
-    expect(await readLock(paths)).toEqual({ ...base, share });
-    for (const bad of [{ ...share, addresses: 'x' }, { ...share, addresses: [1] }, { ...share, fingerprint: '' }, { addresses: [] }, 'x']) {
-      await writeFile(paths.lockFile, JSON.stringify({ ...base, share: bad }));
-      expect(await readLock(paths)).toEqual(base);
-    }
-  });
-
-  it('writes the share into its own lock and changes nothing else', async () => {
-    const info = await liveLock(102);
-    await acquireLock(paths, info);
-    const share = { addresses: ['https://labpc:3443/studio/'], fingerprint: 'AB:CD', certFile: '/d/share/cert.pem' };
-    await writeLockShare(paths, info.token, share);
-    expect(await readLock(paths)).toEqual({ ...info, share });
-    if (!WINDOWS) expect(await mode(paths.lockFile)).toBe(0o600);
-    expect(await leftovers()).toEqual([]);
-  });
-
-  it('refuses to write the share into a lock it does not hold', async () => {
-    const info = await liveLock(103);
-    await acquireLock(paths, info);
-    const share = { addresses: [], fingerprint: 'AB', certFile: '/c' };
-    await expect(writeLockShare(paths, 'another-token', share)).rejects.toThrow('The lock is not held by this launcher.');
-    expect(await readLock(paths)).toEqual(info);
+    expect(await readLock(paths)).toEqual(base);
   });
 
   it.skipIf(WINDOWS)('writes the lock owner-only and reads it back', async () => {
@@ -456,5 +437,68 @@ describe('lock', () => {
     await releaseLock(paths, info.token);
     expect(await readLock(paths)).toBeNull();
     await releaseLock(paths, info.token); // nothing to release is not an error
+  });
+});
+
+describe('share status', () => {
+  const share = { addresses: ['https://labpc:3443/studio/'], fingerprint: 'AB:CD', certFile: '/d/share/cert.pem' };
+
+  it('reads back what a launcher wrote, by that launcher\'s token only', async () => {
+    await writeShareStatus(paths, 'token-a', share);
+    expect(await readShareStatus(paths, 'token-a')).toEqual(share);
+    expect(await readShareStatus(paths, 'token-b')).toBeUndefined();
+  });
+
+  it('never puts the token in a file name', async () => {
+    await writeShareStatus(paths, 'token-a-very-secret', share);
+    const names = await readdir(paths.shareDir);
+    expect(names).toHaveLength(1);
+    expect(names[0]).toMatch(/^status-[0-9a-f]{16}\.json$/);
+    expect(names[0]).not.toContain('token');
+  });
+
+  it.skipIf(WINDOWS)('writes it owner-only and leaves no temp file', async () => {
+    await writeShareStatus(paths, 'token-a', share);
+    const [name] = await readdir(paths.shareDir);
+    expect(await mode(join(paths.shareDir, name!))).toBe(0o600);
+  });
+
+  it('a stale launcher cannot change what its successor reports', async () => {
+    await writeShareStatus(paths, 'successor', share);
+    await writeShareStatus(paths, 'stale', { ...share, addresses: ['https://wrong:1/studio/'] });
+    expect(await readShareStatus(paths, 'successor')).toEqual(share);
+  });
+
+  it('reads undefined for a missing or damaged file', async () => {
+    expect(await readShareStatus(paths, 'token-a')).toBeUndefined();
+    await writeShareStatus(paths, 'token-a', share);
+    const [name] = await readdir(paths.shareDir);
+    await writeFile(join(paths.shareDir, name!), '{ not json');
+    expect(await readShareStatus(paths, 'token-a')).toBeUndefined();
+    await writeFile(join(paths.shareDir, name!), JSON.stringify({ addresses: 'x', fingerprint: 'a', certFile: 'c' }));
+    expect(await readShareStatus(paths, 'token-a')).toBeUndefined();
+  });
+
+  it('removes its own status and leaves the certificate files alone', async () => {
+    await writeShareStatus(paths, 'token-a', share);
+    await writeFile(join(paths.shareDir, 'cert.pem'), 'c');
+    await removeShareStatus(paths, 'token-a');
+    expect(await readdir(paths.shareDir)).toEqual(['cert.pem']);
+    await removeShareStatus(paths, 'token-a');
+  });
+
+  it('clears every other launcher\'s status and keeps its own and the certificate', async () => {
+    await writeShareStatus(paths, 'old-1', share);
+    await writeShareStatus(paths, 'old-2', share);
+    await writeShareStatus(paths, 'mine', share);
+    await writeFile(join(paths.shareDir, 'cert.pem'), 'c');
+    await clearOtherShareStatus(paths, 'mine');
+    expect((await readdir(paths.shareDir)).sort()).toHaveLength(2);
+    expect(await readShareStatus(paths, 'mine')).toEqual(share);
+    expect(await readShareStatus(paths, 'old-1')).toBeUndefined();
+  });
+
+  it('clearing does nothing when the folder is not there', async () => {
+    await clearOtherShareStatus(paths, 'mine');
   });
 });

@@ -34,7 +34,7 @@ import { newControlToken, requestStop, startControl, type ControlServer } from '
 import { newerDataMessage } from './data-version.js';
 import type { LauncherEvent } from './events.js';
 import { postgresUrls, type PostgresSettings } from './postgres.js';
-import { acquireLock, isLockLive, pathsFor, readLock, type StandalonePaths } from './state.js';
+import { acquireLock, isLockLive, pathsFor, readLock, readShareStatus, writeShareStatus, type StandalonePaths } from './state.js';
 import { makeCert, type MakeCert } from './share-cert.js';
 import type { ShareProxy } from './share-proxy.js';
 
@@ -2329,7 +2329,6 @@ describe('runStart with --share', () => {
     expect(f.server.cfg?.TRUST_PROXY).toBeUndefined();
     expect(f.server.cfg?.TLS_CERT_PATH).toBeUndefined();
     expect(l.share).toBeUndefined();
-    expect(await readLock(paths)).not.toHaveProperty('share');
   });
 
   it('reports a taken share port before starting Postgres', async () => {
@@ -2381,9 +2380,25 @@ describe('runStart with --share', () => {
     const f = shareFakes({ noNetwork: true });
     const l = await startShared(f, sharePort);
     expect(f.printed).toContain('No network address was found. Join a network, then start OpenLDR again.');
-    expect(f.printed.some((line) => line.startsWith('Also at'))).toBe(false);
-    // The PC's name is still valid, so it is still offered.
-    expect(l.share?.addresses).toEqual([`https://labpc:${sharePort}/studio/`]);
+    expect(f.printed.some((line) => line.startsWith('Also at') || line.startsWith('Shared'))).toBe(false);
+    // A name alone reaches nobody: with no address, no address is published anywhere.
+    expect(l.share?.addresses).toEqual([]);
+    expect(l.share?.fingerprint).toBe(new X509Certificate(fixed.certPem).fingerprint256);
+    void sharePort;
+  });
+
+  it('publishes no address in the ready event or in status when the PC has no network address', async () => {
+    const f = shareFakes({ noNetwork: true });
+    const events: LauncherEvent[] = [];
+    f.deps.emit = (e) => events.push(e);
+    const l = await startShared(f, await freeLowPort([PORT]));
+    expect(events.at(-1)).toMatchObject({ event: 'ready', share: { addresses: [] } });
+    const json: string[] = [];
+    await runStatus({ dataDir: root, json: true }, (line) => json.push(line));
+    expect(JSON.parse(json[0]!).share).toEqual(l.share);
+    const text: string[] = [];
+    await runStatus({ dataDir: root }, (line) => text.push(line));
+    expect(text).toEqual([`Data folder: ${root}`, `OpenLDR is running at ${ADDRESS}`]);
   });
 
   it('puts the share in the ready event and in status --json', async () => {
@@ -2403,7 +2418,7 @@ describe('runStart with --share', () => {
     expect(printed).toEqual([`Data folder: ${root}`, `OpenLDR is running at ${ADDRESS}`, `Shared at https://labpc:${sharePort}/studio/`]);
   });
 
-  it('keeps the lock token and control port when it writes the share', async () => {
+  it('never rewrites the lock: the share is published beside it', async () => {
     const f = shareFakes();
     let before: Awaited<ReturnType<typeof readLock>> = null;
     const startProxy = f.deps.startShareProxy!;
@@ -2412,14 +2427,39 @@ describe('runStart with --share', () => {
       return startProxy(opts);
     };
     const l = await startShared(f, await freeLowPort([PORT]));
-    const after = await readLock(paths);
     expect(before).not.toBeNull();
-    expect(before).not.toHaveProperty('share');
-    expect(after).toEqual({ ...before!, share: l.share });
+    expect(await readLock(paths)).toEqual(before);
+    expect(await readShareStatus(paths, before!.token)).toEqual(l.share);
     // A stop still reaches this launcher through the lock.
     expect(await runStop({ dataDir: root }, () => {})).toBe(0);
     launchers.splice(launchers.indexOf(l), 1);
     await l.done;
+    expect(await readShareStatus(paths, before!.token)).toBeUndefined();
+  });
+
+  it('a share status left by an earlier launcher is cleared at the next start, shared or not', async () => {
+    await writeShareStatus(paths, 'a-launcher-that-was-killed', { addresses: ['https://old:1/studio/'], fingerprint: 'OLD', certFile: '/c' });
+    await start(fakes().deps);
+    expect(await readShareStatus(paths, 'a-launcher-that-was-killed')).toBeUndefined();
+    const printed: string[] = [];
+    await runStatus({ dataDir: root, json: true }, (line) => printed.push(line));
+    expect(JSON.parse(printed[0]!)).not.toHaveProperty('share');
+  });
+
+  it('closes the front and undoes the start when the share cannot be published', async () => {
+    const f = shareFakes();
+    // A file where the share folder's status file must go makes the publication fail after the front is up.
+    const startProxy = f.deps.startShareProxy!;
+    f.deps.startShareProxy = async (opts) => {
+      const proxy = await startProxy(opts);
+      await rm(paths.shareDir, { recursive: true, force: true });
+      await writeFile(paths.shareDir, 'not a folder');
+      return proxy;
+    };
+    await expect(runStart({ dataDir: root, port: PORT, host: '127.0.0.1', share: { port: await freeLowPort([PORT]) } }, f.deps)).rejects.toThrow();
+    expect(f.order).toContain('front.close');
+    expect(f.order.indexOf('front.close')).toBeLessThan(f.order.indexOf('server.close'));
+    await expectNothingLeft(f);
   });
 
   it('reuses the certificate on the next start', async () => {
