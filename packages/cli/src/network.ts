@@ -220,7 +220,7 @@ export async function hostsAdd(hosts: WorkflowHosts, host: string, io: NetworkIo
 
 export async function hostsRemove(hosts: WorkflowHosts, host: string, opts: { force: boolean }, io: NetworkIo): Promise<number> {
   if (!opts.force) {
-    io.err(`Refusing to remove ${host} without --force. A workflow that calls it stops working at once.`);
+    io.err(`Refusing to remove ${host} without --force. A workflow that reaches it only through this list entry loses access at once.`);
     return 1;
   }
   return guarded(io, async () => {

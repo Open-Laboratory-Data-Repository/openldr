@@ -331,7 +331,7 @@ describe('openldr workflows hosts', () => {
     const s = setup();
     await hostsAdd(s.workflowHosts, 'a.example', s.io);
     expect(await hostsRemove(s.workflowHosts, 'a.example', { force: false }, s.io)).toBe(1);
-    expect(s.err[0]).toMatch(/^Refusing to remove a\.example without --force\./);
+    expect(s.err[0]).toBe('Refusing to remove a.example without --force. A workflow that reaches it only through this list entry loses access at once.');
     expect((await s.workflowHosts.list()).map((h) => h.host)).toEqual(['a.example']);
     expect(await hostsRemove(s.workflowHosts, ' A.example', { force: true }, s.io)).toBe(0);
     expect(await s.workflowHosts.list()).toEqual([]);
