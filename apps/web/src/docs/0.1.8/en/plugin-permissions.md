@@ -128,4 +128,4 @@ It takes no parameters. On the install screen the administrator sees the line **
 
 This capability is not one of the plugin's own permission keys, and no role holds it. It belongs to the plugin's installed version. Any person who may open the plugin's page may then be asked to choose a port. Studio asks each time, naming the plugin, and the person may cancel.
 
-Studio enforces it, not the server: serial bytes never go to the server. Turning the plugin off, removing it, or making another version active closes any open port. [Plugin tables and host functions](/docs/plugin-host-functions) lists the calls.
+Studio enforces it, not the server: the serial calls send no byte to the server. Turning the plugin off, removing it, or making another version active closes any open port. [Plugin tables and host functions](/docs/plugin-host-functions) lists the calls.

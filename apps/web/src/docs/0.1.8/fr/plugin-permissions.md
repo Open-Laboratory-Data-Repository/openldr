@@ -128,4 +128,4 @@ Elle ne prend aucun paramètre. Sur l'écran d'installation, l'administrateur vo
 
 Cette capacité n'est pas l'une des clés de permission du plugin, et aucun rôle ne la détient. Elle appartient à la version installée du plugin. Toute personne qui peut ouvrir la page du plugin peut alors se voir demander de choisir un port. Studio pose la question à chaque fois, en nommant le plugin, et la personne peut annuler.
 
-C'est Studio qui l'applique, pas le serveur : les octets série ne vont jamais au serveur. Désactiver le plugin, le retirer ou activer une autre version ferme tout port ouvert. [Tables et fonctions hôtes des plugins](/docs/plugin-host-functions) donne la liste des appels.
+C'est Studio qui l'applique, pas le serveur : les appels série n'envoient aucun octet au serveur. Désactiver le plugin, le retirer ou activer une autre version ferme tout port ouvert. [Tables et fonctions hôtes des plugins](/docs/plugin-host-functions) donne la liste des appels.

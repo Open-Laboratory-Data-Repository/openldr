@@ -234,7 +234,7 @@ host::fhir_emit(&[json!({ "resourceType": "Observation", "id": "obs-1", "status"
 
 ## Serial ports for a plugin page
 
-A plugin's page can read and write a serial port on the PC it runs on, as raw bytes. This is for a page that talks to an instrument over a cable. The calls are on `window.openldr.serial`, in the page, not in the plugin's server code. Studio holds the port and does every check. The bytes never go to the server.
+A plugin's page can read and write a serial port on the PC it runs on, as raw bytes. This is for a page that talks to an instrument over a cable. The calls are on `window.openldr.serial`, in the page, not in the plugin's server code. Studio holds the port and does every check. These calls send no byte to the server. What your plugin does with the bytes afterwards, such as saving a result, is its own.
 
 The plugin needs the `host:serial` capability. [Plugin permissions](/docs/plugin-permissions) says what the administrator sees.
 
@@ -248,8 +248,8 @@ It works where the browser has the serial feature: Chrome and Edge, on an `https
 | `choose()` | Studio asks the person, naming the plugin, then shows the list of ports. Gives `{ port, label }`, or `null` when the person cancelled. |
 | `open(port, settings)` | Opens a chosen port. |
 | `read(port, waitMs)` | Gives `{ bytes, lost }`. `bytes` is a `Uint8Array` of what arrived, at most 65,536 bytes. With `waitMs` it waits up to that long for a first byte. Without it, it answers at once. |
-| `write(port, bytes)` | Sends a `Uint8Array` of 1 to 65,536 bytes. Resolves when the port has taken them. |
-| `close(port)` | Closes the port. The same `port` can be opened again until the page reloads. |
+| `write(port, bytes)` | Sends a `Uint8Array` of 1 to 65,536 bytes. Resolves when the port's output has taken them. |
+| `close(port)` | Closes the port. The same `port` can be opened again while this page stays loaded, the plugin keeps its grant and the device is still there. |
 
 `port` is a handle Studio makes up for this one page. It is not the port's name, and it is no use to another page.
 
@@ -271,7 +271,7 @@ Any other field is refused. There are no control lines: no DTR, no RTS, no break
 
 | Limit | Value |
 |---|---|
-| Open ports for one plugin page | 2 |
+| Ports open, opening or closing, for one plugin page | 2 |
 | Bytes one read returns | 65,536 |
 | Bytes waiting to be read, per port | 1,048,576 |
 | Bytes one write takes | 65,536 |
@@ -288,8 +288,8 @@ A refused call rejects with an `Error` whose message is one of these codes. `cho
 | `serial-unavailable` | The browser has no serial feature here, or refused for security. |
 | `serial-cancelled` | The person cancelled. Only seen as `null` from `choose()`. |
 | `serial-unknown-port` | The handle is not one of this page's, or the port is not open. |
-| `serial-busy` | The port is already open or opening, here or in another page. Or a read is already waiting on it. Or another port question is open. |
-| `serial-too-many` | Two ports are already open. |
+| `serial-busy` | The port is already open or opening, here or in another page, or its last close has not finished. Or a read is already waiting on it. Or another port question is open. |
+| `serial-too-many` | Two ports are already open, opening or closing. |
 | `serial-too-large` | The bytes are not a `Uint8Array`, are empty, are over 65,536, or the send queue is full. |
 | `serial-bad-settings` | The settings are not as the table above. |
 | `serial-closed` | The port was closed, or the cable was pulled, while the call waited. |
@@ -298,34 +298,36 @@ A refused call rejects with an `Error` whose message is one of these codes. `cho
 ### What your page must handle
 
 - **A cancelled choice.** `choose()` gives `null`. Leave the person where they were.
-- **A dropped link.** A pulled cable ends a waiting read with `serial-closed`. The handle is then dead: later calls give `serial-unknown-port`. Ask the person to choose the port again.
+- **A dropped link.** A pulled cable or an I/O error ends a waiting read with `serial-closed`. The handle is then dead, without a reload: later calls give `serial-unknown-port`. Ask the person to choose the port again.
 - **Lost bytes.** When 1,048,576 bytes wait unread, Studio drops everything unread. The next read gives no bytes and `lost: true`, once. Bytes after that arrive as usual. Start your framing again: the bytes before and after the gap are never joined.
 - **A reload.** Every load of the page starts with no port. The person chooses again.
-- **Only finished writes count.** A write is sent once its promise has resolved. `close()` does not wait for writes that have not finished, so wait for them first.
-- **The grant going away.** While a port is open, Studio asks the server once a minute. If the plugin was turned off, upgraded or lost the capability, the port closes and calls give `serial-not-granted`.
+- **Wait for writes before you close.** A write's promise resolves when the port's output has taken the bytes. That does not mean the instrument received them or answered. `close()` does not wait for writes that have not finished, so wait for them first.
+- **The grant going away.** While a port is open, Studio asks the server once a minute. A check that gets no answer changes nothing and is tried again a minute later. When a check shows the plugin was turned off, upgraded or lost the capability, the port closes, its handle is dead and calls give `serial-not-granted`.
 
 ### Example
 
 ```js
-await window.openldr.ready;
-const serial = window.openldr.serial;
+async function readFromInstrument() {
+  await window.openldr.ready;
+  const serial = window.openldr.serial;
 
-const chosen = await serial.choose();      // null when the person cancelled
-if (!chosen) return;
-await serial.open(chosen.port, { baudRate: 9600 });
+  const chosen = await serial.choose();      // null when the person cancelled
+  if (!chosen) return;
+  await serial.open(chosen.port, { baudRate: 9600 });
 
-let buffer = [];
-for (;;) {
-  let read;
-  try {
-    read = await serial.read(chosen.port, 5000);   // waits up to 5 seconds for a first byte
-  } catch (err) {
-    // 'serial-closed': the cable was pulled or the port was closed. Ask the person to choose again.
-    break;
+  let buffer = [];
+  for (;;) {
+    let read;
+    try {
+      read = await serial.read(chosen.port, 5000);   // waits up to 5 seconds for a first byte
+    } catch (err) {
+      // 'serial-closed': the cable was pulled or the port was closed. Ask the person to choose again.
+      break;
+    }
+    if (read.lost) buffer = [];                      // bytes were dropped: start the framing again
+    buffer.push(...read.bytes);
+    // ...cut whole messages out of buffer here...
   }
-  if (read.lost) buffer = [];                      // bytes were dropped: start the framing again
-  buffer.push(...read.bytes);
-  // ...cut whole messages out of buffer here...
 }
 ```
 

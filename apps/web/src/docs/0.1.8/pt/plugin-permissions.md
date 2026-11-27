@@ -128,4 +128,4 @@ Não leva parâmetros. No ecrã de instalação, o administrador vê a linha **U
 
 Esta capacidade não é uma das chaves de permissão do plugin, e nenhum papel a detém. Pertence à versão instalada do plugin. Qualquer pessoa que possa abrir a página do plugin pode então ser convidada a escolher uma porta. O Studio pergunta de cada vez, com o nome do plugin, e a pessoa pode cancelar.
 
-É o Studio que a aplica, não o servidor: os bytes série nunca vão para o servidor. Desligar o plugin, removê-lo ou ativar outra versão fecha qualquer porta aberta. [Tabelas e funções do anfitrião para plugins](/docs/plugin-host-functions) lista as chamadas.
+É o Studio que a aplica, não o servidor: as chamadas série não enviam nenhum byte para o servidor. Desligar o plugin, removê-lo ou ativar outra versão fecha qualquer porta aberta. [Tabelas e funções do anfitrião para plugins](/docs/plugin-host-functions) lista as chamadas.
