@@ -18,7 +18,9 @@ Do this once, on the PC that runs OpenLDR.
 
 **Expected result:** the tray menu shows an address that starts with `https://`, and that address is copied.
 
-On a PC with no desktop app, start the launcher with `openldr-standalone start --share`. It prints the same address.
+If OpenLDR was started outside the app, nothing restarts. The app says the change applies the next time it starts OpenLDR.
+
+On a PC with no desktop app, start the launcher with `openldr-standalone start --share`. It prints the address, a second address with numbers, and the certificate fingerprint.
 
 ## Open it on another PC
 
@@ -30,13 +32,13 @@ On a PC with no desktop app, start the launcher with `openldr-standalone start -
 
 **Expected result:** Studio opens, with the same data as on the first PC.
 
-If the address with the PC's name does not open, use the one with numbers, such as `https://192.168.1.20:3443/studio/`. The launcher prints both.
+If the address with the PC's name does not open, use the one with numbers, such as `https://192.168.1.20:3443/studio/`. The launcher prints both. The tray shows one. For the others, run `openldr-standalone status --json` on the first PC and read `share.addresses`.
 
 ## Check the certificate
 
 The first PC makes its own certificate, so a browser does not know it. Check that it is the right one before you accept it.
 
-1. On the first PC, open the tray icon and select **Copy certificate fingerprint**.
+1. On the first PC, open the tray icon and select **Copy certificate fingerprint**. With the launcher, read the line that starts `Certificate fingerprint (SHA-256):` in its terminal.
 2. Paste it somewhere you can read it, or read it aloud to the person at the other PC.
 3. On the other PC, open the certificate's details from the browser's warning.
 4. Find the **SHA-256** fingerprint.

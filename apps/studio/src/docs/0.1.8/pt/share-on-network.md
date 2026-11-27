@@ -18,7 +18,9 @@ Faça isto uma vez, no PC onde o OpenLDR corre.
 
 **Resultado esperado:** o menu mostra um endereço que começa por `https://`, e esse endereço fica copiado.
 
-Num PC sem a aplicação de ambiente de trabalho, inicie o lançador com `openldr-standalone start --share`. Ele mostra o mesmo endereço.
+Se o OpenLDR foi iniciado fora da aplicação, nada reinicia. A aplicação diz que a alteração se aplica da próxima vez que ela iniciar o OpenLDR.
+
+Num PC sem a aplicação de ambiente de trabalho, inicie o lançador com `openldr-standalone start --share`. Ele mostra o endereço, um segundo endereço com números, e a impressão digital do certificado.
 
 ## Abri-lo noutro PC
 
@@ -30,13 +32,13 @@ Num PC sem a aplicação de ambiente de trabalho, inicie o lançador com `openld
 
 **Resultado esperado:** o Studio abre, com os mesmos dados do primeiro PC.
 
-Se o endereço com o nome do PC não abrir, use o que tem números, por exemplo `https://192.168.1.20:3443/studio/`. O lançador mostra os dois.
+Se o endereço com o nome do PC não abrir, use o que tem números, por exemplo `https://192.168.1.20:3443/studio/`. O lançador mostra os dois. A área de notificação mostra um. Para os outros, execute `openldr-standalone status --json` no primeiro PC e leia `share.addresses`.
 
 ## Verificar o certificado
 
 O primeiro PC cria o seu próprio certificado, por isso um navegador não o conhece. Confirme que é o certo antes de o aceitar.
 
-1. No primeiro PC, abra o ícone e selecione **Copiar a impressão digital do certificado**.
+1. No primeiro PC, abra o ícone e selecione **Copiar a impressão digital do certificado**. Com o lançador, leia a linha que começa por `Certificate fingerprint (SHA-256):` no terminal dele.
 2. Cole-a num sítio onde a possa ler, ou leia-a em voz alta à pessoa que está no outro PC.
 3. No outro PC, abra os detalhes do certificado a partir do aviso do navegador.
 4. Encontre a impressão digital **SHA-256**.

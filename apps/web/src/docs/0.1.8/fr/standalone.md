@@ -87,7 +87,7 @@ Le code de configuration ne s'affiche que dans le terminal. Le lanceur ne l'écr
 | `--data-dir <folder>` | Voir la section suivante | Le dossier qui contient toutes les données de cette installation. |
 | `--port <port>` | `3000` | Le port web. Si un autre programme l'occupe, `start` s'arrête avec `Port 3000 is already in use. Choose another with --port.` Il ne choisit jamais un autre port de lui-même. |
 | `--host <address>` | `127.0.0.1` | L'adresse d'écoute d'OpenLDR. Par défaut, seul cet ordinateur y a accès. Voir **Ouvrir l'accès à un téléphone ou à un autre ordinateur** plus bas. |
-| `--share` | Désactivé | Ouvre OpenLDR au réseau du laboratoire en HTTPS, sur un second port. Voir **Le partager sur le réseau du laboratoire** plus bas. Ne se combine pas avec `--host`. |
+| `--share` | Désactivé | Ouvre OpenLDR au réseau du laboratoire en HTTPS, sur un second port. Voir **Le partager sur le réseau du laboratoire** plus bas. Omettez `--host`, ou donnez exactement `--host 127.0.0.1`. |
 | `--share-port <port>` | `3443` | Le port qu'utilisent les autres PC avec `--share`. |
 | `--events-fd <n>` | Aucun | Écrit une ligne JSON par événement sur le descripteur n (3 ou plus). Aucun code de configuration n'est créé ni affiché. C'est pour un programme qui lance le lanceur, comme l'application de bureau. |
 | `--json`, avec `status` | Désactivé | `status` affiche une seule ligne JSON à la place. Voir **Vérifier qu'il tourne** plus bas. |
@@ -287,7 +287,7 @@ OpenLDR lui-même n'écoute toujours que sur cet ordinateur. Une seconde porte, 
 
 Sur un autre PC, ouvrez l'une des adresses `https`. Le navigateur avertit qu'il ne connaît pas le certificat. C'est normal : OpenLDR a créé le certificat lui-même. Ouvrez les détails du certificat dans le navigateur et comparez son empreinte SHA-256 à celle affichée par le lanceur. Ne l'acceptez que si elles sont identiques. Connectez-vous ensuite comme d'habitude.
 
-- Le certificat dure 825 jours. Le lanceur en crée un nouveau 30 jours avant la fin, et chaque fois que le nom ou l'adresse réseau de cet ordinateur change. Un nouveau certificat a une nouvelle empreinte, et les autres PC doivent l'accepter de nouveau. Donnez une adresse fixe à cet ordinateur pour l'éviter.
+- Le certificat dure 825 jours. Le lanceur le vérifie à chaque démarrage avec `--share`, pas pendant qu'il tourne. Il en crée un nouveau quand il reste moins de 30 jours, ou quand le nom ou l'adresse réseau de cet ordinateur n'y figure pas. Un nouveau certificat a une nouvelle empreinte, et les autres PC doivent l'accepter de nouveau. Une adresse fixe évite la seconde cause. Rien n'évite la première.
 - Sans adresse réseau, le lanceur affiche `No network address was found. Join a network, then start OpenLDR again.`
 - Votre pare-feu doit peut-être autoriser le port 3443.
 - Un programme qui n'est pas un navigateur a besoin du fichier du certificat. Pour un programme Node, donnez à `NODE_EXTRA_CA_CERTS` le chemin d'une copie de `cert.pem`. Après un nouveau certificat, copiez de nouveau le fichier et relancez ce programme.
@@ -312,7 +312,7 @@ Remplacez `100.64.0.10` par l'adresse privée ou Tailscale de votre ordinateur. 
 
 De cette façon, tout circule sans chiffrement. Pour laisser entrer d'autres PC, préférez `--share` ci-dessus.
 
-La dernière ligne est un avertissement. Une installation autonome n'a pas de TLS. Les noms d'utilisateur, les mots de passe et les données des patients circulent en clair sur le réseau. Toute personne qui peut observer ce réseau peut les lire. Ne le faites que sur un réseau de confiance. Tailscale chiffre le trafic entre vos propres appareils. N'ouvrez jamais ce port sur Internet. Votre pare-feu devra peut-être autoriser le port.
+La dernière ligne est un avertissement. Démarré de cette façon, OpenLDR n'a pas de TLS. Les noms d'utilisateur, les mots de passe et les données des patients circulent en clair sur le réseau. Toute personne qui peut observer ce réseau peut les lire. Ne le faites que sur un réseau de confiance. Tailscale chiffre le trafic entre vos propres appareils. N'ouvrez jamais ce port sur Internet. Votre pare-feu devra peut-être autoriser le port.
 
 ## Sauvegarder et restaurer
 

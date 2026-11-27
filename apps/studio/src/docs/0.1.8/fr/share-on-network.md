@@ -18,7 +18,9 @@ Ce guide n'a pas de clip. Les étapes se passent dans la zone de notification et
 
 **Résultat attendu :** le menu affiche une adresse qui commence par `https://`, et cette adresse est copiée.
 
-Sur un PC sans application de bureau, démarrez le lanceur avec `openldr-standalone start --share`. Il affiche la même adresse.
+Si OpenLDR a été démarré en dehors de l'application, rien ne redémarre. L'application dit que le changement s'appliquera la prochaine fois qu'elle démarrera OpenLDR.
+
+Sur un PC sans application de bureau, démarrez le lanceur avec `openldr-standalone start --share`. Il affiche l'adresse, une seconde adresse avec des chiffres, et l'empreinte du certificat.
 
 ## L'ouvrir sur un autre PC
 
@@ -30,13 +32,13 @@ Sur un PC sans application de bureau, démarrez le lanceur avec `openldr-standal
 
 **Résultat attendu :** Studio s'ouvre, avec les mêmes données que sur le premier PC.
 
-Si l'adresse avec le nom du PC ne s'ouvre pas, utilisez celle avec des chiffres, par exemple `https://192.168.1.20:3443/studio/`. Le lanceur affiche les deux.
+Si l'adresse avec le nom du PC ne s'ouvre pas, utilisez celle avec des chiffres, par exemple `https://192.168.1.20:3443/studio/`. Le lanceur affiche les deux. La zone de notification en affiche une. Pour les autres, lancez `openldr-standalone status --json` sur le premier PC et lisez `share.addresses`.
 
 ## Vérifier le certificat
 
 Le premier PC crée son propre certificat, donc un navigateur ne le connaît pas. Vérifiez que c'est le bon avant de l'accepter.
 
-1. Sur le premier PC, ouvrez l'icône et sélectionnez **Copier l'empreinte du certificat**.
+1. Sur le premier PC, ouvrez l'icône et sélectionnez **Copier l'empreinte du certificat**. Avec le lanceur, lisez la ligne qui commence par `Certificate fingerprint (SHA-256):` dans son terminal.
 2. Collez-la à un endroit où vous pouvez la lire, ou lisez-la à voix haute à la personne devant l'autre PC.
 3. Sur l'autre PC, ouvrez les détails du certificat depuis l'avertissement du navigateur.
 4. Trouvez l'empreinte **SHA-256**.

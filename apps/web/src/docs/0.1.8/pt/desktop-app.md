@@ -100,7 +100,7 @@ Abrir a aplicação de novo enquanto está a funcionar traz a janela de volta. A
 
 Marque **Partilhar na rede do laboratório** para que outros PC do laboratório abram este OpenLDR. A aplicação pergunta primeiro. O OpenLDR reinicia depois, e quem o estiver a usar espera um momento.
 
-Enquanto está partilhado, o menu mostra também o endereço que os outros PC usam, e mais três itens:
+Enquanto está partilhado, o menu mostra também o endereço que os outros PC usam, e mais três itens. O menu mostra um só endereço. Se não abrir noutro PC, execute `openldr-standalone status --json` num terminal e experimente os outros endereços em `share.addresses`.
 
 | Item | O que faz |
 | --- | --- |
@@ -110,7 +110,7 @@ Enquanto está partilhado, o menu mostra também o endereço que os outros PC us
 
 Noutro PC, abra o endereço num navegador. O navegador avisa sobre o certificado na primeira vez. Compare a impressão digital SHA-256 com a da área de notificação, e aceite-o só se forem iguais.
 
-Os outros PC usam a porta 3443. Se outro programa usar essa porta, a aplicação mostra `Port 3443 is already in use. Choose another with --share-port.` Para outra porta, saia da aplicação, acrescente `"sharePort": 8443` a `settings.json` na pasta da aplicação, e volte a abri-la.
+Os outros PC usam a porta 3443. Se outro programa usar essa porta, a aplicação mostra `Port 3443 is already in use. Choose another with --share-port.` Para outra porta, saia da aplicação, acrescente `"sharePort": 8443` a `settings.json`, e volte a abri-la. O ficheiro está na pasta da aplicação, `OpenLDR Desktop`. **Onde ficam os dados** mais abaixo indica o sítio em cada sistema.
 
 Se o OpenLDR foi iniciado fora da aplicação, o visto fica guardado e aplica-se da próxima vez que a aplicação o iniciar. [Executar sem Docker](/docs/standalone) diz mais sobre o certificado.
 

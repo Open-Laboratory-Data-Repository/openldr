@@ -87,7 +87,7 @@ O código de configuração só aparece no terminal. O lançador nunca o escreve
 | `--data-dir <folder>` | Veja a secção seguinte | A pasta que guarda todos os dados desta instalação. |
 | `--port <port>` | `3000` | A porta web. Se outro programa a estiver a usar, `start` para com `Port 3000 is already in use. Choose another with --port.` Nunca escolhe outra porta por si. |
 | `--host <address>` | `127.0.0.1` | O endereço em que o OpenLDR escuta. A predefinição só deixa entrar este computador. Veja **Abrir o acesso a um telemóvel ou a outro computador** mais abaixo. |
-| `--share` | Desligado | Abre o OpenLDR à rede do laboratório por HTTPS, numa segunda porta. Veja **Partilhá-lo na rede do laboratório** mais abaixo. Não se combina com `--host`. |
+| `--share` | Desligado | Abre o OpenLDR à rede do laboratório por HTTPS, numa segunda porta. Veja **Partilhá-lo na rede do laboratório** mais abaixo. Omita `--host`, ou dê exatamente `--host 127.0.0.1`. |
 | `--share-port <port>` | `3443` | A porta que os outros PC usam com `--share`. |
 | `--events-fd <n>` | Nenhum | Escreve uma linha JSON por evento no descritor n (3 ou mais). Nenhum código de configuração é criado nem mostrado. É para um programa que executa o lançador, como a aplicação de computador. |
 | `--json`, com `status` | Desligado | `status` mostra uma só linha JSON em vez disso. Veja **Verificar se está a funcionar** mais abaixo. |
@@ -287,7 +287,7 @@ O próprio OpenLDR continua a escutar só neste computador. Uma segunda porta, c
 
 Noutro PC, abra um dos endereços `https`. O navegador avisa que não conhece o certificado. É o esperado: o OpenLDR criou o certificado. Abra os detalhes do certificado no navegador e compare a impressão digital SHA-256 com a que o lançador mostrou. Aceite-o só se forem iguais. Depois inicie sessão como habitualmente.
 
-- O certificado dura 825 dias. O lançador cria um novo 30 dias antes do fim, e sempre que o nome ou o endereço de rede deste computador muda. Um certificado novo tem uma impressão digital nova, e os outros PC têm de o aceitar outra vez. Dê um endereço fixo a este computador para o evitar.
+- O certificado dura 825 dias. O lançador verifica-o cada vez que arranca com `--share`, e não enquanto corre. Cria um novo quando faltam menos de 30 dias, ou quando o nome ou o endereço de rede deste computador não consta dele. Um certificado novo tem uma impressão digital nova, e os outros PC têm de o aceitar outra vez. Um endereço fixo evita a segunda causa. Nada evita a primeira.
 - Sem endereço de rede, o lançador mostra `No network address was found. Join a network, then start OpenLDR again.`
 - A firewall pode ter de permitir a porta 3443.
 - Um programa que não é um navegador precisa do ficheiro do certificado. Para um programa Node, defina `NODE_EXTRA_CA_CERTS` com o caminho de uma cópia de `cert.pem`. Depois de um certificado novo, copie o ficheiro outra vez e reinicie esse programa.
@@ -312,7 +312,7 @@ Substitua `100.64.0.10` pelo endereço privado ou Tailscale do seu computador. A
 
 Desta forma, tudo circula sem cifra. Para deixar entrar outros PC, prefira `--share` acima.
 
-A última linha é um aviso. Uma instalação autónoma não tem TLS. Os nomes de utilizador, as palavras-passe e os dados dos doentes atravessam a rede sem cifra. Qualquer pessoa que consiga observar essa rede pode lê-los. Faça-o só numa rede de confiança. O Tailscale cifra o tráfego entre os seus próprios dispositivos. Nunca abra esta porta à Internet. Pode ter de autorizar a porta na firewall.
+A última linha é um aviso. Iniciado desta forma, o OpenLDR não tem TLS. Os nomes de utilizador, as palavras-passe e os dados dos doentes atravessam a rede sem cifra. Qualquer pessoa que consiga observar essa rede pode lê-los. Faça-o só numa rede de confiança. O Tailscale cifra o tráfego entre os seus próprios dispositivos. Nunca abra esta porta à Internet. Pode ter de autorizar a porta na firewall.
 
 ## Fazer e repor uma cópia de segurança
 

@@ -100,7 +100,7 @@ Relancer l'application pendant qu'elle tourne fait revenir sa fenêtre. Les lien
 
 Cochez **Partager sur le réseau du laboratoire** pour que d'autres PC du laboratoire ouvrent cet OpenLDR. L'application demande d'abord. OpenLDR redémarre ensuite, et les personnes qui l'utilisent attendent un instant.
 
-Pendant le partage, le menu affiche aussi l'adresse qu'utilisent les autres PC, et trois éléments de plus :
+Pendant le partage, le menu affiche aussi l'adresse qu'utilisent les autres PC, et trois éléments de plus. Le menu affiche une seule adresse. Si elle ne s'ouvre pas sur un autre PC, lancez `openldr-standalone status --json` dans un terminal et essayez les autres adresses sous `share.addresses`.
 
 | Élément | Effet |
 | --- | --- |
@@ -110,7 +110,7 @@ Pendant le partage, le menu affiche aussi l'adresse qu'utilisent les autres PC, 
 
 Sur un autre PC, ouvrez l'adresse dans un navigateur. Le navigateur avertit au sujet du certificat la première fois. Comparez son empreinte SHA-256 à celle de la zone de notification, et ne l'acceptez que si elles sont identiques.
 
-Les autres PC utilisent le port 3443. Si un autre programme utilise ce port, l'application affiche `Port 3443 is already in use. Choose another with --share-port.` Pour un autre port, quittez l'application, ajoutez `"sharePort": 8443` à `settings.json` dans le dossier de l'application, puis relancez-la.
+Les autres PC utilisent le port 3443. Si un autre programme utilise ce port, l'application affiche `Port 3443 is already in use. Choose another with --share-port.` Pour un autre port, quittez l'application, ajoutez `"sharePort": 8443` à `settings.json`, puis relancez-la. Le fichier se trouve dans le dossier de l'application, `OpenLDR Desktop`. **Emplacement des données** plus bas donne son emplacement sur chaque système.
 
 Si OpenLDR a été démarré en dehors de l'application, la coche est enregistrée et s'applique au prochain démarrage par l'application. [Exécuter sans Docker](/docs/standalone) en dit plus sur le certificat.
 

@@ -87,7 +87,7 @@ The setup code goes to the terminal only. The launcher never writes it to a log 
 | `--data-dir <folder>` | See the next section | The folder that holds all of this install's data. |
 | `--port <port>` | `3000` | The web port. If another program uses it, `start` stops with `Port 3000 is already in use. Choose another with --port.` It never picks another port by itself. |
 | `--host <address>` | `127.0.0.1` | The address OpenLDR listens on. The default lets only this computer in. See **Open it to a phone or another computer** below. |
-| `--share` | Off | Opens OpenLDR to the lab network over HTTPS, on a second port. See **Share it on the lab network** below. It cannot be combined with `--host`. |
+| `--share` | Off | Opens OpenLDR to the lab network over HTTPS, on a second port. See **Share it on the lab network** below. Leave `--host` out, or give exactly `--host 127.0.0.1`. |
 | `--share-port <port>` | `3443` | The port other PCs use with `--share`. |
 | `--events-fd <n>` | None | Write one JSON line per event to descriptor n (3 or higher). No setup code is made or printed. It is for a program that runs the launcher, such as the desktop app. |
 | `--json`, with `status` | Off | `status` prints one JSON line instead. See **Check whether it runs** below. |
@@ -287,7 +287,7 @@ OpenLDR itself still listens on this computer only. A second, encrypted door ope
 
 On another PC, open one of the `https` addresses. The browser warns that it does not know the certificate. That is expected: OpenLDR made the certificate itself. Open the certificate's details in the browser and compare its SHA-256 fingerprint with the one the launcher printed. Accept it only when they match. Then sign in as usual.
 
-- The certificate lasts 825 days. The launcher makes a new one 30 days before the end, and whenever this computer's name or network address changes. A new certificate has a new fingerprint, and other PCs must accept it again. Give this computer a fixed address to avoid that.
+- The certificate lasts 825 days. The launcher checks it each time it starts with `--share`, not while it runs. It makes a new one when fewer than 30 days are left, or when this computer's name or network address is not in it. A new certificate has a new fingerprint, and other PCs must accept it again. A fixed address avoids the second cause. Nothing avoids the first.
 - With no network address, the launcher prints `No network address was found. Join a network, then start OpenLDR again.`
 - Your firewall may need to allow port 3443.
 - A program that is not a browser needs the certificate file. For a Node program, set `NODE_EXTRA_CA_CERTS` to a copy of `cert.pem`. After a new certificate, copy the file again and start that program again.
@@ -312,7 +312,7 @@ Replace `100.64.0.10` with your computer's private or Tailscale address. Open th
 
 This way sends everything unencrypted. To let other PCs in, prefer `--share` above.
 
-The last line is a warning. A standalone install has no TLS. Usernames, passwords and patient data cross the network unencrypted. Anyone who can watch that network can read them. Use it only on a network you trust. Tailscale encrypts traffic between your own devices. Never open the port to the internet. Your firewall may need to allow the port.
+The last line is a warning. Started this way, OpenLDR has no TLS. Usernames, passwords and patient data cross the network unencrypted. Anyone who can watch that network can read them. Use it only on a network you trust. Tailscale encrypts traffic between your own devices. Never open the port to the internet. Your firewall may need to allow the port.
 
 ## Back up and restore
 

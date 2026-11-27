@@ -100,7 +100,7 @@ Starting the app again while it runs brings its window back. Links that leave Op
 
 Tick **Share on the lab network** to let other PCs in the lab open this OpenLDR. The app asks first. OpenLDR then restarts, and anyone using it waits a moment.
 
-While it is shared, the tray menu also shows the address other PCs use, and three more items:
+While it is shared, the tray menu also shows the address other PCs use, and three more items. The menu shows one address. If it does not open on another PC, run `openldr-standalone status --json` in a terminal and try the other addresses under `share.addresses`.
 
 | Item | What it does |
 | --- | --- |
@@ -110,7 +110,7 @@ While it is shared, the tray menu also shows the address other PCs use, and thre
 
 On another PC, open the address in a browser. The browser warns about the certificate the first time. Compare its SHA-256 fingerprint with the one from the tray, and accept it only when they match.
 
-Other PCs use port 3443. If another program uses that port, the app shows `Port 3443 is already in use. Choose another with --share-port.` To use another port, quit the app, add `"sharePort": 8443` to `settings.json` in the app's own folder, and start it again.
+Other PCs use port 3443. If another program uses that port, the app shows `Port 3443 is already in use. Choose another with --share-port.` To use another port, quit the app, add `"sharePort": 8443` to `settings.json`, and start it again. The file is in the app's own folder, `OpenLDR Desktop`. **Where the data is** below gives its place on each system.
 
 If OpenLDR was started outside the app, the tick is saved and applies the next time the app starts it. [Run without Docker](/docs/standalone) has more on the certificate.
 
