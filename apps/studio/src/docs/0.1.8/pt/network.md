@@ -43,7 +43,7 @@ Com um ficheiro e sem `--fingerprint`, o comando mostra a impressão digital do 
 O OpenLDR só lê os certificados de confiança quando arranca. Um certificado adicionado ou removido tem efeito depois de um reinício.
 
 - **Aplicação de ambiente de trabalho:** abra o ícone do OpenLDR na área de notificação, selecione **Sair** e volte a abrir o OpenLDR.
-- **Lançador autónomo:** execute `openldr-standalone stop` e depois `openldr-standalone start`. Dê a ambos as opções do primeiro arranque, como `--data-dir`, `--share` e as portas. Sem elas, `stop` pode procurar noutra pasta, e `start` pode arrancar sem a partilha.
+- **Lançador autónomo:** execute `openldr-standalone stop` e depois `openldr-standalone start`. Dê a `stop` o mesmo `--data-dir`, se usou um. Depois repita o seu comando `start` original, com as opções de partilha e de porta. Sem elas, `stop` pode procurar noutra pasta, e `start` pode arrancar sem a partilha.
 - **Instalação Docker:** na pasta de instalação, execute `docker compose restart api`.
 
 **Resultado esperado:** a coluna **Estado** passa de **Após reinício** para **Em uso**.

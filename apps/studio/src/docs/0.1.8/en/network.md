@@ -43,7 +43,7 @@ With a file and no `--fingerprint`, the command prints the certificate's fingerp
 OpenLDR reads its trusted certificates only when it starts. A certificate you add or remove takes effect after a restart.
 
 - **Desktop app:** open the OpenLDR icon in the system tray, select **Quit**, then open OpenLDR again.
-- **Standalone launcher:** run `openldr-standalone stop`, then `openldr-standalone start`. Give both the options you first started it with, such as `--data-dir`, `--share` and the ports. Without them, `stop` can look in another folder, and `start` can come up without sharing.
+- **Standalone launcher:** run `openldr-standalone stop`, then `openldr-standalone start`. Pass the same `--data-dir` to `stop`, if you used one. Then repeat your original `start` command, with its sharing and port options. Without them, `stop` can look in another folder, and `start` can come up without sharing.
 - **Docker install:** in the install folder, run `docker compose restart api`.
 
 **Expected result:** the **State** column changes from **After restart** to **In use**.

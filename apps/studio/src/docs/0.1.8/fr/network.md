@@ -43,7 +43,7 @@ Avec un fichier et sans `--fingerprint`, la commande affiche l'empreinte du cert
 OpenLDR ne lit ses certificats de confiance qu'au démarrage. Un certificat ajouté ou retiré prend effet après un redémarrage.
 
 - **Application de bureau :** ouvrez l'icône OpenLDR dans la zone de notification, sélectionnez **Quitter**, puis rouvrez OpenLDR.
-- **Lanceur autonome :** exécutez `openldr-standalone stop`, puis `openldr-standalone start`. Donnez aux deux les options du premier démarrage, comme `--data-dir`, `--share` et les ports. Sans elles, `stop` peut regarder dans un autre dossier, et `start` peut démarrer sans le partage.
+- **Lanceur autonome :** exécutez `openldr-standalone stop`, puis `openldr-standalone start`. Donnez à `stop` le même `--data-dir`, si vous en avez utilisé un. Répétez ensuite votre commande `start` d'origine, avec ses options de partage et de port. Sans elles, `stop` peut regarder dans un autre dossier, et `start` peut démarrer sans le partage.
 - **Installation Docker :** dans le dossier d'installation, exécutez `docker compose restart api`.
 
 **Résultat attendu :** la colonne **État** passe de **Après redémarrage** à **Utilisé**.
