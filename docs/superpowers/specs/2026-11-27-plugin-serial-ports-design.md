@@ -225,6 +225,30 @@ plugin frame does count for Studio's own page: in Chrome 158, on this PC, the se
 was present and the page had the click it needs. No port was chosen in that run. This design
 no longer leans on it, because Studio now asks with its own button.
 
+**Shown by Claude on 2026-11-27, in Electron 45.3.0 (Chromium 156) on Linux.** A throwaway
+script opened one hidden window on a page and called `navigator.serial.requestPort()`. It ran
+once from `http://127.0.0.1:<port>` and once from `https://127.0.0.1:<port>` with a self-signed
+certificate the script accepted. Both gave the same result.
+
+- `navigator.serial` is there, and the page is a secure context.
+- `select-serial-port` fires in the main process with the PC's ports. This PC listed 33: the
+  `ttyS*` ports and every paired Bluetooth device. The app's list will show Bluetooth devices
+  too, so it must show each port's name.
+- It fires with no permission check handler set, and with one that returns true for `serial`.
+- Answering with an empty string makes `requestPort()` reject with `NotFoundError`
+  ("No port selected by the user").
+- Called with no click, `requestPort()` rejects with `SecurityError` and the list never opens.
+- Answering with a port's id gives the page that port. `getPorts()` then lists that one port.
+- With a device permission handler that returns true for serial, `getPorts()` listed 17 ports
+  after one was chosen. That handler hands the page every port it allows, with no choice made.
+  So the app must not set one that says yes to all serial devices.
+- `port.open()` on `ttyS0` rejected with `NetworkError` ("Failed to open serial port"), with the
+  handler and without it. `ttyS0` has no hardware behind it on this PC.
+
+**HONEST NON-PROOF from that run.** No port was opened, so whether an open needs the device
+permission handler is still unknown. A PC with a real serial device would show it. The packaged
+app, Windows and macOS were not run.
+
 **HONEST NON-PROOF.** The rest was not run. Each is a first check before building.
 
 1. That the browser's port list opens from Studio's own button, in Chrome, in Edge and in the
