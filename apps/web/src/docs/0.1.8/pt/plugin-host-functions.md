@@ -192,6 +192,8 @@ O CE corre então o ponto de entrada com as definições do conector como config
 
 A página nunca vê as definições. Se o código puser uma definição secreta (palavra-passe, token ou chave) na sua resposta, o CE retém a resposta toda. A linha de auditoria da chamada nomeia o conector. A mesma autorização cobre também as chamadas `connectors.*` da página: um plugin só lista e usa os conectores para que foi ativado.
 
+O CE acrescenta a essa config uma definição sua: `openldr.connectorId`, o id do conector de onde vieram as definições. O CE define-a depois das definições guardadas, por isso uma definição guardada com esse nome não a pode mudar. Se o seu plugin guarda uma regra como "esta rota usa o conector X", compare os dois antes de enviar, e recuse se forem diferentes.
+
 O CE nunca segue um redirecionamento na chamada de rede de um plugin. Se o endereço do conector responder com um redirecionamento, o seu código recebe essa mesma resposta, com o estado 3xx, e nada é enviado adiante. Trate-a como uma falha, e diga ao administrador para pôr o endereço final no conector. Um endereço que passa `http` para `https`, ou que acrescenta um caminho, é a causa habitual.
 
 ## fhir_emit
