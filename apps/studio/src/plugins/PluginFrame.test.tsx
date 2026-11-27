@@ -7,7 +7,7 @@ import { PluginFrame, pluginFrameContext } from './PluginFrame';
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual,
-    pluginUiAssetUrl: (id: string) => `/api/plugins/${id}/ui/asset`,
+    pluginUiAssetUrl: (id: string, version?: string) => `/api/plugins/${id}/ui/asset${version ? `?version=${version}` : ''}`,
     pluginBrokerCall: vi.fn(async () => ({ ok: true, data: null })),
   };
 });
@@ -376,6 +376,24 @@ describe('PluginFrame, serial ports', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(answered).toBe(false);
     f.closePorts();
+  });
+
+  it('asks the server for the page of the version the listing named', async () => {
+    const f = await mount({ serialGranted: true, pluginVersion: '1.4.2' });
+    const urls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.endsWith('/api/plugins/analyzer/ui/asset?version=1.4.2'))).toBe(true);
+    expect(urls.some((u) => u.endsWith('/ui/asset'))).toBe(false);
+    f.closePorts();
+  });
+
+  it('draws no page when the server says another version is active now', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 409, text: async () => '{"error":"plugin version changed"}' })));
+    const view = render(
+      <PluginFrame pluginId="analyzer" pluginLabel="Analyzer interface" pluginVersion="1.0.0" serialGranted
+        context={{ pluginId: 'analyzer', capabilities: [], theme: 'light', locale: 'en', sessionId: 's1' }} />,
+    );
+    await settle();
+    expect(view.container.querySelector('iframe')).toBeNull();
   });
 
   it('closes the ports when the frame unmounts', async () => {

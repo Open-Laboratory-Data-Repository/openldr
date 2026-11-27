@@ -24,5 +24,9 @@ describe('plugin-ui api', () => {
 
   it('pluginUiAssetUrl builds the asset path', () => {
     expect(pluginUiAssetUrl('ui-demo')).toBe('/api/plugins/ui-demo/ui/asset');
+    // With the version the list named, so the server serves that version's page or none.
+    expect(pluginUiAssetUrl('ui-demo', '1.2.0')).toBe('/api/plugins/ui-demo/ui/asset?version=1.2.0');
+    expect(pluginUiAssetUrl('ui demo', '1.0.0+a b')).toBe('/api/plugins/ui%20demo/ui/asset?version=1.0.0%2Ba%20b');
+    expect(pluginUiAssetUrl('ui-demo', '')).toBe('/api/plugins/ui-demo/ui/asset');
   });
 });

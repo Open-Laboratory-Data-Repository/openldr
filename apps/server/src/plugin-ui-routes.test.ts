@@ -257,6 +257,64 @@ describe('plugin-ui routes: sites', () => {
     expect(body.map((p: any) => `${p.id}@${p.version}`)).toEqual(['sited@2.0.0']);
   });
 
+  describe('the page asset is bound to one version', () => {
+    const ui = { entry: 'ui.html', sha256: 'x', nav: { label: 'Analyzer', icon: 'plug', section: 'apps' }, uiSdkVersion: '1' };
+    const row = (version: string, active: boolean) => ({ id: 'analyzer', version, enabled: true, active, manifest: { capabilities: [], payload: { kind: 'plugin', ui } } });
+
+    function ctxWith(rows: () => unknown[]) {
+      const loaded: Array<[string, string | undefined]> = [];
+      const ctx = fakeCtx({ plugins: {
+        list: async () => rows(),
+        loadUi: async (id: string, version?: string) => { loaded.push([id, version]); return new TextEncoder().encode(`<p>${version}</p>`); },
+      } });
+      return { ctx, loaded };
+    }
+
+    it('serves the page of the version the studio asked for, loaded by that version', async () => {
+      const { ctx, loaded } = ctxWith(() => [row('1.0.0', false), row('2.0.0', true)]);
+      const res = await build(ctx).inject({ method: 'GET', url: '/api/plugins/analyzer/ui/asset?version=2.0.0' });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toBe('<p>2.0.0</p>');
+      expect(loaded).toEqual([['analyzer', '2.0.0']]);
+    });
+
+    it('refuses when another version became active after the studio read the list', async () => {
+      // The studio's list said 1.0.0. Since then 2.0.0 was made active.
+      const { ctx, loaded } = ctxWith(() => [row('1.0.0', false), row('2.0.0', true)]);
+      const res = await build(ctx).inject({ method: 'GET', url: '/api/plugins/analyzer/ui/asset?version=1.0.0' });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({ error: 'plugin version changed' });
+      expect(loaded).toEqual([]);
+    });
+
+    it('loads the bytes of the row it checked, even if the active version changes in between', async () => {
+      // The first read of the list says 1.0.0 is active. Any later read says 2.0.0.
+      let reads = 0;
+      const { ctx, loaded } = ctxWith(() => (reads++ === 0 ? [row('1.0.0', true), row('2.0.0', false)] : [row('1.0.0', false), row('2.0.0', true)]));
+      const res = await build(ctx).inject({ method: 'GET', url: '/api/plugins/analyzer/ui/asset?version=1.0.0' });
+      expect(res.statusCode).toBe(200);
+      // Never "whatever is active now": the version is named.
+      expect(loaded).toEqual([['analyzer', '1.0.0']]);
+      expect(res.body).toBe('<p>1.0.0</p>');
+    });
+
+    it('with no version asked for, still loads by the version of the row it checked', async () => {
+      const { ctx, loaded } = ctxWith(() => [row('1.0.0', false), row('2.0.0', true)]);
+      const res = await build(ctx).inject({ method: 'GET', url: '/api/plugins/analyzer/ui/asset' });
+      expect(res.statusCode).toBe(200);
+      expect(loaded).toEqual([['analyzer', '2.0.0']]);
+    });
+
+    it('refuses a version that is not a plain version string', async () => {
+      const { ctx, loaded } = ctxWith(() => [row('2.0.0', true)]);
+      for (const bad of ['', '../x', 'a'.repeat(200)]) {
+        const res = await build(ctx).inject({ method: 'GET', url: `/api/plugins/analyzer/ui/asset?version=${encodeURIComponent(bad)}` });
+        expect(res.statusCode, bad).toBe(409);
+      }
+      expect(loaded).toEqual([]);
+    });
+  });
+
   describe('devices.serial', () => {
     const ui = { entry: 'ui.html', sha256: 'x', nav: { label: 'Analyzer', icon: 'plug', section: 'apps' }, uiSdkVersion: '1' };
     const row = (over: Record<string, unknown>) => ({ id: 'analyzer', version: '1.0.0', enabled: true, manifest: { payload: { kind: 'plugin', ui } }, ...over });

@@ -158,7 +158,9 @@ export function PluginFrame({ pluginId, context, serialGranted, pluginLabel, plu
     setSrcdoc(null);
     setError(null);
     setLoad((n) => n + 1);
-    authFetch(pluginUiAssetUrl(pluginId))
+    // Named by version: the server serves this version's page or none. The grants this frame
+    // goes by belong to that version.
+    authFetch(pluginUiAssetUrl(pluginId, pluginVersion))
       .then(async (r) => { if (!r.ok) throw new Error(`asset ${r.status}`); return r.text(); })
       // Stamp the host theme at mount; later changes are pushed via postMessage below.
       .then((html) => { if (!cancelled) setSrcdoc(buildSrcdoc(html, hostTheme(), hostThemeTokens())); })

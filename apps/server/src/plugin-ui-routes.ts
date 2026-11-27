@@ -95,7 +95,7 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
   });
 
   // Serve the stored ui.html bytes — the web iframe sandbox loads this URL as its srcdoc source.
-  app.get<{ Params: { id: string } }>('/api/plugins/:id/ui/asset', async (req, reply) => {
+  app.get<{ Params: { id: string }; Querystring: { version?: unknown } }>('/api/plugins/:id/ui/asset', async (req, reply) => {
     if (!req.user) {
       reply.code(401);
       return reply.send({ error: 'authentication required' });
@@ -115,7 +115,17 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
       reply.code(404);
       return reply.send({ error: 'no ui asset' });
     }
-    const bytes = await ctx.plugins.loadUi(req.params.id);
+    // The studio names the version its list gave it. The list also said what that version was
+    // granted, such as a serial port. If another version is active by now, its page must not be
+    // drawn under the old version's grant: refuse, and the studio shows no page.
+    const asked = (req.query as { version?: unknown } | undefined)?.version;
+    if (asked !== undefined && (typeof asked !== 'string' || asked !== row.version)) {
+      reply.code(409);
+      return reply.send({ error: 'plugin version changed' });
+    }
+    // Loaded by the version of the row just checked, never by "whatever is active now": the
+    // active version can change between the two reads.
+    const bytes = await ctx.plugins.loadUi(req.params.id, row.version);
     if (!bytes) {
       reply.code(404);
       return reply.send({ error: 'no ui asset' });
