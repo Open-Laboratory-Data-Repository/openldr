@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "acaa24484",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A short plugin call keeps a fifth of its time back, not 2 seconds"
+        },
+        {
+          "hash": "bf7ec66cb",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "Keep a caller's own signal on a plugin network call"
+        },
+        {
+          "hash": "a2cb4d398",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "The network calls of one plugin call share its time"
+        },
+        {
+          "hash": "2b1ca2a8e",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "A plugin's network call has a time limit and always gets an answer"
+        },
+        {
           "hash": "6c904cfed",
           "type": "fix",
           "scope": "plugins",
