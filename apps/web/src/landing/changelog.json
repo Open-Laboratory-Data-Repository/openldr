@@ -2,6 +2,72 @@
   "generatedAt": "2026-11-27",
   "days": [
     {
+      "date": "2026-11-27",
+      "version": null,
+      "entries": [
+        {
+          "hash": "ebd20d1b1",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "A slow status read for the share never takes a person out of Studio"
+        },
+        {
+          "hash": "49d67c36e",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "See a share that an attached launcher publishes late or changes"
+        },
+        {
+          "hash": "53c160b60",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "One stop at a time, a share that refreshes, and a share switch that reports a failed save"
+        },
+        {
+          "hash": "f6e2bb3d9",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "A tray switch shares OpenLDR on the lab network"
+        },
+        {
+          "hash": "49f95f5c9",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "The share is published beside the lock, and no address is published without a network"
+        },
+        {
+          "hash": "57f5c358d",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "--share opens OpenLDR to the lab network over HTTPS"
+        },
+        {
+          "hash": "d04a58658",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "A stop does not wait for a client still in its TLS handshake"
+        },
+        {
+          "hash": "45a73955d",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "An HTTPS front that passes requests to the local server"
+        },
+        {
+          "hash": "594f791ab",
+          "type": "fix",
+          "scope": "standalone",
+          "title": "Replace a sharing certificate that is not valid yet"
+        },
+        {
+          "hash": "5d6b93d30",
+          "type": "feat",
+          "scope": "standalone",
+          "title": "Make and keep a certificate for sharing on the lab network"
+        }
+      ]
+    },
+    {
       "date": "2026-11-26",
       "version": "v0.1.13-rc.2",
       "entries": [
