@@ -308,9 +308,9 @@ The server edition for a two-PC lab was not chosen: nobody there looks after Doc
 | G13 | No guide says which setup a lab should pick. `lab-setup.md` covers lab features only. | `apps/web/src/docs/0.1.8/en/lab-setup.md:1` | docs, en, fr, pt |
 | G14 | The certificate route answers 404 on a standalone. `TLS_CERT_PATH` is never set there. | `apps/server/src/settings-routes.ts:346` | core, with G2 |
 | G15 | A referral key at the hub cannot be limited to referrals. | `apps/server/src/access-key-auth.ts:48` | a restricted account per spoke, no code |
-| G16 | A desktop or standalone install cannot be told to trust another install's self-signed certificate. | `apps/standalone/src/environment.ts:40-72` sets no `NODE_EXTRA_CA_CERTS` | core, own design |
+| G16 | A desktop or standalone install cannot be told to trust another install's self-signed certificate. | `apps/standalone/src/environment.ts:40-72` sets no `NODE_EXTRA_CA_CERTS` | core. Designed in `2026-11-27-trusted-certificates-and-workflow-hosts-design.md` |
 | G17 | A plugin's workflow step gets no database access and no caller. | `packages/bootstrap/src/plugin-node-service.ts:126` | core, only if plan 3 needs it |
-| G19 | A workflow's HTTP step may call only hosts named in `WORKFLOW_HTTP_ALLOWLIST`. It is empty by default, and the desktop app has no way to set it. So a desktop spoke cannot run the workflow that fetches results. | `packages/workflows/src/engine/services.ts:171`, `packages/config/src/schema.ts:148`, `apps/standalone/src/environment.ts:40-72` | core, designed together with G16: both are server settings a desktop app cannot set |
+| G19 | A workflow's HTTP step may call only hosts named in `WORKFLOW_HTTP_ALLOWLIST`. It is empty by default, and the desktop app has no way to set it. So a desktop spoke cannot run the workflow that fetches results. | `packages/workflows/src/engine/services.ts:171`, `packages/config/src/schema.ts:148`, `apps/standalone/src/environment.ts:40-72` | core. Designed in `2026-11-27-trusted-certificates-and-workflow-hosts-design.md` |
 | G18 | Withdrawn. lab-bench declares `pluginKind: "sink"`, so Studio's connector form already offers it. | `openldr-ce-plugin-lab-bench/manifest.template.json:31`, `apps/server/src/connectors-routes.ts:78` | none |
 
 **HONEST NON-PROOF.** G3 comes from the docs. Nobody reproduced it in this session. The
