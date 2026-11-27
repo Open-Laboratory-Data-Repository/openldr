@@ -549,7 +549,13 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
         }
         // A caller let in by a capability may make only the corrector's calls. A plugin that names
         // the permission of each action may also be invoked by such a caller: the gate above decided.
-        if (!opened.byRole && !CORRECTOR_OPS.has(op.kind) && !(op.kind === 'invoke' && actions)) {
+        // One more call is open to such a caller: the list of connectors, for one who holds the
+        // role that call needs. A plugin opened only by permissions names no role, so its settings
+        // page could never offer an administrator the connectors approved for it. Only the list:
+        // it reads names and hosts, never settings. Calls that change something stay closed. The
+        // role gate below still decides, and so do the plugin's grant and the approval filter.
+        const listsConnectors = op.kind === 'connectors.list' && rolesFor(op).some((r) => principal.roles.includes(r));
+        if (!opened.byRole && !CORRECTOR_OPS.has(op.kind) && !(op.kind === 'invoke' && actions) && !listsConnectors) {
           return deny(op.kind, `operation ${op.kind} is not open to a caller without the plugin's role`);
         }
 

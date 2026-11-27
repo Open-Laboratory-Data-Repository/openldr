@@ -310,6 +310,46 @@ describe('plugin broker', () => {
     expect((r as any).error).toMatch(/boom/);
   });
 
+  // A plugin opened by its own permissions (no role list) still has admin page calls. An admin who
+  // holds the opening permission makes them; the permission alone does not.
+  describe('a plugin opened by a permission, and a call that needs the admin role', () => {
+    const connectors = { list: async () => [{ id: 'x', name: 'X' }], get: async () => null };
+    const opened = () => broker({ caps: [{ kind: 'host:connectors' }], connectors, requiredCapabilities: ['bench.configure'] }).b;
+
+    it('an admin who holds the permission lists the connectors', async () => {
+      const admin = { id: 'u1', roles: ['lab_admin'], capabilities: ['bench.configure'], dataScope: ALL_DATA };
+      expect(await opened().handle('p1', admin, { kind: 'connectors.list' })).toEqual({ ok: true, data: [{ id: 'x', name: 'X' }] });
+    });
+
+    it('the permission without the admin role does not', async () => {
+      const staff = { id: 'u2', roles: ['data_analyst'], capabilities: ['bench.configure'], dataScope: ALL_DATA };
+      expect((await opened().handle('p1', staff, { kind: 'connectors.list' })).ok).toBe(false);
+    });
+
+    it('the admin role without the permission does not open the page', async () => {
+      const admin = { id: 'u1', roles: ['lab_admin'], capabilities: [], dataScope: ALL_DATA };
+      expect((await opened().handle('p1', admin, { kind: 'connectors.list' })).ok).toBe(false);
+    });
+
+    it('only the list: a call that changes something stays closed to that admin', async () => {
+      const admin = { id: 'u1', roles: ['lab_admin'], capabilities: ['bench.configure'], dataScope: ALL_DATA };
+      const b = broker({ caps: [{ kind: 'host:connectors' }, { kind: 'host:schedule' }], connectors, requiredCapabilities: ['bench.configure'] }).b;
+      expect(await b.handle('p1', admin, { kind: 'schedule.remove', id: 's1' })).toEqual({
+        ok: false, error: "operation schedule.remove is not open to a caller without the plugin's role",
+      });
+      expect(await b.handle('p1', admin, { kind: 'connectors.test', id: 'x' })).toEqual({
+        ok: false, error: "operation connectors.test is not open to a caller without the plugin's role",
+      });
+    });
+
+    it('a call with no role rule of its own stays closed to that admin, as before', async () => {
+      const admin = { id: 'u1', roles: ['lab_admin'], capabilities: ['bench.configure'], dataScope: ALL_DATA };
+      expect(await opened().handle('p1', admin, { kind: 'storage.get', collection: 'c', key: 'k' })).toEqual({
+        ok: false, error: "operation storage.get is not open to a caller without the plugin's role",
+      });
+    });
+  });
+
   it('denies connectors.list when the caller lacks lab_admin (role gate, even with the capability)', async () => {
     const { b } = broker({ caps: [{ kind: 'host:connectors' }], connectors: { list: async () => [{ id: 'x' }], get: async () => null } });
     const lowPriv = { id: 'u2', roles: ['data_analyst'], dataScope: ALL_DATA };
