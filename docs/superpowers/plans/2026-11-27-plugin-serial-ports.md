@@ -22,6 +22,11 @@
 - A port is chosen by a person every time. Nothing picks a port by itself, in Studio or in the app.
 - A port is not remembered across a reload or a restart. The app may mark the port used last time. The person still chooses.
 - A port is known to a plugin page by a handle Studio makes up for that one page. A handle from another page is refused.
+- Each load of a plugin's page gets a fresh gate and fresh handles. Nothing of the old load survives: not a port, not a handle, not a waiting call.
+- Studio does every check. The page toolkit only passes calls on. It is copied into the plugin frame as text and can use nothing outside itself (`packages/plugin-ui-sdk/src/bootstrap.ts:33-36`).
+- While a port is open, Studio asks the server once a minute whether the plugin still holds the grant. No grant closes the port. A check that fails changes nothing and is tried again a minute later. The operator decided this on 2026-11-27.
+- After every wait inside the gate, the gate checks again that it is still alive and still granted. A port that opens too late is closed at once.
+- Lost bytes, one rule: when the bytes waiting to be read reach the limit, everything unread is dropped. The next read answers empty with `lost: true`. Bytes that arrive after that are read normally. The plugin starts its framing again.
 - The limits:
 
   | Limit | Value |
@@ -66,6 +71,10 @@ Run it twice: once with the page served from `http://127.0.0.1:<port>`, once fro
 
 Expected: in both runs `navigator.serial` exists, `select-serial-port` fires with the PC's ports (the list may be empty), and `requestPort()` then rejects because the choice was cancelled.
 
+If the PC has a serial device, also call back with its id and try `port.open()`, once with no device permission handler set and once with one. Record whether the open needs the handler. Task 7 uses the answer.
+
+Record the name of the error each refusal carries (`NotFoundError`, `SecurityError` and so on). Task 4 maps them.
+
 Write the result into the spec's "Shown and not shown" part: the Electron version, both addresses, and what happened.
 
 If `navigator.serial` is missing or `select-serial-port` never fires, stop and report. The spec says the port must then be held by the app's main process, which is a different design.
@@ -83,7 +92,7 @@ git commit -m "docs: record the Electron serial check"
 
 **Files:**
 - Modify: `packages/marketplace/src/capabilities.ts:19-31` (one more entry)
-- Modify: every place that lists the host capabilities by name. Find them with `grep -rn "host:ce-read" packages apps --include=*.ts --include=*.tsx`
+- Modify: `apps/studio/src/pages/settings/marketplace/util.ts:57` (the one map of capability names shown to people), and the language files it reads
 - Modify: `apps/server/src/plugin-ui-routes.ts:34-78` (the `/api/plugins/ui` listing)
 - Modify: `apps/studio/src/api.ts` (the type of one listing entry)
 - Test: `packages/marketplace/src/capabilities.test.ts`, `apps/server/src/plugin-ui-routes.test.ts`
@@ -102,7 +111,9 @@ devices: { serial: boolean };
 // true only when the plugin's ACTIVE version was granted host:serial.
 ```
 
-The grant is the one the broker computes for the active version (`packages/bootstrap/src/plugin-broker.ts`, near line 523, where `grant.capabilities` is read). Use the same function. If that logic is inline in the broker, move it into one exported function and call it from both places. Do not write a second reading of the manifest.
+Read the grant with `readGrant` (`packages/marketplace/src/grant.ts:19`), on the same stored row the listing already uses for that plugin and version. It is the function the broker uses (`packages/bootstrap/src/plugin-broker.ts:610`). A legacy grant, one with no capabilities list, gives `serial: false`.
+
+Leave these alone: the WASM host functions and the server broker's operation types. This permission is checked in Studio only.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -115,6 +126,10 @@ it('says serial is true for a plugin granted host:serial', ...);
 it('says serial is false for a plugin without it', ...);
 it('reads the active version, not an older one that had the grant', ...);
 // Two versions installed. The older one declares host:serial, the active one does not. Expect false.
+it('says serial is false for a legacy plugin with no capabilities list', ...);
+
+// apps/studio/src/pages/settings/marketplace: the test beside util.ts
+it('shows a name for host:serial on the install screen, in each language', ...);
 ```
 
 - [ ] **Step 2: Run them and see them fail**
@@ -130,7 +145,7 @@ Where the install screen shows a line for each capability a plugin asks for, add
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/marketplace packages/bootstrap apps/server apps/studio
+git add packages/marketplace apps/server apps/studio
 git commit -m "feat(plugins): a capability for serial ports, and the studio is told who holds it"
 ```
 
@@ -170,7 +185,8 @@ export interface PluginSerialRead { bytes: Uint8Array; lost: boolean }
 /** Why the studio refused. The text of `error` in the bridge's answer. */
 export type PluginSerialRefusal =
   | 'serial-not-granted' | 'serial-unavailable' | 'serial-cancelled' | 'serial-unknown-port'
-  | 'serial-busy' | 'serial-too-many' | 'serial-too-large' | 'serial-bad-settings' | 'serial-closed';
+  | 'serial-busy' | 'serial-too-many' | 'serial-too-large' | 'serial-bad-settings' | 'serial-closed'
+  | 'serial-failed';      // the device or the system refused: an open that fails, an I/O error
 
 /** Null when the settings are sound, else 'serial-bad-settings'. */
 export function checkSerialSettings(s: unknown): null | 'serial-bad-settings';
@@ -200,8 +216,9 @@ serial: {
 ```
 
 Rules:
-- Bytes cross the bridge as `Uint8Array`. The bridge already uses a `MessagePort`, which carries them as they are.
-- `choose()` turns the refusal `serial-cancelled` into `null`. Every other refusal rejects with an `Error` whose message is the refusal code.
+- The three check functions in `serial.ts` are for Studio, which imports them in Task 4. The toolkit inside the frame cannot import anything, so it checks nothing. It passes each call on.
+- Bytes cross the bridge as `Uint8Array`. A byte view can be a small window on a large buffer, and the bridge would copy the whole buffer. So the toolkit sends `bytes.slice()`, a copy of just those bytes. Studio does the same for bytes it returns.
+- `choose()` turns exactly the refusal `serial-cancelled` into `null`. The toolkit's answer handler rejects every refusal with an `Error` (`bootstrap.ts:203`), so this one case is caught and turned by hand. Every other refusal still rejects, with the refusal code as the message.
 - `read()` with no wait uses 0: it returns what is there now.
 - The mock in `mock.ts` gets a `serial` that refuses every call with `serial-unavailable`, so a plugin's own tests can run.
 
@@ -221,6 +238,13 @@ it('sends each serial call as its host op', ...);              // one assertion 
 it('gives null when the person cancelled the choice', ...);
 it('rejects with the refusal code for any other refusal', ...);
 it('passes read bytes through as a Uint8Array', ...);
+it('works when the emitted toolkit text runs across a real MessageChannel', ...);
+// Evaluate SDK_BOOTSTRAP_V1 as the frame does, with a real MessageChannel and a fake host on the other port.
+// Call each of the six. This catches a reference to anything outside the function.
+it('sends only the bytes of a view, not its whole buffer', ...);
+// write(port, big.subarray(10, 13)) where big is 1 MiB. The op the host receives holds bytes.buffer.byteLength === 3.
+it('keeps bytes 0 and 255 as they are', ...);
+it('is not changed by a later change to the caller\'s array', ...);
 ```
 
 - [ ] **Step 2: Run them and see them fail**
@@ -244,7 +268,8 @@ git commit -m "feat(plugin-ui-sdk): six serial calls for a plugin page"
 
 **Files:**
 - Create: `apps/studio/src/plugins/serial-gate.ts`
-- Test: `apps/studio/src/plugins/serial-gate.test.ts`
+- Create: `apps/studio/src/plugins/serial-native.ts`
+- Test: `apps/studio/src/plugins/serial-gate.test.ts`, `apps/studio/src/plugins/serial-native.test.ts`
 
 This is the part that holds the port and enforces every limit. It follows `createPrintGate` in `apps/studio/src/plugins/print-frame.ts`: one gate per mounted plugin frame, and it never throws.
 
@@ -253,6 +278,17 @@ This is the part that holds the port and enforces every limit. It follows `creat
 - Produces:
 
 ```ts
+// serial-native.ts
+/** navigator.serial as a SerialLike, or undefined when the browser has none or the page is not a
+ *  secure context. The one place that touches the real feature. */
+export function nativeSerial(nav: Navigator, secure: boolean): SerialLike | undefined;
+/** Which refusal an error from the real feature means, by its name:
+ *   NotFoundError                -> 'serial-cancelled'   (the person closed the list)
+ *   SecurityError, NotAllowedError -> 'serial-unavailable' (a policy or the app said no)
+ *   anything else                -> 'serial-failed'      (the device or the system) */
+export function refusalOf(err: unknown): 'serial-cancelled' | 'serial-unavailable' | 'serial-failed';
+
+// serial-gate.ts
 /** The part of navigator.serial the gate uses. A test passes a fake. */
 export interface SerialLike {
   requestPort(): Promise<SerialPortLike>;
@@ -260,7 +296,7 @@ export interface SerialLike {
   removeEventListener(type: 'disconnect', listener: (ev: { target: unknown }) => void): void;
 }
 export interface SerialPortLike {
-  open(options: { baudRate: number; dataBits: number; stopBits: number; parity: string; flowControl: string; bufferSize: number }): Promise<void>;
+  open(options: { baudRate: number; dataBits: 7 | 8; stopBits: 1 | 2; parity: 'none' | 'even' | 'odd'; flowControl: 'none' | 'hardware'; bufferSize: number }): Promise<void>;
   close(): Promise<void>;
   readable: ReadableStream<Uint8Array> | null;
   writable: WritableStream<Uint8Array> | null;
@@ -272,8 +308,9 @@ export interface SerialGateDeps {
   serial: SerialLike | undefined;
   /** true or false once the studio knows the plugin's grant. undefined while it does not. */
   granted(): boolean | undefined;
-  /** The studio's own prompt. Resolves true when the person pressed "Choose port". */
-  confirm(): Promise<boolean>;
+  /** The studio's own prompt, then the port list. The prompt asks the browser for the port inside
+   *  the button press itself. Resolves with the port, or with why there is none. */
+  pick(): Promise<{ port: SerialPortLike } | { refused: 'serial-cancelled' | 'serial-unavailable' | 'serial-busy' | 'serial-failed' }>;
   /** Ports open in any other gate on this page, so one physical port is not opened twice. */
   openElsewhere(port: SerialPortLike): boolean;
 }
@@ -298,16 +335,17 @@ Rules, checked in this order for every op:
 | Op | What happens |
 |---|---|
 | `ports` | The handles this gate made, each with its label |
-| `choose` | `confirm()`. False gives `serial-cancelled`. True calls `requestPort()` at once, with no other wait in between. A rejection there gives `serial-cancelled`. A new port gets a new handle. A port this gate already holds gets its old handle back |
-| `open` | Unknown handle: `serial-unknown-port`. Bad settings: `serial-bad-settings`. Already open here or elsewhere: `serial-busy`. Two already open: `serial-too-many`. Then open it and start reading into the buffer |
+| `choose` | `pick()`. A refusal is passed on as it is. A new port gets a new handle. A port this gate already holds gets its old handle back |
+| `open` | Unknown handle: `serial-unknown-port`. Bad settings: `serial-bad-settings`. Already open or opening, here or elsewhere: `serial-busy`. Two already open or opening: `serial-too-many`. Then take the slot, open the port and start reading into the buffer. An open that fails gives `serial-failed` and frees the slot |
 | `read` | Unknown handle or not open: `serial-unknown-port`. A read already waiting on this port: `serial-busy`. Otherwise return up to 65,536 bytes. With none waiting, wait up to the clamped time for the first one |
 | `write` | Unknown handle or not open: `serial-unknown-port`. Bad bytes, or the send queue would pass 1,048,576: `serial-too-large`. Otherwise queue it. Writes go out in order. The answer comes when the bytes were handed to the port |
-| `close` | Unknown handle: `serial-unknown-port`. Otherwise stop reading, release the locks, close the port. The handle stays known and can be opened again |
+| `close` | Unknown handle: `serial-unknown-port`. Otherwise cancel the reader, let the writer finish or fail, release both locks, then close the port. A real port refuses to close while a reader or writer still holds it. The handle stays known and can be opened again |
 
 - A handle is 16 random hex characters. A label is `Serial port` plus the maker and product numbers in hex when the port gives them, such as `Serial port 0403:6001`.
-- **Losing bytes.** When the bytes waiting to be read reach 1,048,576, new bytes are dropped and a flag is set. The next read answers `{ bytes: <empty>, lost: true }` and clears the flag. The read after that returns bytes again. A loss is reported exactly once, and before any more bytes.
+- **Losing bytes.** When the bytes waiting to be read reach 1,048,576, every unread byte is dropped and a flag is set. The next read answers `{ bytes: <empty>, lost: true }` and clears the flag. Bytes that arrive after the drop are read normally. So the plugin never gets bytes from both sides of a gap joined together.
 - **A pulled cable or a port error.** The gate hears `disconnect` on `serial`, and errors from the reading loop. A waiting read ends with `serial-closed`. Queued writes fail with `serial-closed`. The handle is forgotten: later calls give `serial-unknown-port`.
-- `closeAll()` does the same for every port and removes the `disconnect` listener.
+- **Waits and late answers.** The gate keeps a number that goes up on `closeAll()`. After every wait (`pick`, `port.open`, a read's wait, a write), it checks that the number is the same and that `granted()` is still `true`. If not, it closes any port it was just given and answers `serial-not-granted`.
+- `closeAll()` raises that number first, before anything else, so no waiting call can finish against a dead gate. It then cancels a prompt that is open, closes every port and removes the `disconnect` listener.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -316,9 +354,13 @@ Build a fake `SerialLike` whose port has a controllable `readable` and a recordi
 ```ts
 it('refuses every op until the grant is known, and when it is false', ...);          // one case per op
 it('refuses every op when the browser has no serial feature, and shows no prompt', ...);
-it('asks with the studio prompt before the port list', ...);                          // confirm called before requestPort
-it('gives serial-cancelled when the prompt is refused, and never asks the browser', ...);
-it('gives serial-cancelled when the person closes the port list', ...);
+it('passes on each refusal from the prompt as it is', ...);                           // cancelled, unavailable, busy, failed
+it('closes a port that was picked after the gate was closed', ...);
+// pick() resolves with a port after closeAll(). Expect the answer serial-not-granted and the port never opened.
+it('closes a port that finished opening after the grant was taken away', ...);
+// port.open() resolves after granted() turned false. Expect port.close() called and serial-not-granted.
+it('counts a port that is still opening against the limit of two', ...);
+it('gives serial-failed when the port refuses to open, and frees the slot', ...);
 it('returns the same handle when the same port is chosen twice', ...);
 it('lists only its own handles', ...);
 it('refuses a handle it did not make', ...);
@@ -330,14 +372,26 @@ it('returns bytes that arrived, in order, at most 65536 at a time', ...);
 it('waits for the first byte, then returns', ...);
 it('returns empty when the wait ends with nothing', ...);
 it('refuses a second read while one waits', ...);
-it('reports lost bytes once, before any more bytes', ...);
-// Push 1,048,576 bytes plus 10. Expect: reads drain the buffer, then one { bytes: empty, lost: true }, then new bytes read normally.
+it('drops what was unread when the buffer fills, and reports the loss once', ...);
+// Push 1,048,576 bytes without reading. Then push 10 more. Expect the next read to be { bytes: empty, lost: true },
+// the read after it to return exactly those 10 bytes, and the read after that lost: false.
+it('reports a second overflow as a second loss', ...);
+it('does not report a loss at one byte under the limit', ...);
+it('returns a compact copy of the bytes', ...);                                        // result.bytes.buffer.byteLength === result.bytes.length
 it('sends writes in order', ...);
 it('refuses a write that would pass the send queue limit', ...);
 it('ends a waiting read with serial-closed when the cable is pulled', ...);
 it('forgets the handle after a disconnect', ...);
 it('fails queued writes with serial-closed on a disconnect', ...);
 it('can open a port again after closing it', ...);
+it('cancels the reader and settles the writer before it closes the port', ...);
+// Record the order on the fake: reader.cancel, writer released, then port.close.
+it('closes while a write is blocked, and fails that write with serial-closed', ...);
+
+// serial-native.test.ts
+it('gives undefined when the browser has no serial feature, or the page is not secure', ...);
+it.each([['NotFoundError', 'serial-cancelled'], ['SecurityError', 'serial-unavailable'], ['NotAllowedError', 'serial-unavailable'], ['NetworkError', 'serial-failed'], ['InvalidStateError', 'serial-failed']])
+  ('reads %s as %s', ...);
 it('closeAll closes every port and removes its listener', ...);
 it('never throws, whatever the fake port does', ...);                                  // open rejects, close rejects, reader throws
 ```
@@ -367,8 +421,9 @@ git commit -m "feat(studio): a gate that holds a serial port for one plugin page
 - Modify: `apps/studio/src/plugins/PluginContainer.tsx:51`, `PluginPanelHost.tsx:40`, `PluginWidgets.tsx:34` (each passes the entry's `devices.serial` and its `nav.label` to the frame)
 - Create: `apps/studio/src/plugins/SerialPrompt.tsx`
 - Create: `apps/studio/src/plugins/serial-registry.ts`
+- Create: `apps/studio/src/plugins/serial-grant-watch.ts`
 - Modify: `apps/studio/src/i18n/en.ts`, `fr.ts`, `pt.ts`
-- Test: `apps/studio/src/plugins/host-bridge.test.ts`, `PluginFrame.test.tsx`, `SerialPrompt.test.tsx`, `serial-registry.test.ts`
+- Test: `apps/studio/src/plugins/host-bridge.test.ts`, `PluginFrame.test.tsx`, `SerialPrompt.test.tsx`, `serial-registry.test.ts`, `serial-grant-watch.test.ts`
 
 **Interfaces:**
 - Consumes: `createSerialGate` (Task 4), `devices.serial` (Task 2).
@@ -383,6 +438,19 @@ serial?: SerialGate;
 // PluginFrame props gain
 serialGranted: boolean | undefined;   // from the listing entry. undefined while the listing loads.
 pluginLabel: string;                  // the entry's nav.label, from the server's listing
+pluginVersion: string;                // the entry's version. A change of version closes the ports.
+
+// serial-grant-watch.ts
+export const GRANT_CHECK_MS = 60_000;
+/** While `hasOpenPorts()` is true, asks the server every GRANT_CHECK_MS for the plugin listing.
+ *  Calls `onLost` when the plugin is gone from it, its version changed, or its serial is false.
+ *  A fetch that fails changes nothing. Returns the function that stops the watch. */
+export function watchGrant(input: {
+  pluginId: string; version: string;
+  hasOpenPorts(): boolean;
+  fetchListing(): Promise<Array<{ id: string; version: string; devices: { serial: boolean } }>>;
+  onLost(): void;
+}): () => void;
 
 // serial-registry.ts: the ports open anywhere on this studio page
 export function registerOpenPorts(source: () => readonly SerialPortLike[]): () => void;   // returns the remove function
@@ -390,13 +458,16 @@ export function isOpenElsewhere(port: SerialPortLike, self: () => readonly Seria
 ```
 
 Rules:
-- `PluginFrame` makes one serial gate per mounted frame and keeps it across the frame's reloads, as it does the download and print gates (lines 54 to 58 and 98 to 100).
+- `PluginFrame` makes a new serial gate for each load of the plugin's page. In `onLoad` (line 92), before the new channel is attached (line 96), it calls `closeAll()` on the old gate and makes a fresh one. This is unlike the download and print gates, which are kept across reloads. A port must not outlive the page that was given it.
 - `granted()` reads the current `serialGranted` prop, so a change takes effect on the next call.
-- When `serialGranted` changes from true to anything else, the frame calls `closeAll()`.
+- When `serialGranted` changes from true to anything else, or `pluginVersion` changes, the frame calls `closeAll()`.
 - When the frame unmounts, it calls `closeAll()`. Signing out unmounts every frame.
-- An upgrade or turning the plugin off changes the listing. The frame then gets a new `serialGranted` or unmounts. Either way the ports close.
+- Studio loads the plugin listing once, and again only on a refresh signal (`apps/studio/src/api.ts:3883` is the call). So a grant taken away on another PC does not reach this page by itself. `watchGrant` covers that: while a port is open it asks once a minute, and on a loss the frame calls `closeAll()`.
+- All three places that draw a frame pass the three new props: `PluginContainer.tsx:51`, `PluginPanelHost.tsx:40` and `PluginWidgets.tsx:34`.
 - The prompt is one `Dialog`, drawn by the frame. Title: "{plugin} wants to use a serial port". Body: "Choose the port the cable is plugged into. {plugin} can then read and write it until this page closes." Buttons: "Choose port" and "Cancel". `{plugin}` is `pluginLabel`. Nothing the plugin's page sent is shown.
-- `confirm()` opens that dialog and resolves when a button is pressed or the dialog is closed.
+- The "Choose port" button calls `serial.requestPort()` inside its own press handler, with nothing awaited before it. The browser shows its list only for a call made during a press. `pick()` resolves with the port, or with `refusalOf` the error (Task 4).
+- Cancel, the Escape key, closing the dialog, and the frame going away all resolve `serial-cancelled`. Focus goes back to where it was.
+- One prompt at a time on a Studio page. A second `choose` while one is open, from this frame or another, gets `serial-busy`.
 - The plugin label is plain text. It is never read as markup.
 
 - [ ] **Step 1: Write the failing tests**
@@ -411,16 +482,32 @@ it('never sends a host.serial op to the server', ...);                 // deps.c
 it('refuses serial calls while the grant is not known', ...);          // serialGranted undefined
 it('closes the ports when the grant is taken away', ...);              // rerender with serialGranted false
 it('closes the ports when the frame unmounts', ...);
-it('keeps the gate across a reload of the frame', ...);
+it('closes the ports and forgets the handles when the frame loads again', ...);
+// Fire the frame's load a second time. Expect closeAll on the old gate, and the old handle refused by the new one.
+it('closes the ports when the plugin version changes, though serial stays true', ...);
+it('ends a call that was waiting when the frame loaded again', ...);
 
 // SerialPrompt.test.tsx
 it('names the plugin from the label it was given', ...);
-it('resolves true on Choose port and false on Cancel and on close', ...);
+it('asks the browser for the port inside the press of Choose port', ...);
+// The fake requestPort records whether it ran before the press handler returned. Expect true.
+it('gives the port the person chose', ...);
+it('gives serial-cancelled on Cancel, on Escape, on close and on unmount', ...);
+it('gives serial-unavailable when the browser refuses for security', ...);
+it('gives serial-busy to a second prompt while one is open', ...);
+it('returns focus to where it was', ...);
 it('shows a label with markup in it as plain text', ...);              // label '<b>x</b>' appears literally
 
 // serial-registry.test.ts
 it('says a port is open elsewhere only when another source holds it', ...);
 it('forgets a source when it is removed', ...);
+
+// serial-grant-watch.test.ts, with fake timers
+it('asks nothing while no port is open', ...);
+it('asks once a minute while a port is open', ...);
+it('calls onLost when serial turned false, when the plugin is gone, and when the version changed', ...);
+it('changes nothing when the fetch fails, and asks again a minute later', ...);
+it('ignores an answer that arrives after it was stopped', ...);
 ```
 
 `apps/studio/src/i18n/parity.test.ts` already fails when a key is missing in fr or pt. Run it.
@@ -523,6 +610,8 @@ export interface PortSelection {
   /** Cancel, the window closing, a navigation, or the main window going away. Answers ''. */
   cancel(): void;
   active(): boolean;
+  /** True for a port the person pressed in this run of the app, and for no other. */
+  wasChosen(portId: string): boolean;
 }
 export function createPortSelection(show: (ports: PortChoice[] | undefined) => void): PortSelection;
 
@@ -535,11 +624,13 @@ choices?: Array<{ id: string; label: string; note?: string; selected: boolean }>
 
 What `main.ts` does:
 - `session.on('select-serial-port', (event, portList, webContents, callback) => ...)`: call `event.preventDefault()`. If `maySelectPort` is false, call `callback('')`. Otherwise `selection.begin(portChoices(portList, settings.lastSerialPort?.portName), callback)`.
-- `serial-port-added` and `serial-port-removed`: while a choice is open, `selection.update(...)` with the new list.
+- `serial-port-added` and `serial-port-removed`: only while a choice is open, and only for the main window's own session, `selection.update(...)` with the new list.
 - The port window is the small child window plan 2 made for the PIN. It loads the app's own page and shows the `serial` screen. Studio stays as it is behind it.
-- `serial-use` with a row's id calls `selection.choose(id)` and saves that row's port name as `lastSerialPort`. `serial-cancel`, closing the window, a navigation of the main window, and the main window closing all call `selection.cancel()`.
+- `serial-use` with a row's id calls `selection.choose(id)` and saves that row's port name as `lastSerialPort`. `serial-cancel`, closing the window, a navigation of the main window, the main window closing, and a new choice beginning all call `selection.cancel()`.
+- `serial-use` and `serial-cancel` are taken only from the port window itself: check the sender's `webContents` is that child window's. An app-owned address alone is not enough.
+- The browser's `callback` is answered exactly once for each request, whatever happens.
 - Never call `callback` with a port the person did not press. Not even when the list has one row.
-- `setDevicePermissionHandler`: return true only for `deviceType === 'serial'` from the trusted address's own origin. It is what lets the page keep using a port it was just given.
+- The device permission handler. Task 1 recorded whether a chosen port opens without one. If it does, set none. If it does not, set `setDevicePermissionHandler` to return true only when all of these hold: `deviceType === 'serial'`, the origin is the trusted address's own, the request comes from the main window, and `selection.wasChosen(<the device's port id>)`. A serial device nobody pressed is refused.
 - Both existing permission handlers already go through `mayGrantPermission`.
 
 The `serial` screen:
@@ -567,6 +658,9 @@ it('answers empty for an id that is not in the list', ...);
 it('cancels a second choice that begins while one is open', ...);
 it('updates the rows while open and ignores an update when not', ...);
 it('never answers twice', ...);                                    // choose then cancel -> one answer
+it('answers empty when a new choice replaces an open one', ...);
+it('remembers only the ports that were pressed', ...);             // wasChosen true for the chosen id, false for the others
+it('answers empty when the main window goes away', ...);
 
 // locality.test.ts
 it('grants serial to the trusted address and to nothing else', ...);
@@ -574,6 +668,10 @@ it('still refuses every other device permission', ...);            // 'usb', 'hi
 
 // controller.test.ts
 it('gives the serial screen its rows, its note and its actions', ...);
+it('takes serial-use only from the port window', ...);
+// The same action sent from the main window's own page is ignored. The choice stays open.
+it('refuses the device permission for a serial port nobody pressed', ...);
+// Only if Task 1 showed the handler is needed.
 it('turns Use this port off when no row is selected', ...);
 
 // settings.test.ts

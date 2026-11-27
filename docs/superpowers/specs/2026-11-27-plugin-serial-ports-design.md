@@ -246,6 +246,9 @@ app's main process. Stop and report.
 Made by the operator on 2026-11-27:
 - After a restart, someone presses once to reconnect. Reconnecting by itself is wanted, and
   left for later.
+- When an administrator takes the grant away, an open port on another PC closes within a
+  minute. Studio asks the server once a minute while a port is open. If the server cannot be
+  reached, the port stays open and the check is tried again.
 
 Made by the designer:
 - The link lives only while the plugin's page is open. A background link is later work.
