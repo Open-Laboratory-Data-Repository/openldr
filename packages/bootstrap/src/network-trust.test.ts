@@ -47,7 +47,7 @@ function mutex(): Exclusive {
   };
 }
 
-function make(o: { content?: string | null; file?: string | null; extra?: string | null; loaded?: LoadedTrust; peer?: string | undefined; auditFails?: boolean; exclusive?: Exclusive } = {}): Made {
+function make(o: { content?: string | null; file?: string | null; extra?: string | null; loaded?: LoadedTrust | (() => Promise<LoadedTrust>); peer?: string | undefined; auditFails?: boolean; exclusive?: Exclusive; now?: () => Date } = {}): Made {
   const dir = mkdtempSync(join(tmpdir(), 'trust-'));
   const file = join(dir, 'ca.pem');
   if (o.content !== null) writeFileSync(file, o.content ?? '');
@@ -55,14 +55,14 @@ function make(o: { content?: string | null; file?: string | null; extra?: string
   const svc = createTrustService({
     file: o.file === null ? undefined : (o.file ?? file),
     nodeExtraCaFile: o.extra === null ? undefined : (o.extra ?? file),
-    loaded: async () => o.loaded ?? { known: true, pems: [], since: '2026-11-30T00:00:00.000Z' },
+    loaded: typeof o.loaded === 'function' ? o.loaded : async () => (o.loaded as LoadedTrust | undefined) ?? { known: true, pems: [], since: '2026-11-30T00:00:00.000Z' },
     readPeer: async () => o.peer,
     exclusive: o.exclusive ?? mutex(),
     audit: async (action, actor, fingerprint, subject) => {
       if (o.auditFails) throw new Error('audit down');
       audits.push({ action, actor, fingerprint, subject });
     },
-    now: () => NOW,
+    now: o.now ?? (() => NOW),
   });
   return { svc, file, dir, audits };
 }
@@ -432,6 +432,69 @@ describe('add and remove', () => {
     expect(readFileSync(m.file, 'utf8')).toBe('');
   });
 
+  it('changes nothing when it cannot read what the server loaded', async () => {
+    // Read before the change. After it, a failure here would hide a change that was made.
+    const m = make({ loaded: async () => { throw new Error('settings down'); } });
+    await expect(m.svc.add(CERT_A, ACTOR)).rejects.toThrow('settings down');
+    expect(readFileSync(m.file, 'utf8')).toBe('');
+    expect(m.audits).toEqual([]);
+  });
+
+  it('still audits and answers when the lock fails after the file is in place', async () => {
+    // The database transaction that holds the lock can fail to end after the work is done.
+    const failing: Exclusive = async (work) => {
+      await work();
+      throw new Error('commit failed');
+    };
+    const m = make({ exclusive: failing });
+    expect(await m.svc.add(CERT_A, ACTOR)).toMatchObject({ fingerprint: FP_A });
+    await m.svc.remove(FP_A, ACTOR);
+    expect(m.audits.map((a) => a.action)).toEqual(['network.trust.add', 'network.trust.remove']);
+    expect(readFileSync(m.file, 'utf8')).toBe('');
+  });
+
+  it('passes on a lock failure when the file was not changed', async () => {
+    const failing: Exclusive = async (work) => {
+      await work().catch(() => {});
+      throw new Error('commit failed');
+    };
+    const m = make({ content: CERT_A, exclusive: failing });
+    await expect(m.svc.add(CERT_A, ACTOR)).rejects.toThrow('commit failed');
+    await expect(m.svc.remove(FP_B, ACTOR)).rejects.toThrow('commit failed');
+    expect(m.audits).toEqual([]);
+  });
+
+  it('refuses as busy, and writes nothing, when the file changed between its read and its write', async () => {
+    // What a lost lock would look like: another process writes while this one is in its change.
+    let file = '';
+    let inside = false;
+    let hit = false;
+    const m = make({
+      exclusive: async (work) => {
+        inside = true;
+        try {
+          return await work();
+        } finally {
+          inside = false;
+        }
+      },
+      // The service asks the time when it reads the file. That is after the read, before the write.
+      now: () => {
+        if (inside && !hit) {
+          hit = true;
+          writeFileSync(file, CERT_B);
+        }
+        return NOW;
+      },
+    });
+    file = m.file;
+    await expect(m.svc.add(CERT_A, ACTOR)).rejects.toThrow(TRUST_BUSY);
+    expect(hit).toBe(true);
+    expect(readFileSync(m.file, 'utf8')).toBe(CERT_B);
+    expect(m.audits).toEqual([]);
+    expect(readdirSync(m.dir)).toEqual(['ca.pem']);
+  });
+
   it('a refusal is never reported as an audit failure', async () => {
     const m = make({ content: CERT_A, auditFails: true });
     expect(await code(m.svc.add(CERT_A, ACTOR))).toBe('duplicate');
@@ -618,6 +681,20 @@ describe('the 10 second limit of readPeerCertificate', () => {
       for (const t of timers) clearInterval(t);
       for (const sk of sockets) sk.destroy();
       server.close();
+    }
+  });
+
+  it('gives undefined, and nothing fails later, when the connection cannot even be made', async () => {
+    // Node refuses port 70000 at once, before there is a socket for the timer to close.
+    const failures: unknown[] = [];
+    const onFail = (e: unknown): void => void failures.push(e);
+    process.on('uncaughtException', onFail);
+    try {
+      expect(await readPeerCertificate('127.0.0.1', 70000, 30)).toBeUndefined();
+      await new Promise((r) => setTimeout(r, 120));
+      expect(failures).toEqual([]);
+    } finally {
+      process.off('uncaughtException', onFail);
     }
   });
 });

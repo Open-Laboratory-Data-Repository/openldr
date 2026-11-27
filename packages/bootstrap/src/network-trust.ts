@@ -199,16 +199,26 @@ export function readPeerCertificate(host: string, port: number, timeoutMs = 10_0
       if (settled) return;
       settled = true;
       clearTimeout(deadline);
-      socket.destroy();
+      socket?.destroy();
       done(pem);
     };
-    // From the start, whatever the other side sends in the meantime.
-    const deadline = setTimeout(() => finish(undefined), timeoutMs);
-    const socket = tls.connect({ host, port, rejectUnauthorized: false, ...(isIP(host) === 0 ? { servername: host } : {}) }, () => {
-      const x = socket.getPeerX509Certificate();
-      finish(x ? `${x.toString().trim()}\n` : undefined);
-    });
+    let socket: tls.TLSSocket | undefined;
+    let deadline: NodeJS.Timeout | undefined;
+    try {
+      const made = tls.connect({ host, port, rejectUnauthorized: false, ...(isIP(host) === 0 ? { servername: host } : {}) }, () => {
+        const x = made.getPeerX509Certificate();
+        finish(x ? `${x.toString().trim()}\n` : undefined);
+      });
+      socket = made;
+    } catch {
+      // Node refused the address before making a socket. Nothing answers there.
+      finish(undefined);
+      return;
+    }
     socket.on('error', () => finish(undefined));
+    // From the start, whatever the other side sends in the meantime. Set only once there is a
+    // socket for it to close.
+    deadline = setTimeout(() => finish(undefined), timeoutMs);
   });
 }
 
@@ -250,8 +260,12 @@ export function createTrustService(deps: TrustDeps): TrustService {
     return certs[0] as CertPreview;
   }
 
-  /** Writes the file whole: a temp name in the same folder, then a rename. */
-  async function write(certs: CertPreview[]): Promise<void> {
+  /**
+   * Writes the file whole: a temp name in the same folder, then a rename. `was` is the text this
+   * change read. If the file holds anything else just before the rename, another process wrote
+   * while this one held the lock, which a lost lock would allow. Then nothing is written.
+   */
+  async function write(certs: CertPreview[], was: string): Promise<void> {
     const file = deps.file as string;
     await mkdir(dirname(file), { recursive: true });
     // A new name each time, opened so that a file already there is never reused or followed.
@@ -265,6 +279,7 @@ export function createTrustService(deps: TrustDeps): TrustService {
       } finally {
         await handle.close();
       }
+      if ((await fileText()) !== was) throw new Error(TRUST_BUSY);
       await rename(temp, file);
       made = false;
     } finally {
@@ -273,11 +288,31 @@ export function createTrustService(deps: TrustDeps): TrustService {
   }
 
   /** Under the lock: the file as it is now, or a refusal when it may not be changed. */
-  async function editable(): Promise<CertPreview[]> {
+  async function editable(): Promise<{ text: string; certs: CertPreview[] }> {
     if (!managed) refuse('read-only');
-    const p = parse(await fileText(), deps.now());
+    const text = await fileText();
+    const p = parse(text, deps.now());
     if (p.stray || p.key) refuse('damaged');
-    return dedupe(p.certs);
+    return { text, certs: dedupe(p.certs) };
+  }
+
+  /**
+   * One change to the file, under the lock. `decide` gets the certificates in the file and gives
+   * the new list, or refuses. The lock is a database transaction, and it can fail to end after the
+   * file is already in place. The change then stands, so that failure is not passed on: the
+   * caller goes on to the audit row.
+   */
+  async function change(decide: (now: CertPreview[]) => CertPreview[]): Promise<void> {
+    let written = false;
+    try {
+      await deps.exclusive(async () => {
+        const { text, certs } = await editable();
+        await write(decide(certs), text);
+        written = true;
+      });
+    } catch (err) {
+      if (!written) throw err;
+    }
   }
 
   function dedupe(certs: CertPreview[]): CertPreview[] {
@@ -339,28 +374,26 @@ export function createTrustService(deps: TrustDeps): TrustService {
       const cert = one(pem);
       // Before the lock: with no managed file there is nothing to lock, and no folder to make.
       if (!managed) refuse('read-only');
-      await deps.exclusive(async () => {
-        const now = await editable();
+      // Before the change: a failure to read this afterwards would hide a change that was made.
+      const loaded = await deps.loaded();
+      await change((now) => {
         if (now.some((c) => c.fingerprint === cert.fingerprint)) refuse('duplicate');
-        await write([...now, cert]);
+        return [...now, cert];
       });
       // Only once the file is in place. A failed write leaves no row.
       await audited('network.trust.add', actor, cert);
-      const loaded = await deps.loaded();
       return { ...strip(cert), state: stateInFile(loaded, printsOf(loaded), cert.fingerprint) };
     },
 
     async remove(fingerprint, actor) {
       let gone: CertPreview | undefined;
       if (!managed) refuse('read-only');
-      await deps.exclusive(async () => {
-        const now = await editable();
+      await change((now) => {
         gone = now.find((c) => c.fingerprint === fingerprint);
         if (gone === undefined) refuse('not-found');
-        await write(now.filter((c) => c.fingerprint !== fingerprint));
+        return now.filter((c) => c.fingerprint !== fingerprint);
       });
-      const cert = gone as CertPreview;
-      await audited('network.trust.remove', actor, cert);
+      await audited('network.trust.remove', actor, gone as CertPreview);
     },
   };
 }
