@@ -1118,3 +1118,81 @@ describe('sharing on the lab network', () => {
     expect(h.last()).toMatchObject({ screen: 'error', message: strings.launcherGone });
   });
 });
+
+describe('pageState for the connect mode screens', () => {
+  const FP = Array.from({ length: 32 }, () => 'AB').join(':');
+  const SERVER = 'https://labpc:3443/studio/';
+
+  it('gives the mode choice its two answers', () => {
+    expect(pageState({ screen: 'choose' }, strings)).toEqual({
+      title: 'How will this PC use OpenLDR?',
+      message: "This PC holds the lab's data: OpenLDR and its database run here. Connect to the lab's server: this PC only shows OpenLDR from another PC.",
+      actions: [{ id: 'choose-local', label: "This PC holds the lab's data" }, { id: 'choose-connect', label: "Connect to the lab's server" }],
+    });
+  });
+
+  it('gives the connect screen its input, and Back only while no mode is saved', () => {
+    expect(pageState({ screen: 'connect' }, strings)).toEqual({
+      title: "Connect to the lab's server",
+      input: { label: 'Server address', value: '', placeholder: 'labpc:3443' },
+      actions: [{ id: 'connect', label: 'Connect', primary: true }, { id: 'back', label: 'Back' }],
+    });
+    expect(pageState({ screen: 'connect', value: 'labpc', fixed: true }, strings)).toEqual({
+      title: "Connect to the lab's server",
+      input: { label: 'Server address', value: 'labpc', placeholder: 'labpc:3443' },
+      actions: [{ id: 'connect', label: 'Connect', primary: true }],
+    });
+  });
+
+  it.each([
+    ['empty', "Type the server's address."],
+    ['not-https', 'The address must start with https.'],
+    ['unreadable', 'That is not an address OpenLDR can use.'],
+    ['no-answer', 'Nothing answered at that address. Check it and that the server is on.'],
+    ['certificate', "The server's certificate could not be accepted. Check the address, or ask whoever looks after the server."],
+  ] as const)('says what is wrong on the connect screen for %s, and keeps what was typed', (problem, line) => {
+    const state = pageState({ screen: 'connect', value: 'what was typed', problem }, strings);
+    expect(state.problem).toBe(line);
+    expect(state.input?.value).toBe('what was typed');
+  });
+
+  it('asks about a first certificate with "It matches" as the main answer', () => {
+    expect(pageState({ screen: 'certificate', address: SERVER, fingerprint: FP, changed: false }, strings)).toEqual({
+      title: "Check the server's certificate",
+      message: `This is the first time this PC connects to ${SERVER}. Compare this fingerprint with the one shown on the server.`,
+      detail: FP,
+      actions: [{ id: 'trust', label: 'It matches', primary: true }, { id: 'no-trust', label: 'Cancel' }],
+    });
+  });
+
+  it('asks about a changed certificate with Cancel as the main answer', () => {
+    expect(pageState({ screen: 'certificate', address: SERVER, fingerprint: FP, changed: true }, strings)).toEqual({
+      title: "The server's certificate has changed",
+      message: `The certificate of ${SERVER} is not the one this PC accepted before. Compare this fingerprint with the one shown on the server. If you did not expect a change, stop here.`,
+      detail: FP,
+      actions: [{ id: 'trust', label: 'It matches' }, { id: 'no-trust', label: 'Cancel', primary: true }],
+    });
+  });
+
+  it('says the server is not answering, with Try again and Change server', () => {
+    expect(pageState({ screen: 'unreachable', address: SERVER }, strings)).toEqual({
+      title: 'Cannot reach the server',
+      message: `${SERVER} is not answering. OpenLDR will come back by itself when it does.`,
+      actions: [{ id: 'retry', label: 'Try again', primary: true }, { id: 'change-server', label: 'Change server' }],
+    });
+  });
+
+  it('puts the address into the words in French and Portuguese too', () => {
+    for (const lang of ['fr', 'pt'] as const) {
+      for (const screen of [
+        { screen: 'certificate', address: SERVER, fingerprint: FP, changed: false },
+        { screen: 'certificate', address: SERVER, fingerprint: FP, changed: true },
+        { screen: 'unreachable', address: SERVER },
+      ] as const) {
+        const message = pageState(screen, STRINGS[lang]).message ?? '';
+        expect(message).toContain(SERVER);
+        expect(message).not.toContain('{address}');
+      }
+    }
+  });
+});

@@ -53,6 +53,31 @@ export interface AppStrings {
   notBuilt: string;
   /** Shown and logged in place of a launcher line that held a secret. */
   lineHidden: string;
+  /** Connect mode: the mode choice, the server address, the certificate question and the unreachable page. `{address}` is the server's address. */
+  chooseTitle: string;
+  chooseMessage: string;
+  chooseLocal: string;
+  chooseConnect: string;
+  connectTitle: string;
+  connectLabel: string;
+  connectPlaceholder: string;
+  connectAction: string;
+  backAction: string;
+  problemEmpty: string;
+  problemNotHttps: string;
+  problemUnreadable: string;
+  problemNoAnswer: string;
+  problemCertificate: string;
+  certFirstTitle: string;
+  certFirstMessage: string;
+  certChangedTitle: string;
+  certChangedMessage: string;
+  trustYes: string;
+  trustNo: string;
+  unreachableTitle: string;
+  unreachableMessage: string;
+  changeServer: string;
+  studioWillNotLoad: string;
 }
 
 const en: AppStrings = {
@@ -89,6 +114,30 @@ const en: AppStrings = {
   statusNoAnswer: 'OpenLDR did not respond to a status check.',
   notBuilt: 'OpenLDR is not built. Build it, then start the app again.',
   lineHidden: 'A log line was hidden because it contained a secret.',
+  chooseTitle: "How will this PC use OpenLDR?",
+  chooseMessage: "This PC holds the lab's data: OpenLDR and its database run here. Connect to the lab's server: this PC only shows OpenLDR from another PC.",
+  chooseLocal: "This PC holds the lab's data",
+  chooseConnect: "Connect to the lab's server",
+  connectTitle: "Connect to the lab's server",
+  connectLabel: "Server address",
+  connectPlaceholder: "labpc:3443",
+  connectAction: "Connect",
+  backAction: "Back",
+  problemEmpty: "Type the server's address.",
+  problemNotHttps: "The address must start with https.",
+  problemUnreadable: "That is not an address OpenLDR can use.",
+  problemNoAnswer: "Nothing answered at that address. Check it and that the server is on.",
+  problemCertificate: "The server's certificate could not be accepted. Check the address, or ask whoever looks after the server.",
+  certFirstTitle: "Check the server's certificate",
+  certFirstMessage: "This is the first time this PC connects to {address}. Compare this fingerprint with the one shown on the server.",
+  certChangedTitle: "The server's certificate has changed",
+  certChangedMessage: "The certificate of {address} is not the one this PC accepted before. Compare this fingerprint with the one shown on the server. If you did not expect a change, stop here.",
+  trustYes: "It matches",
+  trustNo: "Cancel",
+  unreachableTitle: "Cannot reach the server",
+  unreachableMessage: "{address} is not answering. OpenLDR will come back by itself when it does.",
+  changeServer: "Change server",
+  studioWillNotLoad: "The server answers, but OpenLDR did not load from it.",
 };
 
 const fr: AppStrings = {
@@ -125,6 +174,30 @@ const fr: AppStrings = {
   statusNoAnswer: "OpenLDR n'a pas répondu à une vérification d'état.",
   notBuilt: "OpenLDR n'est pas compilé. Compilez-le, puis relancez l'application.",
   lineHidden: "Une ligne du journal a été masquée, car elle contenait un secret.",
+  chooseTitle: "Comment ce PC utilisera-t-il OpenLDR ?",
+  chooseMessage: "Ce PC contient les données du laboratoire : OpenLDR et sa base de données fonctionnent ici. Se connecter au serveur du laboratoire : ce PC affiche seulement OpenLDR depuis un autre PC.",
+  chooseLocal: "Ce PC contient les données du laboratoire",
+  chooseConnect: "Se connecter au serveur du laboratoire",
+  connectTitle: "Se connecter au serveur du laboratoire",
+  connectLabel: "Adresse du serveur",
+  connectPlaceholder: "labpc:3443",
+  connectAction: "Se connecter",
+  backAction: "Retour",
+  problemEmpty: "Saisissez l'adresse du serveur.",
+  problemNotHttps: "L'adresse doit commencer par https.",
+  problemUnreadable: "Ce n'est pas une adresse qu'OpenLDR peut utiliser.",
+  problemNoAnswer: "Rien n'a répondu à cette adresse. Vérifiez-la et que le serveur est allumé.",
+  problemCertificate: "Le certificat du serveur n'a pas pu être accepté. Vérifiez l'adresse, ou demandez à la personne qui s'occupe du serveur.",
+  certFirstTitle: "Vérifiez le certificat du serveur",
+  certFirstMessage: "C'est la première fois que ce PC se connecte à {address}. Comparez cette empreinte avec celle affichée sur le serveur.",
+  certChangedTitle: "Le certificat du serveur a changé",
+  certChangedMessage: "Le certificat de {address} n'est pas celui que ce PC avait accepté. Comparez cette empreinte avec celle affichée sur le serveur. Si vous n'attendiez pas de changement, arrêtez-vous ici.",
+  trustYes: "Elle correspond",
+  trustNo: "Annuler",
+  unreachableTitle: "Impossible de joindre le serveur",
+  unreachableMessage: "{address} ne répond pas. OpenLDR reviendra de lui-même dès que le serveur répondra.",
+  changeServer: "Changer de serveur",
+  studioWillNotLoad: "Le serveur répond, mais OpenLDR ne s'est pas chargé depuis celui-ci.",
 };
 
 const pt: AppStrings = {
@@ -161,6 +234,30 @@ const pt: AppStrings = {
   statusNoAnswer: 'O OpenLDR não respondeu a uma verificação de estado.',
   notBuilt: 'O OpenLDR não está compilado. Compile-o e volte a abrir a aplicação.',
   lineHidden: 'Uma linha do registo foi ocultada porque continha um segredo.',
+  chooseTitle: "Como é que este PC vai usar o OpenLDR?",
+  chooseMessage: "Este PC guarda os dados do laboratório: o OpenLDR e a sua base de dados funcionam aqui. Ligar ao servidor do laboratório: este PC apenas mostra o OpenLDR de outro PC.",
+  chooseLocal: "Este PC guarda os dados do laboratório",
+  chooseConnect: "Ligar ao servidor do laboratório",
+  connectTitle: "Ligar ao servidor do laboratório",
+  connectLabel: "Endereço do servidor",
+  connectPlaceholder: "labpc:3443",
+  connectAction: "Ligar",
+  backAction: "Voltar",
+  problemEmpty: "Escreva o endereço do servidor.",
+  problemNotHttps: "O endereço tem de começar por https.",
+  problemUnreadable: "Não é um endereço que o OpenLDR possa usar.",
+  problemNoAnswer: "Nada respondeu nesse endereço. Verifique-o e se o servidor está ligado.",
+  problemCertificate: "Não foi possível aceitar o certificado do servidor. Verifique o endereço, ou pergunte a quem trata do servidor.",
+  certFirstTitle: "Verifique o certificado do servidor",
+  certFirstMessage: "É a primeira vez que este PC se liga a {address}. Compare esta impressão digital com a que é mostrada no servidor.",
+  certChangedTitle: "O certificado do servidor mudou",
+  certChangedMessage: "O certificado de {address} não é o que este PC aceitou antes. Compare esta impressão digital com a que é mostrada no servidor. Se não esperava uma mudança, pare aqui.",
+  trustYes: "Corresponde",
+  trustNo: "Cancelar",
+  unreachableTitle: "Não é possível alcançar o servidor",
+  unreachableMessage: "{address} não responde. O OpenLDR volta sozinho quando o servidor responder.",
+  changeServer: "Mudar de servidor",
+  studioWillNotLoad: "O servidor responde, mas o OpenLDR não carregou a partir dele.",
 };
 
 export const STRINGS: Record<Lang, AppStrings> = { en, fr, pt };
