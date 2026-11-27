@@ -295,7 +295,7 @@ The server edition for a two-PC lab was not chosen: nobody there looks after Doc
 |---|---|---|---|
 | G1 | The desktop app cannot be shared. It is fixed to `127.0.0.1`. | `apps/desktop/src/controller.ts:94`, `launcher.ts:88` | core |
 | G2 | The standalone has no HTTPS. | `apps/standalone/src/commands.ts:681` | core |
-| G3 | Plugin pages can fail from another PC over plain HTTP. Did not reproduce on 2026-11-27 for the plugin save and the dashboard edit listed below. The access key copy is not verified. | `apps/web/src/docs/0.1.8/en/standalone.md:282` | the docs line is corrected in plan 1, Task 6 |
+| G3 | Plugin pages can fail from another PC over plain HTTP. Did not reproduce on 2026-11-27 for the three actions listed below. | `apps/web/src/docs/0.1.8/en/standalone.md:282` | the docs line is corrected in plan 1, Task 6 |
 | G4 | The companion refuses a desktop app on another PC. | `companion/receiver.mjs:72` | closed by G2 |
 | G5 | The desktop app has no connect mode. No setting holds a server address. | `apps/desktop/src/settings.ts:7`, `main.ts:149` | core |
 | G6 | The desktop app cannot be locked. | no kiosk or full-screen code in `apps/desktop/src/main.ts` | core |
@@ -323,9 +323,11 @@ console error in any step:
   setting was still on when the sheet was opened again. It was then turned off and saved.
 - **The dashboard editor.** A new dashboard was made. The widget editor opened and showed a
   live count. The widget was saved and drawn on the dashboard. The dashboard was then deleted.
-- **The access keys sheet.** It opened for a test user and listed that user's key. No key
-  was made and the copy button was not pressed, because that makes a real credential. The
-  code has a fallback for a missing clipboard (`apps/studio/src/users/AccessKeysSheet.tsx:126`).
+- **The access keys sheet.** With the operator's yes, a key named `http-check-delete-me` was
+  made for the test user `bench1`. "Copy key" was pressed. The sheet said "Copied." and the
+  whole 48-character key was selected in its field. That is the fallback for a missing
+  clipboard (`apps/studio/src/users/AccessKeysSheet.tsx:126`). What landed on the clipboard
+  was not read back. The key was then revoked. Its row stays in the list as "Revoked".
 
 What this does not show: other plugin pages, other dashboard actions, and a standalone
 launcher started with `--host`. The address above is a preview server in front of the dev API.
