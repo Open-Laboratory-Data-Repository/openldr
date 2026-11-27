@@ -549,7 +549,11 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
         }
         // A caller let in by a capability may make only the corrector's calls. A plugin that names
         // the permission of each action may also be invoked by such a caller: the gate above decided.
-        if (!opened.byRole && !CORRECTOR_OPS.has(op.kind) && !(op.kind === 'invoke' && actions)) {
+        // A call with a role rule of its own (rolesFor: the admin page calls) is also open to a
+        // caller who holds that role. Such a plugin names no role, so nothing else would ever open
+        // these calls for it. The role gate below still decides, and so does the plugin's grant.
+        const holdsCallRole = rolesFor(op).some((r) => principal.roles.includes(r));
+        if (!opened.byRole && !CORRECTOR_OPS.has(op.kind) && !(op.kind === 'invoke' && actions) && !holdsCallRole) {
           return deny(op.kind, `operation ${op.kind} is not open to a caller without the plugin's role`);
         }
 

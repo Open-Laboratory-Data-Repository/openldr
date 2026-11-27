@@ -67,7 +67,7 @@ A recusa indica a ação e as permissões que a abrem. Está em inglês, por exe
 
 `payload.ui.requiredRoles` e `payload.ui.requiredCapabilities` decidem quem vê o plugin. Um utilizador vê a entrada no menu lateral, e abre `/x/<id>`, só quando tem uma das funções ou uma das capacidades. Escrever o endereço não contorna este controlo. Um plugin sem nenhuma das listas está aberto a todos.
 
-`requiredCapabilities` pode indicar as chaves do próprio plugin. Um utilizador que entra por uma capacidade pode executar as ações do plugin quando o plugin tem `actionPermissions`. O controlo das ações decide então cada chamada. O armazenamento do plugin (`storage.*`) continua fechado a esse utilizador. Precisa de uma das funções do plugin.
+`requiredCapabilities` pode indicar as chaves do próprio plugin. Um utilizador que entra por uma capacidade pode executar as ações do plugin quando o plugin tem `actionPermissions`. O controlo das ações decide então cada chamada. O armazenamento do plugin (`storage.*`) continua fechado a esse utilizador. Precisa de uma das funções do plugin. As chamadas de página reservadas a administradores (`connectors.*`, `schedule.*`, `import.*`) estão abertas a esse utilizador se ele for também administrador. Uma página que lista os conectores para um administrador funciona, por isso, sem indicar uma função.
 
 A página recebe as capacidades do utilizador com sessão iniciada no seu contexto inicial, incluindo as chaves do plugin. Use-as só para mostrar ou esconder separadores. São uma cópia para mostrar. O broker no servidor verifica cada chamada.
 
