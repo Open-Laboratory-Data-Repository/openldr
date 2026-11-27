@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { LauncherEvent, RunningLauncher, ShareInfo, Status } from './launcher';
 import { windowAddress } from './locality';
 import { DEFAULT_SHARE_PORT, type Settings } from './settings';
+import type { PortChoice } from './serial';
 import type { AppStrings } from './strings';
 
 export type Screen =
@@ -21,13 +22,27 @@ export type Screen =
   | { screen: 'certificate'; address: string; fingerprint: string; changed: boolean }
   /** Connect mode: the server does not answer. */
   | { screen: 'unreachable'; address: string }
+  /** The list of serial ports, in a small window of its own, for a person to choose one. */
+  | { screen: 'serial'; ports: PortChoice[] }
   /** The lock's PIN, asked in a small window of its own. Never carries the PIN. */
   | { screen: 'pin'; purpose: 'set' | 'unlock' | 'quit'; wrong?: boolean; tooShort?: boolean };
 
 /** What a button on the app's own page asks for. */
 export type PageAction =
   | 'choose-local' | 'choose-connect' | 'connect' | 'back' | 'trust' | 'no-trust' | 'retry' | 'change-server'
-  | 'pin-submit' | 'pin-cancel';
+  | 'pin-submit' | 'pin-cancel'
+  | 'serial-use' | 'serial-cancel';
+
+/**
+ * The one window an action is taken from. The PIN window sends the PIN actions, the port window
+ * sends the port actions, and the main window sends the rest. main.ts checks the sender against
+ * this: being one of the app's own pages is not enough.
+ */
+export function actionWindow(id: PageAction): 'main' | 'pin' | 'port' {
+  if (id === 'pin-submit' || id === 'pin-cancel') return 'pin';
+  if (id === 'serial-use' || id === 'serial-cancel') return 'port';
+  return 'main';
+}
 
 /** What main sends to the app's own page. The words are already in the person's language. */
 export interface PageState {
@@ -41,7 +56,10 @@ export interface PageState {
   /** One line under the input that says what is wrong with what was typed. */
   problem?: string;
   input?: { label: string; value: string; placeholder: string; secret?: boolean };
-  actions?: Array<{ id: PageAction; label: string; primary?: boolean }>;
+  /** A list to choose one row from. The chosen row's id goes back with the action. */
+  choices?: Array<{ id: string; label: string; note?: string; selected: boolean }>;
+  /** `needsChoice`: the page keeps this button off until a row of `choices` is selected. */
+  actions?: Array<{ id: PageAction; label: string; primary?: boolean; needsChoice?: boolean }>;
 }
 
 const PROBLEMS = {
@@ -101,6 +119,17 @@ export function pageState(screen: Exclude<Screen, { screen: 'studio' }>, strings
         actions: [
           { id: 'trust', label: strings.trustYes, ...(screen.changed ? {} : { primary: true }) },
           { id: 'no-trust', label: strings.trustNo, ...(screen.changed ? { primary: true } : {}) },
+        ],
+      };
+    case 'serial':
+      return {
+        title: strings.serialTitle,
+        // With no port, say so. The list fills in by itself when a cable is plugged in.
+        ...(screen.ports.length === 0 ? { message: strings.serialNone } : {}),
+        choices: screen.ports.map((p) => ({ id: p.id, label: p.label, ...(p.last ? { note: strings.serialLastNote } : {}), selected: p.last })),
+        actions: [
+          { id: 'serial-use', label: strings.serialUse, primary: true, needsChoice: true },
+          { id: 'serial-cancel', label: strings.serialCancel },
         ],
       };
     case 'pin': {

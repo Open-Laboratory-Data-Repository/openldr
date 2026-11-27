@@ -152,6 +152,26 @@ describe('linkTarget', () => {
 describe('mayGrantPermission', () => {
   const launcher = 'http://127.0.0.1:3990/studio/';
 
+  it('grants serial to the trusted address and to nothing else', () => {
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3990/studio/x/analyzer', launcher)).toBe(true);
+    expect(mayGrantPermission('serial', 'https://labpc:3443/studio/x/analyzer', 'https://labpc:3443/studio/', true)).toBe(true);
+    // Another origin, another port, the app's own page, no address, and a server the app is not connected to.
+    expect(mayGrantPermission('serial', 'https://example.org/', launcher)).toBe(false);
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3991/studio/', launcher)).toBe(false);
+    expect(mayGrantPermission('serial', 'file:///opt/openldr-desktop/pages/page.html', launcher)).toBe(false);
+    expect(mayGrantPermission('serial', 'http://127.0.0.1:3990/studio/', undefined)).toBe(false);
+    expect(mayGrantPermission('serial', 'https://labpc:3443/studio/', 'https://labpc:3443/studio/', false)).toBe(false);
+    // Plain http that is not this PC, also in connect mode.
+    expect(mayGrantPermission('serial', 'http://labpc:3080/studio/', 'http://labpc:3080/studio/', true)).toBe(false);
+  });
+
+  it('still refuses every other device permission', () => {
+    for (const permission of ['usb', 'hid', 'bluetooth', 'media', 'geolocation', 'notifications', 'midi', 'clipboard-read', 'serial-port', 'Serial']) {
+      expect(mayGrantPermission(permission, 'http://127.0.0.1:3990/studio/', launcher), permission).toBe(false);
+      expect(mayGrantPermission(permission, 'https://labpc:3443/studio/', 'https://labpc:3443/studio/', true), permission).toBe(false);
+    }
+  });
+
   it('allows a sanitized clipboard write from the window\'s own address on this computer', () => {
     expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3990/studio/users', launcher)).toBe(true);
     expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3990', launcher)).toBe(true);
@@ -267,7 +287,8 @@ describe('connect mode: the window trusts one named server', () => {
     expect(mayGrantPermission('clipboard-sanitized-write', 'http://127.0.0.1:3000/studio/x', 'http://127.0.0.1:3000/studio/', true)).toBe(true);
   });
 
-  it.each(['clipboard-read', 'media', 'geolocation', 'notifications', 'serial', 'fullscreen', 'openExternal', 'pointerLock'])('still refuses %s in connect mode', (p) => {
+  // 'serial' left this list on 2026-11-27: the serial ports plan grants it to the connected server.
+  it.each(['clipboard-read', 'media', 'geolocation', 'notifications', 'usb', 'hid', 'fullscreen', 'openExternal', 'pointerLock'])('still refuses %s in connect mode', (p) => {
     expect(mayGrantPermission(p, 'https://labpc:3443/x', SERVER, true)).toBe(false);
   });
 

@@ -183,3 +183,21 @@ describe('connect mode and lock settings', () => {
     expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ startAtSignIn: false, mode: 'connect', server: { address: 'https://labpc/studio/' }, lock: { salt: 'ab', hash: 'cd' } });
   });
 });
+
+describe('the serial port used last time', () => {
+  const read = (value: unknown) => {
+    const dir = mkdtempSync(join(tmpdir(), 'openldr-settings-'));
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify(value));
+    try { return loadSettings(file); } finally { rmSync(dir, { recursive: true, force: true }); }
+  };
+
+  it('keeps a well formed lastSerialPort and drops a malformed one', () => {
+    expect(read({ startAtSignIn: false, lastSerialPort: { portName: 'COM3' } }).lastSerialPort).toEqual({ portName: 'COM3' });
+    expect(read({ startAtSignIn: false, lastSerialPort: { portName: 'ttyUSB0', extra: 1 } }).lastSerialPort).toEqual({ portName: 'ttyUSB0' });
+    for (const bad of [{ portName: '' }, { portName: 7 }, { portName: 'x'.repeat(300) }, { name: 'COM3' }, 'COM3', null, [], true]) {
+      expect(read({ startAtSignIn: false, lastSerialPort: bad }).lastSerialPort, JSON.stringify(bad)).toBeUndefined();
+    }
+    expect(read({ startAtSignIn: false }).lastSerialPort).toBeUndefined();
+  });
+});

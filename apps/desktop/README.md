@@ -59,6 +59,22 @@ remove `lock`, and that is also how a forgotten PIN is recovered.
 
 This package is private. It is never published.
 
+## Serial ports
+
+A plugin page that holds `host:serial` can ask Studio for a serial port, and Studio asks the
+browser. In the app, the browser asks the app: `select-serial-port` fires on the window's session.
+The app shows its own small window with the PC's ports, and answers with the row a person pressed.
+It never answers with a port nobody pressed, not even when the list has one row.
+
+A request is shown only when it comes from the main window, on the address the app trusts:
+OpenLDR on this PC, or the https server it is connected to. The `serial` permission is granted to
+that address and to no other. The name of the port chosen last time is saved as `lastSerialPort`,
+only to mark that row the next time.
+
+No device permission handler is set. One that says yes to serial devices hands a page every port
+with no choice made (seen in Electron 45 on 2026-11-27). Electron names the window that asked, not
+the frame, so the app cannot tell the main frame from a frame inside it on the same address.
+
 ## Build and start from a checkout
 
 The app runs the built launcher at `apps/standalone/dist/index.js`, and the launcher serves the
