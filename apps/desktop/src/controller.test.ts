@@ -1150,6 +1150,7 @@ describe('pageState for the connect mode screens', () => {
     ['unreadable', 'That is not an address OpenLDR can use.'],
     ['no-answer', 'Nothing answered at that address. Check it and that the server is on.'],
     ['certificate', "The server's certificate could not be accepted. Check the address, or ask whoever looks after the server."],
+    ['not-saved', 'The server could not be saved on this PC. Try again.'],
   ] as const)('says what is wrong on the connect screen for %s, and keeps what was typed', (problem, line) => {
     const state = pageState({ screen: 'connect', value: 'what was typed', problem }, strings);
     expect(state.problem).toBe(line);

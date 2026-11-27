@@ -87,7 +87,10 @@ export class RemoteController {
     if (run !== this.run) return;
     if (first === 'ok') {
       // Electron already trusts the certificate, or the address is plain http on this PC.
-      this.saveServer({ address: parsed.address });
+      if (!this.saveServer({ address: parsed.address })) {
+        this.showConnect({ value: input, problem: 'not-saved' });
+        return;
+      }
       this.showStudio(parsed.address);
       return;
     }
@@ -118,19 +121,24 @@ export class RemoteController {
       else this.showConnect({ value: q.typed });
       return;
     }
-    const before = this.deps.loadSettings().server;
-    this.saveServer({ address: q.address, fingerprint: q.fingerprint });
+    // The pin is in force for this one check only. Nothing goes on disk until the check has
+    // passed on this same run: a quit or another action in the meantime leaves the settings as
+    // they were.
     this.deps.pin({ host: q.host, fingerprint: q.fingerprint });
     const answer = await this.deps.probe(q.address);
     if (run !== this.run) return;
     if (answer === 'ok') {
+      if (!this.saveServer({ address: q.address, fingerprint: q.fingerprint })) {
+        this.pinSaved();
+        this.showConnect({ value: q.typed, problem: 'not-saved' });
+        return;
+      }
       this.showStudio(q.address);
       return;
     }
-    // One try. The certificate the person accepted did not work, so it is not kept.
-    this.deps.pin(undefined);
-    if (before === undefined || before.address !== q.address) this.saveServer(undefined);
-    else this.saveServer(before);
+    // One try. The certificate the person accepted did not work. The server this PC had, if any,
+    // is untouched, and its pin goes back in force.
+    this.pinSaved();
     this.showConnect({ value: q.typed, problem: 'certificate' });
   }
 
@@ -140,9 +148,9 @@ export class RemoteController {
     this.question = undefined;
     this.shown = undefined;
     const old = this.deps.loadSettings().server?.address;
-    this.saveServer(undefined);
+    const saved = this.saveServer(undefined);
     this.deps.pin(undefined);
-    this.showConnect(old === undefined ? {} : { value: old });
+    this.showConnect({ ...(old === undefined ? {} : { value: old }), ...(saved ? {} : { problem: 'not-saved' as const }) });
   }
 
   /** main.ts calls this when Studio's own page failed to load from the server. */
@@ -264,8 +272,22 @@ export class RemoteController {
     this.deps.show({ screen: 'connect', ...parts, ...(fixed ? { fixed: true } : {}) });
   }
 
-  private saveServer(server: Settings['server']): void {
-    const { server: _old, ...rest } = this.deps.loadSettings();
-    this.deps.saveSettings(server === undefined ? rest : { ...rest, server });
+  /** Writes the server, or its absence, with every other setting kept. False when the file could not be written. */
+  private saveServer(server: Settings['server']): boolean {
+    try {
+      const { server: _old, ...rest } = this.deps.loadSettings();
+      this.deps.saveSettings(server === undefined ? rest : { ...rest, server });
+      return true;
+    } catch (err) {
+      this.deps.log(`could not save the settings: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
+    }
+  }
+
+  /** Puts the pin back to the server on disk: its accepted certificate, or none. */
+  private pinSaved(): void {
+    const server = this.deps.loadSettings().server;
+    const parsed = server === undefined ? undefined : parseServerAddress(server.address);
+    this.deps.pin(server?.fingerprint !== undefined && parsed?.ok ? { host: parsed.host, fingerprint: server.fingerprint } : undefined);
   }
 }

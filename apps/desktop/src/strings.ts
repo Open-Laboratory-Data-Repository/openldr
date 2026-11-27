@@ -68,6 +68,7 @@ export interface AppStrings {
   problemUnreadable: string;
   problemNoAnswer: string;
   problemCertificate: string;
+  problemNotSaved: string;
   certFirstTitle: string;
   certFirstMessage: string;
   certChangedTitle: string;
@@ -128,6 +129,7 @@ const en: AppStrings = {
   problemUnreadable: "That is not an address OpenLDR can use.",
   problemNoAnswer: "Nothing answered at that address. Check it and that the server is on.",
   problemCertificate: "The server's certificate could not be accepted. Check the address, or ask whoever looks after the server.",
+  problemNotSaved: "The server could not be saved on this PC. Try again.",
   certFirstTitle: "Check the server's certificate",
   certFirstMessage: "This is the first time this PC connects to {address}. Compare this fingerprint with the one shown on the server.",
   certChangedTitle: "The server's certificate has changed",
@@ -188,6 +190,7 @@ const fr: AppStrings = {
   problemUnreadable: "Ce n'est pas une adresse qu'OpenLDR peut utiliser.",
   problemNoAnswer: "Rien n'a répondu à cette adresse. Vérifiez-la et que le serveur est allumé.",
   problemCertificate: "Le certificat du serveur n'a pas pu être accepté. Vérifiez l'adresse, ou demandez à la personne qui s'occupe du serveur.",
+  problemNotSaved: "Le serveur n'a pas pu être enregistré sur ce PC. Réessayez.",
   certFirstTitle: "Vérifiez le certificat du serveur",
   certFirstMessage: "C'est la première fois que ce PC se connecte à {address}. Comparez cette empreinte avec celle affichée sur le serveur.",
   certChangedTitle: "Le certificat du serveur a changé",
@@ -248,6 +251,7 @@ const pt: AppStrings = {
   problemUnreadable: "Não é um endereço que o OpenLDR possa usar.",
   problemNoAnswer: "Nada respondeu nesse endereço. Verifique-o e se o servidor está ligado.",
   problemCertificate: "Não foi possível aceitar o certificado do servidor. Verifique o endereço, ou pergunte a quem trata do servidor.",
+  problemNotSaved: "Não foi possível guardar o servidor neste PC. Tente de novo.",
   certFirstTitle: "Verifique o certificado do servidor",
   certFirstMessage: "É a primeira vez que este PC se liga a {address}. Compare esta impressão digital com a que é mostrada no servidor.",
   certChangedTitle: "O certificado do servidor mudou",

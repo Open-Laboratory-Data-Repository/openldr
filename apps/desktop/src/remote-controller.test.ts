@@ -23,6 +23,8 @@ interface Options {
   /** A probe of its own, for a test that holds it open. */
   probe?: (address: string) => Promise<Probe>;
   certificate?: ServerCertificate;
+  /** Makes saveSettings throw while it is true. */
+  saveFails?: { now: boolean };
 }
 
 function harness(o: Options = {}) {
@@ -49,6 +51,7 @@ function harness(o: Options = {}) {
     pin: (server) => void pins.push(server),
     loadSettings: () => ({ ...settings }),
     saveSettings: (s) => {
+      if (o.saveFails?.now) throw new Error('disk full');
       settings = { ...s };
       saves.push({ ...s });
     },
@@ -370,5 +373,74 @@ describe('RemoteController, with a saved server', () => {
     const h = harness({ settings: { startAtSignIn: true, window: { width: 900, height: 700 }, mode: 'connect', lock: { salt: 'ab', hash: 'cd' } }, probes: ['ok'] });
     await h.controller.connect('labpc:3443');
     expect(h.settings()).toEqual({ startAtSignIn: true, window: { width: 900, height: 700 }, mode: 'connect', lock: { salt: 'ab', hash: 'cd' }, server: { address: ADDRESS } });
+  });
+
+  it('saves nothing when the person quits while the accepted certificate is still being checked', async () => {
+    let calls = 0;
+    let release: (answer: Probe) => void = () => {};
+    const h = harness({ probe: () => (++calls === 1 ? Promise.resolve('untrusted' as Probe) : new Promise<Probe>((done) => { release = done; })) });
+    await h.controller.connect('labpc:3443');
+    void h.controller.trust(true);
+    await settle();
+    // The check is on its way. Nothing is on disk yet.
+    expect(h.saves).toEqual([]);
+    await h.controller.quit();
+    release('ok');
+    await settle();
+    expect(h.saves).toEqual([]);
+    expect(h.settings().server).toBeUndefined();
+    expect(h.screens.some((x) => x.screen === 'studio')).toBe(false);
+  });
+
+  it('keeps the server it had when a certificate accepted for another server does not work', async () => {
+    const h = harness({ settings: saved(FP_A), probes: ['ok', 'untrusted', 'untrusted'], certificate: { ok: true, fingerprint: FP_B } });
+    await h.controller.start();
+    await h.controller.connect('other.example:3443');
+    await h.controller.trust(true);
+    expect(h.last()).toEqual({ screen: 'connect', value: 'other.example:3443', problem: 'certificate', fixed: true });
+    // The earlier server and its certificate are untouched, and its pin is back in force.
+    expect(h.settings().server).toEqual({ address: ADDRESS, fingerprint: FP_A });
+    expect(h.pins.at(-1)).toEqual({ host: 'labpc', fingerprint: FP_A });
+  });
+
+  it('keeps the old certificate when a changed one was accepted and then did not work', async () => {
+    const h = harness({ settings: saved(FP_A), probes: ['untrusted', 'untrusted'], certificate: { ok: true, fingerprint: FP_B } });
+    await h.controller.start();
+    await h.controller.trust(true);
+    expect(h.settings().server).toEqual({ address: ADDRESS, fingerprint: FP_A });
+    expect(h.pins.at(-1)).toEqual({ host: 'labpc', fingerprint: FP_A });
+  });
+
+  it('says so when the server cannot be saved, drops the pin, and works on the next try', async () => {
+    const saveFails = { now: true };
+    const h = harness({ probes: ['untrusted', 'ok', 'untrusted', 'ok'], saveFails });
+    await h.controller.connect('labpc:3443');
+    await h.controller.trust(true);
+    expect(h.last()).toEqual({ screen: 'connect', value: 'labpc:3443', problem: 'not-saved' });
+    expect(h.pins.at(-1)).toBeUndefined();
+    expect(h.controller.address()).toBeUndefined();
+    expect(h.logs.join(' ')).toContain('disk full');
+    saveFails.now = false;
+    await h.controller.connect('labpc:3443');
+    await h.controller.trust(true);
+    expect(h.last()).toEqual({ screen: 'studio', address: ADDRESS });
+    expect(h.settings().server).toEqual({ address: ADDRESS, fingerprint: FP_A });
+  });
+
+  it('says so when a trusted server cannot be saved', async () => {
+    const h = harness({ probes: ['ok'], saveFails: { now: true } });
+    await h.controller.connect('labpc:3443');
+    expect(h.last()).toEqual({ screen: 'connect', value: 'labpc:3443', problem: 'not-saved' });
+    expect(h.controller.address()).toBeUndefined();
+  });
+
+  it('still shows the connect screen when forgetting the server cannot be saved', async () => {
+    const saveFails = { now: false };
+    const h = harness({ settings: saved(FP_A), probes: ['ok'], saveFails });
+    await h.controller.start();
+    saveFails.now = true;
+    h.controller.changeServer();
+    expect(h.last()).toEqual({ screen: 'connect', value: ADDRESS, problem: 'not-saved', fixed: true });
+    expect(h.pins.at(-1)).toBeUndefined();
   });
 });

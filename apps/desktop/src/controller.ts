@@ -16,7 +16,7 @@ export type Screen =
   /** The first question on a PC with no data: run OpenLDR here, or show another PC's. */
   | { screen: 'choose' }
   /** Connect mode: the server's address. `fixed` means a mode is already saved, so there is no way back to 'choose'. */
-  | { screen: 'connect'; value?: string; problem?: 'empty' | 'not-https' | 'unreadable' | 'no-answer' | 'certificate'; fixed?: true }
+  | { screen: 'connect'; value?: string; problem?: 'empty' | 'not-https' | 'unreadable' | 'no-answer' | 'certificate' | 'not-saved'; fixed?: true }
   /** Connect mode: a certificate this PC's system does not trust, for the person to compare. */
   | { screen: 'certificate'; address: string; fingerprint: string; changed: boolean }
   /** Connect mode: the server does not answer. */
@@ -48,6 +48,7 @@ const PROBLEMS = {
   unreadable: 'problemUnreadable',
   'no-answer': 'problemNoAnswer',
   certificate: 'problemCertificate',
+  'not-saved': 'problemNotSaved',
 } as const;
 
 const NOTES = {
