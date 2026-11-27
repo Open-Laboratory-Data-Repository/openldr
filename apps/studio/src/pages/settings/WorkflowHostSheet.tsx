@@ -29,6 +29,7 @@ export function WorkflowHostSheet({ open, onOpenChange, onChanged }: { open: boo
   async function save(): Promise<void> {
     const mine = session.current;
     const sameSheet = (): boolean => session.current === mine;
+    if (busy) return;
     setBusy(true);
     try {
       await addWorkflowHost(host.trim());
@@ -73,6 +74,7 @@ export function WorkflowHostSheet({ open, onOpenChange, onChanged }: { open: boo
             <Input
               id="host-name"
               data-testid="host-name"
+              disabled={busy}
               autoComplete="off"
               autoCapitalize="none"
               spellCheck={false}

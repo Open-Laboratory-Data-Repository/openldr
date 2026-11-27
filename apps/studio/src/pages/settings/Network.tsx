@@ -129,6 +129,8 @@ export function Network() {
     setSelfBusy(true);
     try {
       const self = await setWorkflowSelf(on);
+      // A refresh asked for before this change still holds the old switch. Drop it.
+      reads.current++;
       setHosts((h) => (h ? { ...h, self } : h));
     } catch (err) {
       toast.error(networkErrorLine(err, t));

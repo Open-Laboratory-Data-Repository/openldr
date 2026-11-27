@@ -28,6 +28,9 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
   const [text, setText] = useState('');
   const [shown, setShown] = useState<CertificatePreview | null>(null);
   const [busy, setBusy] = useState(false);
+  // True from Save until its answer. The fields are locked then: typing another address while one
+  // certificate is being saved would be closed away when that save ends.
+  const [saving, setSaving] = useState(false);
   // What a slow answer is checked against. `source` moves on every edit and every opening, so a
   // certificate read for an address that is no longer in the field is dropped. `session` moves on
   // every opening, so a save that ends late does not close a sheet opened since.
@@ -42,6 +45,7 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
       setText('');
       setShown(null);
       setBusy(false);
+      setSaving(false);
     }
   }, [open]);
 
@@ -52,7 +56,7 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
     setBusy(false);
   }
 
-  const canRead = !busy && (address.trim() !== '' || text.trim() !== '');
+  const canRead = !busy && !saving && (address.trim() !== '' || text.trim() !== '');
 
   async function read(): Promise<void> {
     const mine = ++source.current;
@@ -73,11 +77,12 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
   }
 
   async function save(): Promise<void> {
-    if (!shown) return;
+    if (!shown || saving) return;
     const mine = session.current;
     // Only the sheet this save started from. One opened since is the person's new work.
     const sameSheet = (): boolean => session.current === mine;
     setBusy(true);
+    setSaving(true);
     try {
       const saved = await addTrustCertificate(shown.pem);
       toast.success(t(SAVED[saved.state] ?? 'settings.network.saved'));
@@ -90,7 +95,10 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
         if (sameSheet()) onOpenChange(false);
       }
     } finally {
-      if (sameSheet()) setBusy(false);
+      if (sameSheet()) {
+        setBusy(false);
+        setSaving(false);
+      }
     }
   }
 
@@ -110,7 +118,7 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
                 <DropdownMenuItem data-testid="trust-read" disabled={!canRead} onSelect={() => void read()}>
                   {t('settings.network.readCertificate')}
                 </DropdownMenuItem>
-                <DropdownMenuItem data-testid="trust-save" disabled={busy || !shown} onSelect={() => void save()}>
+                <DropdownMenuItem data-testid="trust-save" disabled={busy || saving || !shown} onSelect={() => void save()}>
                   {t('settings.network.save')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -124,6 +132,7 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
             <Input
               id="trust-address"
               data-testid="trust-address"
+              disabled={saving}
               autoComplete="off"
               autoCapitalize="none"
               spellCheck={false}
@@ -135,6 +144,7 @@ export function TrustCertificateSheet({ open, onOpenChange, onChanged }: { open:
             <Textarea
               id="trust-text"
               data-testid="trust-text"
+              disabled={saving}
               rows={6}
               spellCheck={false}
               className="font-mono text-xs"

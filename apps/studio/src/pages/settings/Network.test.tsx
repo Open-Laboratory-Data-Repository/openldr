@@ -456,6 +456,58 @@ describe('the Network settings page', () => {
     expect(screen.getByTestId('host-name')).toHaveValue('second.example.org');
   });
 
+  it('locks the address and the paste box while a save is on its way', async () => {
+    const slow = later<api.TrustedCertificate>();
+    vi.mocked(api.previewTrustCertificate).mockResolvedValue({ certificates: [preview] });
+    vi.mocked(api.addTrustCertificate).mockReturnValue(slow.promise);
+    mount();
+    await screen.findByTestId(`trust-row-${FP}`);
+    await pick('network-menu', 'trust-add');
+    fireEvent.change(screen.getByTestId('trust-address'), { target: { value: 'a.district' } });
+    await pick('trust-sheet-menu', 'trust-read');
+    await screen.findByTestId('trust-preview');
+    expect(screen.getByTestId('trust-address')).not.toBeDisabled();
+    await pick('trust-sheet-menu', 'trust-save');
+    // Nothing may be typed or read for another certificate while this one is being saved.
+    expect(screen.getByTestId('trust-address')).toBeDisabled();
+    expect(screen.getByTestId('trust-text')).toBeDisabled();
+    openMenu('trust-sheet-menu');
+    expect(await screen.findByTestId('trust-read')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('trust-save')).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await act(async () => { slow.resolve(cert({ state: 'added' })); });
+    await waitFor(() => expect(screen.queryByTestId('trust-address')).toBeNull());
+    expect(api.addTrustCertificate).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks the host field while a save is on its way', async () => {
+    const slow = later<void>();
+    vi.mocked(api.addWorkflowHost).mockReturnValue(slow.promise);
+    mount();
+    await showHosts();
+    await pick('network-menu', 'host-add');
+    fireEvent.change(screen.getByTestId('host-name'), { target: { value: 'a.example.org' } });
+    await pick('host-sheet-menu', 'host-save');
+    expect(screen.getByTestId('host-name')).toBeDisabled();
+    await act(async () => { slow.resolve(); });
+    await waitFor(() => expect(screen.queryByTestId('host-name')).toBeNull());
+  });
+
+  it('keeps the switch as it was just set when an older refresh ends after it', async () => {
+    vi.mocked(api.setWorkflowSelf).mockResolvedValue({ on: true, origin: 'http://127.0.0.1:3000' });
+    mount();
+    await showHosts();
+    await screen.findByTestId('hosts-self');
+    const old = later<api.WorkflowHostsView>();
+    vi.mocked(api.getWorkflowHosts).mockReturnValueOnce(old.promise);
+    await pick('network-menu', 'network-refresh');
+    await act(async () => { fireEvent.click(screen.getByTestId('hosts-self')); });
+    await waitFor(() => expect(screen.getByTestId('hosts-self')).toHaveAttribute('aria-checked', 'true'));
+    // The refresh was asked for before the switch changed, so it still says off.
+    await act(async () => { old.resolve({ self: { on: false, origin: 'http://127.0.0.1:3000' }, hosts: [] }); });
+    expect(screen.getByTestId('hosts-self')).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('says so when a refresh fails, keeps what it had, and refreshes again from the menu', async () => {
     mount();
     await screen.findByTestId(`trust-row-${FP}`);
