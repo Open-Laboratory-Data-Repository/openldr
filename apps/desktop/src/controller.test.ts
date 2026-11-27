@@ -178,6 +178,29 @@ const runningStatus = (host?: string): Status => ({
 });
 
 describe('pageState', () => {
+  it('gives the pin screen its words for each purpose, and the wrong and too short lines', () => {
+    const set = pageState({ screen: 'pin', purpose: 'set' }, strings);
+    expect(set).toEqual({
+      title: strings.pinSetTitle,
+      message: strings.pinSetMessage,
+      input: { label: strings.pinLabel, value: '', placeholder: '', secret: true },
+      actions: [{ id: 'pin-submit', label: strings.pinSetAction, primary: true }, { id: 'pin-cancel', label: strings.pinCancel }],
+    });
+    const unlock = pageState({ screen: 'pin', purpose: 'unlock' }, strings);
+    expect(unlock.title).toBe(strings.pinUnlockTitle);
+    expect(unlock.message).toBeUndefined();
+    expect(unlock.actions?.[0]).toEqual({ id: 'pin-submit', label: strings.pinUnlockAction, primary: true });
+    const quit = pageState({ screen: 'pin', purpose: 'quit' }, strings);
+    expect(quit.title).toBe(strings.pinQuitTitle);
+    expect(quit.message).toBe(strings.pinQuitMessage);
+    expect(quit.actions?.[0]).toEqual({ id: 'pin-submit', label: strings.pinQuitAction, primary: true });
+    expect(pageState({ screen: 'pin', purpose: 'unlock', wrong: true }, strings).problem).toBe(strings.pinWrong);
+    expect(pageState({ screen: 'pin', purpose: 'set', tooShort: true }, strings).problem).toBe(strings.pinTooShort);
+    expect(pageState({ screen: 'pin', purpose: 'unlock' }, strings).problem).toBeUndefined();
+    // The PIN is never sent back to the page.
+    expect(pageState({ screen: 'pin', purpose: 'unlock', wrong: true }, strings).input?.value).toBe('');
+  });
+
   it('gives the starting title and the note for each step', () => {
     expect(pageState({ screen: 'starting', note: 'checking' }, strings)).toEqual({
       title: strings.startingTitle,

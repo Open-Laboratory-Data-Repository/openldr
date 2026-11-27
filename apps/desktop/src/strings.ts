@@ -87,6 +87,25 @@ export interface AppStrings {
   switchConfirmNo: string;
   switchToConnectBody: string;
   switchToLocalBody: string;
+  /** The mode could not be written to the settings file, so the app stays as it is. */
+  switchSaveFailed: string;
+  /** The lock: the PIN window for each purpose, and the two tray items. */
+  pinSetTitle: string;
+  pinSetMessage: string;
+  pinSetAction: string;
+  pinUnlockTitle: string;
+  pinUnlockAction: string;
+  pinQuitTitle: string;
+  pinQuitMessage: string;
+  pinQuitAction: string;
+  pinLabel: string;
+  pinCancel: string;
+  pinWrong: string;
+  pinTooShort: string;
+  /** The lock could not be written to the settings file, so this PC is as it was. */
+  pinNotSaved: string;
+  trayLock: string;
+  trayUnlock: string;
 }
 
 const en: AppStrings = {
@@ -155,6 +174,22 @@ const en: AppStrings = {
   switchConfirmNo: "Cancel",
   switchToConnectBody: "This PC will show OpenLDR from another PC. The data on this PC stays where it is and is not used.",
   switchToLocalBody: "OpenLDR and its database will run on this PC.",
+  switchSaveFailed: "The setting could not be saved, so nothing was changed. See the app log.",
+  pinSetTitle: "Lock this PC to OpenLDR",
+  pinSetMessage: "Choose a PIN. Unlocking this PC, or quitting OpenLDR, will ask for it. Press Ctrl+Shift+L to unlock.",
+  pinSetAction: "Lock",
+  pinUnlockTitle: "Unlock this PC",
+  pinUnlockAction: "Unlock",
+  pinQuitTitle: "Quit OpenLDR",
+  pinQuitMessage: "This PC is locked to OpenLDR. Type the PIN to quit.",
+  pinQuitAction: "Quit",
+  pinLabel: "PIN",
+  pinCancel: "Cancel",
+  pinWrong: "That PIN is not right.",
+  pinTooShort: "Use at least 4 characters.",
+  pinNotSaved: "The setting could not be saved, so nothing was changed. See the app log.",
+  trayLock: "Lock this PC to OpenLDR...",
+  trayUnlock: "Unlock this PC...",
 };
 
 const fr: AppStrings = {
@@ -223,6 +258,22 @@ const fr: AppStrings = {
   switchConfirmNo: "Annuler",
   switchToConnectBody: "Ce PC affichera OpenLDR depuis un autre PC. Les données de ce PC restent où elles sont et ne sont pas utilisées.",
   switchToLocalBody: "OpenLDR et sa base de données fonctionneront sur ce PC.",
+  switchSaveFailed: "Le réglage n'a pas pu être enregistré, donc rien n'a changé. Consultez le journal de l'application.",
+  pinSetTitle: "Verrouiller ce PC sur OpenLDR",
+  pinSetMessage: "Choisissez un code PIN. Il sera demandé pour déverrouiller ce PC ou pour quitter OpenLDR. Appuyez sur Ctrl+Maj+L pour déverrouiller.",
+  pinSetAction: "Verrouiller",
+  pinUnlockTitle: "Déverrouiller ce PC",
+  pinUnlockAction: "Déverrouiller",
+  pinQuitTitle: "Quitter OpenLDR",
+  pinQuitMessage: "Ce PC est verrouillé sur OpenLDR. Saisissez le code PIN pour quitter.",
+  pinQuitAction: "Quitter",
+  pinLabel: "Code PIN",
+  pinCancel: "Annuler",
+  pinWrong: "Ce code PIN n'est pas le bon.",
+  pinTooShort: "Utilisez au moins 4 caractères.",
+  pinNotSaved: "Le réglage n'a pas pu être enregistré, donc rien n'a changé. Consultez le journal de l'application.",
+  trayLock: "Verrouiller ce PC sur OpenLDR...",
+  trayUnlock: "Déverrouiller ce PC...",
 };
 
 const pt: AppStrings = {
@@ -291,6 +342,22 @@ const pt: AppStrings = {
   switchConfirmNo: "Cancelar",
   switchToConnectBody: "Este PC vai mostrar o OpenLDR de outro PC. Os dados deste PC ficam onde estão e não são usados.",
   switchToLocalBody: "O OpenLDR e a sua base de dados vão funcionar neste PC.",
+  switchSaveFailed: "Não foi possível guardar a definição, por isso nada mudou. Consulte o registo da aplicação.",
+  pinSetTitle: "Bloquear este PC no OpenLDR",
+  pinSetMessage: "Escolha um PIN. Será pedido para desbloquear este PC ou para sair do OpenLDR. Prima Ctrl+Shift+L para desbloquear.",
+  pinSetAction: "Bloquear",
+  pinUnlockTitle: "Desbloquear este PC",
+  pinUnlockAction: "Desbloquear",
+  pinQuitTitle: "Sair do OpenLDR",
+  pinQuitMessage: "Este PC está bloqueado no OpenLDR. Escreva o PIN para sair.",
+  pinQuitAction: "Sair",
+  pinLabel: "PIN",
+  pinCancel: "Cancelar",
+  pinWrong: "Esse PIN não está certo.",
+  pinTooShort: "Use pelo menos 4 caracteres.",
+  pinNotSaved: "Não foi possível guardar a definição, por isso nada mudou. Consulte o registo da aplicação.",
+  trayLock: "Bloquear este PC no OpenLDR...",
+  trayUnlock: "Desbloquear este PC...",
 };
 
 export const STRINGS: Record<Lang, AppStrings> = { en, fr, pt };

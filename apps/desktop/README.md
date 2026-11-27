@@ -31,7 +31,31 @@ the app checks a server in a session of its own, made for that fingerprint, and 
 session the fingerprint only when Studio is about to be shown. If the window still refuses a
 certificate that such a check accepts, the app starts itself again once.
 
-Studio's two calls to the app (`setupCode` and `info`) are refused in connect mode.
+Studio's two calls to the app (`setupCode` and `info`) are refused in connect mode, and the page is
+not given the object that holds them.
+
+Electron keeps a yes about a certificate as well as a no. So when an accepted certificate is left
+(Change server) or replaced (the server's certificate changed), the app starts itself again before
+it shows Studio. The new server is already saved, so the new process goes straight to it.
+
+Switching mode from the tray asks once, saves the new mode, and quits the normal way. The app is
+started again only when that quit ended with code 0. If OpenLDR on this PC did not stop, the old
+mode is put back.
+
+## The lock
+
+**Lock this PC to OpenLDR...** in the tray asks for a PIN and saves a salted scrypt hash of it as
+`lock` in the settings file. While locked, the window is in kiosk mode, closing it does nothing,
+links to other sites are dropped, and the tray holds Open, Unlock and Quit only. `Ctrl+Shift+L`
+asks for the PIN to unlock. The PIN is asked in a small window on top, so Studio keeps what was
+typed.
+
+Quit from the tray, the app menu or `Ctrl+Q` asks for the PIN. A shutdown, a sign-out and a
+signal quit without it. Electron reports a signal as a plain `before-quit`, the same as a session
+that ends, so the app cannot tell them apart (seen on Linux on 2026-11-27).
+
+The lock stops a casual user. Someone who can edit the settings file with the PC's account can
+remove `lock`, and that is also how a forgotten PIN is recovered.
 
 This package is private. It is never published.
 

@@ -62,6 +62,7 @@ export function linkTarget(
   url: string,
   launcherAddress: string | undefined,
   ownPages: readonly string[],
+  locked = false,
 ): 'inside' | 'browser' | 'refuse' {
   const u = parse(url);
   if (u === undefined) return 'refuse';
@@ -70,6 +71,8 @@ export function linkTarget(
     const o = parse(own);
     if (o !== undefined && page(o) === page(u)) return 'inside';
   }
+  // A PC locked to OpenLDR opens nothing else: a link that would leave for the browser is dropped.
+  if (locked) return 'refuse';
   if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:') return 'browser';
   return 'refuse';
 }

@@ -9,11 +9,13 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, powe
 import { setAutostart, startedHidden, type AutostartDeps } from './autostart';
 import { bridgeHandlers } from './bridge';
 import { readServerCertificate, verifyDecision, type PinnedServer } from './cert-trust';
-import { ACTION_CHANNEL, RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
+import { ACTION_CHANNEL, CONNECT_MODE_CHANNEL, RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
 import { DesktopController, pageState, type PageAction, type Screen } from './controller';
 import * as launcher from './launcher';
+import { createLockFlow, quitNeedsPin, type LockFlow } from './lock-flow';
 import { frameTarget, linkTarget, mayGrantPermission, renderAfterLoad, sameOrigin, urlForLog } from './locality';
 import { startMode, type Running } from './mode';
+import { createModeSwitch } from './mode-switch';
 import { choosePort } from './ports';
 import { RemoteController } from './remote-controller';
 import { Selfcheck, selfcheckConfig } from './selfcheck';
@@ -77,6 +79,8 @@ function main(): void {
   log(`The app started. Electron ${process.versions.electron}, ${process.platform}.`);
 
   let win: BrowserWindow | undefined;
+  /** The small window that asks for the lock's PIN, on top of the main one. Studio stays behind it. */
+  let pinWin: BrowserWindow | undefined;
   let tray: Tray | undefined;
   /** Builds the tray menu again from the settings and the launcher's share. Set once the tray exists. */
   let rebuildTray = (): void => {};
@@ -100,18 +104,35 @@ function main(): void {
   /** True while the app's own page is loading. Its did-finish-load sends the screen. */
   let pageLoading = false;
 
+  /** Set once the app is ready. Told the exit code just before the process ends. */
+  let beforeExit = (_code: number): void => {};
   const exit = (code: number): void => {
     exiting = true;
     log(`The app exits with code ${code}.`);
+    beforeExit(code);
     app.exit(code);
   };
 
-  /** Every way to quit ends here: the tray, the app menu, before-quit, a signal, a shutdown. */
+  /** The lock, once the app is ready. Before that nothing is locked and nothing asks for a PIN. */
+  let lockFlow: LockFlow | undefined;
+  const isLocked = (): boolean => lockFlow?.locked() ?? false;
+
+  /** The quit itself, once nothing stands in its way. */
+  const quitNow = (): void => {
+    if (exiting) return;
+    if (running === undefined) return exit(0);
+    void running.controller.quit();
+  };
+
+  /**
+   * Every way to quit ends here: the tray, the app menu, before-quit, a signal, a shutdown. On a
+   * locked PC the tray and the menu ask for the PIN first (see quitNeedsPin for why the others do not).
+   */
   const requestQuit = (why: string): void => {
     if (exiting) return;
     log(`Quit asked for: ${why}.`);
-    if (running === undefined) return exit(0);
-    void running.controller.quit();
+    if (quitNeedsPin(why, isLocked())) return lockFlow?.ask('quit');
+    quitNow();
   };
 
   // Before anything is started, so no launcher can run while these are missing.
@@ -166,7 +187,8 @@ function main(): void {
   // Every page the app makes: links that leave OpenLDR open in the person's browser.
   app.on('web-contents-created', (_e, contents) => {
     const guard = (event: { preventDefault(): void }, url: string): void => {
-      const where = linkTarget(url, running?.controller.address(), [pageUrl]);
+      // On a locked PC a link that would leave for the browser is dropped.
+      const where = linkTarget(url, running?.controller.address(), [pageUrl], isLocked());
       if (where === 'inside') return;
       event.preventDefault();
       if (where === 'browser') void shell.openExternal(url);
@@ -186,7 +208,7 @@ function main(): void {
     });
     contents.on('will-attach-webview', (event) => event.preventDefault());
     contents.setWindowOpenHandler(({ url }) => {
-      if (linkTarget(url, running?.controller.address(), [pageUrl]) === 'browser') void shell.openExternal(url);
+      if (linkTarget(url, running?.controller.address(), [pageUrl], isLocked()) === 'browser') void shell.openExternal(url);
       return { action: 'deny' };
     });
   });
@@ -206,6 +228,11 @@ function main(): void {
   for (const [channel, handle] of Object.entries(handlers)) {
     ipcMain.handle(channel, (event) => handle(event.senderFrame?.url ?? ''));
   }
+
+  // The preload's question. It decides only whether Studio sees the object; the calls are checked above.
+  ipcMain.on(CONNECT_MODE_CHANNEL, (event) => {
+    event.returnValue = connectMode();
+  });
 
   ipcMain.on(RETRY_CHANNEL, (event) => {
     // Only from one of the app's own pages.
@@ -237,6 +264,14 @@ function main(): void {
     const p = payload as { id?: unknown; value?: unknown } | null;
     if (typeof p?.id !== 'string' || !ACTIONS.has(p.id)) return;
     const value = typeof p.value === 'string' ? p.value.slice(0, 2000) : '';
+    // The PIN window sends the two PIN actions and nothing else. The main window sends the rest.
+    const fromPin = pinWin !== undefined && !pinWin.isDestroyed() && event.sender === pinWin.webContents;
+    if (p.id === 'pin-submit' || p.id === 'pin-cancel') {
+      if (!fromPin) return;
+      // The PIN goes to the lock and nowhere else. It is never logged.
+      return p.id === 'pin-submit' ? void lockFlow?.submit(value) : lockFlow?.cancel();
+    }
+    if (win === undefined || event.sender !== win.webContents) return;
     switch (p.id as PageAction) {
       case 'choose-local':
         if (running !== undefined) return;
@@ -263,7 +298,6 @@ function main(): void {
       case 'retry':
         return retry();
       default:
-        // 'pin-submit' and 'pin-cancel' belong to the lock.
         return;
     }
   });
@@ -295,7 +329,8 @@ function main(): void {
       width: settings.window?.width ?? 1360,
       height: settings.window?.height ?? 900,
       title: s.windowTitle,
-      show: !hidden,
+      // A locked PC always shows OpenLDR.
+      show: !hidden || settings.lock !== undefined,
       autoHideMenuBar: true,
       icon: join(here, '..', 'assets', 'icon.png'),
       webPreferences: {
@@ -311,7 +346,15 @@ function main(): void {
     w.on('close', (event) => {
       if (exiting) return;
       event.preventDefault();
-      w.hide();
+      // On a locked PC closing does nothing: the window is not hidden either.
+      if (!isLocked()) w.hide();
+    });
+    // Ctrl+Shift+L asks for the PIN to unlock. In kiosk mode the tray may be out of reach, so this is the way in.
+    w.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' || !input.control || !input.shift || input.alt || input.meta || input.key.toLowerCase() !== 'l') return;
+      if (!isLocked()) return;
+      event.preventDefault();
+      lockFlow?.ask('unlock');
     });
     let sizeTimer: NodeJS.Timeout | undefined;
     w.on('resize', () => {
@@ -421,27 +464,118 @@ function main(): void {
         log(`The certificate was not saved: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
-    /** Asks, saves the other mode, and starts the app again through the normal quit. */
-    const switchMode = async (to: 'local' | 'connect'): Promise<void> => {
-      const answer = await box({
-        type: 'question',
-        buttons: [s.switchConfirmYes, s.switchConfirmNo],
-        defaultId: 1,
-        cancelId: 1,
-        message: to === 'connect' ? s.trayUseConnect.replace(/\.\.\.$/, '') : s.trayUseLocal.replace(/\.\.\.$/, ''),
-        detail: to === 'connect' ? s.switchToConnectBody : s.switchToLocalBody,
-      });
-      if (answer.response !== 0) return;
-      try {
-        // Not `save`: a failed write must stop the switch.
-        saveSettings(settingsFile, { ...loadSettings(settingsFile), mode: to });
-      } catch (err) {
-        log(`The mode was not changed: ${err instanceof Error ? err.message : String(err)}`);
+    // The lock. Its PIN is asked in a small window on top; the main window is never sent to
+    // another page for it, so what is typed in Studio stays.
+    let pinScreen: Extract<Screen, { screen: 'pin' }> | undefined;
+    const sendPin = (): void => {
+      if (pinWin === undefined || pinWin.isDestroyed() || pinScreen === undefined) return;
+      pinWin.webContents.send(SCREEN_CHANNEL, pageState(pinScreen, strings()));
+    };
+    const openPin = (screen: Extract<Screen, { screen: 'pin' }>): void => {
+      pinScreen = screen;
+      if (pinWin !== undefined && !pinWin.isDestroyed()) {
+        if (!pinWin.webContents.isLoading()) sendPin();
         return;
       }
-      app.relaunch();
-      requestQuit('switch mode');
+      // A window on top of a hidden one may never show.
+      showWindow();
+      const made = new BrowserWindow({
+        parent: w,
+        modal: true,
+        width: 460,
+        height: 420,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        show: false,
+        autoHideMenuBar: true,
+        title: s.windowTitle,
+        webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: join(here, 'preload.cjs') },
+      });
+      pinWin = made;
+      made.setMenuBarVisibility(false);
+      made.webContents.on('did-finish-load', () => {
+        sendPin();
+        if (!made.isDestroyed()) made.show();
+      });
+      made.webContents.on('before-input-event', (event, input) => {
+        if (input.type !== 'keyDown' || input.key !== 'Escape') return;
+        event.preventDefault();
+        lockFlow?.cancel();
+      });
+      made.on('closed', () => {
+        if (pinWin === made) pinWin = undefined;
+        // Closed by its own corner: the same as Cancel.
+        lockFlow?.cancel();
+      });
+      void made.loadFile(pagePath).catch((err: unknown) => log(`The PIN window did not load: ${String(err)}`));
     };
+    /** The menu of an unlocked app, as Electron made it. */
+    const usualMenu = Menu.getApplicationMenu();
+    /** A locked PC's menu: Quit asks for the PIN, and nothing opens developer tools or leaves full screen. */
+    const lockedMenu = (): Menu =>
+      Menu.buildFromTemplate([
+        { label: s.windowTitle, submenu: [{ label: s.trayQuit, accelerator: 'CmdOrCtrl+Q', click: () => requestQuit('menu') }] },
+        { role: 'editMenu' },
+        { label: 'View', submenu: [{ role: 'reload' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }] },
+      ]);
+    const applyLock = (on: boolean): void => {
+      Menu.setApplicationMenu(on ? lockedMenu() : usualMenu);
+      if (!w.isDestroyed()) {
+        if (on) showWindow();
+        w.setKiosk(on);
+      }
+      if (on && !loadSettings(settingsFile).startAtSignIn) {
+        // A locked PC starts OpenLDR at sign-in.
+        try {
+          setAutostart(autostart, true);
+          save({ ...loadSettings(settingsFile), startAtSignIn: true });
+        } catch (err) {
+          log(`Start at sign-in was not turned on: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      rebuildTray();
+    };
+    lockFlow = createLockFlow({
+      loadSettings: () => loadSettings(settingsFile),
+      // Not `save`: a failed write must be told.
+      saveSettings: (v) => saveSettings(settingsFile, v),
+      sleep,
+      open: openPin,
+      close: () => {
+        pinScreen = undefined;
+        if (pinWin !== undefined && !pinWin.isDestroyed()) pinWin.close();
+      },
+      apply: applyLock,
+      quit: quitNow,
+      tell: () => void dialog.showMessageBox(pinWin !== undefined && !pinWin.isDestroyed() ? pinWin : w, { type: 'error', message: s.pinNotSaved, buttons: ['OK'] }),
+      log,
+    });
+
+    // Switching mode: ask once, save, quit the normal way. The app starts again only after a quit
+    // that ended well, so a launcher that would not stop is never left behind a connect window.
+    const modeSwitch = createModeSwitch({
+      confirm: async (to) =>
+        (
+          await box({
+            type: 'question',
+            buttons: [s.switchConfirmYes, s.switchConfirmNo],
+            defaultId: 1,
+            cancelId: 1,
+            message: to === 'connect' ? s.trayUseConnect.replace(/\.\.\.$/, '') : s.trayUseLocal.replace(/\.\.\.$/, ''),
+            detail: to === 'connect' ? s.switchToConnectBody : s.switchToLocalBody,
+          })
+        ).response === 0,
+      loadSettings: () => loadSettings(settingsFile),
+      // Not `save`: a failed write must stop the switch.
+      saveSettings: (v) => saveSettings(settingsFile, v),
+      tell: () => void box({ type: 'error', message: s.switchSaveFailed, buttons: ['OK'] }),
+      quit: () => requestQuit('switch mode'),
+      relaunch: () => app.relaunch({ args: process.argv.slice(1).filter((a) => a !== CERT_RELAUNCH) }),
+      log,
+    });
+    beforeExit = (code) => modeSwitch.exiting(code);
     rebuildTray = (): void => {
       if (tray === undefined || tray.isDestroyed()) return;
       const now = loadSettings(settingsFile);
@@ -454,6 +588,7 @@ function main(): void {
             share: local()?.share(),
             busy: shareSwitch.busy(),
             ...(connectMode() ? { mode: 'connect' as const, ...(serverNow !== undefined ? { server: serverNow } : {}) } : {}),
+            ...(isLocked() ? { locked: true } : {}),
           }, s, {
             open: showWindow,
             setStartAtSignIn: (on) => {
@@ -479,13 +614,17 @@ function main(): void {
               remote()?.changeServer();
               showWindow();
             },
-            switchMode: (to) => void switchMode(to),
+            switchMode: (to) => void modeSwitch.request(to),
+            lock: () => lockFlow?.ask('set'),
+            unlock: () => lockFlow?.ask('unlock'),
           }),
         ),
       );
     };
     rebuildTray();
     tray.on('click', showWindow);
+    // A PC that was locked when the app last ran is locked again from the first moment.
+    if (isLocked()) applyLock(true);
 
     const makeLocal = (): DesktopController => new DesktopController({
       readStatus: () => launcher.readStatus(target),

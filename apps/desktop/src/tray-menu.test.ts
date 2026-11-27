@@ -16,6 +16,8 @@ function actions(): TrayActions {
     quit: vi.fn(),
     changeServer: vi.fn(),
     switchMode: vi.fn(),
+    lock: vi.fn(),
+    unlock: vi.fn(),
   };
 }
 
@@ -32,8 +34,28 @@ const click = (i: Electron.MenuItemConstructorOptions, checked = false): void =>
 };
 
 describe('trayTemplate', () => {
+  it('when locked, shows only Open, Unlock and Quit', () => {
+    const three = [s.trayOpen, s.trayUnlock, '---', s.trayQuit];
+    expect(labels(state({ locked: true, shareOnNetwork: true, share, startAtSignIn: true }))).toEqual(three);
+    expect(labels(state({ locked: true, mode: 'connect', server: 'https://labpc:3443/studio/' }))).toEqual(three);
+    const act = actions();
+    click(item(state({ locked: true }), act, s.trayUnlock));
+    expect(act.unlock).toHaveBeenCalledTimes(1);
+    click(item(state({ locked: true }), act, s.trayQuit));
+    expect(act.quit).toHaveBeenCalledTimes(1);
+  });
+
+  it('when not locked, offers Lock this PC to OpenLDR...', () => {
+    expect(labels(state())).toContain(s.trayLock);
+    expect(labels(state({ mode: 'connect' }))).toContain(s.trayLock);
+    expect(labels(state())).not.toContain(s.trayUnlock);
+    const act = actions();
+    click(item(state(), act, s.trayLock));
+    expect(act.lock).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the usual items and the share box when not sharing', () => {
-    expect(labels(state())).toEqual([s.trayOpen, s.trayStartAtSignIn, s.trayShare, s.trayUseConnect, s.trayOpenLogs, '---', s.trayQuit]);
+    expect(labels(state())).toEqual([s.trayOpen, s.trayStartAtSignIn, s.trayShare, s.trayUseConnect, s.trayLock, s.trayOpenLogs, '---', s.trayQuit]);
   });
 
   it('shows the address and the three share items only when sharing is running', () => {
@@ -46,6 +68,7 @@ describe('trayTemplate', () => {
       s.trayCopyFingerprint,
       s.traySaveCertificate,
       s.trayUseConnect,
+      s.trayLock,
       s.trayOpenLogs,
       '---',
       s.trayQuit,
@@ -54,7 +77,7 @@ describe('trayTemplate', () => {
 
   it('shows the setting ticked and nothing else while sharing has not started yet', () => {
     const st = state({ shareOnNetwork: true });
-    expect(labels(st)).toEqual([s.trayOpen, s.trayStartAtSignIn, s.trayShare, s.trayUseConnect, s.trayOpenLogs, '---', s.trayQuit]);
+    expect(labels(st)).toEqual([s.trayOpen, s.trayStartAtSignIn, s.trayShare, s.trayUseConnect, s.trayLock, s.trayOpenLogs, '---', s.trayQuit]);
     expect(item(st, actions(), s.trayShare)).toMatchObject({ type: 'checkbox', checked: true });
   });
 
@@ -67,6 +90,7 @@ describe('trayTemplate', () => {
       s.trayCopyFingerprint,
       s.traySaveCertificate,
       s.trayUseConnect,
+      s.trayLock,
       s.trayOpenLogs,
       '---',
       s.trayQuit,
@@ -126,13 +150,13 @@ describe('trayTemplate in connect mode', () => {
 
   it('in connect mode shows the server and no share items', () => {
     expect(labels(state({ mode: 'connect', server: SERVER, shareOnNetwork: true, share }))).toEqual([
-      s.trayOpen, s.trayStartAtSignIn, SERVER, s.trayChangeServer, s.trayUseLocal, s.trayOpenLogs, '---', s.trayQuit,
+      s.trayOpen, s.trayStartAtSignIn, SERVER, s.trayChangeServer, s.trayUseLocal, s.trayLock, s.trayOpenLogs, '---', s.trayQuit,
     ]);
   });
 
   it('shows the server as a line that cannot be pressed, and leaves it out when there is none yet', () => {
     expect(item(state({ mode: 'connect', server: SERVER }), actions(), SERVER).enabled).toBe(false);
-    expect(labels(state({ mode: 'connect' }))).toEqual([s.trayOpen, s.trayStartAtSignIn, s.trayChangeServer, s.trayUseLocal, s.trayOpenLogs, '---', s.trayQuit]);
+    expect(labels(state({ mode: 'connect' }))).toEqual([s.trayOpen, s.trayStartAtSignIn, s.trayChangeServer, s.trayUseLocal, s.trayLock, s.trayOpenLogs, '---', s.trayQuit]);
   });
 
   it('Change server and Use this PC call their actions', () => {

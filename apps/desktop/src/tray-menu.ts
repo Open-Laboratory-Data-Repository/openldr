@@ -16,6 +16,8 @@ export interface TrayState {
   mode?: 'local' | 'connect';
   /** Connect mode: the server's address, once there is one. */
   server?: string;
+  /** True when this PC is locked to OpenLDR. The menu then holds three items only. */
+  locked?: boolean;
 }
 
 export interface TrayActions {
@@ -30,6 +32,10 @@ export interface TrayActions {
   changeServer(): void;
   /** Ask, then switch to the other way of running and start the app again. */
   switchMode(to: 'local' | 'connect'): void;
+  /** Ask for a new PIN and lock this PC to OpenLDR. */
+  lock(): void;
+  /** Ask for the PIN and take the lock off. */
+  unlock(): void;
 }
 
 type Item = Electron.MenuItemConstructorOptions;
@@ -61,13 +67,28 @@ function connectTemplate(state: TrayState, s: AppStrings, act: TrayActions): Ite
     ...(state.server !== undefined ? [{ label: state.server, enabled: false } as Item] : []),
     { label: s.trayChangeServer, click: () => act.changeServer() },
     { label: s.trayUseLocal, click: () => act.switchMode('local') },
+    { label: s.trayLock, click: () => act.lock() },
     { label: s.trayOpenLogs, click: () => act.openLogs() },
     { type: 'separator' },
     { label: s.trayQuit, click: () => act.quit() },
   ];
 }
 
+/**
+ * A locked PC: open, unlock, quit. Every other item leaves the app, changes its server or restarts
+ * it, so none is shown. Quit asks for the PIN in main.ts.
+ */
+function lockedTemplate(s: AppStrings, act: TrayActions): Item[] {
+  return [
+    { label: s.trayOpen, click: () => act.open() },
+    { label: s.trayUnlock, click: () => act.unlock() },
+    { type: 'separator' },
+    { label: s.trayQuit, click: () => act.quit() },
+  ];
+}
+
 export function trayTemplate(state: TrayState, s: AppStrings, act: TrayActions): Item[] {
+  if (state.locked) return lockedTemplate(s, act);
   if (state.mode === 'connect') return connectTemplate(state, s, act);
   return [
     { label: s.trayOpen, click: () => act.open() },
@@ -81,6 +102,7 @@ export function trayTemplate(state: TrayState, s: AppStrings, act: TrayActions):
     },
     ...(state.share ? shareItems(state.share, s, act) : []),
     { label: s.trayUseConnect, click: () => act.switchMode('connect') },
+    { label: s.trayLock, click: () => act.lock() },
     { label: s.trayOpenLogs, click: () => act.openLogs() },
     { type: 'separator' },
     { label: s.trayQuit, click: () => act.quit() },

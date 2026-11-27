@@ -20,7 +20,9 @@ export type Screen =
   /** Connect mode: a certificate this PC's system does not trust, for the person to compare. */
   | { screen: 'certificate'; address: string; fingerprint: string; changed: boolean }
   /** Connect mode: the server does not answer. */
-  | { screen: 'unreachable'; address: string };
+  | { screen: 'unreachable'; address: string }
+  /** The lock's PIN, asked in a small window of its own. Never carries the PIN. */
+  | { screen: 'pin'; purpose: 'set' | 'unlock' | 'quit'; wrong?: boolean; tooShort?: boolean };
 
 /** What a button on the app's own page asks for. */
 export type PageAction =
@@ -101,6 +103,22 @@ export function pageState(screen: Exclude<Screen, { screen: 'studio' }>, strings
           { id: 'no-trust', label: strings.trustNo, ...(screen.changed ? { primary: true } : {}) },
         ],
       };
+    case 'pin': {
+      const words = {
+        set: { title: strings.pinSetTitle, message: strings.pinSetMessage, action: strings.pinSetAction },
+        unlock: { title: strings.pinUnlockTitle, message: undefined, action: strings.pinUnlockAction },
+        quit: { title: strings.pinQuitTitle, message: strings.pinQuitMessage, action: strings.pinQuitAction },
+      }[screen.purpose];
+      const problem = screen.wrong ? strings.pinWrong : screen.tooShort ? strings.pinTooShort : undefined;
+      return {
+        title: words.title,
+        ...(words.message !== undefined ? { message: words.message } : {}),
+        // Always empty: what was typed is never sent back to the page.
+        input: { label: strings.pinLabel, value: '', placeholder: '', secret: true },
+        ...(problem !== undefined ? { problem } : {}),
+        actions: [{ id: 'pin-submit', label: words.action, primary: true }, { id: 'pin-cancel', label: strings.pinCancel }],
+      };
+    }
     case 'unreachable':
       return {
         title: strings.unreachableTitle,

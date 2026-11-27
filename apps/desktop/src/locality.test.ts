@@ -108,6 +108,17 @@ describe('linkTarget', () => {
   const launcher = 'http://127.0.0.1:3990/studio/';
   const ownPages = ['file:///opt/openldr-desktop/pages/page.html'] as const;
 
+  it('drops links to other sites when locked', () => {
+    expect(linkTarget('https://example.org/', 'https://labpc:3443/studio/', [], true)).toBe('refuse');
+    expect(linkTarget('mailto:someone@example.org', 'https://labpc:3443/studio/', [], true)).toBe('refuse');
+    expect(linkTarget('https://labpc:3443/studio/x', 'https://labpc:3443/studio/', [], true)).toBe('inside');
+    expect(linkTarget('file:///opt/app/pages/page.html', undefined, ['file:///opt/app/pages/page.html'], true)).toBe('inside');
+  });
+
+  it('still sends links to other sites to the browser when not locked', () => {
+    expect(linkTarget('https://example.org/', 'https://labpc:3443/studio/', [], false)).toBe('browser');
+  });
+
   it('keeps the launcher origin inside', () => {
     expect(linkTarget('http://127.0.0.1:3990/studio/', launcher, ownPages)).toBe('inside');
     expect(linkTarget('http://127.0.0.1:3990/api/health', launcher, ownPages)).toBe('inside');
