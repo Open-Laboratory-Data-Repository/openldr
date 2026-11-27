@@ -50,6 +50,7 @@ export * from './form-access-store';
 export * from './dashboard-access-store';
 export * from './user-data-scope-store';
 export * from './app-settings-store';
+export * from './exclusive';
 export * from './reference-change-log';
 export * from './terminology-sync';
 export * from './reference-capture';

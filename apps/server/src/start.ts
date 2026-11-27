@@ -1,5 +1,5 @@
 import type { Config } from '@openldr/config';
-import { createAppContext, createIngestContext, createDbContext, seedDatabase, seedEssentials, drainCrashMarkersToAudit, startUpdateCheck, type AppContext } from '@openldr/bootstrap';
+import { createAppContext, createIngestContext, createDbContext, seedDatabase, seedEssentials, drainCrashMarkersToAudit, startUpdateCheck, recordLoadedTrust, nodeExtraCertificates, type AppContext } from '@openldr/bootstrap';
 import type { Logger } from '@openldr/core';
 import { buildApp } from './app';
 import { createUpdateFetch } from './update-fetch';
@@ -169,6 +169,13 @@ export async function startServer(cfg: Config, logger: Logger): Promise<RunningS
       closeIngest: () => ingest.close(),
       closeContext: () => ctx.close(),
     });
+
+    // Node read its extra trusted certificates once, when this process started. Record that list so
+    // Settings > Network and `openldr trust` can tell a certificate in use from one that waits for
+    // a restart. Before listening, so no request reads the previous start's record. Not best
+    // effort: if this fails, the previous start's record stays, and a certificate this start did
+    // not load would show as in use. A throw here closes what was opened and the start fails.
+    await recordLoadedTrust(ctx.appSettings, nodeExtraCertificates(), new Date());
 
     // LISTEN_HOST defaults to all interfaces; the reverse proxy owns the external port (P1-NFR-7).
     const address = await app.listen({ port: cfg.PORT, host: cfg.LISTEN_HOST });

@@ -3746,6 +3746,58 @@ export interface ConnectorUpdateInput {
   name?: string; config?: Record<string, string>; allowedHost?: string | null; enabled?: boolean;
 }
 
+// --- Settings > Network: trusted certificates and workflow hosts (/api/network) -----------------
+
+export interface TrustedCertificate {
+  fingerprint: string;
+  subject: string;
+  validTo: string;
+  expired: boolean;
+  state: 'in-use' | 'added' | 'removed' | 'outside' | 'unknown';
+}
+export interface CertificatePreview { pem: string; fingerprint: string; subject: string; validTo: string; expired: boolean }
+export interface NetworkTrust {
+  mode: 'editable' | 'not-configured' | 'set-outside' | 'damaged';
+  /** A lock on the list. `stuck` means it is old enough to be removed by a person. */
+  lock?: { since: string; stuck: boolean };
+  certificates: TrustedCertificate[];
+}
+export interface WorkflowHostRow { host: string; source: 'setting' | 'server' }
+export interface WorkflowHostsView { self: { on: boolean; origin: string }; hosts: WorkflowHostRow[] }
+
+/**
+ * A refusal from /api/network. `code` is the server's own word for it, such as 'private-key' or
+ * 'busy', or its plain line for a bad host or address. `changed` is true when the change was made
+ * and only its audit record failed.
+ */
+export class NetworkError extends Error {
+  constructor(readonly code: string, readonly status: number, readonly changed: boolean) {
+    super(code);
+    this.name = 'NetworkError';
+  }
+}
+async function networkCall<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await authFetch(url, init);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: unknown; changed?: unknown } | null;
+    throw new NetworkError(typeof body?.error === 'string' && body.error ? body.error : String(res.status), res.status, body?.changed === true);
+  }
+  return (res.status === 204 ? undefined : await res.json()) as T;
+}
+export const getNetworkTrust = (): Promise<NetworkTrust> => networkCall<NetworkTrust>('/api/network/trust');
+export const previewTrustCertificate = (from: { address: string } | { text: string }): Promise<{ certificates: CertificatePreview[] }> =>
+  networkCall('/api/network/trust/preview', jbody(from, 'POST'));
+export const addTrustCertificate = (pem: string): Promise<TrustedCertificate> => networkCall('/api/network/trust', jbody({ pem }, 'POST'));
+export const removeTrustCertificate = (fingerprint: string): Promise<void> =>
+  networkCall(`/api/network/trust/${encodeURIComponent(fingerprint)}`, { method: 'DELETE' });
+export const unlockTrust = (): Promise<{ removed: boolean }> => networkCall('/api/network/trust/unlock', { method: 'POST' });
+export const getWorkflowHosts = (): Promise<WorkflowHostsView> => networkCall<WorkflowHostsView>('/api/network/workflow-hosts');
+export const addWorkflowHost = (host: string): Promise<void> => networkCall('/api/network/workflow-hosts', jbody({ host }, 'POST'));
+export const removeWorkflowHost = (host: string): Promise<void> =>
+  networkCall(`/api/network/workflow-hosts/${encodeURIComponent(host)}`, { method: 'DELETE' });
+export const setWorkflowSelf = (on: boolean): Promise<{ on: boolean; origin: string }> =>
+  networkCall('/api/network/workflow-hosts/self', jbody({ on }, 'PUT'));
+
 export const listConnectors = (): Promise<Connector[]> =>
   apiGet<Connector[]>('/api/connectors', 'list connectors');
 export interface ConnectorConfigView { config: Record<string, string>; secretsSet: Record<string, boolean> }

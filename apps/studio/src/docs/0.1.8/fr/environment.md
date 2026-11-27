@@ -128,6 +128,7 @@ Consultez [Fournisseurs d'authentification](/docs/auth-providers) avant de chang
 | `OIDC_INTERNAL_ISSUER_URL` | Facultatif | Adresse du realm Keycloak côté serveur. OIDC générique n'en déduit pas les adresses. |
 | `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET` | Valeurs privées du déploiement | Compte de service pour administrer le fournisseur. |
 | `TLS_CERT_PATH` | Facultatif | Certificat public du serveur proposé au téléchargement du certificat central. |
+| `TRUSTED_CA_FILE` | Facultatif | Le fichier des certificats de confiance supplémentaires que gère Paramètres > Réseau. Doit être le même fichier que `NODE_EXTRA_CA_CERTS`. |
 | `SECRETS_ENCRYPTION_KEY` | Base64, 32 octets décodés | Clé de chiffrement des identifiants enregistrés. Conservez la valeur existante. |
 | `AUTH_DEV_BYPASS` | false | Contournement explicite de l'authentification en développement. Production refuse true. |
 | `AUTH_DEV_USERNAME`, `AUTH_DEV_ROLES` | dev-admin, lab_admin | Acteur du contournement de développement explicitement activé. |
@@ -140,7 +141,7 @@ Activez les capacités de l'hôte uniquement pour les utilisateurs et installati
 | --- | --- | --- |
 | `WORKFLOW_CODE_ENABLED` | false | Autorise l'exécution du nœud Code avec accès à l'hôte. |
 | `WORKFLOW_CODE_TIMEOUT_MS`, `WORKFLOW_CODE_MEMORY_MB` | 5000, 128 | Limites de temps et de mémoire du nœud Code. |
-| `WORKFLOW_HTTP_ALLOWLIST` | Vide | Noms d'hôte autorisés pour les requêtes HTTP des workflows. |
+| `WORKFLOW_HTTP_ALLOWLIST` | Vide | Noms d'hôte autorisés pour les requêtes HTTP des workflows. Paramètres > Réseau y ajoute sa propre liste. |
 | `WORKFLOW_FILE_MAX_BYTES` | 52428800 | Limite de fichier envoyé au workflow ou au webhook. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | 100000 | Nombre maximal d'éléments accumulés en sortie de boucle. |
 | `WORKFLOW_FILE_ACCESS_ENABLED`, `WORKFLOW_FILE_ACCESS_ROOT` | false, vide | Accès aux fichiers de l'hôte et répertoire racine obligatoire. |

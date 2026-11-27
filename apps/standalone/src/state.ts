@@ -21,6 +21,8 @@ export interface StandalonePaths {
   lockFile: string;
   /** The sharing certificate and its key (share-cert.ts). Made on the first `start --share`. */
   shareDir: string;
+  /** The extra certificates this install trusts (trust-start.ts). One PEM file, changed in Settings > Network. */
+  trustFile: string;
   /** The version of OpenLDR that last started this folder (data-version.ts). */
   versionFile: string;
   serverLog: string;
@@ -137,6 +139,7 @@ export function pathsFor(root: string): StandalonePaths {
     stateFile: join(root, 'standalone.json'),
     lockFile: join(root, 'standalone.lock'),
     shareDir: join(root, 'share'),
+    trustFile: join(root, 'trust', 'ca.pem'),
     versionFile: join(root, 'last-version.json'),
     serverLog: join(logs, 'server.log'),
     postgresLog: join(logs, 'postgres.log'),

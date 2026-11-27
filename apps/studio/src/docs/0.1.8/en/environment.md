@@ -128,6 +128,7 @@ Use [Authentication providers](/docs/auth-providers) before changing an issuer. 
 | `OIDC_INTERNAL_ISSUER_URL` | Optional | Keycloak server-side realm address. Generic OIDC does not derive endpoints from it. |
 | `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET` | Private deployment values | Provider administration service account. |
 | `TLS_CERT_PATH` | Optional | Public server certificate offered for central certificate download. |
+| `TRUSTED_CA_FILE` | Optional | The file of extra trusted certificates that Settings > Network manages. Must be the same file as `NODE_EXTRA_CA_CERTS`. |
 | `SECRETS_ENCRYPTION_KEY` | Base64, 32 decoded bytes | Saved-credential encryption key. Preserve existing value. |
 | `AUTH_DEV_BYPASS` | false | Explicit development authentication bypass. Production rejects true. |
 | `AUTH_DEV_USERNAME`, `AUTH_DEV_ROLES` | dev-admin, lab_admin | Actor for an explicitly enabled development bypass. |
@@ -140,7 +141,7 @@ Enable host-level capabilities only for the users and installations that need th
 | --- | --- | --- |
 | `WORKFLOW_CODE_ENABLED` | false | Permit Code node execution with host access. |
 | `WORKFLOW_CODE_TIMEOUT_MS`, `WORKFLOW_CODE_MEMORY_MB` | 5000, 128 | Code node time and memory limits. |
-| `WORKFLOW_HTTP_ALLOWLIST` | Empty | Hostnames allowed for workflow HTTP requests. |
+| `WORKFLOW_HTTP_ALLOWLIST` | Empty | Hostnames allowed for workflow HTTP requests. Settings > Network adds its own list to this one. |
 | `WORKFLOW_FILE_MAX_BYTES` | 52428800 | Workflow upload or webhook file limit. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | 100000 | Maximum accumulated loop output items. |
 | `WORKFLOW_FILE_ACCESS_ENABLED`, `WORKFLOW_FILE_ACCESS_ROOT` | false, empty | Host file access and its required folder root. |

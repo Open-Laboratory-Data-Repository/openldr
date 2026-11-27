@@ -1,10 +1,12 @@
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { pathsFor } from '../../standalone/src/state';
 import {
+  trustFileIn,
   launcherEnv,
   lineSplitter,
   parseEventLine,
@@ -115,6 +117,16 @@ describe('launcherEnv', () => {
     const base = { PATH: '/usr/bin', HOME: '/home/x' };
     expect(launcherEnv(base)).toEqual({ PATH: '/usr/bin', HOME: '/home/x', ELECTRON_RUN_AS_NODE: '1' });
     expect(base).toEqual({ PATH: '/usr/bin', HOME: '/home/x' });
+  });
+
+  it('adds NODE_EXTRA_CA_CERTS for the trust file', () => {
+    expect(launcherEnv({ PATH: '/usr/bin' }, '/data/trust/ca.pem')).toEqual({ PATH: '/usr/bin', ELECTRON_RUN_AS_NODE: '1', NODE_EXTRA_CA_CERTS: '/data/trust/ca.pem' });
+    // Set to nothing is not set.
+    expect(launcherEnv({ NODE_EXTRA_CA_CERTS: '' }, '/data/trust/ca.pem').NODE_EXTRA_CA_CERTS).toBe('/data/trust/ca.pem');
+  });
+
+  it('keeps a NODE_EXTRA_CA_CERTS the person set', () => {
+    expect(launcherEnv({ NODE_EXTRA_CA_CERTS: '/etc/ssl/ours.pem' }, '/data/trust/ca.pem').NODE_EXTRA_CA_CERTS).toBe('/etc/ssl/ours.pem');
   });
 });
 
@@ -306,6 +318,44 @@ describe('requestStop', () => {
       return child;
     }) as unknown as Spawn;
     expect(await requestStop(target, spawn)).toBe(1);
+  });
+});
+
+describe('the trust file', () => {
+  it('is where the launcher keeps it', () => {
+    // A copy of the launcher's path, since this package does not import the launcher. Pinned here.
+    expect(trustFileIn('/d')).toBe(pathsFor('/d').trustFile);
+  });
+
+  it('starts the launcher reading the trust file, and makes the file when missing', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'desktop-trust-'));
+    const trustFile = join(dir, 'trust', 'ca.pem');
+    const spawn = vi.fn(() => fakeChild());
+    startLauncher(target, 3990, { event: () => {}, stderrLine: () => {} }, spawn as unknown as Spawn, undefined, trustFile);
+    const options = (spawn.mock.calls[0] as unknown as [string, string[], { env: NodeJS.ProcessEnv }])[2];
+    expect(options.env).toEqual(launcherEnv(process.env, trustFile));
+    expect(readFileSync(trustFile, 'utf8')).toBe('');
+    // A file that is there is left as it is.
+    writeFileSync(trustFile, 'kept');
+    startLauncher(target, 3990, { event: () => {}, stderrLine: () => {} }, spawn as unknown as Spawn, undefined, trustFile);
+    expect(readFileSync(trustFile, 'utf8')).toBe('kept');
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('starts the launcher without it when the file cannot be made, and the launcher then sets it up itself', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'desktop-trust-'));
+    writeFileSync(join(dir, 'trust'), 'a file where the folder should be');
+    const spawn = vi.fn(() => fakeChild());
+    startLauncher(target, 3990, { event: () => {}, stderrLine: () => {} }, spawn as unknown as Spawn, undefined, join(dir, 'trust', 'ca.pem'));
+    const options = (spawn.mock.calls[0] as unknown as [string, string[], { env: NodeJS.ProcessEnv }])[2];
+    expect(options.env).toEqual(launcherEnv(process.env));
+    // A folder where the file itself should be is not a trust file either.
+    const other = mkdtempSync(join(tmpdir(), 'desktop-trust-'));
+    mkdirSync(join(other, 'trust', 'ca.pem'), { recursive: true });
+    startLauncher(target, 3990, { event: () => {}, stderrLine: () => {} }, spawn as unknown as Spawn, undefined, join(other, 'trust', 'ca.pem'));
+    expect((spawn.mock.calls[1] as unknown as [string, string[], { env: NodeJS.ProcessEnv }])[2].env).toEqual(launcherEnv(process.env));
+    rmSync(other, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
   });
 });
 

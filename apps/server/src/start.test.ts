@@ -6,10 +6,12 @@ import type { Logger } from '@openldr/core';
 // boot against Postgres is proved by hand (see the Task 4 report), not here.
 const fakes = vi.hoisted(() => {
   const calls: string[] = [];
-  const state = { listenError: undefined as Error | undefined, ingestError: undefined as Error | undefined };
+  const state = { listenError: undefined as Error | undefined, ingestError: undefined as Error | undefined, recordError: undefined as Error | undefined };
+  const extra = (): string[] => [];
   const ctx = {
     logger: { warn: () => {}, info: () => {}, error: () => {} },
     audit: {},
+    appSettings: { name: 'the app settings' },
     updateCheck: {},
     reportScheduler: { reconcile: async () => {} },
     pluginScheduleRunner: { reconcile: async () => {} },
@@ -33,7 +35,7 @@ const fakes = vi.hoisted(() => {
     startWorker: () => ({ stop: async () => { calls.push('worker stopped'); } }),
     close: async () => { calls.push('ingest closed'); },
   };
-  return { calls, state, ctx, app, ingest };
+  return { calls, state, ctx, app, ingest, extra };
 });
 
 vi.mock('@openldr/bootstrap', () => ({
@@ -48,6 +50,11 @@ vi.mock('@openldr/bootstrap', () => ({
   seedEssentials: vi.fn(async () => ({ formsSeeded: 0, workflowsSeeded: 0, connectorsSeeded: 0, valueSetsImported: 0 })),
   drainCrashMarkersToAudit: vi.fn(async () => {}),
   startUpdateCheck: vi.fn(() => () => { fakes.calls.push('update check stopped'); }),
+  nodeExtraCertificates: vi.fn(() => fakes.extra),
+  recordLoadedTrust: vi.fn(async () => {
+    fakes.calls.push('trust recorded');
+    if (fakes.state.recordError) throw fakes.state.recordError;
+  }),
 }));
 vi.mock('./app', () => ({ buildApp: vi.fn(async () => { fakes.calls.push('app built'); return fakes.app; }) }));
 vi.mock('./register-event-handlers', () => ({ registerEventHandlers: vi.fn(async () => {}) }));
@@ -65,6 +72,7 @@ beforeEach(() => {
   fakes.calls.length = 0;
   fakes.state.listenError = undefined;
   fakes.state.ingestError = undefined;
+  fakes.state.recordError = undefined;
 });
 
 describe('importing start', () => {
@@ -100,6 +108,31 @@ describe('startServer', () => {
     expect(server.context).toBe(fakes.ctx);
     await server.close();
     listen.mockRestore();
+  });
+
+  it('records the extra certificates this process loaded, before it listens', async () => {
+    const bootstrap = await import('@openldr/bootstrap');
+    const { startServer } = await import('./start');
+    const before = Date.now();
+    const server = await startServer(cfg, logger);
+    const [settings, extra, now] = vi.mocked(bootstrap.recordLoadedTrust).mock.lastCall!;
+    expect(settings).toBe(fakes.ctx.appSettings);
+    expect(extra).toBe(fakes.extra);
+    expect(now.getTime()).toBeGreaterThanOrEqual(before);
+    expect(fakes.calls.indexOf('trust recorded')).toBeGreaterThan(-1);
+    expect(fakes.calls.indexOf('trust recorded')).toBeLessThan(fakes.calls.indexOf('listen'));
+    await server.close();
+  });
+
+  it('does not start when the record cannot be written, and closes what it opened', async () => {
+    // The record of an earlier start would stay, and a certificate that start had loaded would
+    // show as in use on this one.
+    fakes.state.recordError = new Error('settings table is not there');
+    const { startServer } = await import('./start');
+    await expect(startServer(cfg, logger)).rejects.toThrow('settings table is not there');
+    expect(fakes.calls).not.toContain('listen');
+    const after = fakes.calls.slice(fakes.calls.indexOf('trust recorded') + 1);
+    expect([...after].sort()).toEqual(['app closed', 'context closed', 'ingest closed', 'update check stopped', 'worker stopped'].sort());
   });
 
   it('asks for the three queue workers, the sync start and the import driver only the server runs', async () => {

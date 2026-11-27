@@ -854,6 +854,35 @@ mkdir -p "$DIR/config/nginx/certs" "$DIR/config/nginx/certs/central" "$DIR/confi
 # api image's node v22). To trust a central, overwrite this file with its certificate and restart
 # the api — no .env or compose edit needed.
 [ -f "$DIR/config/nginx/certs/central/fullchain.pem" ] || : > "$DIR/config/nginx/certs/central/fullchain.pem"
+
+# The trusted certificates, changed in Settings > Network and with `openldr trust`. The api mounts
+# this folder and reads config/trust/ca.pem. An empty file means nothing extra is trusted.
+#
+# Once only, an install made before this folder existed brings its central certificate along.
+# The marker says that step is done. Without it, a later run would copy the old file again over
+# a list the administrator has since changed, and an empty list is a real state. The copy goes
+# through a temporary name and the marker is written last, so a run that stops half way copies
+# again next time.
+TRUST_DIR="$DIR/config/trust"
+OLD_CENTRAL="$DIR/config/nginx/certs/central/fullchain.pem"
+# 1 once the folder holds the list and the marker. Only then may .env be moved to it, below.
+TRUST_READY=0
+if mkdir -p "$TRUST_DIR" 2>/dev/null && [ -w "$TRUST_DIR" ]; then
+  if [ ! -f "$TRUST_DIR/.migrated" ]; then
+    if [ -s "$OLD_CENTRAL" ]; then
+      cp "$OLD_CENTRAL" "$TRUST_DIR/ca.pem.tmp" && chmod 644 "$TRUST_DIR/ca.pem.tmp" && mv "$TRUST_DIR/ca.pem.tmp" "$TRUST_DIR/ca.pem" \
+        || err "could not copy the central certificate into $TRUST_DIR"
+      echo "→ Copied the central certificate into config/trust/ca.pem. It is now managed in Settings > Network."
+    fi
+    # Readable by the api's user whatever this shell's umask is. Certificates are public.
+    [ -f "$TRUST_DIR/ca.pem" ] || { : > "$TRUST_DIR/ca.pem" && chmod 644 "$TRUST_DIR/ca.pem"; } || err "could not make $TRUST_DIR/ca.pem"
+    : > "$TRUST_DIR/.migrated" || err "could not write $TRUST_DIR/.migrated"
+  fi
+  [ -f "$TRUST_DIR/ca.pem" ] || { : > "$TRUST_DIR/ca.pem" && chmod 644 "$TRUST_DIR/ca.pem"; } || err "could not make $TRUST_DIR/ca.pem"
+  TRUST_READY=1
+else
+  echo "⚠ Cannot write to $TRUST_DIR as this user. Left it, and the trusted certificate settings in .env, as they are."
+fi
 fetch() { curl -fsSL "$REPO_RAW/$1" -o "$2" || err "failed to download $1"; }
 fetch "deploy/install/docker-compose.yml" "$DIR/docker-compose.yml"
 # The realm is imported by Keycloak only, so a local install does not download it.
@@ -1020,7 +1049,9 @@ GARAGE_RPC_SECRET=$GARAGE_RPC
 GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN
 $AUTH_ENV_BLOCK
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
-NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem
+TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem
+NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem
+OPENLDR_TRUST_GID=$(id -g)
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
 MIGRATE_ON_START=true
 SEED_ON_START=$SEED_ON_START_VAL
@@ -1050,6 +1081,29 @@ else
         echo "→ Added the keycloak profile to COMPOSE_PROFILES in .env, so Keycloak keeps running"
         ;;
     esac
+  fi
+  # An install made before the trust folder names the old single file. Move exactly that default
+  # to the new path, so Settings > Network can manage the list. Any other value is the person's
+  # own choice and stays: the page then shows the list as set outside OpenLDR. Only when the
+  # folder above is ready: with the path moved and no copy, the api would start on an empty list
+  # and stop trusting the central. The whole new file is built first and put in place in one
+  # step, so a run that stops half way leaves the old file. Line ends are kept as they are. The
+  # check is on the exact text (grep -F): a pattern would take the dot for any character.
+  if [ "$TRUST_READY" -eq 1 ] && tr -d '\r' < "$DIR/.env" | grep -Fqx 'NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem'; then
+    ( umask 077; awk -v gid="$(id -g)" '
+        { cr = ""; line = $0; if (sub(/\r$/, "", line)) cr = "\r" }
+        line == "NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem" { line = "NODE_EXTRA_CA_CERTS=/etc/openldr/trust/ca.pem"; eol = cr }
+        line ~ /^TRUSTED_CA_FILE=/ { has_file = 1 }
+        line ~ /^OPENLDR_TRUST_GID=/ { has_gid = 1 }
+        { print line cr }
+        END {
+          # New lines end as the moved line ends.
+          if (!has_file) print "TRUSTED_CA_FILE=/etc/openldr/trust/ca.pem" eol
+          if (!has_gid) print "OPENLDR_TRUST_GID=" gid eol
+        }
+      ' "$DIR/.env" > "$DIR/.env.tmp" ) || err "could not prepare the new .env"
+    mv "$DIR/.env.tmp" "$DIR/.env" || err "could not replace .env"
+    echo "→ Moved NODE_EXTRA_CA_CERTS in .env to config/trust/ca.pem, so Settings > Network manages the trusted certificates"
   fi
 fi
 

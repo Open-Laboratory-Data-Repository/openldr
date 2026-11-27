@@ -14,6 +14,7 @@ export const SUB_NAV: SubNavItem[] = [
   { labelKey: 'settings.subNav.sites', to: '/settings/sites', caps: ['sync.manage'] },
   { labelKey: 'settings.subNav.sync', to: '/settings/sync', caps: ['sync.view'] },
   { labelKey: 'settings.subNav.connectors', to: '/settings/connectors', caps: ['connectors.manage'] },
+  { labelKey: 'settings.subNav.network', to: '/settings/network', caps: ['network.manage'] },
   { labelKey: 'settings.subNav.marketplace', to: '/settings/marketplace', caps: ['marketplace.view'] },
   { labelKey: 'settings.subNav.roles', to: '/settings/roles', caps: ['roles.view'] },
   { labelKey: 'settings.subNav.layouts', to: '/settings/layouts', caps: ['settings.edit_general'] },

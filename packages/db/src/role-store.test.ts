@@ -178,6 +178,18 @@ describe('RoleStore', () => {
     await db.destroy();
   });
 
+  it('gives an existing Administrator role network.manage at the next start', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await seedStaleAdmin(db, ['network.manage']);
+
+    const result = await store.seedSystemRoles();
+
+    expect((await store.getBySlug('lab_admin'))!.capabilities).toContain('network.manage');
+    expect(result.granted).toContainEqual({ slug: 'lab_admin', roleId: 'r-admin', capability: 'network.manage' });
+    await db.destroy();
+  });
+
   // lab_admin is LOCKED — update() throws for it, so an absence can never be a deliberate revoke.
   // It is therefore reconciled unconditionally, even though the ledger has seen the key.
   it('reconciles lab_admin even when the key is already in the ledger', async () => {

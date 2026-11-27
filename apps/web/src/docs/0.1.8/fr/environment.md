@@ -147,6 +147,7 @@ Keycloak est le choix par défaut. L'OIDC générique utilise la découverte et 
 | `OIDC_INTERNAL_ISSUER_URL` | URL de base interne du realm, pour Keycloak uniquement. L'OIDC générique ignore cette valeur. |
 | `OIDC_INTERNAL_JWKS_URL` | Remplacement explicite du point de terminaison interne des clés de signature. Ne change pas l'émetteur attendu. |
 | `TLS_CERT_PATH` | Chemin du certificat TLS public de ce serveur (PEM). Quand elle est définie, la page Sites peut proposer le certificat au téléchargement, pour qu'un laboratoire distant fasse confiance à un serveur central auto-signé. L'installateur monte le certificat et définit cette variable automatiquement. |
+| `TRUSTED_CA_FILE` | Chemin du fichier PEM unique des certificats de confiance supplémentaires que gère OpenLDR. Il doit désigner le même fichier que `NODE_EXTRA_CA_CERTS`, que Node lit au démarrage du serveur. Si les deux diffèrent, ou si cette variable n'est pas définie, la liste est en lecture seule. Un certificat ajouté au fichier est utilisé après le prochain redémarrage. |
 | `OIDC_AUDIENCE` | Audience attendue du jeton. |
 | `OIDC_WEB_CLIENT_ID` | ID du client public avec lequel l'application studio s'authentifie. |
 | `OIDC_SCOPES` | Portées demandées par l'application studio. Vaut `openid profile email` par défaut. Doit inclure `openid`. |
@@ -156,6 +157,14 @@ Keycloak est le choix par défaut. L'OIDC générique utilise la découverte et 
 | `KEYCLOAK_ADMIN_PASSWORD` | Mot de passe de l'administrateur Keycloak (généré). |
 | `KEYCLOAK_ADMIN_CLIENT_ID` | ID du client utilisé pour les appels à l'API d'administration. |
 | `KEYCLOAK_ADMIN_CLIENT_SECRET` | Secret du client pour les appels à l'API d'administration. |
+
+### Gérer les certificats de confiance sur une installation antérieure à Paramètres > Réseau
+
+Une nouvelle installation définit `TRUSTED_CA_FILE` et `NODE_EXTRA_CA_CERTS` sur `/etc/openldr/trust/ca.pem`, et Paramètres > Réseau gère ce fichier. Une installation plus ancienne désigne `/etc/ssl/central-ca.pem`, et la page affiche la liste sans vous laisser la modifier.
+
+Relancez l'installateur dans le dossier d'installation. Il garde votre `.env`, copie une seule fois l'ancien certificat central dans `config/trust/ca.pem`, et ne déplace le chemin que si `.env` contient encore l'ancienne valeur par défaut. Un chemin que vous avez choisi vous-même reste tel quel. Redémarrez ensuite la pile avec `docker compose up -d`.
+
+Sur une installation Docker, la commande `openldr` n'a pas de terminal, donc `openldr trust add` ne peut pas poser sa question. Donnez-lui `--fingerprint`. Avec un fichier et sans `--fingerprint`, la commande affiche l'empreinte du certificat et n'enregistre rien. Avec `--address` et sans `--fingerprint`, elle s'arrête avant de contacter le serveur.
 
 ## Réglages réservés au développement
 
@@ -229,7 +238,7 @@ Ces variables existent pour que le développement local et les tests de bout en 
 | `WORKFLOW_CODE_ENABLED` | `false` | Autorise l'exécution des nœuds Code. Si elle est désactivée, les nœuds Code refusent de s'exécuter. |
 | `WORKFLOW_CODE_TIMEOUT_MS` | `5000` | Durée maximale d'une exécution de nœud Code, en millisecondes. |
 | `WORKFLOW_CODE_MEMORY_MB` | `128` | Mémoire maximale d'une exécution de nœud Code, en Mo. |
-| `WORKFLOW_HTTP_ALLOWLIST` | vide | Noms d'hôte, séparés par des virgules, que le nœud HTTP Request peut appeler. Vide signifie que tous les hôtes sont refusés. |
+| `WORKFLOW_HTTP_ALLOWLIST` | vide | Noms d'hôte, séparés par des virgules, que le nœud HTTP Request peut appeler. Un administrateur en ajoute d'autres dans Paramètres > Réseau, et les deux listes s'utilisent ensemble. Si les deux sont vides, tous les hôtes sont refusés, sauf cet OpenLDR lui-même quand son interrupteur est activé dans Paramètres > Réseau. Un hôte nommé ici ne peut pas être retiré dans l'application. |
 | `WORKFLOW_FILE_MAX_BYTES` | `52428800` (50 Mo) | Plus gros fichier accepté pour un envoi lors d'une exécution de flux, ou pour le corps d'un webhook. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | `100000` | Nombre maximal d'éléments qu'un seul nœud de boucle peut collecter. |
 | `WORKFLOW_FILE_ACCESS_ENABLED` | `false` | Autorise le nœud Read/Write File à toucher des fichiers sur le serveur. |

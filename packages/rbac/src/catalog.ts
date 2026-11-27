@@ -63,6 +63,8 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   { key: 'marketplace.manage', group: 'marketplace', label: 'Manage marketplace', description: 'Install, publish, enable, disable, and remove plugins and registries.' },
   // Connectors
   { key: 'connectors.manage', group: 'connectors', label: 'Manage connectors', description: 'Configure external database and service connectors.' },
+  // Network
+  { key: 'network.manage', group: 'network', label: 'Manage network trust', description: 'Add trusted certificates and name the hosts a workflow may call.' },
   // Sync
   { key: 'sync.view', group: 'sync', label: 'View sync', description: 'See lab⇄central sync status and activity.' },
   { key: 'sync.manage', group: 'sync', label: 'Manage sync', description: 'Configure sync, enroll sites, and resolve divergences.' },
@@ -98,6 +100,7 @@ const GROUP_LABELS: Record<string, string> = {
   terminology: 'Terminology',
   marketplace: 'Marketplace',
   connectors: 'Connectors',
+  network: 'Network',
   sync: 'Sync',
   settings: 'Settings',
   data_exposure: 'Data Exposure',

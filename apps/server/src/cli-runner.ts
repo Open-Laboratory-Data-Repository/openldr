@@ -74,17 +74,20 @@ export function resolveCliEntry(
  * The settings that name a file or folder. The child changes into the request folder before it
  * reads its config, so a relative value (or a relative default, such as PLUGIN_CRASH_LOG_DIR's)
  * would land inside a folder the server deletes. The child gets the server's own value instead,
- * made absolute against the server's working folder. WEB_DIST_DIR is read from the environment,
- * not the config schema. cli-runner.test.ts fails when the schema gains a setting named like a path
+ * made absolute against the server's working folder. WEB_DIST_DIR and NODE_EXTRA_CA_CERTS are read
+ * from the environment, not the config schema. NODE_EXTRA_CA_CERTS is here because the trust
+ * service compares it with TRUSTED_CA_FILE, and the child's own Node reads it too. cli-runner.test.ts fails when the schema gains a setting named like a path
  * (ending in _DIR, _PATH, _ROOT or _FILE) that is on neither this list nor NOT_PATH_SETTINGS.
  */
 export const PATH_SETTINGS = [
   'BLOB_DIR',
   'MARKETPLACE_LOCAL_REGISTRY_ROOT',
   'MARKETPLACE_REGISTRY_DIR',
+  'NODE_EXTRA_CA_CERTS',
   'PLUGIN_CRASH_LOG_DIR',
   'TERMINOLOGY_WORK_DIR',
   'TLS_CERT_PATH',
+  'TRUSTED_CA_FILE',
   'WEB_DIST_DIR',
   'WORKFLOW_FILE_ACCESS_ROOT',
 ] as const;

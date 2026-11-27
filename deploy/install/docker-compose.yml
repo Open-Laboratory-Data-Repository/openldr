@@ -16,6 +16,12 @@ services:
       # and restart the api. The file MUST exist — Docker turns a missing bind-mount source into a
       # directory and the api then fails to start.
       - ./config/nginx/certs/central/fullchain.pem:/etc/ssl/central-ca.pem:ro
+      # The certificates this OpenLDR trusts for its own outgoing HTTPS calls, changed in
+      # Settings > Network and with `openldr trust`. TRUSTED_CA_FILE and NODE_EXTRA_CA_CERTS both
+      # name /etc/openldr/trust/ca.pem. A folder, not a single file: the list is replaced by
+      # renaming a new file over the old one, which a single-file mount does not follow. The mount
+      # above stays for an install whose .env still names /etc/ssl/central-ca.pem.
+      - ./config/trust:/etc/openldr/trust
       # Shared working directory for the `openldr` CLI wrapper, which runs
       # `docker compose exec -w / api …`. File-taking commands (`ingest <file>`,
       # `sync export --out`, `artifact keygen --out`) then name paths that exist on BOTH
@@ -27,12 +33,30 @@ services:
       # (10001) can't write into a ./data directory owned by the installing user.
       - ./data:/data
     depends_on:
+      trust-init: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       storage: { condition: service_healthy }
       # `required: false` (Compose 2.20 or later): wait for Keycloak when its profile is on,
       # start without it when it is off (AUTH_ADAPTER=local).
       keycloak: { condition: service_healthy, required: false }
     restart: unless-stopped
+
+  # Runs once before the api, as root, and ends. It gives the trust folder to the api's user
+  # (uid 10001, apps/server/Dockerfile), which must write there, and to the group of the person
+  # who installed, because on Linux the `openldr` wrapper runs the CLI as that person. The setgid
+  # bit keeps that group on files made later. The certificate file is opened to both too: one
+  # copied from an older install may be readable by its owner only. It fails, and the api does
+  # not start, when ca.pem is a folder or a link, or cannot be made. It reaches no network.
+  trust-init:
+    image: ghcr.io/open-laboratory-data-repository/openldr-api:${OPENLDR_VERSION:-latest}
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "set -eu; if [ -L /trust/ca.pem ] || { [ -e /trust/ca.pem ] && [ ! -f /trust/ca.pem ]; }; then echo '/trust/ca.pem is not a plain file. Remove it, then start again.' >&2; exit 1; fi; [ -f /trust/ca.pem ] || : > /trust/ca.pem; chown 10001:${OPENLDR_TRUST_GID:-10001} /trust /trust/ca.pem; chmod 2775 /trust; chmod 0664 /trust/ca.pem"
+    volumes:
+      - ./config/trust:/trust
+    restart: "no"
 
   studio:
     image: ghcr.io/open-laboratory-data-repository/openldr-studio:${OPENLDR_VERSION:-latest}

@@ -157,6 +157,7 @@ O Keycloak é o modo por omissão. O OIDC genérico usa descoberta e tokens de a
 | `OIDC_INTERNAL_ISSUER_URL` | URL interno base do realm, apenas para Keycloak. O OIDC genérico ignora este valor. |
 | `OIDC_INTERNAL_JWKS_URL` | Substitui explicitamente o endereço interno das chaves de assinatura. Não altera o emissor esperado. |
 | `TLS_CERT_PATH` | Caminho do certificado TLS público deste servidor (PEM). Quando definido, a página Sites permite transferi-lo, para que um laboratório remoto confie num servidor central autoassinado. O instalador monta o certificado e define esta variável automaticamente. |
+| `TRUSTED_CA_FILE` | Caminho do único ficheiro PEM de certificados de confiança adicionais gerido pelo OpenLDR. Tem de indicar o mesmo ficheiro que `NODE_EXTRA_CA_CERTS`, que o Node lê quando o servidor arranca. Se os dois forem diferentes, ou se esta variável não estiver definida, a lista é só de leitura. Um certificado acrescentado ao ficheiro é usado após o próximo reinício. |
 | `OIDC_AUDIENCE` | Audiência esperada do token. |
 | `OIDC_WEB_CLIENT_ID` | ID do cliente público com que o Studio se autentica. |
 | `OIDC_SCOPES` | Scopes pedidos pelo Studio. Usa `openid profile email` por omissão. Tem de incluir `openid`. |
@@ -166,6 +167,14 @@ O Keycloak é o modo por omissão. O OIDC genérico usa descoberta e tokens de a
 | `KEYCLOAK_ADMIN_PASSWORD` | Palavra-passe do administrador do Keycloak (gerada). |
 | `KEYCLOAK_ADMIN_CLIENT_ID` | ID do cliente usado nas chamadas à API de administração. |
 | `KEYCLOAK_ADMIN_CLIENT_SECRET` | Segredo do cliente usado nas chamadas à API de administração. |
+
+### Gerir os certificados de confiança numa instalação anterior a Definições > Rede
+
+Uma instalação nova define `TRUSTED_CA_FILE` e `NODE_EXTRA_CA_CERTS` como `/etc/openldr/trust/ca.pem`, e Definições > Rede gere esse ficheiro. Uma instalação mais antiga indica `/etc/ssl/central-ca.pem`, e a página mostra a lista sem o deixar alterá-la.
+
+Execute de novo o instalador na pasta de instalação. Ele mantém o seu `.env`, copia uma única vez o antigo certificado central para `config/trust/ca.pem`, e só move o caminho se o `.env` ainda tiver o valor predefinido antigo. Um caminho que tenha escolhido fica como está. Depois volte a arrancar a pilha com `docker compose up -d`.
+
+Numa instalação Docker, o comando `openldr` não tem terminal, pelo que `openldr trust add` não pode fazer a sua pergunta. Indique `--fingerprint`. Com um ficheiro e sem `--fingerprint`, o comando mostra a impressão digital do certificado e não guarda nada. Com `--address` e sem `--fingerprint`, para antes de contactar o servidor.
 
 ## Definições apenas para desenvolvimento
 
@@ -253,7 +262,7 @@ Numa pilha instalada, o [instalador](/docs/install) prepara-o a partir das opç�
 | `WORKFLOW_CODE_ENABLED` | `false` | Permitir a execução de nós Code. Desligado, um nó Code recusa executar. |
 | `WORKFLOW_CODE_TIMEOUT_MS` | `5000` | Tempo máximo de uma execução de um nó Code, em milissegundos. |
 | `WORKFLOW_CODE_MEMORY_MB` | `128` | Memória máxima de uma execução de um nó Code, em MB. |
-| `WORKFLOW_HTTP_ALLOWLIST` | vazio | Nomes de anfitrião, separados por vírgulas, que o nó HTTP Request pode chamar. Vazio, todos os anfitriões são recusados. |
+| `WORKFLOW_HTTP_ALLOWLIST` | vazio | Nomes de anfitrião, separados por vírgulas, que o nó HTTP Request pode chamar. Um administrador acrescenta outros em Definições > Rede, e as duas listas usam-se em conjunto. Com ambas vazias, todos os anfitriões são recusados, exceto este próprio OpenLDR quando o interruptor dele está ligado em Definições > Rede. Um anfitrião indicado aqui não pode ser removido na aplicação. |
 | `WORKFLOW_FILE_MAX_BYTES` | `52428800` (50 MB) | Tamanho máximo de um ficheiro enviado a uma execução de fluxo de trabalho ou de um corpo de webhook. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | `100000` | Número máximo de itens que um único nó de ciclo pode recolher. |
 | `WORKFLOW_FILE_ACCESS_ENABLED` | `false` | Permitir que o nó Read/Write File aceda a ficheiros no servidor. |

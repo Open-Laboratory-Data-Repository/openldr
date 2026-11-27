@@ -19,6 +19,7 @@ import { NotificationPreferences } from '@/pages/settings/NotificationPreference
 import { DistributedSync } from '@/pages/settings/DistributedSync';
 import { Marketplace } from '@/pages/settings/Marketplace';
 import { Connectors } from '@/pages/settings/Connectors';
+import { Network } from '@/pages/settings/Network';
 import { Forms } from './pages/Forms';
 import { FormCapture } from './pages/FormCapture';
 import { FormBuilderPage } from './forms-builder/FormBuilderPage';
@@ -82,6 +83,7 @@ export function App() {
         <Route path="sync" element={<RequireCapability cap="sync.view"><DistributedSync /></RequireCapability>} />
         <Route path="marketplace" element={<RequireCapability cap="marketplace.view"><Marketplace /></RequireCapability>} />
         <Route path="connectors" element={<RequireCapability cap="connectors.manage"><Connectors /></RequireCapability>} />
+        <Route path="network" element={<RequireCapability cap="network.manage"><Network /></RequireCapability>} />
         <Route path="roles" element={<RequireCapability cap="roles.view"><Roles /></RequireCapability>} />
         <Route path="setup" element={<RequireCapability cap="settings.view"><SetupChecks /></RequireCapability>} />
         <Route path="layouts" element={<RequireCapability cap="settings.edit_general"><Layouts /></RequireCapability>} />

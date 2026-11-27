@@ -41,4 +41,48 @@ describe('createAppSettingsStore', () => {
     // value is still stored — only the capture is suppressed.
     expect((await store.get('sync.central_url'))?.value).toBe('https://central.example');
   });
+
+  describe('update', () => {
+    it('gives the change null when the key is not there, and stores what it returns', async () => {
+      const store = createAppSettingsStore(db);
+      const seen: Array<string | null> = [];
+      await store.update('workflows.http_hosts', (old) => { seen.push(old); return '["a"]'; }, 'admin');
+      expect(seen).toEqual([null]);
+      expect(await store.get('workflows.http_hosts')).toMatchObject({ value: '["a"]', updatedBy: 'admin' });
+    });
+
+    it('gives the change the stored value, and replaces it', async () => {
+      const store = createAppSettingsStore(db);
+      await store.set('workflows.http_hosts', '["a"]', 'admin');
+      const seen: Array<string | null> = [];
+      await store.update('workflows.http_hosts', (old) => { seen.push(old); return '["a","b"]'; }, 'grace');
+      expect(seen).toEqual(['["a"]']);
+      expect(await store.get('workflows.http_hosts')).toMatchObject({ value: '["a","b"]', updatedBy: 'grace' });
+    });
+
+    it('stores nothing when the change throws', async () => {
+      const store = createAppSettingsStore(db);
+      await store.set('workflows.http_hosts', '["a"]', 'admin');
+      await expect(store.update('workflows.http_hosts', () => { throw new Error('no'); }, 'grace')).rejects.toThrow('no');
+      expect(await store.get('workflows.http_hosts')).toMatchObject({ value: '["a"]', updatedBy: 'admin' });
+      await expect(store.update('other.key', () => { throw new Error('no'); }, 'grace')).rejects.toThrow('no');
+      expect(await store.get('other.key')).toBeNull();
+    });
+
+    it('one update after another sees the first one', async () => {
+      const store = createAppSettingsStore(db);
+      const add = (h: string) => store.update('k', (old) => JSON.stringify([...(old ? (JSON.parse(old) as string[]) : []), h]), null);
+      await add('a');
+      await add('b');
+      expect((await store.get('k'))?.value).toBe('["a","b"]');
+    });
+
+    it('captures a center-owned key, like set does', async () => {
+      const store = createAppSettingsStore(db, referenceCapture);
+      await store.update('dashboard.raw_sql', () => 'true', 'admin');
+      expect(await refLog(db, 'dashboard.raw_sql')).toHaveLength(1);
+      await store.update('workflows.http_hosts', () => '[]', 'admin');
+      expect(await refLog(db, 'workflows.http_hosts')).toHaveLength(0);
+    });
+  });
 });

@@ -146,18 +146,62 @@ export function parseAllowlist(raw: string): string[] {
   return raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
+/**
+ * What an HTTP step may call. `hosts` match the host name on any port and scheme. `origins` match
+ * scheme, host and port exactly, such as 'http://127.0.0.1:3000'.
+ */
+export interface HttpAllowRule {
+  hosts: string[];
+  origins: string[];
+}
+
+interface Allowed {
+  hosts: Set<string>;
+  origins: Set<string>;
+}
+
+/**
+ * A host in the one form used to compare: lower case, and an IPv6 address without brackets and
+ * in the short form a URL gives it. A person may write `0:0:0:0:0:0:0:1` or `[::1]`; the URL of a
+ * request always gives `[::1]`. Without this, an address typed in long form would never match.
+ */
+export function canonicalHost(raw: string): string {
+  const text = raw.trim().toLowerCase().replace(/^\[(.*)\]$/, '$1');
+  if (!text.includes(':')) return text;
+  try {
+    return new URL(`http://[${text}]`).hostname.replace(/^\[(.*)\]$/, '$1');
+  } catch {
+    return text;
+  }
+}
+
+function prepare(allow: string | HttpAllowRule): Allowed {
+  const rule = typeof allow === 'string' ? { hosts: parseAllowlist(allow), origins: [] } : allow;
+  const origins = new Set<string>();
+  for (const raw of rule.origins) {
+    try {
+      const u = new URL(raw);
+      // `origin` is the URL's own normal form: lower case, no path, no default port.
+      if (u.protocol === 'http:' || u.protocol === 'https:') origins.add(u.origin);
+    } catch {
+      // Not a URL: it allows nothing.
+    }
+  }
+  return { hosts: new Set(rule.hosts.map(canonicalHost).filter(Boolean)), origins };
+}
+
 const MAX_REDIRECTS = 5;
 
 /**
- * Validate a single hop's URL: scheme must be http/https, and the hostname
- * must be on the allow-list. Returns the parsed URL.
+ * Validate a single hop's URL: scheme must be http/https, and either the hostname is an allowed
+ * host or the origin (scheme, host and port) is an allowed origin. Returns the parsed URL.
  *
  * NOTE (residual risk): the check is host-based and operator-controlled. It
  * does NOT defend against DNS-rebinding — an allow-listed hostname that resolves
  * to an internal/loopback IP would still pass. Resolve-and-pin (checking the
  * resolved IP against private/link-local ranges) is a possible future hardening.
  */
-function validateHop(rawUrl: string, allow: string[]): URL {
+function validateHop(rawUrl: string, allow: Allowed): URL {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
@@ -167,12 +211,12 @@ function validateHop(rawUrl: string, allow: string[]): URL {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error(`HTTP Request: unsupported URL scheme: ${parsed.protocol}`);
   }
-  const host = parsed.hostname.toLowerCase();
-  if (!allow.includes(host)) throw new Error(`HTTP host not allowed: ${host}`);
+  const host = canonicalHost(parsed.hostname);
+  if (!allow.hosts.has(host) && !allow.origins.has(parsed.origin)) throw new Error(`HTTP host not allowed: ${host}`);
   return parsed;
 }
 
-/** Drop sensitive auth headers (case-insensitively) before a cross-host hop. */
+/** Drop sensitive auth headers (case-insensitively) before a hop to another origin. */
 function stripSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(headers)) {
@@ -196,19 +240,19 @@ function dropBodyHeaders(headers: Record<string, string>): Record<string, string
 }
 
 /**
- * fetch wrapper that rejects any host not on the comma-separated allow-list
- * (SSRF guard). Redirects are followed MANUALLY so every hop — the initial URL
+ * fetch wrapper that rejects any URL the allow rule does not cover (SSRF guard). `allow` is a rule,
+ * or the old comma-separated host list, which means those hosts and no origins. Redirects are followed MANUALLY so every hop — the initial URL
  * and each redirect target — is revalidated against the allow-list and scheme
  * check; fetch is never allowed to auto-follow. `fetchImpl` is injectable for
  * tests.
  */
 export async function guardedFetch(
   req: HttpRequest,
-  allowlistRaw: string,
+  allowRule: string | HttpAllowRule,
   fetchImpl: typeof fetch = fetch,
 ): Promise<HttpResponse> {
   if (!req.url) throw new Error('HTTP Request: URL is required');
-  const allow = parseAllowlist(allowlistRaw);
+  const allow = prepare(allowRule);
 
   let currentUrl = validateHop(req.url, allow);
   let method = (req.method ?? 'GET').toUpperCase();
@@ -246,8 +290,9 @@ export async function guardedFetch(
     }
     // 307/308 (and 301/302 already-GET) preserve method + body as-is.
 
-    // Cross-host hop: strip sensitive request headers before forwarding.
-    if (validated.hostname.toLowerCase() !== currentUrl.hostname.toLowerCase()) {
+    // A hop to another origin (scheme, host or port): strip sensitive request headers first.
+    // Another port of the same host is another program, and http is not https.
+    if (validated.origin !== currentUrl.origin) {
       headers = stripSensitiveHeaders(headers);
     }
 

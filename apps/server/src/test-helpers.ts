@@ -550,6 +550,8 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     pluginHost: {} as never,
     imports: {} as never,
     connectorAccess: {} as never,
+    trust: {} as never,
+    workflowHosts: {} as never,
     importCopies: {} as never,
     importChecks: {} as never,
     pluginRemoval: {} as never,

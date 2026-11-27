@@ -118,6 +118,10 @@ export const ConfigSchema = z
     // Filesystem path to this server's public TLS certificate (PEM). When set, the Sites page can
     // offer it for download so a remote lab can trust this central's self-signed cert. Optional.
     TLS_CERT_PATH: z.string().optional(),
+    // The one PEM file of extra trusted certificates that Settings > Network and `openldr trust`
+    // manage. Node must be started with NODE_EXTRA_CA_CERTS naming the same file, or the page is
+    // read-only. Unset on an install made before this existed.
+    TRUSTED_CA_FILE: z.string().optional(),
     KEYCLOAK_ADMIN_CLIENT_ID: z.string().min(1).optional(),
     KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().min(1).optional(),
 

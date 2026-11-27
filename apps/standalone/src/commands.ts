@@ -164,6 +164,12 @@ export function databaseStoppedMessage(postgresLog: string): string {
  */
 const FOREIGN_PREFIXES = ['OIDC_', 'KEYCLOAK_', 'S3_', 'MSSQL_', 'MYSQL_'];
 const FOREIGN_KEYS = new Set(['IDENTITY_ADMIN_ADAPTER', 'AUTH_DEV_USERNAME', 'AUTH_DEV_ROLES']);
+/**
+ * Keys only the launcher may set. One the shell had is dropped, and the launcher's own value, when
+ * it gives one, is set after. TRUSTED_CA_FILE: the launcher gives it only when it started Node on
+ * its own trust file. A value from the shell could name the person's own file as editable.
+ */
+const LAUNCHER_ONLY_KEYS = new Set(['TRUSTED_CA_FILE']);
 
 // ---------------------------------------------------------------------------------------------
 // Shared helpers
@@ -201,7 +207,7 @@ export function cliEntryFile(appDir = resolve(dirname(fileURLToPath(import.meta.
   return join(appDir, 'dist', 'cli.js');
 }
 
-function dataPaths(dataDir: string | undefined): StandalonePaths {
+export function dataPaths(dataDir: string | undefined): StandalonePaths {
   return pathsFor(resolveDataDir({ flag: dataDir, env: process.env, platform: process.platform, homedir: homedir() }));
 }
 
@@ -212,7 +218,7 @@ function dataPaths(dataDir: string | undefined): StandalonePaths {
  */
 export function applyEnvironment(env: Record<string, string>): void {
   for (const key of Object.keys(process.env)) {
-    if (FOREIGN_KEYS.has(key) || FOREIGN_PREFIXES.some((p) => key.startsWith(p))) delete process.env[key];
+    if (FOREIGN_KEYS.has(key) || LAUNCHER_ONLY_KEYS.has(key) || FOREIGN_PREFIXES.some((p) => key.startsWith(p))) delete process.env[key];
   }
   Object.assign(process.env, env);
 }
@@ -376,7 +382,7 @@ async function liveLock(paths: StandalonePaths): Promise<LockInfo | null> {
 // start
 
 export async function runStart(
-  opts: { dataDir?: string; port: number; host: string; share?: { port: number } },
+  opts: { dataDir?: string; port: number; host: string; share?: { port: number }; trustFile?: string },
   deps: LauncherDeps,
 ): Promise<Launcher> {
   // 1. The folders. Nothing is started before the studio build is known to be there.
@@ -672,6 +678,7 @@ export async function runStart(
         appVersion: deps.appVersion,
         cliEntry: deps.cliEntry,
         ...(shareCert ? { share: { certFile: shareCert.certFile } } : {}),
+        ...(opts.trustFile !== undefined ? { trustFile: opts.trustFile } : {}),
       }),
     );
     const cfg = loadConfig({ ...process.env });

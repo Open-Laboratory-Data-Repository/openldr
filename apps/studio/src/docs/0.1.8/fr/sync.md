@@ -184,11 +184,13 @@ Le compte de service central doit avoir manage-clients et view-clients dans le r
 
 ## Faire confiance au TLS central sur le serveur du laboratoire
 
-Accepter un certificat autosigné dans le navigateur ne le rend pas fiable pour le serveur du laboratoire. Téléchargez le certificat public central depuis les points de Sites ou le résultat d'inscription, puis transférez-le au laboratoire par votre canal d'administration habituel.
+Accepter un certificat autosigné dans le navigateur ne le rend pas fiable pour le serveur du laboratoire. Le serveur du laboratoire tient sa propre liste.
 
-Montez-le en lecture seule dans le conteneur API du laboratoire et définissez NODE_EXTRA_CA_CERTS avec ce chemin interne. Recréez l'API après modification de son environnement. Le certificat doit correspondre au nom d'hôte ou à l'IP centrale, y compris son Subject Alternative Name. Gardez la validation normale des certificats.
+Au laboratoire, ouvrez **Paramètres**, puis **Réseau**, et ajoutez le certificat du central. Comparez son empreinte avec celle que vous donne l'administrateur du central, puis enregistrez et redémarrez OpenLDR. Le guide [Réseau](/docs/network) donne les étapes.
 
-Utilisez une adresse centrale HTTPS fiable en production. Une adresse HTTP localhost sert uniquement aux tests isolés comme l'exemple illustré. Aucun téléchargement de certificat ni changement de confiance TLS n'a été testé ici.
+Le certificat doit correspondre au nom d'hôte ou à l'IP centrale, y compris son Subject Alternative Name. Gardez la validation normale des certificats.
+
+Une installation faite avant la page Réseau peut afficher la liste comme définie hors d'OpenLDR. Elle fait alors toujours confiance au fichier que désigne son réglage `NODE_EXTRA_CA_CERTS`, comme avant. Le guide d'environnement du site web explique comment la déplacer.
 
 ## Utiliser la CLI
 

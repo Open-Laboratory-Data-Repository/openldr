@@ -156,6 +156,7 @@ Keycloak is the default. Generic OIDC uses discovery and JWT access tokens. See 
 | `OIDC_INTERNAL_ISSUER_URL` | Keycloak-only internal realm base URL. Generic OIDC ignores this value. |
 | `OIDC_INTERNAL_JWKS_URL` | Explicit internal signing-key endpoint override. Does not change the expected issuer. |
 | `TLS_CERT_PATH` | Path to this server's public TLS certificate (PEM). When set, the Sites page can offer it for download so a remote lab can trust a self-signed central. The installer mounts the certificate and sets this automatically. |
+| `TRUSTED_CA_FILE` | Path to the one PEM file of extra trusted certificates that OpenLDR manages. It must name the same file as `NODE_EXTRA_CA_CERTS`, which is what Node reads when the server starts. When the two differ, or this one is unset, the list is read-only. A certificate added to the file is used after the next restart. |
 | `OIDC_AUDIENCE` | Expected token audience. |
 | `OIDC_WEB_CLIENT_ID` | Public client ID the studio app authenticates with. |
 | `OIDC_SCOPES` | Scopes the studio app requests. Defaults to `openid profile email`. Must include `openid`. |
@@ -165,6 +166,14 @@ Keycloak is the default. Generic OIDC uses discovery and JWT access tokens. See 
 | `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin password (generated). |
 | `KEYCLOAK_ADMIN_CLIENT_ID` | Client ID used for admin API calls. |
 | `KEYCLOAK_ADMIN_CLIENT_SECRET` | Client secret for admin API calls. |
+
+### Manage trusted certificates on an install made before Settings > Network
+
+A new install sets `TRUSTED_CA_FILE` and `NODE_EXTRA_CA_CERTS` to `/etc/openldr/trust/ca.pem`, and Settings > Network manages that file. An older install names `/etc/ssl/central-ca.pem`, and the page shows the list without letting you change it.
+
+Run the installer again in the install folder. It keeps your `.env`, copies the old central certificate into `config/trust/ca.pem` once, and moves the path only when `.env` still holds the old default. A path you chose yourself is left as it is. Then start the stack again with `docker compose up -d`.
+
+On a Docker install the `openldr` command has no terminal, so `openldr trust add` cannot ask its question. Give it `--fingerprint`. With a file and no `--fingerprint`, the command prints the certificate's fingerprint and saves nothing. With `--address` and no `--fingerprint`, it stops before it contacts the server.
 
 ## Development-only settings
 
@@ -248,7 +257,7 @@ deployed stack the [installer](/docs/install) provisions this from its `--mysql-
 | `WORKFLOW_CODE_ENABLED` | `false` | Allow Code nodes to run. When off, Code nodes refuse to run. |
 | `WORKFLOW_CODE_TIMEOUT_MS` | `5000` | Time limit for one Code node run, in milliseconds. |
 | `WORKFLOW_CODE_MEMORY_MB` | `128` | Memory limit for one Code node run, in MB. |
-| `WORKFLOW_HTTP_ALLOWLIST` | empty | Comma-separated hostnames the HTTP Request node may call. Empty means every host is refused. |
+| `WORKFLOW_HTTP_ALLOWLIST` | empty | Comma-separated hostnames the HTTP Request node may call. An administrator adds more in Settings > Network, and the two lists are used together. With both empty, every host is refused, except this OpenLDR itself when its switch in Settings > Network is on. A host named here cannot be removed in the app. |
 | `WORKFLOW_FILE_MAX_BYTES` | `52428800` (50 MB) | Largest file accepted by a workflow run upload or webhook body. |
 | `WORKFLOW_LOOP_MAX_ITEMS` | `100000` | Most items a single loop node may collect. |
 | `WORKFLOW_FILE_ACCESS_ENABLED` | `false` | Allow the Read/Write File node to touch files on the server. |

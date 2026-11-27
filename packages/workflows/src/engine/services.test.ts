@@ -208,4 +208,102 @@ describe('guardedFetch', () => {
     expect(r.status).toBe(304);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  /** Answers 302 to `to` for `from`, and 200 for anything else. Records each call's headers. */
+  function redirecting(from: string, to: string) {
+    const seen: Array<{ url: string; headers: Record<string, string> }> = [];
+    const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
+      seen.push({ url, headers: { ...(init.headers as Record<string, string>) } });
+      if (url === from) return makeResponse({ status: 302, headers: { location: to } });
+      return makeResponse({ status: 200, body: 'done' });
+    });
+    return { seen, fetchImpl };
+  }
+  const SECRET = { Authorization: 'Bearer secret', Cookie: 'sid=abc', 'X-Keep': 'yes' };
+
+  it('allows an exact origin and refuses the same host on another port', async () => {
+    const allow = { hosts: [], origins: ['http://127.0.0.1:3000'] };
+    await expect(guardedFetch({ url: 'http://127.0.0.1:3000/health' }, allow, okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://127.0.0.1:5432/' }, allow, okFetch as never)).rejects.toThrow('HTTP host not allowed: 127.0.0.1');
+    await expect(guardedFetch({ url: 'https://127.0.0.1:3000/' }, allow, okFetch as never)).rejects.toThrow('HTTP host not allowed');
+  });
+
+  it('a named host is allowed on any port and scheme', async () => {
+    const allow = { hosts: ['a.example'], origins: [] };
+    await expect(guardedFetch({ url: 'http://a.example:8080/x' }, allow, okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'https://a.example/x' }, allow, okFetch as never)).resolves.toBeDefined();
+  });
+
+  it('still takes the old comma-separated list', async () => {
+    await expect(guardedFetch({ url: 'https://b.example/x' }, 'a.example, B.example', okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'https://c.example/x' }, 'a.example, b.example', okFetch as never)).rejects.toThrow(/not allowed/);
+  });
+
+  it('drops the sign-in headers on a redirect to another port of the same host', async () => {
+    const { seen, fetchImpl } = redirecting('http://a.example/start', 'http://a.example:8080/x');
+    await guardedFetch({ url: 'http://a.example/start', headers: SECRET }, { hosts: ['a.example'], origins: [] }, fetchImpl as never);
+    expect(seen[0].headers.Authorization).toBe('Bearer secret');
+    expect(seen[1].url).toBe('http://a.example:8080/x');
+    expect(seen[1].headers).toEqual({ 'X-Keep': 'yes' });
+  });
+
+  it('drops them on a redirect from http to https on the same host', async () => {
+    const { seen, fetchImpl } = redirecting('http://a.example/start', 'https://a.example/start');
+    await guardedFetch({ url: 'http://a.example/start', headers: SECRET }, { hosts: ['a.example'], origins: [] }, fetchImpl as never);
+    expect(seen[1].headers).toEqual({ 'X-Keep': 'yes' });
+  });
+
+  it('keeps them on a redirect within the same origin', async () => {
+    const { seen, fetchImpl } = redirecting('http://127.0.0.1:3000/a', 'http://127.0.0.1:3000/b');
+    await guardedFetch({ url: 'http://127.0.0.1:3000/a', headers: SECRET }, { hosts: [], origins: ['http://127.0.0.1:3000'] }, fetchImpl as never);
+    expect(seen[1].headers).toEqual(SECRET);
+  });
+
+  it('refuses a redirect from an allowed origin to a host that is not allowed', async () => {
+    const { fetchImpl } = redirecting('http://127.0.0.1:3000/a', 'http://127.0.0.1:5432/');
+    await expect(
+      guardedFetch({ url: 'http://127.0.0.1:3000/a' }, { hosts: [], origins: ['http://127.0.0.1:3000'] }, fetchImpl as never),
+    ).rejects.toThrow('HTTP host not allowed: 127.0.0.1');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the sign-in headers whatever their letter case', async () => {
+    const { seen, fetchImpl } = redirecting('http://a.example/start', 'http://b.example/x');
+    await guardedFetch(
+      { url: 'http://a.example/start', headers: { AUTHORIZATION: 'x', cookie: 'y', 'X-Api-Token': 'z', 'Proxy-Authorization': 'p', Accept: 'text/plain' } },
+      { hosts: ['a.example', 'b.example'], origins: [] },
+      fetchImpl as never,
+    );
+    expect(seen[1].headers).toEqual({ Accept: 'text/plain' });
+  });
+
+  it('matches an IPv6 origin written with brackets', async () => {
+    const allow = { hosts: [], origins: ['http://[::1]:3000'] };
+    await expect(guardedFetch({ url: 'http://[::1]:3000/health' }, allow, okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://[::1]:3001/health' }, allow, okFetch as never)).rejects.toThrow(/not allowed/);
+  });
+
+  it('matches an IPv6 host named with or without brackets', async () => {
+    await expect(guardedFetch({ url: 'http://[::1]:9/x' }, { hosts: ['::1'], origins: [] }, okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://[::1]:9/x' }, { hosts: ['[::1]'], origins: [] }, okFetch as never)).resolves.toBeDefined();
+  });
+
+  it('an origin written with a path or in capitals still matches only that origin', async () => {
+    const allow = { hosts: [], origins: ['HTTP://LocalHost:3000/'] };
+    await expect(guardedFetch({ url: 'http://localhost:3000/x' }, allow, okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://localhost:3001/x' }, allow, okFetch as never)).rejects.toThrow(/not allowed/);
+  });
+
+  it('an origin that is not a URL allows nothing and does not throw for a good host', async () => {
+    const allow = { hosts: ['a.example'], origins: ['not a url'] };
+    await expect(guardedFetch({ url: 'http://a.example/x' }, allow, okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://b.example/x' }, allow, okFetch as never)).rejects.toThrow(/not allowed/);
+  });
+
+  it('matches an IPv6 host written in long form, in the rule or in the old list', async () => {
+    await expect(guardedFetch({ url: 'http://[::1]:9/x' }, { hosts: ['0:0:0:0:0:0:0:1'], origins: [] }, okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://[fd00::20]/x' }, 'FD00:0000:0000:0000:0000:0000:0000:0020', okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://[fd00:0:0:0:0:0:0:20]/x' }, '[fd00::20]', okFetch as never)).resolves.toBeDefined();
+    await expect(guardedFetch({ url: 'http://[::2]/x' }, { hosts: ['0:0:0:0:0:0:0:1'], origins: [] }, okFetch as never)).rejects.toThrow(/not allowed/);
+  });
 });
