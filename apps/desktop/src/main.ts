@@ -6,13 +6,13 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, powerMonitor, session, shell, Tray } from 'electron';
-import { setAutostart, startedHidden, type AutostartDeps } from './autostart';
+import { autostartEnabled, setAutostart, startedHidden, type AutostartDeps } from './autostart';
 import { bridgeHandlers } from './bridge';
 import { readServerCertificate, verifyDecision, type PinnedServer } from './cert-trust';
 import { ACTION_CHANNEL, CONNECT_MODE_CHANNEL, RETRY_CHANNEL, SCREEN_CHANNEL } from './channels';
 import { DesktopController, pageState, type PageAction, type Screen } from './controller';
 import * as launcher from './launcher';
-import { createLockFlow, quitNeedsPin, type LockFlow } from './lock-flow';
+import { createLockFlow, ensureStartAtSignIn, quitNeedsPin, type LockFlow } from './lock-flow';
 import { frameTarget, linkTarget, mayGrantPermission, renderAfterLoad, sameOrigin, urlForLog } from './locality';
 import { startMode, type Running } from './mode';
 import { createModeSwitch } from './mode-switch';
@@ -526,14 +526,16 @@ function main(): void {
         if (on) showWindow();
         w.setKiosk(on);
       }
-      if (on && !loadSettings(settingsFile).startAtSignIn) {
-        // A locked PC starts OpenLDR at sign-in.
-        try {
-          setAutostart(autostart, true);
-          save({ ...loadSettings(settingsFile), startAtSignIn: true });
-        } catch (err) {
-          log(`Start at sign-in was not turned on: ${err instanceof Error ? err.message : String(err)}`);
-        }
+      if (on) {
+        // A locked PC starts OpenLDR at sign-in. Checked against the system at every lock and every start.
+        ensureStartAtSignIn({
+          registered: () => autostartEnabled(autostart),
+          register: () => setAutostart(autostart, true),
+          saved: () => loadSettings(settingsFile).startAtSignIn,
+          save: () => saveSettings(settingsFile, { ...loadSettings(settingsFile), startAtSignIn: true }),
+          tell: () => void dialog.showMessageBox(w, { type: 'warning', message: s.lockNoAutostart, buttons: ['OK'] }),
+          log,
+        });
       }
       rebuildTray();
     };

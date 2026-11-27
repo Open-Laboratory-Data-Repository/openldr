@@ -106,6 +106,8 @@ export interface AppStrings {
   pinNotSaved: string;
   trayLock: string;
   trayUnlock: string;
+  /** The PC is locked, but the system could not be told to start the app at sign-in. */
+  lockNoAutostart: string;
 }
 
 const en: AppStrings = {
@@ -190,6 +192,7 @@ const en: AppStrings = {
   pinNotSaved: "The setting could not be saved, so nothing was changed. See the app log.",
   trayLock: "Lock this PC to OpenLDR...",
   trayUnlock: "Unlock this PC...",
+  lockNoAutostart: "This PC is locked, but OpenLDR could not be set to start when you sign in. After a restart the PC will show its desktop until someone starts OpenLDR. See the app log.",
 };
 
 const fr: AppStrings = {
@@ -274,6 +277,7 @@ const fr: AppStrings = {
   pinNotSaved: "Le réglage n'a pas pu être enregistré, donc rien n'a changé. Consultez le journal de l'application.",
   trayLock: "Verrouiller ce PC sur OpenLDR...",
   trayUnlock: "Déverrouiller ce PC...",
+  lockNoAutostart: "Ce PC est verrouillé, mais OpenLDR n'a pas pu être réglé pour démarrer à la connexion. Après un redémarrage, le PC affichera son bureau jusqu'à ce que quelqu'un démarre OpenLDR. Consultez le journal de l'application.",
 };
 
 const pt: AppStrings = {
@@ -358,6 +362,7 @@ const pt: AppStrings = {
   pinNotSaved: "Não foi possível guardar a definição, por isso nada mudou. Consulte o registo da aplicação.",
   trayLock: "Bloquear este PC no OpenLDR...",
   trayUnlock: "Desbloquear este PC...",
+  lockNoAutostart: "Este PC está bloqueado, mas não foi possível definir o OpenLDR para iniciar ao entrar na sessão. Depois de reiniciar, o PC mostra o ambiente de trabalho até alguém iniciar o OpenLDR. Consulte o registo da aplicação.",
 };
 
 export const STRINGS: Record<Lang, AppStrings> = { en, fr, pt };

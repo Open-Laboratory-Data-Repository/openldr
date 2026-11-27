@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Screen } from './controller';
 import { makeLock, WRONG_PIN_WAIT_MS } from './lock';
-import { createLockFlow, quitNeedsPin } from './lock-flow';
+import { createLockFlow, ensureStartAtSignIn, quitNeedsPin } from './lock-flow';
 import type { Settings } from './settings';
 
 type Pin = Extract<Screen, { screen: 'pin' }>;
@@ -211,5 +211,73 @@ describe('createLockFlow, quitting a locked PC', () => {
     expect(h.closes()).toBe(1);
     await h.flow.submit('1234');
     expect(h.quits()).toBe(0);
+  });
+});
+
+describe('ensureStartAtSignIn', () => {
+  function sign(o: { registered: boolean; saved: boolean; enableFails?: boolean; saveFails?: boolean }) {
+    let registered = o.registered;
+    let saved = o.saved;
+    const told: string[] = [];
+    const logs: string[] = [];
+    let enables = 0;
+    const ok = ensureStartAtSignIn({
+      registered: () => registered,
+      register: () => {
+        enables++;
+        if (o.enableFails) throw new Error('read-only home');
+        registered = true;
+      },
+      saved: () => saved,
+      save: () => {
+        if (o.saveFails) throw new Error('disk full');
+        saved = true;
+      },
+      tell: () => void told.push('no-start-at-sign-in'),
+      log: (line) => void logs.push(line),
+    });
+    return { ok, told, logs, enables: () => enables, registered: () => registered, saved: () => saved };
+  }
+
+  it('registers the app with the system and saves the setting', () => {
+    const r = sign({ registered: false, saved: false });
+    expect(r.ok).toBe(true);
+    expect(r.registered()).toBe(true);
+    expect(r.saved()).toBe(true);
+    expect(r.told).toEqual([]);
+  });
+
+  it('goes by what the system holds, not by the saved setting', () => {
+    // The setting says on, but the system's entry was removed.
+    const r = sign({ registered: false, saved: true });
+    expect(r.enables()).toBe(1);
+    expect(r.registered()).toBe(true);
+  });
+
+  it('touches nothing when the system already starts the app', () => {
+    const r = sign({ registered: true, saved: true });
+    expect(r.enables()).toBe(0);
+    expect(r.ok).toBe(true);
+  });
+
+  it('saves the setting when only the setting is behind', () => {
+    const r = sign({ registered: true, saved: false });
+    expect(r.enables()).toBe(0);
+    expect(r.saved()).toBe(true);
+  });
+
+  it('tells the person when the system could not be told to start the app', () => {
+    const r = sign({ registered: false, saved: false, enableFails: true });
+    expect(r.ok).toBe(false);
+    expect(r.told).toEqual(['no-start-at-sign-in']);
+    expect(r.saved()).toBe(false);
+    expect(r.logs.join(' ')).toContain('read-only home');
+  });
+
+  it('still counts as on when only the setting could not be saved', () => {
+    const r = sign({ registered: false, saved: false, saveFails: true });
+    expect(r.ok).toBe(true);
+    expect(r.told).toEqual([]);
+    expect(r.logs.join(' ')).toContain('disk full');
   });
 });

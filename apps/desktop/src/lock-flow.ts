@@ -138,3 +138,41 @@ export function createLockFlow(deps: LockFlowDeps): LockFlow {
     },
   };
 }
+
+/**
+ * A locked PC starts OpenLDR when its user signs in. This goes by what the system holds, never by
+ * the saved setting: the system's entry can be removed while the setting still says on. False when
+ * the system could not be told, and then the person is told, because the PC would come up
+ * unlocked onto its desktop after a restart.
+ */
+export function ensureStartAtSignIn(deps: {
+  /** True when the system will start the app at sign-in. */
+  registered(): boolean;
+  /** Tells the system to. Throws when it cannot. */
+  register(): void;
+  /** The saved setting. */
+  saved(): boolean;
+  /** Saves the setting as on. Throws when it cannot. */
+  save(): void;
+  tell(): void;
+  log(line: string): void;
+}): boolean {
+  if (!deps.registered()) {
+    try {
+      deps.register();
+    } catch (err) {
+      deps.log(`Start at sign-in was not turned on: ${err instanceof Error ? err.message : String(err)}`);
+      deps.tell();
+      return false;
+    }
+  }
+  if (!deps.saved()) {
+    try {
+      deps.save();
+    } catch (err) {
+      // The system starts the app either way. Only the tray's tick is behind.
+      deps.log(`The start at sign-in setting could not be saved: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return true;
+}
