@@ -310,7 +310,7 @@ The server edition for a two-PC lab was not chosen: nobody there looks after Doc
 | G15 | A referral key at the hub cannot be limited to referrals. | `apps/server/src/access-key-auth.ts:48` | a restricted account per spoke, no code |
 | G16 | A desktop or standalone install cannot be told to trust another install's self-signed certificate. | `apps/standalone/src/environment.ts:40-72` sets no `NODE_EXTRA_CA_CERTS` | core, own design |
 | G17 | A plugin's workflow step gets no database access and no caller. | `packages/bootstrap/src/plugin-node-service.ts:126` | core, only if plan 3 needs it |
-| G18 | Studio's connector form offers only "sink" plugins as owner. lab-bench is not one. | `apps/server/src/connectors-routes.ts:77` | core or lab-bench, settled in plan 3 |
+| G18 | Withdrawn. lab-bench declares `pluginKind: "sink"`, so Studio's connector form already offers it. | `openldr-ce-plugin-lab-bench/manifest.template.json:31`, `apps/server/src/connectors-routes.ts:78` | none |
 
 **HONEST NON-PROOF.** G3 comes from the docs. Nobody reproduced it in this session. The
 first build step is to open a lab-bench page from a second PC over plain HTTP and see what
