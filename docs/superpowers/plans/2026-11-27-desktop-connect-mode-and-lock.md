@@ -14,7 +14,7 @@
 
 ## One change from the spec
 
-The spec says turning the lock off needs an OpenLDR administrator's sign-in. This plan uses a PIN that is set when the lock is turned on. Two reasons. A locked PC must still unlock when the server is off. And a hub that signs in through Keycloak gives the app no way to ask who is signed in. The operator should confirm this change.
+The spec first said turning the lock off needs an OpenLDR administrator's sign-in. This plan uses a PIN that is set when the lock is turned on. Two reasons. A locked PC must still unlock when the server is off. And a hub that signs in through Keycloak gives the app no way to ask who is signed in. The operator approved this on 2026-11-27, and the spec now says the same.
 
 ## Global Constraints
 
@@ -617,6 +617,9 @@ git commit -m "feat(desktop): lock a PC to OpenLDR with a PIN"
 - Create: `apps/web/src/docs/0.1.8/en/lab-setups.md`, and the same page in `fr` and `pt`
 - Modify: `apps/web/src/docs/toc.ts` (one entry, placed after the desktop app page)
 - Modify: `apps/web/src/docs/0.1.8/en/desktop-app.md`, and the same page in `fr` and `pt`
+- Modify: `apps/studio/src/docs/0.1.8/en/share-on-network.md` (made by plan 1), and the same page in `fr` and `pt`
+
+The operator decided on 2026-11-27 that these features get in-app guidance too. Plan 1 made the in-app page "Open OpenLDR from another PC". This plan adds to it.
 
 - [ ] **Step 1: Write `lab-setups.md`**
 
@@ -626,17 +629,21 @@ This is the "which setup" guide (gap G13). Take the four setups from the spec's 
 
 "Connect to the lab's server": the first-start choice, the address, the certificate check with the fingerprint, the unreachable screen, and how to change server. "Lock this PC to OpenLDR": the PIN, `Ctrl+Shift+L`, what the lock does not stop, how to set the app as the kiosk program on Windows (assigned access), and how to recover a forgotten PIN.
 
-- [ ] **Step 3: Translate to fr and pt, and run `unslop` over all six files**
+- [ ] **Step 2b: Add two tasks to the in-app page**
+
+"Use the OpenLDR app on another PC": choose "Connect to the lab's server", type the address, compare the fingerprint. "Lock a PC to OpenLDR": the tray item, the PIN, `Ctrl+Shift+L`. Keep both short and link to the web page.
+
+- [ ] **Step 3: Translate to fr and pt, and run `unslop` over all nine files**
 
 - [ ] **Step 4: Run the web tests**
 
-Run: `pnpm --filter @openldr/web test`
+Run: `pnpm --filter @openldr/web test` and `pnpm --filter @openldr/studio exec vitest run src/docs`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/web/src/docs
+git add apps/web/src/docs apps/studio/src/docs
 git commit -m "docs: lab setups, connect mode and the lock"
 ```
 

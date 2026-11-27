@@ -169,7 +169,10 @@ One setting, off by default. When on:
 - The app starts when the PC user signs in.
 - The window is full screen with no way to another program from inside the app.
 - Links to outside sites do not open.
-- Turning it off needs an OpenLDR administrator's sign-in.
+- Turning it off, or quitting the app, needs a PIN. The PIN is set when the lock is turned on.
+  The operator chose a PIN over an administrator's sign-in on 2026-11-27: a locked PC must
+  still unlock when the server is off, and a hub on Keycloak cannot tell the app who is
+  signed in.
 
 The app cannot stop someone leaving it with the keyboard. That is the operating system's job
 (kiosk mode on Windows). The setup guide will show how to set the app as the kiosk program.
@@ -313,6 +316,8 @@ outside identity server would be sent to the browser (`apps/desktop/src/main.ts:
 - Each site keeps its own users. No sign-in through national.
 - One package for both modes. A small client package is later.
 - Lock is one setting. The operating system's kiosk mode does the hard lock.
+- Sharing and connect mode get a short in-app guide as well as the web docs. The operator
+  asked for this on 2026-11-27.
 - Serial ports come after connect mode, with their own design.
 - The analyser PC keeps the companion until serial ports land.
 
