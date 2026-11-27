@@ -5,7 +5,7 @@
 
 import http, { type IncomingHttpHeaders, type IncomingMessage, type OutgoingHttpHeaders, type ServerResponse } from 'node:http';
 import https from 'node:https';
-import type { AddressInfo } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 
 export interface ShareProxy {
   port: number;
@@ -91,6 +91,16 @@ export function startShareProxy(opts: { host: string; port: number; certPem: str
   server.on('upgrade', (_req, socket) => socket.destroy());
   // A client that breaks the TLS or HTTP rules gets its socket closed, with no stack in a log.
   server.on('clientError', (_err, socket) => socket.destroy());
+  server.on('tlsClientError', (_err, socket) => socket.destroy());
+
+  // Every accepted socket, from the TCP connection on. closeAllConnections() knows a connection
+  // only once its TLS handshake is done, so a client that has connected and not yet finished
+  // the handshake would hold a stop for up to Node's 120 second handshake limit.
+  const sockets = new Set<Socket>();
+  server.on('connection', (socket: Socket) => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
+  });
 
   return new Promise<ShareProxy>((resolve, reject) => {
     server.once('error', reject);
@@ -103,6 +113,7 @@ export function startShareProxy(opts: { host: string; port: number; certPem: str
           closing ??= new Promise<void>((done) => {
             server.close(() => done());
             server.closeAllConnections();
+            for (const socket of sockets) socket.destroy();
           });
           return closing;
         },

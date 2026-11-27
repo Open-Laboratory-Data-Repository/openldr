@@ -1,7 +1,7 @@
 import { once } from 'node:events';
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import https from 'node:https';
-import type { AddressInfo } from 'node:net';
+import net, { type AddressInfo } from 'node:net';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { makeCert } from './share-cert';
 import { startShareProxy, type ShareProxy } from './share-proxy';
@@ -283,6 +283,19 @@ describe('startShareProxy', () => {
     });
     expect(['error', 'close']).toContain(await within(2000, outcome));
     expect(reached).toBe(false);
+  });
+
+  it('closes at once while a client has connected and not yet finished the TLS handshake', async () => {
+    const up = await upstream((_req, res) => res.end('ok'));
+    const proxy = await startShareProxy({ host: '127.0.0.1', port: 0, certPem, keyPem, upstreamPort: up.port });
+    // A plain TCP connection that never speaks TLS. It has no HTTP request for the front to close.
+    const socket = net.connect({ host: '127.0.0.1', port: proxy.port });
+    socket.on('error', () => {});
+    await once(socket, 'connect');
+    await new Promise((r) => setTimeout(r, 50));
+    const closed = once(socket, 'close');
+    await within(2000, proxy.close());
+    await within(2000, closed);
   });
 
   it('close can be called twice', async () => {
