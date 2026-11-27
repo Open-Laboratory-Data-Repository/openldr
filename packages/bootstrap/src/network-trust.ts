@@ -6,7 +6,7 @@
 // Design: docs/superpowers/specs/2026-11-27-trusted-certificates-and-workflow-hosts-design.md
 
 import { randomBytes, X509Certificate } from 'node:crypto';
-import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
+import { link, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -95,8 +95,9 @@ export interface TrustStatus {
   mode: 'editable' | 'not-configured' | 'set-outside' | 'damaged';
   /**
    * Present while a lock file sits beside the managed file. A change holds it for a moment. One
-   * that is `stuck` (older than 30 seconds) was most likely left by a change that a power cut or
-   * a crash stopped. No change goes through until a person removes it with `unlock`.
+   * that is `stuck` (older than 30 seconds) may be removed by a person with `unlock`. Thirty
+   * seconds is when that is allowed. It is not proof that the change stopped: a power cut or a
+   * crash is the likely cause, and the person decides. No change goes through until then.
    */
   lock?: { since: string; stuck: boolean };
 }
@@ -235,6 +236,33 @@ export function readPeerCertificate(host: string, port: number, timeoutMs = 10_0
   });
 }
 
+/**
+ * Removes the lock file only if it still holds `content`, the text the caller looked at. True
+ * when it removed it.
+ *
+ * A file cannot be removed "if unchanged" in one step. So the file is first moved aside, which
+ * only one caller can do, and then read. If it is another lock (a second unlock got there first
+ * and a new change made its own), it is put back. If a third lock has appeared in that moment the
+ * put-back fails, and the change that lost its lock refuses its write, because it checks the lock
+ * is still its own.
+ */
+export async function removeLockIfSame(lockFile: string, content: string): Promise<boolean> {
+  const aside = `${lockFile}.${randomBytes(8).toString('hex')}.unlock`;
+  try {
+    await rename(lockFile, aside);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw err;
+  }
+  try {
+    if ((await readFile(aside, 'utf8')) === content) return true;
+    await link(aside, lockFile).catch(() => {});
+    return false;
+  } finally {
+    await rm(aside, { force: true });
+  }
+}
+
 const LOCK_WAIT_MS = 10_000;
 const LOCK_STEP_MS = 50;
 const LOCK_STUCK_MS = 30_000;
@@ -243,11 +271,12 @@ export function createTrustService(deps: TrustDeps): TrustService {
   const lockFile = `${deps.file ?? ''}.lock`;
 
   /** The lock file as it is now, or undefined when there is none. */
-  async function lockNow(): Promise<{ since: string; stuck: boolean } | undefined> {
+  async function lockNow(): Promise<{ since: string; stuck: boolean; content: string } | undefined> {
     if (deps.file === undefined) return undefined;
     try {
+      const content = await readFile(lockFile, 'utf8');
       const made = (await stat(lockFile)).mtimeMs;
-      return { since: new Date(made).toISOString(), stuck: Date.now() - made > LOCK_STUCK_MS };
+      return { since: new Date(made).toISOString(), stuck: Date.now() - made > LOCK_STUCK_MS, content };
     } catch {
       return undefined;
     }
@@ -411,7 +440,7 @@ export function createTrustService(deps: TrustDeps): TrustService {
   return {
     async status() {
       const lock = managed ? await lockNow() : undefined;
-      return { mode: await mode(), ...(lock ? { lock } : {}) };
+      return { mode: await mode(), ...(lock ? { lock: { since: lock.since, stuck: lock.stuck } } : {}) };
     },
 
     async unlock(actor) {
@@ -419,7 +448,8 @@ export function createTrustService(deps: TrustDeps): TrustService {
       const lock = await lockNow();
       if (lock === undefined) return false;
       if (!lock.stuck) refuse('busy');
-      await rm(lockFile, { force: true });
+      // Only the lock that was looked at. A second unlock, or a new change, may have got in.
+      if (!(await removeLockIfSame(lockFile, lock.content))) return false;
       try {
         await deps.audit('network.trust.unlock', actor, 'lock', lock.since);
       } catch (err) {

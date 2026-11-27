@@ -16,6 +16,7 @@ import {
   readLoadedTrust,
   readPeerCertificate,
   recordLoadedTrust,
+  removeLockIfSame,
   TRUST_BUSY,
   TrustAuditFailed,
   TrustRefused,
@@ -734,5 +735,36 @@ describe('a lock left behind', () => {
     writeFileSync(`${m.file}.lock`, 'held');
     old(`${m.file}.lock`, 60_000);
     expect(await m.svc.status()).toMatchObject({ mode: 'damaged', lock: { stuck: true } });
+  });
+
+  it('unlock puts back a lock that is not the one it looked at', async () => {
+    // Between looking at a stuck lock and removing it, another unlock removed it and a new change
+    // made its own. That new lock must stay.
+    const m = make();
+    const lock = `${m.file}.lock`;
+    writeFileSync(lock, JSON.stringify({ token: 'new holder' }));
+    expect(await removeLockIfSame(lock, 'the stuck one that was looked at')).toBe(false);
+    expect(JSON.parse(readFileSync(lock, 'utf8'))).toEqual({ token: 'new holder' });
+    expect(readdirSync(m.dir).sort()).toEqual(['ca.pem', 'ca.pem.lock']);
+  });
+
+  it('unlock removes the lock it looked at, and says so when it is already gone', async () => {
+    const m = make();
+    const lock = `${m.file}.lock`;
+    writeFileSync(lock, 'held');
+    expect(await removeLockIfSame(lock, 'held')).toBe(true);
+    expect(await removeLockIfSame(lock, 'held')).toBe(false);
+    expect(readdirSync(m.dir)).toEqual(['ca.pem']);
+  });
+
+  it('two unlocks at once remove one lock and audit once', async () => {
+    const m = make();
+    const lock = `${m.file}.lock`;
+    writeFileSync(lock, 'held');
+    old(lock, 60_000);
+    const done = await Promise.all([m.svc.unlock(ACTOR), m.svc.unlock(ACTOR), m.svc.unlock(ACTOR)]);
+    expect(done.filter(Boolean)).toHaveLength(1);
+    expect(m.audits).toHaveLength(1);
+    expect(readdirSync(m.dir)).toEqual(['ca.pem']);
   });
 });
