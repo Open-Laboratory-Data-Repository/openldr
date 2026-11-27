@@ -6,6 +6,72 @@
       "version": null,
       "entries": [
         {
+          "hash": "b6985c2ae",
+          "type": "fix",
+          "scope": "desktop",
+          "title": "Serial goes only to the main frame, and a port list that cannot show is answered"
+        },
+        {
+          "hash": "d5e3bf602",
+          "type": "feat",
+          "scope": "desktop",
+          "title": "The app shows a list of serial ports for a plugin page"
+        },
+        {
+          "hash": "08803a473",
+          "type": "fix",
+          "scope": "plugins",
+          "title": "The studio draws a plugin page only for the version its list named"
+        },
+        {
+          "hash": "6c0b63254",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A late port list never answers a later question, and a new plugin version gets a new page"
+        },
+        {
+          "hash": "455141e49",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Plugin pages can ask for a serial port"
+        },
+        {
+          "hash": "a76f19f75",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The serial gate counts ports it is still letting go of"
+        },
+        {
+          "hash": "cb284642d",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The serial gate lets go of ports at once and owns them until closed"
+        },
+        {
+          "hash": "fc20fa2a6",
+          "type": "feat",
+          "scope": "studio",
+          "title": "A gate that holds a serial port for one plugin page"
+        },
+        {
+          "hash": "5b721dd37",
+          "type": "fix",
+          "scope": "plugin-ui-sdk",
+          "title": "Serial settings named like object methods, and bytes from another frame"
+        },
+        {
+          "hash": "8603630db",
+          "type": "feat",
+          "scope": "plugin-ui-sdk",
+          "title": "Six serial calls for a plugin page"
+        },
+        {
+          "hash": "9fc80a61c",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "A capability for serial ports, and the studio is told who holds it"
+        },
+        {
           "hash": "771d6c955",
           "type": "fix",
           "scope": "desktop",
