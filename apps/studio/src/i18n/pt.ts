@@ -2839,6 +2839,12 @@ export const pt: EnShape = {
     noUi: 'Este plugin não fornece interface.',
     loadFailed: 'Não foi possível carregar a página deste plugin. Recarregue a página para tentar novamente.',
     loadError: 'Falha ao carregar a interface do plugin.',
+    serial: {
+      title: '{{plugin}} quer usar uma porta série',
+      body: 'Escolha a porta onde o cabo está ligado. {{plugin}} pode depois ler e escrever nela até esta página fechar.',
+      choose: 'Escolher porta',
+      cancel: 'Cancelar',
+    },
     sites: {
       menu: 'Locais',
       title: 'Locais de {{name}}',

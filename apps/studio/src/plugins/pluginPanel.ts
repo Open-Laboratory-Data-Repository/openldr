@@ -5,8 +5,10 @@ import type { PluginUiEntry } from '@/api';
 // but the panel lives above the routes (PluginPanelHost in App.tsx) so its iframe is not reloaded
 // on every page change. Both read this one value.
 
-/** `permissionKeys` are the plugin's own keys, so the panel's page gets only those and CE's. */
-export interface OpenPanel { id: string; title: string; permissionKeys?: string[] }
+/** `permissionKeys` are the plugin's own keys, so the panel's page gets only those and CE's.
+ *  `label`, `version` and `serial` come from the server's listing: the plugin's name, its active
+ *  version, and whether it holds host:serial. Without them the panel's page gets no serial port. */
+export interface OpenPanel { id: string; title: string; permissionKeys?: string[]; label?: string; version?: string; serial?: boolean }
 
 let open: OpenPanel | null = null;
 const listeners = new Set<() => void>();
@@ -29,8 +31,8 @@ export function usePluginPanel(): OpenPanel | null {
   return useSyncExternalStore(subscribe, getPluginPanel, getPluginPanel);
 }
 
-export function openPluginPanel(id: string, title: string, permissionKeys: string[] = []): void {
-  set({ id, title, permissionKeys });
+export function openPluginPanel(id: string, title: string, permissionKeys: string[] = [], plugin?: { label: string; version: string; serial: boolean }): void {
+  set({ id, title, permissionKeys, ...(plugin ?? {}) });
 }
 
 export function closePluginPanel(): void {
@@ -41,7 +43,12 @@ export function closePluginPanel(): void {
  *  (disabled, removed, role lost, or the panel switched off), so it never shows a dead frame. */
 export function syncPluginPanel(entries: PluginUiEntry[]): void {
   if (!open) return;
-  const panel = entries.find((e) => e.id === open!.id)?.sites?.panel;
-  if (!panel) set(null);
-  else if (panel.title !== open.title) set({ ...open, title: panel.title });
+  const entry = entries.find((e) => e.id === open!.id);
+  const panel = entry?.sites?.panel;
+  if (!entry || !panel) return set(null);
+  // The fresh list also says who the plugin is now: a new version, or a grant given or taken.
+  const serial = entry.devices?.serial === true;
+  if (panel.title !== open.title || entry.nav.label !== open.label || entry.version !== open.version || serial !== (open.serial ?? false)) {
+    set({ ...open, title: panel.title, label: entry.nav.label, version: entry.version, serial });
+  }
 }
