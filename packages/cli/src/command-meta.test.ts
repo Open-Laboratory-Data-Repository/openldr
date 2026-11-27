@@ -223,6 +223,7 @@ const REASON: Record<string, string> = {
   // positional arguments
   action: CHOICE, batchId: ID, capability: ID, code: ID, columns: 'column names in the warehouse', connector: ID,
   conceptMapUrl: URI, copy: ID, display: TEXT, entityId: ID, entityType: CHOICE, field: SETTING, form: 'a form id or name', id: ID, idA: ID, idB: ID,
+  fingerprint: 'a certificate fingerprint', host: 'a host name or an IP address',
   key: SETTING, keyId: ID, kind: CHOICE, level: CHOICE, loinc: ID, name: ID, plugin: ID, requestId: ID,
   resourceId: ID, resourceType: CHOICE, roles: ID, run: ID, site: CHOICE, siteId: ID, slug: ID, state: CHOICE,
   subject: ID, system: URI, systemId: ID, systemUrl: URI, table: 'a warehouse table name', 'target-code': ID,
@@ -233,7 +234,7 @@ const REASON: Record<string, string> = {
   '--central-url': URI, '--code': ID, '--connector': ID, '--contact': TEXT, '--copy': ID, '--reference': ID, '--laboratory': FILTER, '--converter': ID, '--count': NUM,
   '--country': 'an ISO3 country code', '--desc': TEXT, '--duplicate': ID, '--email': TEXT, '--enabled': CHOICE,
   '--entity': FILTER, '--entity-id': FILTER, '--entity-type': FILTER, '--expires': WHEN, '--format': CHOICE,
-  '--from': WHEN, '--icon': 'an icon name', '--id': ID, '--jurisdiction': TEXT, '--kind': CHOICE, '--label': TEXT,
+  '--fingerprint': 'a certificate fingerprint', '--from': WHEN, '--icon': 'an icon name', '--id': ID, '--jurisdiction': TEXT, '--kind': CHOICE, '--label': TEXT,
   '--lang': CHOICE, '--level': CHOICE, '--limit': NUM, '--list-column': CHOICE, '--loinc': CHOICE, '--name': TEXT,
   '--national-system': URI, '--offset': NUM, '--open': 'role slugs or ids, comma separated', '--on-absent': CHOICE, '--on-conflict': CHOICE, '--on-deleted': CHOICE,
   '--option': 'name=value plugin options, passed to the plugin as text', '--page-size': NUM, '--keep': CHOICE,
@@ -260,6 +261,11 @@ const NOT_A_PATH: Record<string, string[]> = {
   'workflows run-continue': ['workflowId', 'requestId'],
   'workflows disable': ['workflowId'],
   'workflows map-test': ['workflowId', 'nodeId'],
+  'trust add': ['--address', '--fingerprint'],
+  'trust remove': ['fingerprint'],
+  'workflows hosts add': ['host'],
+  'workflows hosts remove': ['host'],
+  'workflows hosts self': ['state'],
   'connectors inspect': ['id'],
   'connectors update': ['id'],
   'connectors diagnose': ['id'],
@@ -541,6 +547,8 @@ const READ_NAMES = new Set(['list', 'show', 'status', 'inspect', 'export']);
 const READ_NAME_WRITE_KEY: Record<string, string> = {
   'connectors inspect': 'prints a connector\'s settings and which secrets are set; GET /api/connectors/:id/config needs connectors.manage (connectors-routes.ts:85)',
   'connectors list': 'lists connectors; GET /api/connectors needs connectors.manage and the area has no view key (connectors-routes.ts:83)',
+  'trust list': 'lists trusted certificates; GET /api/network/trust needs network.manage and the area has no view key (network-routes.ts)',
+  'workflows hosts list': 'lists the hosts a workflow may call; GET /api/network/workflow-hosts needs network.manage and the area has no view key (network-routes.ts)',
   'data-exposure list': 'lists hidden columns; GET /api/dashboards/column-policy needs data_exposure.manage (dashboards-routes.ts:143)',
   'data-exposure show': 'not a read: it exposes hidden columns, a write to the policy (dashboards-routes.ts:162)',
   'import status': 'shows import runs; Studio lets only lab_admin read them, like the connector routes (plugin-broker.ts:198)',
@@ -594,6 +602,8 @@ const EXTRA_CARE = [
   // sign-in or the install
   'settings flags set', 'settings numbers set', 'settings lab set', 'settings sync set', 'settings validation set',
   'sync enroll', 'sync rotate', 'sync revoke',
+  // which servers this install trusts, and where a workflow may send data
+  'trust add', 'trust remove', 'trust unlock', 'workflows hosts add', 'workflows hosts remove', 'workflows hosts self',
 ];
 // Extra-care commands whose key a role other than lab_admin holds, because Studio already gives that
 // role the same power through the route named.

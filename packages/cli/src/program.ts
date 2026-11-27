@@ -1,4 +1,5 @@
 import { runConnectorAllow, runConnectorPlugins, runConnectorRevoke } from './connector-access';
+import { runHostsAdd, runHostsList, runHostsRemove, runHostsSelf, runTrustAdd, runTrustList, runTrustRemove, runTrustUnlock } from './network';
 import { runPluginCall } from './plugin-call';
 import { Command, Option, type ParseOptions } from 'commander';
 import { loadConfig } from '@openldr/config';
@@ -139,6 +140,57 @@ export function buildProgram(): Command {
     .action(async (requestId: string, opts: { json: boolean }) => {
       try { process.exitCode = await runWorkflowReceiptShow(requestId, opts); }
       catch { process.stderr.write('Workflow receipt unavailable.\n'); process.exitCode = 1; }
+    });
+
+  const workflowHosts = workflows.command('hosts').description('The hosts a workflow HTTP step may call');
+  workflowHosts.command('list').description('List the allowed hosts, where each comes from, and whether a workflow may call this OpenLDR')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      try { process.exitCode = await runHostsList(opts); }
+      catch (err) { process.stderr.write(`workflows hosts list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  workflowHosts.command('add <host>').description('Let a workflow call a host: a host name or an IP address, with no port and no path')
+    .action(async (host: string) => {
+      try { process.exitCode = await runHostsAdd(host); }
+      catch (err) { process.stderr.write(`workflows hosts add failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  workflowHosts.command('remove <host>').description('Stop workflows calling a host. Refuses without --force')
+    .option('--force', 'confirm the removal', false)
+    .action(async (host: string, opts: { force: boolean }) => {
+      try { process.exitCode = await runHostsRemove(host, opts); }
+      catch (err) { process.stderr.write(`workflows hosts remove failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  workflowHosts.command('self <state>').description('Let a workflow call this OpenLDR itself, on its own address and port only. State is on or off')
+    .action(async (value: string) => {
+      try { process.exitCode = await runHostsSelf(value); }
+      catch (err) { process.stderr.write(`workflows hosts self failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+
+  const trust = program.command('trust').description('The certificates this OpenLDR trusts for its own outgoing HTTPS calls');
+  trust.command('list').description('List the trusted certificates and whether the running server uses each one')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      try { process.exitCode = await runTrustList(opts); }
+      catch (err) { process.stderr.write(`trust list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  trust.command('add [file]').description('Trust a certificate from a PEM file, or from the server at --address. Asks first, unless --fingerprint is given and matches. Used after a restart')
+    .option('--address <host:port>', 'read the certificate the server at this address shows. Needs --fingerprint')
+    .option('--fingerprint <sha256>', 'the SHA-256 fingerprint the certificate must have')
+    .action(async (file: string | undefined, opts: { address?: string; fingerprint?: string }) => {
+      try { process.exitCode = await runTrustAdd({ file, from: opts.address, fingerprint: opts.fingerprint }); }
+      catch (err) { process.stderr.write(`trust add failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  trust.command('remove <fingerprint>').description('Stop trusting a certificate. Refuses without --force. Takes effect after a restart')
+    .option('--force', 'confirm the removal', false)
+    .action(async (fingerprint: string, opts: { force: boolean }) => {
+      try { process.exitCode = await runTrustRemove(fingerprint, opts); }
+      catch (err) { process.stderr.write(`trust remove failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  trust.command('unlock').description('Remove a lock that an interrupted change left on the list. Refuses without --force, and refuses a lock younger than 30 seconds. That age does not prove the change stopped')
+    .option('--force', 'confirm that no other change is running', false)
+    .action(async (opts: { force: boolean }) => {
+      try { process.exitCode = await runTrustUnlock(opts); }
+      catch (err) { process.stderr.write(`trust unlock failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
   const connectors = program.command('connectors').description('Inspect and update host connector configuration');

@@ -207,6 +207,17 @@ export const COMMAND_META: Readonly<Record<string, CommandMeta>> = freezeTable({
   'connectors test': { kind: 'app', capability: 'connectors.manage' }, // :255
   'connectors update': { kind: 'app', capability: 'connectors.manage', destructive: true, paths: [inFile('--file')] }, // :147
 
+  // network-routes.ts: every route needs network.manage, reads included. The area has no view key.
+  'trust add': { kind: 'app', capability: 'network.manage', paths: [inFile('file')] },
+  'trust list': { kind: 'app', capability: 'network.manage' },
+  'trust remove': { kind: 'app', capability: 'network.manage', destructive: true },
+  // It removes only a lock file. Destructive all the same: a change that is still running would then be refused.
+  'trust unlock': { kind: 'app', capability: 'network.manage', destructive: true },
+  'workflows hosts add': { kind: 'app', capability: 'network.manage' },
+  'workflows hosts list': { kind: 'app', capability: 'network.manage' },
+  'workflows hosts remove': { kind: 'app', capability: 'network.manage', destructive: true },
+  'workflows hosts self': { kind: 'app', capability: 'network.manage' },
+
   // dashboards-routes.ts:18: GET and PUT /api/dashboards/column-policy (:143, :162) both need data_exposure.manage.
   'data-exposure hide': { kind: 'app', capability: 'data_exposure.manage' },
   'data-exposure list': { kind: 'app', capability: 'data_exposure.manage' },
