@@ -132,3 +132,54 @@ describe('sharing settings', () => {
     expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ startAtSignIn: false, shareOnNetwork: true, sharePort: 8443 });
   });
 });
+
+describe('connect mode and lock settings', () => {
+  const FP = Array.from({ length: 32 }, (_, i) => (i + 16).toString(16).toUpperCase().padStart(2, '0')).join(':');
+  const load = (value: unknown) => {
+    const file = join(mkdtempSync(join(tmpdir(), 'desktop-settings-')), 'settings.json');
+    writeFileSync(file, JSON.stringify(value));
+    return loadSettings(file);
+  };
+
+  it('keeps a well formed mode, server and lock', () => {
+    const whole = { startAtSignIn: false, mode: 'connect', server: { address: 'https://labpc:3443/studio/', fingerprint: FP }, lock: { salt: 'a1b2', hash: '00ff' } };
+    expect(load(whole)).toEqual(whole);
+    expect(load({ mode: 'local' })).toEqual({ startAtSignIn: false, mode: 'local' });
+    expect(load({ server: { address: 'https://labpc/studio/' } })).toEqual({ startAtSignIn: false, server: { address: 'https://labpc/studio/' } });
+  });
+
+  it('drops a mode that is not one of the two words', () => {
+    for (const mode of ['x', '', 'Connect', 1, null, true]) expect(load({ mode })).toEqual({ startAtSignIn: false });
+  });
+
+  it('drops the whole server when its address does not parse, or is not as the parser writes it', () => {
+    for (const address of ['http://labpc', '', 'lab pc', 42, 'labpc:3443', 'https://labpc:3443']) {
+      expect(load({ server: { address, fingerprint: FP } })).toEqual({ startAtSignIn: false });
+    }
+    expect(load({ server: 'https://labpc/studio/' })).toEqual({ startAtSignIn: false });
+  });
+
+  it('drops a bad fingerprint alone and keeps the address', () => {
+    for (const fingerprint of ['AB:CD', FP.toLowerCase(), FP.replaceAll(':', ''), `${FP}:00`, 7]) {
+      expect(load({ server: { address: 'https://labpc/studio/', fingerprint } })).toEqual({ startAtSignIn: false, server: { address: 'https://labpc/studio/' } });
+    }
+  });
+
+  it('drops a lock whose salt or hash is empty or not hex', () => {
+    for (const lock of [{ salt: 'zz', hash: '' }, { salt: '', hash: 'ab' }, { salt: 'ab' }, { hash: 'ab' }, { salt: 'ab', hash: 'xyz' }, 'locked', true]) {
+      expect(load({ lock })).toEqual({ startAtSignIn: false });
+    }
+  });
+
+  it('a file from before this change loads with no mode, no server and no lock', () => {
+    const s = load({ port: 3000, startAtSignIn: true, window: { width: 900, height: 700 }, shareOnNetwork: true, sharePort: 3443 });
+    expect(s).toEqual({ port: 3000, startAtSignIn: true, window: { width: 900, height: 700 }, shareOnNetwork: true, sharePort: 3443 });
+    expect('mode' in s || 'server' in s || 'lock' in s).toBe(false);
+  });
+
+  it('writes them back, and nothing malformed', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'desktop-settings-')), 'settings.json');
+    saveSettings(file, { startAtSignIn: false, mode: 'connect', server: { address: 'https://labpc/studio/', fingerprint: 'nope' }, lock: { salt: 'ab', hash: 'cd' } });
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ startAtSignIn: false, mode: 'connect', server: { address: 'https://labpc/studio/' }, lock: { salt: 'ab', hash: 'cd' } });
+  });
+});
