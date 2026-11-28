@@ -1,10 +1,40 @@
 {
-  "generatedAt": "2026-11-27",
+  "generatedAt": "2026-11-28",
   "days": [
     {
       "date": "2026-11-27",
       "version": null,
       "entries": [
+        {
+          "hash": "720b5874a",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Arming is one database write"
+        },
+        {
+          "hash": "ace42c848",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Queue the run before storing its time"
+        },
+        {
+          "hash": "b537fd835",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A failed enqueue clears only the time it stored"
+        },
+        {
+          "hash": "ed2f90953",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Arm only the saved workflow, honour off, and reach the CLI"
+        },
+        {
+          "hash": "8ba2d22d6",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "A saved schedule runs without a restart"
+        },
         {
           "hash": "acaa24484",
           "type": "fix",
