@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z, ZodError } from 'zod';
-import { sealForSave, secretRefsOf, duplicateWorkflow, newWorkflowId, setWorkflowEnabled, MAP_TEST_MAX_ITEMS, MapConfigError, continueWorkflowReceipt, type AppContext } from '@openldr/bootstrap';
+import { sealForSave, secretRefsOf, duplicateWorkflow, newWorkflowId, setWorkflowEnabled, syncWorkflowSchedules, MAP_TEST_MAX_ITEMS, MapConfigError, continueWorkflowReceipt, type AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
 import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
@@ -16,20 +16,10 @@ import { waitForWebhookReceipt } from './webhook-receipt-wait';
 import { resolveNodeOptions, resolveNodeDetail } from './workflows-node-options';
 import { isProtectedWorkflowId, rebuildSystemWorkflow } from './system-workflows';
 
-/** Sync schedule rows after a workflow save. Webhook paths are stored with the definition. */
-async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; definition: unknown }): Promise<void> {
-  const def = WorkflowDefinitionSchema.parse(workflow.definition);
-  // schedules (derived table) — replace this workflow's rows with current schedule nodes
-  await ctx.workflows.schedules.removeForWorkflow(workflow.id);
-  for (const n of def.nodes as Array<{ id: string; type?: string; data?: Record<string, unknown> }>) {
-    const isSchedule = n.type === 'trigger' && n.data?.triggerType === 'schedule';
-    const cron = n.data?.cron as string | undefined;
-    if (isSchedule && cron && cron.trim()) {
-      await ctx.workflows.schedules.upsert({
-        workflowId: workflow.id, nodeId: n.id, cron, tz: (n.data?.tz as string) ?? null, enabled: true, nextDueAt: null,
-      });
-    }
-  }
+/** Store a saved workflow's schedules and queue their first run (bootstrap syncWorkflowSchedules,
+ *  which the CLI calls too). Webhook paths are stored with the definition. */
+async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; enabled: boolean; definition: unknown }): Promise<void> {
+  await syncWorkflowSchedules({ schedules: ctx.workflows.schedules, logger: ctx.logger }, workflow);
 }
 
 /** Scan all saved workflows for ingest trigger nodes; returns the ids that should fire on ingest. */

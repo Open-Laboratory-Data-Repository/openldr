@@ -71,13 +71,15 @@ function fakeSecretStore() {
 function fakeWorkflowExtras() {
   const runRecords: any[] = [];
   const scheduleRows: any[] = [];
+  // The durable queue a schedule's run is put on, in the same step as its stored time.
+  const queue = { published: [] as any[], failing: false };
   const webhookEntries = new Map<string, { workflowId: string; secret: string | null }>();
   const norm = (p: string) => p.replace(/^\/+/, '').replace(/\/+$/, '');
   let ingestIds: string[] = [];
   let eventIds: string[] = [];
   const runAndRecordCalls: any[] = [];
   return {
-    runRecords, scheduleRows, webhookEntries, runAndRecordCalls,
+    runRecords, scheduleRows, webhookEntries, runAndRecordCalls, queue,
     getIngestIds: () => ingestIds,
     getEventIds: () => eventIds,
     runs: {
@@ -95,7 +97,13 @@ function fakeWorkflowExtras() {
       },
       list: async () => scheduleRows as any[],
       get: async (workflowId: string, nodeId: string) => scheduleRows.find((x) => x.workflowId === workflowId && x.nodeId === nodeId),
-      setNextDue: async () => {},
+      // As the real store: one step that stores the time and queues the run.
+      armDue: async (workflowId: string, nodeId: string, dueAt: string, event: any) => {
+        const r = scheduleRows.find((x) => x.workflowId === workflowId && x.nodeId === nodeId);
+        if (!r) return false;
+        if (queue.failing) throw new Error('queue is away');
+        r.nextDueAt = dueAt; queue.published.push({ ...event, availableAt: new Date(dueAt) }); return true;
+      },
     },
     webhooks: {
       register: (path: string, entry: any) => { webhookEntries.set(norm(path), entry); },
@@ -134,6 +142,7 @@ function fakeCtx() {
   const extras = fakeWorkflowExtras();
   const secretStore = fakeSecretStore();
   return {
+    scheduleQueue: extras.queue,
     workflows: {
       store: {
         list: async () => data as any[],
@@ -1759,6 +1768,64 @@ describe('workflow on/off and stale saves (follow-up C7-1)', () => {
     registerWorkflowRoutes(app, ctx);
     return { app, ctx };
   };
+
+  // A schedule that is saved must start without a restart: every save route stores it and queues its
+  // first run (bootstrap syncWorkflowSchedules, the same code the CLI calls).
+  describe('a saved schedule', () => {
+    const timed = (id: string, over: Record<string, unknown> = {}) => ({
+      id, name: 'Timed', description: null, enabled: true, createdBy: null,
+      definition: { nodes: [{ id: 'tick', type: 'trigger', position: { x: 0, y: 0 }, data: { triggerType: 'schedule', cron: '*/5 * * * *', tz: 'UTC' } }], edges: [] },
+      ...over,
+    });
+    const queued = (ctx: any, id: string) => (ctx.scheduleQueue.published as any[]).filter((e) => e.type === 'workflow.schedule.due' && e.payload.workflowId === id);
+    const rowOf = async (ctx: any, id: string) => ctx.workflows.schedules.get(id, 'tick');
+
+    it('creating one queues its first run and stores the time', async () => {
+      const { app, ctx } = setup();
+      const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t1') });
+      expect(res.statusCode).toBeLessThan(300);
+      const row = await rowOf(ctx, 'wf-t1');
+      expect(row).toMatchObject({ enabled: true });
+      expect(row.nextDueAt).toBeTruthy();
+      expect(queued(ctx, 'wf-t1').map((e) => e.payload.dueAt)).toEqual([row.nextDueAt]);
+    });
+
+    it('one that is saved switched off is stored switched off, and nothing is queued', async () => {
+      const { app, ctx } = setup();
+      await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t2', { enabled: false }) });
+      expect(await rowOf(ctx, 'wf-t2')).toMatchObject({ enabled: false, nextDueAt: null });
+      expect(queued(ctx, 'wf-t2')).toEqual([]);
+    });
+
+    it('switching it off stores that, and switching it on queues a run', async () => {
+      const { app, ctx } = setup();
+      await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t3') });
+      await app.inject({ method: 'PUT', url: '/api/workflows/wf-t3/enabled', payload: { enabled: false } });
+      expect(await rowOf(ctx, 'wf-t3')).toMatchObject({ enabled: false, nextDueAt: null });
+      expect(queued(ctx, 'wf-t3')).toHaveLength(1);
+      await app.inject({ method: 'PUT', url: '/api/workflows/wf-t3/enabled', payload: { enabled: true } });
+      expect(await rowOf(ctx, 'wf-t3')).toMatchObject({ enabled: true });
+      expect(queued(ctx, 'wf-t3')).toHaveLength(2);
+    });
+
+    it('saving one workflow leaves the stored time of another alone', async () => {
+      const { app, ctx } = setup();
+      await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-a1') });
+      // A is overdue: its run is queued and its worker is late.
+      (await rowOf(ctx, 'wf-a1')).nextDueAt = '2020-01-01T00:00:00.000Z';
+      await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-b1') });
+      expect((await rowOf(ctx, 'wf-a1')).nextDueAt).toBe('2020-01-01T00:00:00.000Z');
+      expect(queued(ctx, 'wf-a1')).toHaveLength(1);
+    });
+
+    it('a save still succeeds when the run cannot be queued, and the time is not left stored', async () => {
+      const { app, ctx } = setup();
+      (ctx as any).scheduleQueue.failing = true;
+      const res = await app.inject({ method: 'POST', url: '/api/workflows', payload: timed('wf-t4') });
+      expect(res.statusCode).toBeLessThan(300);
+      expect(await rowOf(ctx, 'wf-t4')).toMatchObject({ enabled: true, nextDueAt: null });
+    });
+  });
 
   it('PUT enabled changes only enabled, so a toggle never brings back an older graph or name', async () => {
     const { app } = setup();

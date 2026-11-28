@@ -447,7 +447,7 @@ Pour essayer les mappages enregistrés d'un nœud Map to FHIR sur un fichier, la
 ./openldr workflows map-test wf-ingest map-1 data/your-rows.csv
 ```
 
-Pour activer ou désactiver un flux de travail en ligne de commande, lancez `workflows enable` ou `workflows disable` avec son id. Seul cela change, comme avec **Enable** et **Disable** dans la liste. L'activation est refusée quand un autre flux de travail activé utilise son chemin de webhook. Un webhook suit tout de suite. Redémarrez le serveur pour que les planifications, les écouteurs, l'ingestion et les déclencheurs d'événements suivent.
+Pour activer ou désactiver un flux de travail en ligne de commande, lancez `workflows enable` ou `workflows disable` avec son id. Seul cela change, comme avec **Enable** et **Disable** dans la liste. L'activation est refusée quand un autre flux de travail activé utilise son chemin de webhook. Un webhook et une planification suivent tout de suite. Redémarrez le serveur pour que les écouteurs, l'ingestion et les déclencheurs d'événements suivent.
 
 ```shell
 ./openldr workflows disable WORKFLOW_ID

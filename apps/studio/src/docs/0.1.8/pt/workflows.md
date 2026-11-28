@@ -447,7 +447,7 @@ Para experimentar os mapeamentos guardados de um nó Map to FHIR num ficheiro, e
 ./openldr workflows map-test wf-ingest map-1 data/your-rows.csv
 ```
 
-Para ativar ou desativar um workflow pela linha de comandos, execute `workflows enable` ou `workflows disable` com o seu id. Só isso muda, como com **Enable** e **Disable** na lista. A ativação é recusada quando outro workflow ativo usa o seu caminho de webhook. Um webhook segue de imediato. Reinicie o servidor para que os agendamentos, os ouvintes, a ingestão e os gatilhos de eventos sigam.
+Para ativar ou desativar um workflow pela linha de comandos, execute `workflows enable` ou `workflows disable` com o seu id. Só isso muda, como com **Enable** e **Disable** na lista. A ativação é recusada quando outro workflow ativo usa o seu caminho de webhook. Um webhook e um agendamento seguem de imediato. Reinicie o servidor para que os ouvintes, a ingestão e os gatilhos de eventos sigam.
 
 ```shell
 ./openldr workflows disable WORKFLOW_ID

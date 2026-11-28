@@ -1,4 +1,4 @@
-import { createAppContext, recordAuditEvent, setWorkflowEnabled, continueWorkflowReceipt } from '@openldr/bootstrap';
+import { createAppContext, recordAuditEvent, setWorkflowEnabled, syncWorkflowSchedules, continueWorkflowReceipt } from '@openldr/bootstrap';
 import { describeInterruption } from './interruptions';
 import { loadConfig } from '@openldr/config';
 import { cliNamedActor } from './cli-actor';
@@ -7,8 +7,10 @@ import { redactError } from './redact-error';
 /**
  * `openldr workflows enable|disable <id>`: the studio row menu's Enable and Disable, through the same
  * shared code (bootstrap workflow-enabled.ts). Only `enabled` changes. A webhook follows at once,
- * because each request reads the stored workflow; a running server picks up schedules, listeners,
- * ingest and event triggers at its next start.
+ * because each request reads the stored workflow. A schedule follows at once too: its rows are
+ * stored and its first run is put on the durable queue the running server drains, in one
+ * database write (bootstrap workflow-schedules.ts, as the save routes do). A running server picks up listeners, ingest and
+ * event triggers at its next start.
  */
 export async function runWorkflowSetEnabled(id: string, enabled: boolean): Promise<number> {
   const ctx = await createAppContext(loadConfig());
@@ -18,11 +20,12 @@ export async function runWorkflowSetEnabled(id: string, enabled: boolean): Promi
       process.stderr.write(`Workflow not found: ${id}\n`);
       return 1;
     }
+    await syncWorkflowSchedules({ schedules: ctx.workflows.schedules, logger: ctx.logger }, changed.after);
     await recordAuditEvent(ctx, cliNamedActor(), {
       action: enabled ? 'workflow.enable' : 'workflow.disable', entityType: 'workflow', entityId: id,
     });
-    process.stdout.write(`${changed.after.name} is ${enabled ? 'enabled' : 'disabled'}. Webhooks follow now. `
-      + 'Restart the server for schedules, listeners, ingest and event triggers to follow.\n');
+    process.stdout.write(`${changed.after.name} is ${enabled ? 'enabled' : 'disabled'}. Webhooks and schedules follow now. `
+      + 'Restart the server for listeners, ingest and event triggers to follow.\n');
     return 0;
   } catch (err) {
     // A path refusal names workflows only, so it is printed as it is.
